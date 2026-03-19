@@ -1,55 +1,28 @@
-# ============================================================
-# GPU服务器依赖 - LifeSwarm完整后端
-# ============================================================
+# GPU 服务器依赖（vLLM Multi-LoRA）
+# 安装命令: pip install -r gpu_server/requirements_gpu.txt
 
-# ==================== 核心ML依赖 ====================
-torch>=2.1.0
-torchvision>=0.16.0
-torchaudio>=2.1.0
+# ===== vLLM 推理引擎 =====
+vllm>=0.6.0
+
+# ===== 模型训练 =====
 transformers>=4.40.0
 peft>=0.10.0
 accelerate>=0.28.0
-bitsandbytes>=0.43.0
 datasets>=2.18.0
+bitsandbytes>=0.43.0
+
+# ===== Web 服务 =====
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+httpx>=0.27.0
+pydantic>=2.0.0
+
+# ===== 基础依赖 =====
+torch>=2.0.0
+numpy>=1.24.0
 sentencepiece
 tiktoken
 
-# ==================== 后端框架 ====================
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
-python-multipart
-aiofiles
-httpx
-websockets
-
-# ==================== 数据库 ====================
-sqlalchemy>=2.0.0
-aiosqlite
-
-# ==================== 数据处理 ====================
-numpy>=1.24.0
-pandas>=2.0.0
-scikit-learn>=1.3.0
-
-# ==================== RAG/向量检索 ====================
-faiss-cpu>=1.7.4
-sentence-transformers>=2.2.0
-
-# ==================== 知识图谱 ====================
-networkx>=3.0
-
-# ==================== 工具库 ====================
-python-dotenv
-python-jose[cryptography]
-passlib[bcrypt]
-bcrypt
-pillow
-matplotlib
-pydantic>=2.0.0
-
-# ==================== 监控 ====================
-psutil
-
-# ==================== 可选：API调用 ====================
-# dashscope  # 阿里云通义千问API
-# openai     # OpenAI API
+# ===== 可选：监控 =====
+# prometheus-client
+# psutil
