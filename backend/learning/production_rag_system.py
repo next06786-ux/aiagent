@@ -73,7 +73,14 @@ class ProductionRAGSystem:
             print(f"   GPU加速: {use_gpu}")
             
             device = 'cuda' if use_gpu else 'cpu'
-            self.model = SentenceTransformer(model_name, device=device)
+            
+            # 优先使用本地模型路径
+            local_model_path = f"/root/autodl-tmp/huggingface/sentence-transformers/{model_name}"
+            if os.path.exists(local_model_path):
+                print(f"   使用本地模型: {local_model_path}")
+                self.model = SentenceTransformer(local_model_path, device=device)
+            else:
+                self.model = SentenceTransformer(model_name, device=device)
             self.embedding_dim = self.model.get_sentence_embedding_dimension()
             
             # 初始化FAISS索引（修复Windows内存问题）
