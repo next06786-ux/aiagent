@@ -1,18 +1,45 @@
+# ===== Web 服务 =====
 fastapi>=0.100.0
-uvicorn>=0.20.0
+uvicorn[standard]>=0.20.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
+pydantic-settings>=2.0.0
 aiohttp>=3.8.0
 httpx>=0.24.0
+sse-starlette>=1.6.0
+python-multipart
+aiofiles
+
+# ===== 数据库 =====
 neo4j>=5.0.0
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
 redis>=5.0.0
+aiosqlite
+
+# ===== 数据处理 =====
 numpy>=1.24.0
 pandas>=2.0.0
 scikit-learn>=1.3.0
+
+# ===== AI/ML 核心 =====
 torch>=2.0.0
-transformers>=4.30.0
+transformers>=4.40.0
 dashscope>=1.10.0
-pydantic-settings>=2.0.0
-sse-starlette>=1.6.0
+
+# ===== vLLM Multi-LoRA (GPU服务器) =====
+vllm>=0.6.0
+peft>=0.10.0
+accelerate>=0.28.0
+datasets>=2.18.0
+bitsandbytes>=0.43.0
+
+# ===== 向量检索 =====
+faiss-cpu
+sentence-transformers
+
+# ===== 工具 =====
+sentencepiece
+tiktoken
+schedule
+apscheduler

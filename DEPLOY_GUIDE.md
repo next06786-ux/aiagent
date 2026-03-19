@@ -68,7 +68,7 @@ ssh -p PORT root@YOUR_SERVER_IP
 cd /root
 
 # 克隆仓库
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git clone https://github.com/next06786-ux/aiagent.git
 
 # 或使用 SSH（需要配置 SSH Key）
 git clone git@github.com:YOUR_USERNAME/YOUR_REPO.git
