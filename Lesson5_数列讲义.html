@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>数列：完整知识体系 (Complete Guide)</title>
+<style>
+@page { size: A4; margin: 1.5cm; }
+body {
+  font-family: "Microsoft YaHei", "SimSun", sans-serif;
+  color: #333;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0;
+}
+.container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.header {
+  text-align: center;
+  border-bottom: 2px solid #000;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+.header h1 { 
+  font-size: 22px; 
+  font-weight: 900; 
+  margin: 0; 
+}
+/* 模块标题 */
+.section-title {
+  background-color: #2c3e50;
+  color: #fff;
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 15px;
+  margin-top: 20px;
+  border-radius: 4px;
+}
+/* 公式表格 */
+.formula-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.formula-table th, .formula-table td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: center;
+}
+.formula-table th { 
+  background-color: #eee; 
+}
+.math { 
+  font-family: "Times New Roman", serif; 
+  font-weight: bold; 
+  font-style: italic; 
+}
+.red { 
+  color: #c0392b; 
+  font-weight: bold; 
+}
+.blue {
+  color: #2980b9;
+  font-weight: bold;
+}
+.green {
+  color: #27ae60;
+  font-weight: bold;
+}
+/* 示例框 */
+.example-box {
+  border: 1px solid #3498db;
+  background-color: #ecf0f1;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 4px;
+}
+.example-title {
+  font-weight: bold;
+  color: #2980b9;
+  margin-bottom: 5px;
+}
+/* 图示区域 */
+.visual-box {
+  border: 1px dashed #999;
+  padding: 10px;
+  margin-top: 10px;
+  min-height: 80px;
+  background: #fff;
+  position: relative;
+}
+.tips { 
+  font-size: 12px; 
+  color: #7f8c8d; 
+  margin-top: 5px; 
+  font-style: italic; 
+}
+.highlight-row {
+  background-color: #fff5f5;
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>Lesson 5: 数列完整知识体系 (Sequences Guide)</h1>
+  <p>等差数列 · 等比数列 · 求和公式 · 综合应用</p>
+</div>
+
+<!-- Part I: 等差数列 -->
+<div class="section-title">Part I: 等差数列 (Arithmetic Sequence)</div>
+<div class="tips">核心特征：相邻两项的差为常数 d (公差)</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th>公式类型</th>
+    <th>公式</th>
+    <th>说明</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="highlight-row">
+    <td><b>通项公式</b></td>
+    <td><span class="math red">a<sub>n</sub> = a<sub>1</sub> + (n-1)d</span></td>
+    <td>第n项 = 首项 + (项数-1)×公差</td>
+  </tr>
+  <tr>
+    <td><b>中项公式</b></td>
+    <td><span class="math">2a<sub>n</sub> = a<sub>n-1</sub> + a<sub>n+1</sub></span></td>
+    <td>任意一项是前后两项的算术平均</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>前n项和</b></td>
+    <td><span class="math red">S<sub>n</sub> = n(a<sub>1</sub>+a<sub>n</sub>)/2</span></td>
+    <td>项数 × (首项+末项) / 2</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>前n项和(2)</b></td>
+    <td><span class="math red">S<sub>n</sub> = na<sub>1</sub> + n(n-1)d/2</span></td>
+    <td>只用首项和公差表示</td>
+  </tr>
+  <tr>
+    <td><b>性质1</b></td>
+    <td><span class="math">a<sub>m</sub> = a<sub>n</sub> + (m-n)d</span></td>
+    <td>任意两项关系</td>
+  </tr>
+  <tr>
+    <td><b>性质2</b></td>
+    <td><span class="math">若m+n=p+q, 则a<sub>m</sub>+a<sub>n</sub>=a<sub>p</sub>+a<sub>q</sub></span></td>
+    <td>下标和相等,项和相等</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="example-box">
+  <div class="example-title">典型例题</div>
+  <p><b>例1:</b> 已知等差数列 {a<sub>n</sub>} 中, a<sub>3</sub>=7, a<sub>7</sub>=15, 求 a<sub>1</sub> 和 d</p>
+  <p><b>解:</b> 由 a<sub>7</sub> = a<sub>3</sub> + 4d → 15 = 7 + 4d → d = 2</p>
+  <p>由 a<sub>3</sub> = a<sub>1</sub> + 2d → 7 = a<sub>1</sub> + 4 → a<sub>1</sub> = 3</p>
+</div>
+
+<div class="visual-box">
+  <p style="font-weight:bold; text-align:center;">等差数列图示 (线性增长)</p>
+  <div style="text-align:center; color:#999; padding:20px;">
+    a₁ ——→ a₂ ——→ a₃ ——→ a₄ ——→ a₅<br>
+    &nbsp;&nbsp;+d&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+d&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+d&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+d<br>
+    <span style="color:#c0392b;">(每次增加相同的量)</span>
+  </div>
+</div>
+
+<!-- Part II: 等比数列 -->
+<div class="section-title">Part II: 等比数列 (Geometric Sequence)</div>
+<div class="tips">核心特征：相邻两项的比为常数 q (公比, q≠0)</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th>公式类型</th>
+    <th>公式</th>
+    <th>说明</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="highlight-row">
+    <td><b>通项公式</b></td>
+    <td><span class="math red">a<sub>n</sub> = a<sub>1</sub> · q<sup>n-1</sup></span></td>
+    <td>第n项 = 首项 × 公比<sup>(项数-1)</sup></td>
+  </tr>
+  <tr>
+    <td><b>中项公式</b></td>
+    <td><span class="math">a<sub>n</sub><sup>2</sup> = a<sub>n-1</sub> · a<sub>n+1</sub></span></td>
+    <td>任意一项的平方是前后两项的积</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>前n项和(q≠1)</b></td>
+    <td><span class="math red">S<sub>n</sub> = a<sub>1</sub>(1-q<sup>n</sup>)/(1-q)</span></td>
+    <td>或 = a<sub>1</sub>(q<sup>n</sup>-1)/(q-1)</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>前n项和(q=1)</b></td>
+    <td><span class="math red">S<sub>n</sub> = na<sub>1</sub></span></td>
+    <td>公比为1时,所有项相等</td>
+  </tr>
+  <tr>
+    <td><b>性质1</b></td>
+    <td><span class="math">a<sub>m</sub> = a<sub>n</sub> · q<sup>m-n</sup></span></td>
+    <td>任意两项关系</td>
+  </tr>
+  <tr>
+    <td><b>性质2</b></td>
+    <td><span class="math">若m+n=p+q, 则a<sub>m</sub>·a<sub>n</sub>=a<sub>p</sub>·a<sub>q</sub></span></td>
+    <td>下标和相等,项积相等</td>
+  </tr>
+  <tr>
+    <td><b>无穷递缩</b></td>
+    <td><span class="math blue">当|q|&lt;1时, S<sub>∞</sub> = a<sub>1</sub>/(1-q)</span></td>
+    <td>无穷项和(重要!)</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="example-box">
+  <div class="example-title">典型例题</div>
+  <p><b>例2:</b> 已知等比数列 {a<sub>n</sub>} 中, a<sub>2</sub>=6, a<sub>5</sub>=48, 求 a<sub>1</sub> 和 q</p>
+  <p><b>解:</b> 由 a<sub>5</sub> = a<sub>2</sub> · q³ → 48 = 6q³ → q³ = 8 → q = 2</p>
+  <p>由 a<sub>2</sub> = a<sub>1</sub>q → 6 = a<sub>1</sub>·2 → a<sub>1</sub> = 3</p>
+</div>
+
+<div class="visual-box">
+  <p style="font-weight:bold; text-align:center;">等比数列图示 (指数增长/衰减)</p>
+  <div style="text-align:center; color:#999; padding:20px;">
+    a₁ ——→ a₂ ——→ a₃ ——→ a₄ ——→ a₅<br>
+    &nbsp;&nbsp;×q&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;×q&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;×q&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;×q<br>
+    <span style="color:#c0392b;">(每次乘以相同的倍数)</span>
+  </div>
+</div>
+
+<!-- Part III: 常用求和公式 -->
+<div class="section-title">Part III: 常用求和公式 (Summation Formulas)</div>
+<div class="tips">必须熟记的基础求和公式</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th>序号</th>
+    <th>求和公式</th>
+    <th>记忆技巧</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="highlight-row">
+    <td>①</td>
+    <td><span class="math red">1+2+3+...+n = n(n+1)/2</span></td>
+    <td>前n个自然数和 (首尾配对)</td>
+  </tr>
+  <tr class="highlight-row">
+    <td>②</td>
+    <td><span class="math red">1²+2²+3²+...+n² = n(n+1)(2n+1)/6</span></td>
+    <td>平方和公式 (记住分母是6)</td>
+  </tr>
+  <tr class="highlight-row">
+    <td>③</td>
+    <td><span class="math red">1³+2³+3³+...+n³ = [n(n+1)/2]²</span></td>
+    <td>立方和 = (自然数和)²</td>
+  </tr>
+  <tr>
+    <td>④</td>
+    <td><span class="math">1+2+4+8+...+2<sup>n-1</sup> = 2<sup>n</sup>-1</span></td>
+    <td>等比数列(q=2)求和</td>
+  </tr>
+  <tr>
+    <td>⑤</td>
+    <td><span class="math">1+3+5+...+(2n-1) = n²</span></td>
+    <td>前n个奇数和 = n²</td>
+  </tr>
+  <tr>
+    <td>⑥</td>
+    <td><span class="math">2+4+6+...+2n = n(n+1)</span></td>
+    <td>前n个偶数和</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="example-box">
+  <div class="example-title">典型例题</div>
+  <p><b>例3:</b> 求 S = 1×2 + 2×3 + 3×4 + ... + n(n+1)</p>
+  <p><b>解:</b> 通项 a<sub>k</sub> = k(k+1) = k² + k</p>
+  <p>S = Σk² + Σk = n(n+1)(2n+1)/6 + n(n+1)/2</p>
+  <p>&nbsp;&nbsp; = n(n+1)[(2n+1)/6 + 1/2]</p>
+  <p>&nbsp;&nbsp; = <span class="red">n(n+1)(n+2)/3</span></p>
+</div>
+
+<!-- Part IV: 求和方法 -->
+<div class="section-title">Part IV: 数列求和方法 (Summation Methods)</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th style="width:25%;">方法</th>
+    <th style="width:35%;">适用情况</th>
+    <th style="width:40%;">示例</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="highlight-row">
+    <td><b>公式法</b></td>
+    <td>等差/等比数列</td>
+    <td>直接套用 S<sub>n</sub> 公式</td>
+  </tr>
+  <tr>
+    <td><b>分组求和</b></td>
+    <td>可拆分成几个基本数列</td>
+    <td>(2n+3<sup>n</sup>) = Σ2n + Σ3<sup>n</sup></td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>裂项相消</b></td>
+    <td>通项可拆成两项之差</td>
+    <td>1/[n(n+1)] = 1/n - 1/(n+1)</td>
+  </tr>
+  <tr>
+    <td><b>错位相减</b></td>
+    <td>等差×等比</td>
+    <td>n·2<sup>n</sup> 型</td>
+  </tr>
+  <tr>
+    <td><b>倒序相加</b></td>
+    <td>首尾对称</td>
+    <td>组合数求和</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="example-box">
+  <div class="example-title">裂项相消法示例</div>
+  <p><b>例4:</b> 求 S = 1/(1×2) + 1/(2×3) + 1/(3×4) + ... + 1/[n(n+1)]</p>
+  <p><b>解:</b> 通项裂项: 1/[k(k+1)] = 1/k - 1/(k+1)</p>
+  <p>S = (1/1 - 1/2) + (1/2 - 1/3) + (1/3 - 1/4) + ... + (1/n - 1/(n+1))</p>
+  <p>&nbsp;&nbsp; = 1 - 1/(n+1) = <span class="red">n/(n+1)</span></p>
+</div>
+
+<div class="example-box">
+  <div class="example-title">错位相减法示例</div>
+  <p><b>例5:</b> 求 S = 1×2 + 2×2² + 3×2³ + ... + n×2<sup>n</sup></p>
+  <p><b>解:</b> S = 1×2¹ + 2×2² + 3×2³ + ... + n×2<sup>n</sup> &nbsp;&nbsp;&nbsp;①</p>
+  <p>2S = &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1×2² + 2×2³ + ... + (n-1)×2<sup>n</sup> + n×2<sup>n+1</sup> &nbsp;&nbsp;&nbsp;②</p>
+  <p>①-②: -S = 2 + 2² + 2³ + ... + 2<sup>n</sup> - n×2<sup>n+1</sup></p>
+  <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-S = 2(2<sup>n</sup>-1)/(2-1) - n×2<sup>n+1</sup></p>
+  <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S = <span class="red">(n-1)×2<sup>n+1</sup> + 2</span></p>
+</div>
+
+<!-- Part V: 数列性质对比 -->
+<div class="section-title">Part V: 等差与等比数列对比 (Comparison)</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th>对比项</th>
+    <th>等差数列</th>
+    <th>等比数列</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td><b>定义</b></td>
+    <td>a<sub>n+1</sub> - a<sub>n</sub> = d (常数)</td>
+    <td>a<sub>n+1</sub> / a<sub>n</sub> = q (常数, q≠0)</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>通项</b></td>
+    <td>a<sub>n</sub> = a<sub>1</sub> + (n-1)d</td>
+    <td>a<sub>n</sub> = a<sub>1</sub> · q<sup>n-1</sup></td>
+  </tr>
+  <tr>
+    <td><b>中项</b></td>
+    <td>算术平均: 2a<sub>n</sub> = a<sub>n-1</sub> + a<sub>n+1</sub></td>
+    <td>几何平均: a<sub>n</sub>² = a<sub>n-1</sub> · a<sub>n+1</sub></td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>求和</b></td>
+    <td>S<sub>n</sub> = n(a<sub>1</sub>+a<sub>n</sub>)/2</td>
+    <td>S<sub>n</sub> = a<sub>1</sub>(1-q<sup>n</sup>)/(1-q)</td>
+  </tr>
+  <tr>
+    <td><b>图像</b></td>
+    <td>线性增长 (直线)</td>
+    <td>指数增长/衰减 (曲线)</td>
+  </tr>
+  <tr>
+    <td><b>性质</b></td>
+    <td>m+n=p+q → a<sub>m</sub>+a<sub>n</sub>=a<sub>p</sub>+a<sub>q</sub></td>
+    <td>m+n=p+q → a<sub>m</sub>·a<sub>n</sub>=a<sub>p</sub>·a<sub>q</sub></td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>子数列</b></td>
+    <td>等间隔取项仍为等差</td>
+    <td>等间隔取项仍为等比</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="tips">
+  <b>记忆口诀:</b><br>
+  • 等差看"差"(加减), 等比看"比"(乘除)<br>
+  • 等差用"和", 等比用"积"<br>
+  • 等差是线性, 等比是指数
+</div>
+
+<!-- Part VI: 递推数列 -->
+<div class="section-title">Part VI: 递推数列 (Recursive Sequences)</div>
+<div class="tips">通过递推关系求通项公式的常见类型</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th style="width:30%;">递推类型</th>
+    <th style="width:35%;">转化方法</th>
+    <th style="width:35%;">示例</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="highlight-row">
+    <td>a<sub>n+1</sub> = a<sub>n</sub> + d</td>
+    <td>等差数列</td>
+    <td>直接用等差公式</td>
+  </tr>
+  <tr>
+    <td>a<sub>n+1</sub> = qa<sub>n</sub></td>
+    <td>等比数列</td>
+    <td>直接用等比公式</td>
+  </tr>
+  <tr class="highlight-row">
+    <td>a<sub>n+1</sub> = a<sub>n</sub> + f(n)</td>
+    <td>累加法</td>
+    <td>逐项相减后累加</td>
+  </tr>
+  <tr>
+    <td>a<sub>n+1</sub> = a<sub>n</sub> · f(n)</td>
+    <td>累乘法</td>
+    <td>逐项相除后累乘</td>
+  </tr>
+  <tr class="highlight-row">
+    <td>a<sub>n+1</sub> = pa<sub>n</sub> + q</td>
+    <td>构造等比</td>
+    <td>设 a<sub>n+1</sub>+k = p(a<sub>n</sub>+k)</td>
+  </tr>
+  <tr>
+    <td>a<sub>n+2</sub> = pa<sub>n+1</sub> + qa<sub>n</sub></td>
+    <td>特征方程法</td>
+    <td>解 x²=px+q 求通解</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="example-box">
+  <div class="example-title">构造等比数列示例</div>
+  <p><b>例6:</b> 已知 a<sub>1</sub>=1, a<sub>n+1</sub> = 2a<sub>n</sub> + 3, 求通项公式</p>
+  <p><b>解:</b> 设 a<sub>n+1</sub> + k = 2(a<sub>n</sub> + k)</p>
+  <p>展开: a<sub>n+1</sub> + k = 2a<sub>n</sub> + 2k</p>
+  <p>对比原式: 2k = 3 → k = 3</p>
+  <p>所以 a<sub>n+1</sub> + 3 = 2(a<sub>n</sub> + 3)</p>
+  <p>令 b<sub>n</sub> = a<sub>n</sub> + 3, 则 {b<sub>n</sub>} 是等比数列</p>
+  <p>b<sub>1</sub> = a<sub>1</sub> + 3 = 4, q = 2</p>
+  <p>b<sub>n</sub> = 4×2<sup>n-1</sup> = 2<sup>n+1</sup></p>
+  <p>∴ a<sub>n</sub> = b<sub>n</sub> - 3 = <span class="red">2<sup>n+1</sup> - 3</span></p>
+</div>
+
+<!-- Part VII: 常见题型与技巧 -->
+<div class="section-title">Part VII: 常见题型与解题技巧 (Problem-Solving Tips)</div>
+
+<table class="formula-table">
+<thead>
+  <tr>
+    <th style="width:25%;">题型</th>
+    <th style="width:40%;">关键技巧</th>
+    <th style="width:35%;">注意事项</th>
+  </tr>
+</thead>
+<tbody>
+  <tr class="highlight-row">
+    <td><b>求通项公式</b></td>
+    <td>• 观察规律<br>• 利用 S<sub>n</sub> 与 a<sub>n</sub> 关系<br>• 递推关系转化</td>
+    <td>注意 n=1 时单独验证</td>
+  </tr>
+  <tr>
+    <td><b>求前n项和</b></td>
+    <td>• 判断数列类型<br>• 选择合适求和方法<br>• 分类讨论(q=1?)</td>
+    <td>等比数列注意 q≠1</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>最值问题</b></td>
+    <td>• 等差: a<sub>n</sub>≥0 与 a<sub>n</sub>≤0 分界<br>• 等比: 单调性分析<br>• 二次函数配方</td>
+    <td>注意 n 为正整数</td>
+  </tr>
+  <tr>
+    <td><b>数列不等式</b></td>
+    <td>• 放缩法<br>• 数学归纳法<br>• 裂项后比较</td>
+    <td>注意放缩方向</td>
+  </tr>
+  <tr class="highlight-row">
+    <td><b>实际应用</b></td>
+    <td>• 建立数列模型<br>• 识别等差/等比<br>• 分期付款问题</td>
+    <td>理解实际意义</td>
+  </tr>
+</tbody>
+</table>
+
+<div class="example-box">
+  <div class="example-title">S<sub>n</sub> 与 a<sub>n</sub> 关系</div>
+  <p><b>重要公式:</b></p>
+  <p class="math" style="text-align:center; font-size:14px;">
+    a<sub>n</sub> = 
+    <span style="display:inline-block; text-align:left;">
+      { S<sub>1</sub>, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n=1<br>
+      { S<sub>n</sub> - S<sub>n-1</sub>, &nbsp;&nbsp;n≥2
+    </span>
+  </p>
+  <p><b>例7:</b> 已知 S<sub>n</sub> = 2n² + n, 求 a<sub>n</sub></p>
+  <p><b>解:</b> 当 n=1 时, a<sub>1</sub> = S<sub>1</sub> = 2+1 = 3</p>
+  <p>当 n≥2 时, a<sub>n</sub> = S<sub>n</sub> - S<sub>n-1</sub></p>
+  <p>&nbsp;&nbsp; = (2n²+n) - [2(n-1)²+(n-1)]</p>
+  <p>&nbsp;&nbsp; = 2n²+n - 2n²+4n-2 - n+1</p>
+  <p>&nbsp;&nbsp; = 4n - 1</p>
+  <p>验证: n=1 时, 4×1-1=3 ✓</p>
+  <p>∴ a<sub>n</sub> = <span class="red">4n - 1</span></p>
+</div>
+
+<!-- Part VIII: 易错点提醒 -->
+<div class="section-title">Part VIII: 易错点提醒 (Common Mistakes)</div>
+
+<div style="display:flex; gap:10px; margin-top:10px;">
+  <div style="flex:1; border:2px solid #e74c3c; padding:10px; border-radius:4px;">
+    <p style="color:#e74c3c; font-weight:bold; margin-top:0;">易错点1: 等比求和忘记分类</p>
+    <p style="font-size:12px;">
+      <b>错误:</b> 直接用 S<sub>n</sub>=a<sub>1</sub>(1-q<sup>n</sup>)/(1-q)<br>
+      <b>正确:</b> 必须先判断 q 是否等于 1<br>
+      • q=1 时, S<sub>n</sub>=na<sub>1</sub><br>
+      • q≠1 时, 才用公式
+    </p>
+  </div>
+  
+  <div style="flex:1; border:2px solid #e74c3c; padding:10px; border-radius:4px;">
+    <p style="color:#e74c3c; font-weight:bold; margin-top:0;">易错点2: S<sub>n</sub>求a<sub>n</sub>忘记验证n=1</p>
+    <p style="font-size:12px;">
+      <b>错误:</b> 只用 a<sub>n</sub>=S<sub>n</sub>-S<sub>n-1</sub><br>
+      <b>正确:</b> 分两步<br>
+      • n=1: a<sub>1</sub>=S<sub>1</sub><br>
+      • n≥2: a<sub>n</sub>=S<sub>n</sub>-S<sub>n-1</sub><br>
+      • 验证 n=1 是否满足通式
+    </p>
+  </div>
+</div>
+
+<div style="display:flex; gap:10px; margin-top:10px;">
+  <div style="flex:1; border:2px solid #e74c3c; padding:10px; border-radius:4px;">
+    <p style="color:#e74c3c; font-weight:bold; margin-top:0;">易错点3: 等比数列首项为0</p>
+    <p style="font-size:12px;">
+      <b>错误:</b> 认为 0,0,0,... 是等比数列<br>
+      <b>正确:</b> 等比数列要求 a<sub>n</sub>≠0<br>
+      定义中 q=a<sub>n+1</sub>/a<sub>n</sub> 要有意义
+    </p>
+  </div>
+  
+  <div style="flex:1; border:2px solid #e74c3c; padding:10px; border-radius:4px;">
+    <p style="color:#e74c3c; font-weight:bold; margin-top:0;">易错点4: 错位相减符号错误</p>
+    <p style="font-size:12px;">
+      <b>错误:</b> 相减时符号搞混<br>
+      <b>正确:</b> 仔细对齐每一项<br>
+      • 写清楚 S 和 qS<br>
+      • 逐项相减,注意正负号
+    </p>
+  </div>
+</div>
+
+<div style="border:2px solid #27ae60; padding:10px; border-radius:4px; margin-top:10px;">
+  <p style="color:#27ae60; font-weight:bold; margin-top:0;">解题检查清单</p>
+  <ul style="font-size:12px; margin:5px 0;">
+    <li>□ 数列类型判断正确 (等差/等比/其他)</li>
+    <li>□ 公式选择合适 (通项/求和)</li>
+    <li>□ 特殊情况讨论 (q=1? n=1?)</li>
+    <li>□ 计算过程仔细 (符号/运算)</li>
+    <li>□ 结果验证合理 (代入检验)</li>
+  </ul>
+</div>
+
+<!-- Part IX: 综合练习 -->
+<div class="section-title">Part IX: 综合练习题 (Practice Problems)</div>
+
+<div class="example-box">
+  <div class="example-title">练习1: 等差数列基础</div>
+  <p>已知等差数列{a<sub>n</sub>}中, a<sub>5</sub>+a<sub>9</sub>=16, a<sub>4</sub>=1</p>
+  <p>(1) 求首项 a<sub>1</sub> 和公差 d</p>
+  <p>(2) 求前10项和 S<sub>10</sub></p>
+  <div style="background:#f9f9f9; padding:8px; margin-top:8px; border-left:3px solid #3498db;">
+    <p style="margin:3px 0; font-size:11px;"><b>提示:</b> 利用性质 a<sub>5</sub>+a<sub>9</sub>=2a<sub>7</sub></p>
+  </div>
+</div>
+
+<div class="example-box">
+  <div class="example-title">练习2: 等比数列求和</div>
+  <p>已知等比数列{a<sub>n</sub>}的前n项和 S<sub>n</sub>=3<sup>n</sup>-1</p>
+  <p>(1) 求通项公式 a<sub>n</sub></p>
+  <p>(2) 判断数列类型并说明理由</p>
+  <div style="background:#f9f9f9; padding:8px; margin-top:8px; border-left:3px solid #3498db;">
+    <p style="margin:3px 0; font-size:11px;"><b>提示:</b> 用 a<sub>n</sub>=S<sub>n</sub>-S<sub>n-1</sub> (n≥2)</p>
+  </div>
+</div>
+
+<div class="example-box">
+  <div class="example-title">练习3: 裂项求和</div>
+  <p>求和: S<sub>n</sub> = 1/(1×3) + 1/(3×5) + 1/(5×7) + ... + 1/[(2n-1)(2n+1)]</p>
+  <div style="background:#f9f9f9; padding:8px; margin-top:8px; border-left:3px solid #3498db;">
+    <p style="margin:3px 0; font-size:11px;"><b>提示:</b> 1/[(2k-1)(2k+1)] = (1/2)[1/(2k-1) - 1/(2k+1)]</p>
+  </div>
+</div>
+
+<div class="example-box">
+  <div class="example-title">练习4: 错位相减</div>
+  <p>求和: S<sub>n</sub> = 1 + 3×2 + 5×2² + 7×2³ + ... + (2n-1)×2<sup>n-1</sup></p>
+  <div style="background:#f9f9f9; padding:8px; margin-top:8px; border-left:3px solid #3498db;">
+    <p style="margin:3px 0; font-size:11px;"><b>提示:</b> 通项为 (2k-1)×2<sup>k-1</sup>, 用错位相减法</p>
+  </div>
+</div>
+
+<div class="example-box">
+  <div class="example-title">练习5: 递推数列</div>
+  <p>已知 a<sub>1</sub>=2, a<sub>n+1</sub>=3a<sub>n</sub>+2, 求通项公式 a<sub>n</sub></p>
+  <div style="background:#f9f9f9; padding:8px; margin-top:8px; border-left:3px solid #3498db;">
+    <p style="margin:3px 0; font-size:11px;"><b>提示:</b> 构造等比数列, 设 a<sub>n+1</sub>+k=3(a<sub>n</sub>+k)</p>
+  </div>
+</div>
+
+<!-- Part X: 知识网络图 -->
+<div class="section-title">Part X: 数列知识网络 (Knowledge Map)</div>
+
+<div style="border:2px solid #34495e; padding:15px; margin-top:10px; background:#f8f9fa;">
+  <div style="text-align:center; font-weight:bold; font-size:16px; margin-bottom:15px;">
+    数列完整知识体系
+  </div>
+  
+  <div style="display:flex; gap:15px;">
+    <!-- 左侧: 等差数列 -->
+    <div style="flex:1; border:2px solid #3498db; padding:10px; border-radius:6px; background:#fff;">
+      <p style="text-align:center; font-weight:bold; color:#3498db; margin:0 0 8px 0;">等差数列</p>
+      <p style="font-size:11px; margin:3px 0;">定义: a<sub>n+1</sub>-a<sub>n</sub>=d</p>
+      <p style="font-size:11px; margin:3px 0;">通项: a<sub>n</sub>=a<sub>1</sub>+(n-1)d</p>
+      <p style="font-size:11px; margin:3px 0;">求和: S<sub>n</sub>=n(a<sub>1</sub>+a<sub>n</sub>)/2</p>
+      <p style="font-size:11px; margin:3px 0;">性质: 中项/对称性</p>
+    </div>
+    
+    <!-- 右侧: 等比数列 -->
+    <div style="flex:1; border:2px solid #e74c3c; padding:10px; border-radius:6px; background:#fff;">
+      <p style="text-align:center; font-weight:bold; color:#e74c3c; margin:0 0 8px 0;">等比数列</p>
+      <p style="font-size:11px; margin:3px 0;">定义: a<sub>n+1</sub>/a<sub>n</sub>=q</p>
+      <p style="font-size:11px; margin:3px 0;">通项: a<sub>n</sub>=a<sub>1</sub>·q<sup>n-1</sup></p>
+      <p style="font-size:11px; margin:3px 0;">求和: S<sub>n</sub>=a<sub>1</sub>(1-q<sup>n</sup>)/(1-q)</p>
+      <p style="font-size:11px; margin:3px 0;">性质: 中项/无穷和</p>
+    </div>
+  </div>
+  
+  <div style="margin-top:15px; border:2px solid #27ae60; padding:10px; border-radius:6px; background:#fff;">
+    <p style="text-align:center; font-weight:bold; color:#27ae60; margin:0 0 8px 0;">求和方法</p>
+    <div style="display:flex; gap:10px; font-size:11px;">
+      <div style="flex:1;">• 公式法<br>• 分组求和</div>
+      <div style="flex:1;">• 裂项相消<br>• 错位相减</div>
+      <div style="flex:1;">• 倒序相加<br>• 累加累乘</div>
+    </div>
+  </div>
+  
+  <div style="margin-top:15px; border:2px solid #f39c12; padding:10px; border-radius:6px; background:#fff;">
+    <p style="text-align:center; font-weight:bold; color:#f39c12; margin:0 0 8px 0;">递推数列</p>
+    <p style="font-size:11px; margin:3px 0;">
+      a<sub>n+1</sub>=a<sub>n</sub>+f(n) → 累加法 &nbsp;|&nbsp; 
+      a<sub>n+1</sub>=pa<sub>n</sub>+q → 构造法 &nbsp;|&nbsp; 
+      特征方程法
+    </p>
+  </div>
+</div>
+
+<div style="margin-top:15px; padding:10px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:4px;">
+  <p style="font-weight:bold; margin:5px 0;">学习建议</p>
+  <ul style="font-size:12px; margin:5px 0; padding-left:20px;">
+    <li>熟记基本公式 (通项、求和)</li>
+    <li>掌握求和方法 (至少4种)</li>
+    <li>注意特殊情况 (q=1, n=1)</li>
+    <li>多做综合题 (数列+函数/不等式)</li>
+    <li>总结题型规律 (建立知识网络)</li>
+  </ul>
+</div>
+
+
+<!-- 结尾 -->
+<div style="margin-top:30px; padding:15px; background:#ecf0f1; border-radius:6px; text-align:center;">
+  <p style="font-size:14px; font-weight:bold; margin:5px 0;">数列学习完成</p>
+  <p style="font-size:12px; color:#7f8c8d; margin:5px 0;">
+    掌握数列，就是掌握了数学中"规律"的本质<br>
+    从有限到无限，从离散到连续，数列是通往高等数学的桥梁
+  </p>
+  <p style="font-size:11px; color:#95a5a6; margin:10px 0 0 0;">
+    © 2026 高中数学讲义系列 · Lesson 5
+  </p>
+</div>
+
+</div>
+</body>
+</html>

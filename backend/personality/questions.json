@@ -1,0 +1,315 @@
+{
+  "test_info": {
+    "title": "个性化AI基座测评",
+    "description": "通过20道题了解你的性格、决策风格和价值观，为你打造专属AI助手",
+    "duration": "约10分钟",
+    "total_questions": 20
+  },
+  "dimensions": {
+    "personality": {
+      "name": "性格特质",
+      "description": "基于大五人格理论"
+    },
+    "decision_style": {
+      "name": "决策风格",
+      "description": "你如何做决定"
+    },
+    "risk_preference": {
+      "name": "风险偏好",
+      "description": "你对风险的态度"
+    },
+    "life_priority": {
+      "name": "生活优先级",
+      "description": "你最看重什么"
+    }
+  },
+  "questions": [
+    {
+      "id": 1,
+      "dimension": "personality",
+      "subdimension": "openness",
+      "question": "面对新事物时，你通常会：",
+      "options": [
+        {"value": 1, "text": "保持谨慎，先观察再决定"},
+        {"value": 2, "text": "有些好奇，但不会主动尝试"},
+        {"value": 3, "text": "比较感兴趣，愿意了解"},
+        {"value": 4, "text": "非常兴奋，迫不及待想尝试"}
+      ]
+    },
+    {
+      "id": 2,
+      "dimension": "personality",
+      "subdimension": "conscientiousness",
+      "question": "对于学习或工作任务，你的习惯是：",
+      "options": [
+        {"value": 1, "text": "经常拖到最后一刻"},
+        {"value": 2, "text": "有时会拖延，但能完成"},
+        {"value": 3, "text": "通常按时完成"},
+        {"value": 4, "text": "总是提前规划，严格执行"}
+      ]
+    },
+    {
+      "id": 3,
+      "dimension": "personality",
+      "subdimension": "extraversion",
+      "question": "在社交场合中，你更倾向于：",
+      "options": [
+        {"value": 1, "text": "安静待在角落，避免交流"},
+        {"value": 2, "text": "和熟人聊天，不主动认识新人"},
+        {"value": 3, "text": "适度社交，既有独处也有交流"},
+        {"value": 4, "text": "主动交流，享受成为焦点"}
+      ]
+    },
+    {
+      "id": 4,
+      "dimension": "personality",
+      "subdimension": "agreeableness",
+      "question": "当朋友需要帮助时，你会：",
+      "options": [
+        {"value": 1, "text": "先考虑自己的时间和精力"},
+        {"value": 2, "text": "帮忙，但会设定界限"},
+        {"value": 3, "text": "尽力帮助，即使有些不便"},
+        {"value": 4, "text": "毫不犹豫，全力以赴"}
+      ]
+    },
+    {
+      "id": 5,
+      "dimension": "personality",
+      "subdimension": "neuroticism",
+      "question": "面对压力或挫折时，你通常：",
+      "options": [
+        {"value": 4, "text": "很容易焦虑，难以平静"},
+        {"value": 3, "text": "会感到压力，但能调节"},
+        {"value": 2, "text": "比较淡定，不太受影响"},
+        {"value": 1, "text": "非常冷静，几乎不受干扰"}
+      ]
+    },
+    {
+      "id": 6,
+      "dimension": "decision_style",
+      "subdimension": "rational_vs_intuitive",
+      "question": "做重要决定时，你更依赖：",
+      "options": [
+        {"value": 1, "text": "直觉和感觉"},
+        {"value": 2, "text": "感觉为主，理性为辅"},
+        {"value": 3, "text": "理性为主，感觉为辅"},
+        {"value": 4, "text": "数据和逻辑分析"}
+      ]
+    },
+    {
+      "id": 7,
+      "dimension": "decision_style",
+      "subdimension": "speed",
+      "question": "你做决定的速度通常是：",
+      "options": [
+        {"value": 1, "text": "非常快，凭第一感觉"},
+        {"value": 2, "text": "比较快，简单思考后决定"},
+        {"value": 3, "text": "需要时间，仔细权衡"},
+        {"value": 4, "text": "很慢，反复思考和对比"}
+      ]
+    },
+    {
+      "id": 8,
+      "dimension": "decision_style",
+      "subdimension": "consultation",
+      "question": "做决定前，你会：",
+      "options": [
+        {"value": 1, "text": "完全自己决定，不咨询他人"},
+        {"value": 2, "text": "偶尔听听意见，但主要靠自己"},
+        {"value": 3, "text": "经常咨询他人，综合考虑"},
+        {"value": 4, "text": "必须征求多人意见才能决定"}
+      ]
+    },
+    {
+      "id": 9,
+      "dimension": "decision_style",
+      "subdimension": "regret_tendency",
+      "question": "做完决定后，你会：",
+      "options": [
+        {"value": 1, "text": "很少后悔，相信自己的选择"},
+        {"value": 2, "text": "偶尔会想，但不会纠结"},
+        {"value": 3, "text": "经常反思，担心是否正确"},
+        {"value": 4, "text": "总是后悔，反复质疑自己"}
+      ]
+    },
+    {
+      "id": 10,
+      "dimension": "decision_style",
+      "subdimension": "information_seeking",
+      "question": "决策前收集信息时，你会：",
+      "options": [
+        {"value": 1, "text": "基本不查，凭经验判断"},
+        {"value": 2, "text": "简单了解，不深入研究"},
+        {"value": 3, "text": "详细调研，多方对比"},
+        {"value": 4, "text": "穷尽所有信息，分析到底"}
+      ]
+    },
+    {
+      "id": 11,
+      "dimension": "risk_preference",
+      "subdimension": "financial",
+      "question": "如果有1万元闲钱，你会：",
+      "options": [
+        {"value": 1, "text": "存银行，保证安全"},
+        {"value": 2, "text": "买稳健理财，小幅增值"},
+        {"value": 3, "text": "投资基金，追求收益"},
+        {"value": 4, "text": "投资股票或创业，追求高回报"}
+      ]
+    },
+    {
+      "id": 12,
+      "dimension": "risk_preference",
+      "subdimension": "career",
+      "question": "毕业后选择工作时，你更倾向：",
+      "options": [
+        {"value": 1, "text": "稳定的体制内工作"},
+        {"value": 2, "text": "大公司的稳定岗位"},
+        {"value": 3, "text": "有发展潜力的创业公司"},
+        {"value": 4, "text": "自己创业或做自由职业"}
+      ]
+    },
+    {
+      "id": 13,
+      "dimension": "risk_preference",
+      "subdimension": "relationship",
+      "question": "在感情中，你会：",
+      "options": [
+        {"value": 1, "text": "非常谨慎，确定合适才开始"},
+        {"value": 2, "text": "比较谨慎，但愿意尝试"},
+        {"value": 3, "text": "相对开放，敢于表达"},
+        {"value": 4, "text": "勇敢追求，不怕失败"}
+      ]
+    },
+    {
+      "id": 14,
+      "dimension": "risk_preference",
+      "subdimension": "change",
+      "question": "面对生活重大改变（如换城市），你会：",
+      "options": [
+        {"value": 1, "text": "极力避免，喜欢稳定"},
+        {"value": 2, "text": "不太愿意，除非必要"},
+        {"value": 3, "text": "可以接受，愿意尝试"},
+        {"value": 4, "text": "非常期待，享受变化"}
+      ]
+    },
+    {
+      "id": 15,
+      "dimension": "risk_preference",
+      "subdimension": "failure_tolerance",
+      "question": "对于失败，你的态度是：",
+      "options": [
+        {"value": 1, "text": "无法接受，会严重打击信心"},
+        {"value": 2, "text": "比较难受，需要时间恢复"},
+        {"value": 3, "text": "能接受，当作学习机会"},
+        {"value": 4, "text": "完全不怕，失败是常态"}
+      ]
+    },
+    {
+      "id": 16,
+      "dimension": "life_priority",
+      "subdimension": "health",
+      "question": "你对健康的重视程度：",
+      "options": [
+        {"value": 1, "text": "不太关注，顺其自然"},
+        {"value": 2, "text": "偶尔注意，不会刻意"},
+        {"value": 3, "text": "比较重视，有意识维护"},
+        {"value": 4, "text": "非常重视，是第一优先级"}
+      ]
+    },
+    {
+      "id": 17,
+      "dimension": "life_priority",
+      "subdimension": "career",
+      "question": "你对事业成就的追求：",
+      "options": [
+        {"value": 1, "text": "不太在意，够用就好"},
+        {"value": 2, "text": "有一定追求，但不强求"},
+        {"value": 3, "text": "比较看重，愿意努力"},
+        {"value": 4, "text": "非常重要，是人生目标"}
+      ]
+    },
+    {
+      "id": 18,
+      "dimension": "life_priority",
+      "subdimension": "relationship",
+      "question": "你对家庭和亲密关系的看重程度：",
+      "options": [
+        {"value": 1, "text": "不是重点，更注重个人发展"},
+        {"value": 2, "text": "有一定重要性"},
+        {"value": 3, "text": "很重要，会投入时间精力"},
+        {"value": 4, "text": "最重要，是生活的核心"}
+      ]
+    },
+    {
+      "id": 19,
+      "dimension": "life_priority",
+      "subdimension": "freedom",
+      "question": "你对自由和独立的渴望：",
+      "options": [
+        {"value": 1, "text": "不太在意，喜欢有人依靠"},
+        {"value": 2, "text": "有一定需求"},
+        {"value": 3, "text": "比较看重，不喜欢束缚"},
+        {"value": 4, "text": "极度渴望，是核心价值"}
+      ]
+    },
+    {
+      "id": 20,
+      "dimension": "life_priority",
+      "subdimension": "wealth",
+      "question": "你对财富的态度：",
+      "options": [
+        {"value": 1, "text": "够用就好，不是追求目标"},
+        {"value": 2, "text": "希望有一定积蓄"},
+        {"value": 3, "text": "比较重视，愿意为此努力"},
+        {"value": 4, "text": "非常重要，是安全感来源"}
+      ]
+    }
+  ],
+  "scoring": {
+    "personality": {
+      "openness": {
+        "low": "传统保守型",
+        "medium": "平衡适应型",
+        "high": "开放创新型"
+      },
+      "conscientiousness": {
+        "low": "灵活随性型",
+        "medium": "适度规划型",
+        "high": "严谨自律型"
+      },
+      "extraversion": {
+        "low": "内向独立型",
+        "medium": "平衡社交型",
+        "high": "外向活跃型"
+      },
+      "agreeableness": {
+        "low": "理性独立型",
+        "medium": "平衡合作型",
+        "high": "温和利他型"
+      },
+      "neuroticism": {
+        "low": "情绪稳定型",
+        "medium": "适度敏感型",
+        "high": "情绪敏感型"
+      }
+    },
+    "decision_style": {
+      "rational": "理性分析型",
+      "intuitive": "直觉感性型",
+      "balanced": "平衡综合型"
+    },
+    "risk_preference": {
+      "risk_averse": "风险规避型",
+      "risk_neutral": "风险中性型",
+      "risk_seeking": "风险追求型"
+    },
+    "life_priority": {
+      "health_first": "健康优先型",
+      "career_first": "事业优先型",
+      "relationship_first": "关系优先型",
+      "freedom_first": "自由优先型",
+      "wealth_first": "财富优先型",
+      "balanced": "平衡发展型"
+    }
+  }
+}

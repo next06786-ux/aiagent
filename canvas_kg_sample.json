@@ -1,0 +1,678 @@
+{
+  "user_id": "default_user",
+  "information": [
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:0",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "健康生活",
+      "created_at": "2026-03-13T20:45:37.366507",
+      "first_mentioned": "2026-03-13T20:45:37.366535",
+      "mention_count": 1,
+      "category": "健康管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:1",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "运动习惯",
+      "created_at": "2026-03-13T20:45:37.692988",
+      "first_mentioned": "2026-03-13T20:45:37.693008",
+      "mention_count": 1,
+      "category": "健康管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "晨跑",
+      "created_at": "2026-03-13T20:45:37.711577",
+      "first_mentioned": "2026-03-13T20:45:37.711596",
+      "mention_count": 1,
+      "category": "健康管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "项目会议",
+      "created_at": "2026-03-13T20:45:39.642769",
+      "first_mentioned": "2026-03-13T20:45:39.642791",
+      "mention_count": 1,
+      "category": "时间管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:4",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "需求讨论",
+      "created_at": "2026-03-13T20:45:39.658969",
+      "first_mentioned": "2026-03-13T20:45:39.658987",
+      "mention_count": 1,
+      "category": "时间管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:5",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "方案评审",
+      "created_at": "2026-03-13T20:45:39.675633",
+      "first_mentioned": "2026-03-13T20:45:39.675655",
+      "mention_count": 1,
+      "category": "时间管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:6",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "拉伸运动",
+      "created_at": "2026-03-13T20:45:37.863131",
+      "first_mentioned": "2026-03-13T20:45:37.863147",
+      "mention_count": 1,
+      "category": "健康管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:7",
+      "type": "entity",
+      "entity_type": "location",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "会议室A",
+      "created_at": "2026-03-13T20:45:39.691704",
+      "first_mentioned": "2026-03-13T20:45:39.691725",
+      "mention_count": 1,
+      "category": "地点"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:8",
+      "type": "entity",
+      "entity_type": "object",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "笔记本电脑",
+      "created_at": "2026-03-13T20:45:39.707771",
+      "first_mentioned": "2026-03-13T20:45:39.707790",
+      "mention_count": 1,
+      "category": "物品"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:9",
+      "type": "entity",
+      "entity_type": "person",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "李四",
+      "created_at": "2026-03-13T20:45:39.722900",
+      "first_mentioned": "2026-03-13T20:45:39.722917",
+      "mention_count": 1,
+      "category": "人物"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:10",
+      "type": "entity",
+      "entity_type": "person",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "王五",
+      "created_at": "2026-03-13T20:45:39.736912",
+      "first_mentioned": "2026-03-13T20:45:39.736929",
+      "mention_count": 1,
+      "category": "人物"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:12",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "知识积累",
+      "created_at": "2026-03-13T20:45:40.089117",
+      "first_mentioned": "2026-03-13T20:45:40.089134",
+      "mention_count": 1,
+      "category": "学习管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:13",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "技能提升",
+      "created_at": "2026-03-13T20:45:40.102511",
+      "first_mentioned": "2026-03-13T20:45:40.102530",
+      "mention_count": 1,
+      "category": "学习管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "阅读技术书籍",
+      "created_at": "2026-03-13T20:45:40.115256",
+      "first_mentioned": "2026-03-13T20:45:40.115274",
+      "mention_count": 1,
+      "category": "学习管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:15",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "做笔记",
+      "created_at": "2026-03-13T20:45:40.129750",
+      "first_mentioned": "2026-03-13T20:45:40.129771",
+      "mention_count": 1,
+      "category": "学习管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:16",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "实践编程",
+      "created_at": "2026-03-13T20:45:40.144770",
+      "first_mentioned": "2026-03-13T20:45:40.144790",
+      "mention_count": 1,
+      "category": "学习管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:17",
+      "type": "entity",
+      "entity_type": "location",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "图书馆",
+      "created_at": "2026-03-13T20:45:40.159658",
+      "first_mentioned": "2026-03-13T20:45:40.159679",
+      "mention_count": 1,
+      "category": "地点"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:18",
+      "type": "entity",
+      "entity_type": "object",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "Python编程书",
+      "created_at": "2026-03-13T20:45:40.172840",
+      "first_mentioned": "2026-03-13T20:45:40.172858",
+      "mention_count": 1,
+      "category": "物品"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:19",
+      "type": "entity",
+      "entity_type": "object",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "笔记本",
+      "created_at": "2026-03-13T20:45:40.187036",
+      "first_mentioned": "2026-03-13T20:45:40.187054",
+      "mention_count": 1,
+      "category": "物品"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:20",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "社交活动",
+      "created_at": "2026-03-13T20:45:40.795776",
+      "first_mentioned": "2026-03-13T20:45:40.795838",
+      "mention_count": 1,
+      "category": "社交管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:21",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "友谊维护",
+      "created_at": "2026-03-13T20:45:40.810875",
+      "first_mentioned": "2026-03-13T20:45:40.810907",
+      "mention_count": 1,
+      "category": "社交管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "周末聚会",
+      "created_at": "2026-03-13T20:45:40.827449",
+      "first_mentioned": "2026-03-13T20:45:40.827467",
+      "mention_count": 1,
+      "category": "社交管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:23",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "聊天",
+      "created_at": "2026-03-13T20:45:40.844361",
+      "first_mentioned": "2026-03-13T20:45:40.844440",
+      "mention_count": 1,
+      "category": "社交管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:24",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "拍照留念",
+      "created_at": "2026-03-13T20:45:40.872705",
+      "first_mentioned": "2026-03-13T20:45:40.872723",
+      "mention_count": 1,
+      "category": "社交管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:25",
+      "type": "entity",
+      "entity_type": "location",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "咖啡厅",
+      "created_at": "2026-03-13T20:45:40.889488",
+      "first_mentioned": "2026-03-13T20:45:40.889602",
+      "mention_count": 1,
+      "category": "地点"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:26",
+      "type": "entity",
+      "entity_type": "object",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "相机",
+      "created_at": "2026-03-13T20:45:40.905398",
+      "first_mentioned": "2026-03-13T20:45:40.905416",
+      "mention_count": 1,
+      "category": "物品"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:31",
+      "type": "event",
+      "user_id": "default_user",
+      "confidence": 0.75,
+      "name": "喝水",
+      "created_at": "2026-03-13T20:45:37.878284",
+      "first_mentioned": "2026-03-13T20:45:37.878302",
+      "mention_count": 1,
+      "category": "健康管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:32",
+      "type": "entity",
+      "entity_type": "location",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "奥林匹克公园",
+      "created_at": "2026-03-13T20:45:37.895323",
+      "first_mentioned": "2026-03-13T20:45:37.895341",
+      "mention_count": 1,
+      "category": "地点"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:33",
+      "type": "entity",
+      "entity_type": "object",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "Nike跑鞋",
+      "created_at": "2026-03-13T20:45:38.046411",
+      "first_mentioned": "2026-03-13T20:45:38.046428",
+      "mention_count": 1,
+      "category": "物品"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:34",
+      "type": "entity",
+      "entity_type": "object",
+      "user_id": "default_user",
+      "confidence": 0.8,
+      "name": "运动手表",
+      "created_at": "2026-03-13T20:45:38.063119",
+      "first_mentioned": "2026-03-13T20:45:38.063135",
+      "mention_count": 1,
+      "category": "物品"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:35",
+      "type": "entity",
+      "entity_type": "person",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "张三",
+      "created_at": "2026-03-13T20:45:38.080357",
+      "first_mentioned": "2026-03-13T20:45:38.080375",
+      "mention_count": 1,
+      "category": "人物"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:37",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.9,
+      "name": "项目管理",
+      "created_at": "2026-03-13T20:45:39.614148",
+      "first_mentioned": "2026-03-13T20:45:39.614168",
+      "mention_count": 1,
+      "category": "时间管理"
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:38",
+      "type": "concept",
+      "user_id": "default_user",
+      "confidence": 0.85,
+      "name": "团队协作",
+      "created_at": "2026-03-13T20:45:39.628891",
+      "first_mentioned": "2026-03-13T20:45:39.628909",
+      "mention_count": 1,
+      "category": "社交管理"
+    }
+  ],
+  "sources": [
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:11",
+      "user_id": "default_user",
+      "description": "会议室讨论的照片",
+      "created_at": "2026-03-13T20:45:40.030611",
+      "source_id": "photo_meeting_001",
+      "type": "photo",
+      "timestamp": 1773405940
+    },
+    {
+      "id": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:36",
+      "user_id": "default_user",
+      "created_at": "2026-03-13T20:45:39.273080",
+      "description": "早晨在公园跑步的照片",
+      "source_id": "photo_morning_run_001",
+      "type": "photo",
+      "timestamp": 1773405939
+    }
+  ],
+  "relationships": [
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:0",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:6",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:38.283446"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:0",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:38.096815"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:1",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:38.300350"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:36",
+      "type": "EXTRACTED_FROM",
+      "confidence": 0.9,
+      "created_at": "2026-03-13T20:45:39.386092"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:31",
+      "type": "BEFORE",
+      "created_at": "2026-03-13T20:45:39.257804"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:34",
+      "type": "REQUIRES",
+      "created_at": "2026-03-13T20:45:38.745527"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:33",
+      "type": "REQUIRES",
+      "created_at": "2026-03-13T20:45:38.516691"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:32",
+      "type": "OCCURS_AT",
+      "created_at": "2026-03-13T20:45:38.347181"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:11",
+      "type": "EXTRACTED_FROM",
+      "confidence": 0.9,
+      "created_at": "2026-03-13T20:45:40.045904"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:8",
+      "type": "REQUIRES",
+      "created_at": "2026-03-13T20:45:39.799801"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:7",
+      "type": "OCCURS_AT",
+      "created_at": "2026-03-13T20:45:39.784780"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:4",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "PART_OF",
+      "created_at": "2026-03-13T20:45:39.860073"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:5",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "PART_OF",
+      "created_at": "2026-03-13T20:45:40.016073"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:6",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "type": "BEFORE",
+      "created_at": "2026-03-13T20:45:39.118396"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:6",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:32",
+      "type": "OCCURS_AT",
+      "created_at": "2026-03-13T20:45:38.502405"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:7",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:11",
+      "type": "EXTRACTED_FROM",
+      "confidence": 0.85,
+      "created_at": "2026-03-13T20:45:40.061491"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:9",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:40.998463"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:9",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:39.815410"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:10",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:41.011425"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:10",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:39.829884"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:12",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:40.234350"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:13",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:37",
+      "type": "SUPPORTS",
+      "created_at": "2026-03-13T20:45:40.468897"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:13",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:16",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:40.248800"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "PREPARES_FOR",
+      "created_at": "2026-03-13T20:45:40.611220"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:15",
+      "type": "CAUSES",
+      "created_at": "2026-03-13T20:45:40.320417"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:18",
+      "type": "REQUIRES",
+      "created_at": "2026-03-13T20:45:40.277926"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:17",
+      "type": "OCCURS_AT",
+      "created_at": "2026-03-13T20:45:40.263901"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:15",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:16",
+      "type": "CAUSES",
+      "created_at": "2026-03-13T20:45:40.453874"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:15",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:19",
+      "type": "REQUIRES",
+      "created_at": "2026-03-13T20:45:40.291468"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:20",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:40.921010"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:21",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:40.936166"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:38",
+      "type": "ENHANCES",
+      "created_at": "2026-03-13T20:45:41.053199"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:25",
+      "type": "OCCURS_AT",
+      "created_at": "2026-03-13T20:45:40.953788"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:23",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "PART_OF",
+      "created_at": "2026-03-13T20:45:41.025035"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:24",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "PART_OF",
+      "created_at": "2026-03-13T20:45:41.039282"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:24",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:26",
+      "type": "REQUIRES",
+      "created_at": "2026-03-13T20:45:40.968145"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:32",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:36",
+      "type": "EXTRACTED_FROM",
+      "confidence": 0.85,
+      "created_at": "2026-03-13T20:45:39.549488"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:33",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:36",
+      "type": "EXTRACTED_FROM",
+      "confidence": 0.8,
+      "created_at": "2026-03-13T20:45:39.568790"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:35",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:22",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:40.983637"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:35",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:14",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:40.306601"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:35",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:39.845566"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:35",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:6",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:39.101053"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:35",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:2",
+      "type": "PARTICIPATES_IN",
+      "created_at": "2026-03-13T20:45:38.766361"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:37",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:39.752182"
+    },
+    {
+      "source": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:38",
+      "target": "4:516fc51a-8264-4c7b-89f3-0167e4d34872:3",
+      "type": "INCLUDES",
+      "created_at": "2026-03-13T20:45:39.769398"
+    }
+  ]
+}

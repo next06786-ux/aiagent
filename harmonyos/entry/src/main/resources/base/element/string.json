@@ -1,0 +1,68 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "VisionAgent - 24/7 Vision AI Agent"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "VisionAgent Main Ability"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "VisionAgent"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "需要相机权限来拍照和录像"
+    },
+    {
+      "name": "permission_microphone_reason",
+      "value": "需要麦克风权限来录制视频音频"
+    },
+    {
+      "name": "permission_media_reason",
+      "value": "需要访问媒体文件来处理图片和视频"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "需要网络权限来连接AI服务"
+    },
+    {
+      "name": "permission_background_reason",
+      "value": "需要后台运行权限来执行24/7自主任务"
+    },
+    {
+      "name": "permission_location_reason",
+      "value": "需要位置权限来提供基于位置的智能建议"
+    },
+    {
+      "name": "permission_accelerometer_reason",
+      "value": "需要访问加速度计进行活动检测"
+    },
+    {
+      "name": "permission_gyroscope_reason",
+      "value": "需要访问陀螺仪进行运动分析"
+    },
+    {
+      "name": "permission_activity_reason",
+      "value": "需要访问运动数据进行健康分析"
+    },
+    {
+      "name": "permission_network_reason",
+      "value": "需要获取网络信息以显示IP地址"
+    },
+    {
+      "name": "permission_album_reason",
+      "value": "需要访问相册来读取和处理图片"
+    },
+    {
+      "name": "permission_read_media_reason",
+      "value": "需要读取相册权限来扫描和分析照片"
+    },
+    {
+      "name": "permission_write_media_reason",
+      "value": "需要写入相册权限来保存处理后的照片"
+    }
+  ]
+}

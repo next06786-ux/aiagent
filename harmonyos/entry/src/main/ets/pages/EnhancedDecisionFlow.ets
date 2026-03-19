@@ -1,0 +1,889 @@
+/**
+ * 增强决策流程页面
+ * 两阶段信息收集 + 个性化决策模拟
+ * 阶段1: 用户自由表达 -> AI问"还有吗" -> 用户说"没了"
+ * 阶段2: AI针对性提问收集信息
+ * 阶段3: 本地模型+LoRA决策模拟
+ */
+import router from '@ohos.router'
+import http from '@ohos.net.http'
+import promptAction from '@ohos.promptAction'
+import { ApiConfig } from '../config/ApiConfig'
+import { getUserId } from '../service/UserSessionManager'
+
+interface Message {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp: string
+}
+
+interface CollectedInfo {
+  decision_context: Record<string, string>
+  user_constraints: Record<string, string>
+  priorities: Record<string, string>
+  concerns: string[]
+  options_mentioned: string[]
+}
+
+interface OptionInput {
+  title: string
+  description: string
+}
+
+interface SimulationOption {
+  option_id: string
+  title: string
+  description: string
+  final_score: number
+  risk_level: number
+  timeline: TimelineEvent[]
+}
+
+interface TimelineEvent {
+  month: number
+  event: string
+  impact: Record<string, number>
+  probability: number
+}
+
+interface SimulationResult {
+  simulation_id: string
+  question: string
+  options: SimulationOption[]
+  recommendation: string
+  used_lora: boolean
+}
+
+@Entry
+@Component
+struct EnhancedDecisionFlow {
+  @State currentPhase: 'init' | 'user_free_talk' | 'ai_questioning' | 'ask_options' | 'simulation' | 'result' = 'init'
+  @State sessionId: string = ''
+  @State userId: string = ''
+  @State initialQuestion: string = ''
+  @State messages: Message[] = []
+  @State userInput: string = ''
+  @State isLoading: boolean = false
+  @State collectedInfo: CollectedInfo | null = null
+  @State simulationResult: SimulationResult | null = null
+  @State currentRound: number = 0
+  @State userOptions: string[] = []  // 用户提供的选项
+  @State aiSuggestedOptions: OptionInput[] = []  // AI建议的选项
+  @State allOptions: OptionInput[] = []  // 所有选项（用户+AI）
+
+  async aboutToAppear() {
+    // 获取真实用户ID
+    this.userId = await getUserId()
+    console.info('[EnhancedDecisionFlow] 获取到用户ID:', this.userId)
+    
+    // 如果是 default_user，说明未登录，跳转到登录页
+    if (this.userId === 'default_user' || this.userId === '') {
+      console.warn('[EnhancedDecisionFlow] 用户未登录，跳转到登录页')
+      promptAction.showToast({ message: '请先登录' })
+      router.replaceUrl({ url: 'pages/Login' })
+      return
+    }
+
+    // 处理路由参数
+    const params = router.getParams() as Record<string, string>
+    if (params?.userId) {
+      this.userId = params.userId
+    }
+    if (params?.initialQuestion) {
+      this.initialQuestion = params.initialQuestion
+      // 如果有初始问题，自动开始收集
+      setTimeout(() => {
+        this.startCollection()
+      }, 500)
+    }
+  }
+
+  // 开始信息收集
+  private async startCollection() {
+    if (!this.initialQuestion.trim()) {
+      return
+    }
+
+    // 确保用户ID已加载
+    if (!this.userId || this.userId === '') {
+      console.warn('[EnhancedDecisionFlow] 用户ID未加载，等待...')
+      this.userId = await getUserId()
+      console.info('[EnhancedDecisionFlow] 重新获取用户ID:', this.userId)
+    }
+
+    console.info('[EnhancedDecisionFlow] 开始收集，用户ID:', this.userId)
+
+    this.isLoading = true
+
+    try {
+      const httpRequest = http.createHttp()
+      
+      console.info('[EnhancedDecisionFlow] 请求数据 - user_id:', this.userId, 'question:', this.initialQuestion)
+      
+      const response = await httpRequest.request(
+        ApiConfig.getApiUrl('/api/decision/enhanced/collect/start'),
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: `{"user_id":"${this.userId}","initial_question":"${this.initialQuestion.replace(/"/g, '\\"')}"}`,
+          connectTimeout: 30000,
+          readTimeout: 30000
+        }
+      )
+      httpRequest.destroy()
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if (result.code === 200 && result.data) {
+          const data = result.data as Record<string, string>
+          this.sessionId = data.session_id
+          this.currentPhase = 'user_free_talk'
+          
+          console.info('[EnhancedDecisionFlow] 会话创建成功:', this.sessionId)
+          
+          // 添加系统消息
+          this.messages.push({
+            role: 'system',
+            content: data.message,
+            timestamp: new Date().toISOString()
+          })
+        }
+      }
+    } catch (error) {
+      console.error('开始收集失败:', (error as Error).message)
+    }
+
+    this.isLoading = false
+  }
+
+  // 继续信息收集
+  private async continueCollection() {
+    if (!this.userInput.trim()) {
+      return
+    }
+
+    // 如果在询问选项阶段
+    if (this.currentPhase === 'ask_options') {
+      this.handleUserOptions()
+      return
+    }
+
+    // 添加用户消息
+    this.messages.push({
+      role: 'user',
+      content: this.userInput,
+      timestamp: new Date().toISOString()
+    })
+
+    const userMessage = this.userInput
+    this.userInput = ''
+    this.isLoading = true
+
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        ApiConfig.getApiUrl('/api/decision/enhanced/collect/continue'),
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({
+            session_id: this.sessionId,
+            user_response: userMessage
+          }),
+          connectTimeout: 30000,
+          readTimeout: 30000
+        }
+      )
+      httpRequest.destroy()
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if (result.code === 200 && result.data) {
+          const data = result.data as Record<string, Object>
+          const round = data.round as number
+          this.currentRound = round || this.currentRound + 1
+
+          const isComplete = data.is_complete as boolean
+          if (isComplete) {
+            // 信息收集完成，询问用户选项
+            this.collectedInfo = data.collected_info as CollectedInfo
+            const summary = data.summary as string
+            this.messages.push({
+              role: 'assistant',
+              content: `信息收集完成！\n\n${summary}`,
+              timestamp: new Date().toISOString()
+            })
+            
+            // 进入询问选项阶段
+            this.currentPhase = 'ask_options'
+            setTimeout(() => {
+              this.messages.push({
+                role: 'assistant',
+                content: '你有明确的选择吗？如果有，请告诉我你考虑的选项（用逗号分隔，比如：考研,工作,创业）。如果没有，直接说"没有"，我会为你推荐一些选项。',
+                timestamp: new Date().toISOString()
+              })
+            }, 500)
+          } else {
+            // 继续收集
+            const phase = data.phase as string
+            this.currentPhase = phase as 'user_free_talk' | 'ai_questioning'
+            const aiQuestion = data.ai_question as string
+            this.messages.push({
+              role: 'assistant',
+              content: aiQuestion,
+              timestamp: new Date().toISOString()
+            })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('继续收集失败:', (error as Error).message)
+      this.messages.push({
+        role: 'system',
+        content: '抱歉，出现了错误，请重试',
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    this.isLoading = false
+  }
+
+  // 处理用户选项输入
+  private async handleUserOptions(): Promise<void> {
+    const userResponse = this.userInput.trim()
+    
+    // 添加用户消息
+    this.messages.push({
+      role: 'user',
+      content: userResponse,
+      timestamp: new Date().toISOString()
+    })
+    
+    this.userInput = ''
+    this.isLoading = true
+
+    // 检查用户是否有明确选项
+    const hasNoOptions = userResponse.includes('没有') || 
+                         userResponse.includes('不知道') || 
+                         userResponse.includes('没想好') ||
+                         userResponse.toLowerCase().includes('no')
+
+    if (!hasNoOptions) {
+      // 用户提供了选项，解析它们
+      this.userOptions = userResponse.split(/[,，、]/).map(opt => opt.trim()).filter(opt => opt.length > 0)
+    }
+
+    // 请求 AI 生成建议选项
+    await this.generateAISuggestions()
+    
+    this.isLoading = false
+  }
+
+  // 生成 AI 建议选项
+  private async generateAISuggestions(): Promise<void> {
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        ApiConfig.getApiUrl('/api/decision/enhanced/generate-options'),
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({
+            session_id: this.sessionId,
+            user_options: this.userOptions
+          }),
+          connectTimeout: 30000,
+          readTimeout: 30000
+        }
+      )
+      httpRequest.destroy()
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if (result.code === 200 && result.data) {
+          const data = result.data as Record<string, Object>
+          const aiOptions = data.ai_options as OptionInput[]
+          this.aiSuggestedOptions = aiOptions
+
+          // 合并所有选项
+          this.allOptions = []
+          
+          // 添加用户选项
+          for (const userOpt of this.userOptions) {
+            const opt: OptionInput = { title: userOpt, description: `你提出的选择` }
+            this.allOptions.push(opt)
+          }
+          
+          // 添加 AI 建议
+          for (const aiOpt of this.aiSuggestedOptions) {
+            this.allOptions.push(aiOpt)
+          }
+
+          // 显示选项确认
+          this.showOptionsConfirmation()
+        }
+      }
+    } catch (error) {
+      console.error('生成AI建议失败:', (error as Error).message)
+      // 降级：使用默认选项
+      this.useDefaultOptions()
+    }
+  }
+
+  // 显示选项确认
+  private showOptionsConfirmation(): void {
+    let optionsText = '我为你准备了以下选项：\n\n'
+    for (let i = 0; i < this.allOptions.length; i++) {
+      const opt = this.allOptions[i]
+      optionsText += `${i + 1}. ${opt.title}\n`
+    }
+    optionsText += '\n点击"开始模拟"为每个选项创建决策副本。'
+
+    this.messages.push({
+      role: 'assistant',
+      content: optionsText,
+      timestamp: new Date().toISOString()
+    })
+
+    this.currentPhase = 'simulation'
+  }
+
+  // 使用默认选项
+  private useDefaultOptions(): void {
+    if (this.userOptions.length > 0) {
+      // 只使用用户选项
+      for (const userOpt of this.userOptions) {
+        const opt: OptionInput = { title: userOpt, description: `你提出的选择` }
+        this.allOptions.push(opt)
+      }
+    } else {
+      // 使用通用默认选项
+      const opt1: OptionInput = { title: '选项A', description: '第一个选择' }
+      const opt2: OptionInput = { title: '选项B', description: '第二个选择' }
+      this.allOptions = [opt1, opt2]
+    }
+    this.showOptionsConfirmation()
+  }
+
+  // 显示选项输入
+  private showOptionsInput(): void {
+    // 已废弃，使用新的流程
+    this.startSimulation(this.allOptions)
+  }
+
+  // 开始决策模拟
+  private async startSimulation(options: OptionInput[]): Promise<void> {
+    this.isLoading = true
+
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        ApiConfig.getApiUrl('/api/decision/enhanced/simulate/with-collection'),
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({
+            session_id: this.sessionId,
+            options: options,
+            use_lora: true
+          }),
+          connectTimeout: 60000,
+          readTimeout: 60000
+        }
+      )
+      httpRequest.destroy()
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if (result.code === 200 && result.data) {
+          const data = result.data as SimulationResult
+          this.simulationResult = data
+          
+          // 跳转到副本列表页面
+          router.replaceUrl({
+            url: 'pages/DecisionDungeonList',
+            params: {
+              userId: this.userId,
+              simulationData: JSON.stringify(data)
+            }
+          })
+        }
+      }
+    } catch (error) {
+      console.error('决策模拟失败:', (error as Error).message)
+    }
+
+    this.isLoading = false
+  }
+
+  build() {
+    Column() {
+      // 顶部导航
+      Row() {
+        Button({ type: ButtonType.Circle }) {
+          Text('←')
+            .fontSize(24)
+            .fontColor('#1A1A1A')
+            .fontWeight(600)
+        }
+        .width(40)
+        .height(40)
+        .backgroundColor('rgba(0,0,0,0)')
+        .onClick(() => router.back())
+
+        Text('智能决策助手')
+          .fontSize(20)
+          .fontWeight(700)
+          .fontColor('#1A1A1A')
+          .layoutWeight(1)
+          .margin({ left: 12 })
+
+        // 阶段指示器
+        Text(this.getPhaseText())
+          .fontSize(12)
+          .fontWeight(600)
+          .fontColor('#007AFF')
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .backgroundColor('rgba(0,122,255,0.1)')
+          .borderRadius(12)
+      }
+      .width('100%')
+      .height(56)
+      .padding({ left: 16, right: 16 })
+      .backgroundColor('rgba(255,255,255,0.95)')
+
+      // 主内容区
+      if (this.currentPhase === 'init') {
+        this.InitView()
+      } else if (this.currentPhase === 'result') {
+        this.ResultView()
+      } else {
+        this.ChatView()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#F5F7FA')
+  }
+
+  // 初始化视图
+  @Builder
+  InitView() {
+    Column({ space: 24 }) {
+      // 标题
+      Column({ space: 20 }) {
+        // AI图标
+        Stack() {
+          Circle({ width: 80, height: 80 })
+            .fill('linear-gradient(135deg, #667eea, #764ba2)')
+            .opacity(0.15)
+          
+          Circle({ width: 64, height: 64 })
+            .fill('linear-gradient(135deg, #667eea, #764ba2)')
+            .opacity(0.25)
+          
+          Text('AI')
+            .fontSize(28)
+            .fontWeight(700)
+            .fontColor('#667eea')
+        }
+        .width(80)
+        .height(80)
+
+        Column({ space: 8 }) {
+          Text('AI决策助手')
+            .fontSize(32)
+            .fontWeight(700)
+            .fontColor('#1A1A1A')
+
+          Text('通过对话深入了解你的情况\n为你提供个性化的决策建议')
+            .fontSize(16)
+            .fontColor('#666')
+            .textAlign(TextAlign.Center)
+            .lineHeight(24)
+        }
+      }
+      .width('100%')
+      .padding({ top: 60 })
+
+      // 输入框
+      Column({ space: 16 }) {
+        Text('你面临什么决策？')
+          .fontSize(18)
+          .fontWeight(600)
+          .fontColor('#1A1A1A')
+          .alignSelf(ItemAlign.Start)
+
+        TextArea({ placeholder: '比如：我不知道毕业后该考研还是工作...' })
+          .width('100%')
+          .height(120)
+          .padding(16)
+          .fontSize(16)
+          .fontColor('#1A1A1A')
+          .backgroundColor(Color.White)
+          .borderRadius(16)
+          .onChange((value: string) => {
+            this.initialQuestion = value
+          })
+
+        Button('开始对话')
+          .width('100%')
+          .height(48)
+          .fontSize(16)
+          .fontWeight(600)
+          .fontColor(Color.White)
+          .backgroundColor('#007AFF')
+          .borderRadius(12)
+          .enabled(!this.isLoading && this.initialQuestion.trim().length > 0)
+          .onClick(() => {
+            this.startCollection()
+          })
+      }
+      .width('100%')
+      .padding(20)
+    }
+    .width('100%')
+    .layoutWeight(1)
+  }
+
+  // 对话视图
+  @Builder
+  ChatView() {
+    Column() {
+      // 消息列表
+      Scroll() {
+        Column({ space: 16 }) {
+          // 显示初始问题
+          Row() {
+            Column({ space: 8 }) {
+              Text('你的问题')
+                .fontSize(12)
+                .fontColor('#999')
+              Text(this.initialQuestion)
+                .fontSize(16)
+                .fontColor('#1A1A1A')
+                .fontWeight(600)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+          }
+          .width('100%')
+          .padding(16)
+          .backgroundColor('rgba(0,122,255,0.05)')
+          .borderRadius(12)
+
+          // 消息列表
+          ForEach(this.messages, (msg: Message, index: number) => {
+            this.MessageBubble(msg)
+          })
+
+          // 加载指示器
+          if (this.isLoading) {
+            Row({ space: 8 }) {
+              LoadingProgress()
+                .width(20)
+                .height(20)
+                .color('#007AFF')
+              Text('AI思考中...')
+                .fontSize(14)
+                .fontColor('#666')
+            }
+            .padding(16)
+          }
+        }
+        .width('100%')
+        .padding(16)
+      }
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
+
+      // 输入框
+      if (this.currentPhase !== 'simulation' && this.currentPhase !== 'result') {
+        Row({ space: 12 }) {
+          TextInput({ 
+            placeholder: this.getInputPlaceholder(),
+            text: this.userInput  // 绑定text属性，这样清空userInput时输入框也会清空
+          })
+            .layoutWeight(1)
+            .height(44)
+            .fontSize(16)
+            .backgroundColor(Color.White)
+            .borderRadius(22)
+            .padding({ left: 16, right: 16 })
+            .onChange((value: string) => {
+              this.userInput = value
+            })
+
+          Button('发送')
+            .width(70)
+            .height(44)
+            .fontSize(16)
+            .fontWeight(600)
+            .fontColor(Color.White)
+            .backgroundColor('#007AFF')
+            .borderRadius(22)
+            .enabled(!this.isLoading && this.userInput.trim().length > 0)
+            .onClick(() => {
+              this.continueCollection()
+            })
+        }
+        .width('100%')
+        .padding(16)
+        .backgroundColor(Color.White)
+      } else if (this.currentPhase === 'simulation') {
+        // 显示开始模拟按钮
+        Row() {
+          Button('开始模拟')
+            .width('90%')
+            .height(48)
+            .fontSize(16)
+            .fontWeight(600)
+            .fontColor(Color.White)
+            .backgroundColor('#007AFF')
+            .borderRadius(24)
+            .enabled(!this.isLoading)
+            .onClick(() => {
+              this.startSimulation(this.allOptions)
+            })
+        }
+        .width('100%')
+        .padding(16)
+        .backgroundColor(Color.White)
+        .justifyContent(FlexAlign.Center)
+      }
+    }
+    .width('100%')
+    .layoutWeight(1)
+  }
+
+  // 结果视图
+  @Builder
+  ResultView() {
+    Scroll() {
+      Column({ space: 20 }) {
+        // 标题
+        Row({ space: 12 }) {
+          Stack() {
+            Circle({ width: 48, height: 48 })
+              .fill('linear-gradient(135deg, #667eea, #764ba2)')
+              .opacity(0.15)
+            
+            Text('分析')
+              .fontSize(14)
+              .fontWeight(700)
+              .fontColor('#667eea')
+          }
+          .width(48)
+          .height(48)
+
+          Text('决策分析结果')
+            .fontSize(24)
+            .fontWeight(700)
+            .fontColor('#1A1A1A')
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20, top: 20 })
+
+        // 选项卡片
+        if (this.simulationResult && this.simulationResult.options) {
+          ForEach(this.simulationResult.options, (option: SimulationOption) => {
+            this.OptionCard(option)
+          })
+        }
+
+        // AI推荐
+        if (this.simulationResult && this.simulationResult.recommendation) {
+          Column({ space: 12 }) {
+            Row({ space: 12 }) {
+              Stack() {
+                Circle({ width: 40, height: 40 })
+                  .fill('linear-gradient(135deg, #007AFF, #5856D6)')
+                  .opacity(0.15)
+                
+                Text('AI')
+                  .fontSize(14)
+                  .fontWeight(700)
+                  .fontColor('#007AFF')
+              }
+              .width(40)
+              .height(40)
+
+              Text('AI推荐')
+                .fontSize(18)
+                .fontWeight(700)
+                .fontColor('#007AFF')
+            }
+
+            Text(this.simulationResult.recommendation)
+              .fontSize(15)
+              .fontColor('#333')
+              .lineHeight(24)
+          }
+          .width('100%')
+          .padding(20)
+          .backgroundColor('rgba(0,122,255,0.05)')
+          .borderRadius(16)
+          .margin({ left: 20, right: 20 })
+          .alignItems(HorizontalAlign.Start)
+        }
+
+        // 操作按钮
+        Row({ space: 12 }) {
+          Button('查看详情')
+            .layoutWeight(1)
+            .height(48)
+            .fontSize(16)
+            .fontWeight(600)
+            .fontColor('#007AFF')
+            .backgroundColor('rgba(0,122,255,0.1)')
+            .borderRadius(12)
+
+          Button('重新分析')
+            .layoutWeight(1)
+            .height(48)
+            .fontSize(16)
+            .fontWeight(600)
+            .fontColor(Color.White)
+            .backgroundColor('#007AFF')
+            .borderRadius(12)
+            .onClick(() => {
+              this.resetFlow()
+            })
+        }
+        .width('100%')
+        .padding({ left: 20, right: 20, bottom: 20 })
+      }
+      .width('100%')
+    }
+    .layoutWeight(1)
+    .scrollBar(BarState.Auto)
+  }
+
+  // 消息气泡
+  @Builder
+  MessageBubble(msg: Message) {
+    Row() {
+      if (msg.role === 'user') {
+        Blank()
+      }
+
+      Column({ space: 4 }) {
+        Text(msg.content)
+          .fontSize(15)
+          .fontColor(msg.role === 'user' ? Color.White : '#1A1A1A')
+          .lineHeight(22)
+          .padding(12)
+          .backgroundColor(msg.role === 'user' ? '#007AFF' : Color.White)
+          .borderRadius(12)
+          .constraintSize({ maxWidth: '75%' })
+      }
+      .alignItems(msg.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)
+
+      if (msg.role === 'assistant' || msg.role === 'system') {
+        Blank()
+      }
+    }
+    .width('100%')
+  }
+
+  // 选项卡片
+  @Builder
+  OptionCard(option: SimulationOption) {
+    Column({ space: 12 }) {
+      Row() {
+        Text(option.title)
+          .fontSize(18)
+          .fontWeight(700)
+          .fontColor('#1A1A1A')
+          .layoutWeight(1)
+
+        Text(`${option.final_score.toFixed(1)}分`)
+          .fontSize(20)
+          .fontWeight(700)
+          .fontColor('#007AFF')
+      }
+      .width('100%')
+
+      // 风险等级
+      Row({ space: 8 }) {
+        Text('风险等级:')
+          .fontSize(14)
+          .fontColor('#666')
+        
+        Progress({ value: option.risk_level * 100, total: 100, type: ProgressType.Linear })
+          .width(100)
+          .height(6)
+          .color(this.getRiskColor(option.risk_level))
+        
+        Text(this.getRiskText(option.risk_level))
+          .fontSize(14)
+          .fontColor(this.getRiskColor(option.risk_level))
+          .fontWeight(600)
+      }
+
+      Text(option.description)
+        .fontSize(14)
+        .fontColor('#666')
+        .lineHeight(20)
+    }
+    .width('100%')
+    .padding(16)
+    .backgroundColor(Color.White)
+    .borderRadius(16)
+    .margin({ left: 20, right: 20 })
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  // 辅助方法
+  private getPhaseText(): string {
+    switch (this.currentPhase) {
+      case 'init':
+        return '准备开始'
+      case 'user_free_talk':
+        return '自由表达'
+      case 'ai_questioning':
+        return 'AI提问'
+      case 'ask_options':
+        return '确认选项'
+      case 'simulation':
+        return '准备模拟'
+      case 'result':
+        return '完成'
+      default:
+        return ''
+    }
+  }
+
+  private getInputPlaceholder(): string {
+    if (this.currentPhase === 'user_free_talk') {
+      return '详细描述你的情况...'
+    } else if (this.currentPhase === 'ask_options') {
+      return '输入你的选项，用逗号分隔...'
+    } else {
+      return '回答AI的问题...'
+    }
+  }
+
+  private getRiskColor(risk: number): string {
+    if (risk < 0.3) return '#34C759'
+    if (risk < 0.6) return '#FF9500'
+    return '#FF3B30'
+  }
+
+  private getRiskText(risk: number): string {
+    if (risk < 0.3) return '低风险'
+    if (risk < 0.6) return '中风险'
+    return '高风险'
+  }
+
+  private resetFlow() {
+    this.currentPhase = 'init'
+    this.sessionId = ''
+    this.initialQuestion = ''
+    this.messages = []
+    this.userInput = ''
+    this.collectedInfo = null
+    this.simulationResult = null
+    this.currentRound = 0
+  }
+}

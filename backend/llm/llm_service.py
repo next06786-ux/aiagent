@@ -1,0 +1,477 @@
+"""
+大模型服务
+LLM Service - 为智能体提供大模型增强能力
+"""
+import os
+from typing import Dict, List, Optional, Any
+from enum import Enum
+import json
+
+
+class LLMProvider(Enum):
+    """大模型提供商"""
+    OPENAI = "openai"
+    QWEN = "qwen"  # 通义千问
+    ERNIE = "ernie"  # 文心一言
+    GLM = "glm"  # 智谱
+    OLLAMA = "ollama"  # 本地
+    LOCAL = "local"  # 本地Qwen服务器
+
+
+class LLMService:
+    """大模型服务"""
+    
+    def __init__(self, provider: str = "openai", api_key: Optional[str] = None):
+        self.provider = LLMProvider(provider)
+        # 特殊处理 Qwen，使用 DASHSCOPE_API_KEY
+        if provider == "qwen":
+            self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
+        elif provider == "local":
+            self.api_key = "local"  # 本地模型不需要API key
+        else:
+            self.api_key = api_key or os.getenv(f"{provider.upper()}_API_KEY")
+        self.client = None
+        self.enabled = False  # 添加enabled属性
+        self._initialize()
+    
+    def _initialize(self):
+        """初始化大模型客户端"""
+        if self.provider == LLMProvider.OPENAI:
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key)
+                self.model = "gpt-3.5-turbo"
+                self.enabled = True  # 初始化成功
+            except ImportError:
+                print("⚠️ OpenAI 未安装，请运行: pip install openai")
+                self.enabled = False
+        
+        elif self.provider == LLMProvider.QWEN:
+            try:
+                from openai import OpenAI
+                # 使用 OpenAI 兼容接口
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                )
+                self.model = "qwen-plus"  # qwen-plus, qwen-turbo, qwen-max, qwen3.5-plus
+                self.enable_thinking = True  # 启用深度思考模式
+                self.enabled = True  # 初始化成功
+            except ImportError:
+                print("⚠️ OpenAI 未安装，请运行: pip install openai")
+                self.enabled = False
+        
+        elif self.provider == LLMProvider.OLLAMA:
+            try:
+                import ollama
+                self.client = ollama
+                self.model = "llama3"
+                self.enabled = True  # 初始化成功
+            except ImportError:
+                print("⚠️ Ollama 未安装，请运行: pip install ollama")
+                self.enabled = False
+    
+    def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, response_format: Optional[str] = None) -> str:
+        """
+        对话接口
+        
+        Args:
+            messages: 消息列表 [{"role": "user", "content": "..."}]
+            temperature: 温度参数（0-1，越高越随机）
+            response_format: 响应格式，可选 "json_object"
+        
+        Returns:
+            大模型回复
+        """
+        try:
+            if self.provider == LLMProvider.OPENAI:
+                return self._chat_openai(messages, temperature, response_format)
+            elif self.provider == LLMProvider.QWEN:
+                return self._chat_qwen(messages, temperature, response_format)
+            elif self.provider == LLMProvider.OLLAMA:
+                return self._chat_ollama(messages, temperature)
+            else:
+                return "大模型未配置"
+        except Exception as e:
+            print(f"LLM 调用失败: {e}")
+            return f"大模型调用失败: {str(e)}"
+    
+    def _chat_openai(self, messages: List[Dict[str, str]], temperature: float, response_format: Optional[str] = None) -> str:
+        """OpenAI 对话"""
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "timeout": 15
+        }
+        if response_format == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
+        
+        response = self.client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
+    
+    def _chat_qwen(self, messages: List[Dict[str, str]], temperature: float, response_format: Optional[str] = None) -> str:
+        """通义千问对话（使用 OpenAI 兼容接口）"""
+        extra_body = {}
+        
+        # 启用深度思考模式（如果支持）
+        if hasattr(self, 'enable_thinking') and self.enable_thinking:
+            extra_body['enable_search'] = False  # 禁用搜索，加快响应
+        
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "extra_body": extra_body,
+            "timeout": 20
+        }
+        
+        # 添加 JSON 响应格式支持
+        if response_format == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
+        
+        try:
+            response = self.client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"Qwen API 调用失败: {e}")
+            # 返回友好的错误信息
+            return f"抱歉，AI服务暂时无法响应。请稍后再试。(错误: {str(e)[:50]})"
+    
+    def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+        """
+        流式对话接口（支持思考过程展示）
+        
+        Args:
+            messages: 消息列表
+            temperature: 温度参数
+        
+        Yields:
+            {"type": "thinking", "content": "..."} 或 {"type": "answer", "content": "..."}
+        """
+        try:
+            if self.provider == LLMProvider.QWEN:
+                yield from self._chat_qwen_stream(messages, temperature)
+            else:
+                # 其他提供商暂不支持流式
+                content = self.chat(messages, temperature)
+                yield {"type": "answer", "content": content}
+        except Exception as e:
+            print(f"LLM 流式调用失败: {e}")
+            yield {"type": "error", "content": str(e)}
+    
+    def _chat_qwen_stream(self, messages: List[Dict[str, str]], temperature: float):
+        """通义千问流式对话（支持深度思考模式）"""
+        try:
+            completion = self.client.chat.completions.create(
+                model="qwen-plus",  # 深度思考模型
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+                extra_body={"enable_thinking": True},  # 启用深度思考
+                timeout=30
+            )
+            
+            is_answering = False  # 是否进入回复阶段
+            
+            for chunk in completion:
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    
+                    # 检查思考过程（reasoning_content）
+                    if hasattr(delta, "reasoning_content") and delta.reasoning_content is not None:
+                        if not is_answering:
+                            # 发送思考过程
+                            yield {"type": "thinking", "content": delta.reasoning_content}
+                    
+                    # 检查回答内容（content）
+                    if hasattr(delta, "content") and delta.content:
+                        if not is_answering:
+                            # 第一次收到回答内容，标记进入回复阶段
+                            is_answering = True
+                        # 发送回答内容
+                        yield {"type": "answer", "content": delta.content}
+        
+        except Exception as e:
+            print(f"Qwen深度思考模式失败: {e}")
+            # 降级到普通模式
+            try:
+                completion = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    stream=True,
+                    timeout=30
+                )
+                
+                for chunk in completion:
+                    if chunk.choices and len(chunk.choices) > 0:
+                        delta = chunk.choices[0].delta
+                        if hasattr(delta, "content") and delta.content:
+                            yield {"type": "answer", "content": delta.content}
+            except Exception as e2:
+                print(f"Qwen普通模式也失败: {e2}")
+                yield {"type": "error", "content": str(e2)}
+    
+    def _chat_ollama(self, messages: List[Dict[str, str]], temperature: float) -> str:
+        """Ollama 本地对话"""
+        response = self.client.chat(
+            model=self.model,
+            messages=messages,
+            options={'temperature': temperature}
+        )
+        return response['message']['content']
+    
+    def analyze_health(self, health_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
+        """
+        健康分析增强
+        
+        Args:
+            health_data: 健康数据
+            prediction: 预测结果
+        
+        Returns:
+            大模型分析结果
+        """
+        prompt = f"""
+你是一个专业的健康顾问。请分析以下健康数据和预测结果，给出专业建议。
+
+当前健康数据：
+- 睡眠时间: {health_data.get('sleep_hours', 0)} 小时
+- 运动时间: {health_data.get('exercise_minutes', 0)} 分钟
+- 压力水平: {health_data.get('stress_level', 0)}/10
+
+预测结果：
+- 健康分数: {prediction.get('health_score', 0)}
+- 睡眠债务: {prediction.get('sleep_debt', 0)} 小时
+- 免疫力: {prediction.get('immunity', 0)}
+
+请提供：
+1. 当前健康状况评估（2-3句话）
+2. 主要健康风险（如果有）
+3. 具体改善建议（3-5条）
+
+要求：专业、简洁、可操作。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个专业的健康顾问，擅长分析健康数据并给出实用建议。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.7)
+    
+    def analyze_time(self, time_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
+        """时间管理分析增强"""
+        prompt = f"""
+你是一个时间管理专家。请分析以下时间使用数据和预测结果。
+
+当前时间数据：
+- 工作时间: {time_data.get('work_hours', 0)} 小时
+- 任务数量: {time_data.get('task_count', 0)} 个
+- 完成率: {time_data.get('completion_rate', 0)}%
+
+预测结果：
+- 效率分数: {prediction.get('efficiency_score', 0)}
+- 认知负荷: {prediction.get('cognitive_load', 0)}
+- 时间压力: {prediction.get('time_pressure', 0)}
+
+请提供：
+1. 时间使用效率评估
+2. 存在的时间管理问题
+3. 优化建议（3-5条）
+
+要求：实用、具体、可执行。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个时间管理专家，擅长帮助人们提高效率。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.7)
+    
+    def analyze_emotion(self, emotion_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
+        """情绪分析增强"""
+        prompt = f"""
+你是一个心理咨询师。请分析以下情绪数据和预测结果。
+
+当前情绪数据：
+- 心情评分: {emotion_data.get('mood_score', 0)}/10
+- 焦虑水平: {emotion_data.get('anxiety_level', 0)}/10
+- 压力来源: {emotion_data.get('stress_source', '未知')}
+
+预测结果：
+- 情绪稳定性: {prediction.get('emotional_stability', 0)}
+- 情绪调节能力: {prediction.get('regulation_ability', 0)}
+
+请提供：
+1. 情绪状态评估
+2. 潜在情绪风险
+3. 情绪管理建议（3-5条）
+
+要求：温和、专业、有同理心。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个专业的心理咨询师，擅长情绪分析和心理疏导。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.8)
+    
+    def analyze_social(self, social_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
+        """社交分析增强"""
+        prompt = f"""
+你是一个人际关系专家。请分析以下社交数据和预测结果。
+
+当前社交数据：
+- 社交时间: {social_data.get('social_hours', 0)} 小时
+- 见面人数: {social_data.get('friends_met', 0)} 人
+- 社交质量: {social_data.get('interaction_quality', 0)}/10
+
+预测结果：
+- 孤独感: {prediction.get('loneliness', 0)}
+- 社交满意度: {prediction.get('social_satisfaction', 0)}
+
+请提供：
+1. 社交状况评估
+2. 人际关系建议（3-5条）
+
+要求：实用、温暖、鼓励性。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个人际关系专家，擅长帮助人们改善社交生活。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.7)
+    
+    def analyze_finance(self, finance_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
+        """财务分析增强"""
+        prompt = f"""
+你是一个理财顾问。请分析以下财务数据和预测结果。
+
+当前财务数据：
+- 收入: ¥{finance_data.get('income', 0)}
+- 支出: ¥{finance_data.get('spending', 0)}
+- 储蓄: ¥{finance_data.get('savings', 0)}
+
+预测结果：
+- 储蓄率: {prediction.get('savings_rate', 0)}%
+- 财务健康度: {prediction.get('financial_health', 0)}
+
+请提供：
+1. 财务状况评估
+2. 理财建议（3-5条）
+
+要求：专业、实用、保守。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个专业的理财顾问，擅长个人财务规划。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.6)
+    
+    def analyze_learning(self, learning_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
+        """学习分析增强"""
+        prompt = f"""
+你是一个学习教练。请分析以下学习数据和预测结果。
+
+当前学习数据：
+- 学习时间: {learning_data.get('study_hours', 0)} 小时
+- 完成课程: {learning_data.get('courses_completed', 0)} 门
+- 知识掌握度: {learning_data.get('knowledge_retention', 0)}%
+
+预测结果：
+- 学习效率: {prediction.get('learning_efficiency', 0)}
+- 知识保持率: {prediction.get('retention_rate', 0)}%
+
+请提供：
+1. 学习状况评估
+2. 学习方法建议（3-5条）
+
+要求：鼓励性、具体、科学。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个学习教练，擅长帮助人们提高学习效率。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.7)
+    
+    def explain_emergent_pattern(self, pattern: Dict[str, Any]) -> str:
+        """
+        解释涌现模式
+        
+        Args:
+            pattern: 涌现模式数据
+        
+        Returns:
+            大模型解释
+        """
+        pattern_type = pattern.get('type', 'unknown')
+        domains = pattern.get('domains', [])
+        description = pattern.get('description', '')
+        
+        prompt = f"""
+你是一个数据分析专家。请用通俗易懂的语言解释以下涌现模式。
+
+模式类型: {pattern_type}
+涉及领域: {', '.join(domains)}
+系统描述: {description}
+
+请提供：
+1. 这个模式是什么意思？（用日常语言解释）
+2. 为什么会出现这个模式？
+3. 这对用户意味着什么？
+4. 应该如何应对？
+
+要求：通俗易懂、有洞察力、可操作。
+"""
+        
+        messages = [
+            {"role": "system", "content": "你是一个数据分析专家，擅长用简单的语言解释复杂的模式。"},
+            {"role": "user", "content": prompt}
+        ]
+        
+        return self.chat(messages, temperature=0.7)
+
+
+# 全局 LLM 服务实例
+llm_service = None
+
+def get_llm_service() -> Optional[LLMService]:
+    """获取 LLM 服务实例"""
+    global llm_service
+    
+    if llm_service is None:
+        # 确保加载环境变量
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        # 从环境变量读取配置
+        provider = os.getenv('LLM_PROVIDER', 'openai')
+        
+        # 根据provider获取对应的API key
+        if provider == 'qwen':
+            api_key = os.getenv('DASHSCOPE_API_KEY')
+            key_name = 'DASHSCOPE_API_KEY'
+        elif provider == 'openai':
+            api_key = os.getenv('OPENAI_API_KEY')
+            key_name = 'OPENAI_API_KEY'
+        else:
+            api_key = os.getenv(f'{provider.upper()}_API_KEY')
+            key_name = f'{provider.upper()}_API_KEY'
+        
+        if api_key:
+            llm_service = LLMService(provider=provider, api_key=api_key)
+            print(f"✓ LLM 服务已启用: {provider}")
+        else:
+            print(f"⚠️ LLM 未配置，请设置 {key_name}")
+    
+    return llm_service

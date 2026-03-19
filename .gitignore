@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+*.local
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Data files (too large for git)
+*.index
+*.faiss
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# Node modules (if any)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend data (user specific)
+backend/data/production_rag/*.index
+backend/data/production_rag/*.json
+backend/data/decision_sessions/
+backend/data/simulations/
+backend/data/lora_status/
+
+# Keep example env
+!.env.example

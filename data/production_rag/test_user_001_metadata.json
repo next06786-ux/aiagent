@@ -1,0 +1,1118 @@
+{
+  "user_id": "test_user_001",
+  "memories": [
+    {
+      "id": "sensor_data_1773318725.887353_0",
+      "memory_type": "sensor_data",
+      "content": "传感器数据: {'conversation_id': 'conv_1773318712.487421'}",
+      "metadata": {
+        "timestamp": "2026-03-12T20:31:52.493953",
+        "sensors": {
+          "conversation_id": "conv_1773318712.487421"
+        }
+      },
+      "timestamp": "2026-03-12T20:32:05.887353",
+      "importance": 0.4,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773318726.302775_1",
+      "memory_type": "conversation",
+      "content": "今天工作很忙，压力很大",
+      "metadata": {
+        "timestamp": "2026-03-12T20:31:52.493953",
+        "source": "user_input"
+      },
+      "timestamp": "2026-03-12T20:32:06.302775",
+      "importance": 0.6,
+      "access_count": 1,
+      "last_access": "2026-03-12T20:32:07.769974",
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.420207_2",
+      "memory_type": "insight",
+      "content": "[time领域] 数据质量: 0.0%; 已记录 1 个时间事件",
+      "metadata": {
+        "domain": "time",
+        "confidence": 0.5,
+        "predictions": [
+          "当前工作节奏可持续"
+        ],
+        "recommendations": [
+          "建议增加数据采集频率，以获得更准确的洞察",
+          "使用时间块管理法，提高工作效率"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.420207",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.464712_3",
+      "memory_type": "insight",
+      "content": "[social领域] 知识图谱中记录了 0 个社交关系; 近期社交活动较少",
+      "metadata": {
+        "domain": "social",
+        "confidence": 0.7,
+        "predictions": [
+          "适当增加社交互动有益身心健康"
+        ],
+        "recommendations": [
+          "本周末可以约朋友见面",
+          "保持每周至少2次社交互动",
+          "尝试拓展社交圈，参加兴趣小组"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.464712",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.511298_4",
+      "memory_type": "insight",
+      "content": "[learning领域] 已建立 0 个学习模式; 今日暂无学习活动记录",
+      "metadata": {
+        "domain": "learning",
+        "confidence": 0.75,
+        "predictions": [
+          "持续记录学习数据，系统将发现最佳学习时段"
+        ],
+        "recommendations": [
+          "建议每天安排固定学习时间",
+          "采用番茄工作法，25分钟专注+5分钟休息"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.511298",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.552843_5",
+      "memory_type": "insight",
+      "content": "[emotion领域] 当前情绪状态: 平和",
+      "metadata": {
+        "domain": "emotion",
+        "confidence": 0.7,
+        "predictions": [
+          "情绪平稳，可以尝试新的挑战"
+        ],
+        "recommendations": [
+          "适当的运动有助于提升情绪"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.552843",
+      "importance": 0.8,
+      "access_count": 1,
+      "last_access": "2026-03-12T20:32:07.769974",
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.59667_6",
+      "memory_type": "insight",
+      "content": "[finance领域] 今日暂无财务活动记录; 建议保持收支平衡",
+      "metadata": {
+        "domain": "finance",
+        "confidence": 0.6,
+        "predictions": [
+          "定期记录支出有助于财务规划"
+        ],
+        "recommendations": [
+          "设置月度预算，控制非必要支出",
+          "建立应急基金，至少3-6个月生活费"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.596670",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.64255_7",
+      "memory_type": "insight",
+      "content": "[health领域] 今日步数: 0 步; 活动量偏低",
+      "metadata": {
+        "domain": "health",
+        "confidence": 0.6,
+        "predictions": [
+          "长期活动不足可能影响健康"
+        ],
+        "recommendations": [
+          "建议每天至少8000步",
+          "可以尝试饭后散步或爬楼梯"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.642550",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "sensor_data_1773318726.705047_8",
+      "memory_type": "sensor_data",
+      "content": "传感器数据: {'timestamp': 1773318726693, 'steps': 5234, 'heart_rate': 75, 'accelerometer': {'x': 0.1, 'y': 0.2, 'z': 9.8}, 'activity': 'walking'}",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:06.701051",
+        "sensors": {
+          "timestamp": 1773318726693,
+          "steps": 5234,
+          "heart_rate": 75,
+          "accelerometer": {
+            "x": 0.1,
+            "y": 0.2,
+            "z": 9.8
+          },
+          "activity": "walking"
+        }
+      },
+      "timestamp": "2026-03-12T20:32:06.705047",
+      "importance": 0.4,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773318726.746288_9",
+      "memory_type": "conversation",
+      "content": "后台采集于 1773318726693",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:06.701051",
+        "source": "user_input"
+      },
+      "timestamp": "2026-03-12T20:32:06.746288",
+      "importance": 0.6,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.786937_10",
+      "memory_type": "insight",
+      "content": "[time领域] 数据质量: 0.0%; 已记录 2 个时间事件",
+      "metadata": {
+        "domain": "time",
+        "confidence": 0.5,
+        "predictions": [
+          "当前工作节奏可持续"
+        ],
+        "recommendations": [
+          "建议增加数据采集频率，以获得更准确的洞察",
+          "使用时间块管理法，提高工作效率"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.786937",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.837295_11",
+      "memory_type": "insight",
+      "content": "[social领域] 知识图谱中记录了 0 个社交关系; 近期社交活动较少",
+      "metadata": {
+        "domain": "social",
+        "confidence": 0.7,
+        "predictions": [
+          "适当增加社交互动有益身心健康"
+        ],
+        "recommendations": [
+          "本周末可以约朋友见面",
+          "保持每周至少2次社交互动",
+          "尝试拓展社交圈，参加兴趣小组"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.837295",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.87585_12",
+      "memory_type": "insight",
+      "content": "[learning领域] 已建立 0 个学习模式; 今日暂无学习活动记录",
+      "metadata": {
+        "domain": "learning",
+        "confidence": 0.75,
+        "predictions": [
+          "持续记录学习数据，系统将发现最佳学习时段"
+        ],
+        "recommendations": [
+          "建议每天安排固定学习时间",
+          "采用番茄工作法，25分钟专注+5分钟休息"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.875850",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.915856_13",
+      "memory_type": "insight",
+      "content": "[emotion领域] 当前情绪状态: 平和",
+      "metadata": {
+        "domain": "emotion",
+        "confidence": 0.7,
+        "predictions": [
+          "情绪平稳，可以尝试新的挑战"
+        ],
+        "recommendations": [
+          "适当的运动有助于提升情绪"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.915856",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318726.957008_14",
+      "memory_type": "insight",
+      "content": "[finance领域] 今日暂无财务活动记录; 建议保持收支平衡",
+      "metadata": {
+        "domain": "finance",
+        "confidence": 0.6,
+        "predictions": [
+          "定期记录支出有助于财务规划"
+        ],
+        "recommendations": [
+          "设置月度预算，控制非必要支出",
+          "建立应急基金，至少3-6个月生活费"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:06.957008",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.001241_15",
+      "memory_type": "insight",
+      "content": "[health领域] 今日步数: 0 步; 活动量偏低",
+      "metadata": {
+        "domain": "health",
+        "confidence": 0.6,
+        "predictions": [
+          "长期活动不足可能影响健康"
+        ],
+        "recommendations": [
+          "建议每天至少8000步",
+          "可以尝试饭后散步或爬楼梯"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.001241",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "sensor_data_1773318727.044231_16",
+      "memory_type": "sensor_data",
+      "content": "传感器数据: {'timestamp': 1773319026693, 'steps': 5678, 'heart_rate': 72, 'accelerometer': {'x': 0.0, 'y': 0.0, 'z': 9.8}, 'activity': 'sitting'}",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:07.041165",
+        "sensors": {
+          "timestamp": 1773319026693,
+          "steps": 5678,
+          "heart_rate": 72,
+          "accelerometer": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 9.8
+          },
+          "activity": "sitting"
+        }
+      },
+      "timestamp": "2026-03-12T20:32:07.044231",
+      "importance": 0.4,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773318727.089176_17",
+      "memory_type": "conversation",
+      "content": "后台采集于 1773319026693",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:07.041165",
+        "source": "user_input"
+      },
+      "timestamp": "2026-03-12T20:32:07.089176",
+      "importance": 0.6,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.131248_18",
+      "memory_type": "insight",
+      "content": "[time领域] 数据质量: 0.0%; 已记录 3 个时间事件",
+      "metadata": {
+        "domain": "time",
+        "confidence": 0.5,
+        "predictions": [
+          "当前工作节奏可持续"
+        ],
+        "recommendations": [
+          "建议增加数据采集频率，以获得更准确的洞察",
+          "使用时间块管理法，提高工作效率"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.131248",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.173435_19",
+      "memory_type": "insight",
+      "content": "[social领域] 知识图谱中记录了 0 个社交关系; 近期社交活动较少",
+      "metadata": {
+        "domain": "social",
+        "confidence": 0.7,
+        "predictions": [
+          "适当增加社交互动有益身心健康"
+        ],
+        "recommendations": [
+          "本周末可以约朋友见面",
+          "保持每周至少2次社交互动",
+          "尝试拓展社交圈，参加兴趣小组"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.173435",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.212008_20",
+      "memory_type": "insight",
+      "content": "[learning领域] 已建立 0 个学习模式; 今日暂无学习活动记录",
+      "metadata": {
+        "domain": "learning",
+        "confidence": 0.75,
+        "predictions": [
+          "持续记录学习数据，系统将发现最佳学习时段"
+        ],
+        "recommendations": [
+          "建议每天安排固定学习时间",
+          "采用番茄工作法，25分钟专注+5分钟休息"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.212008",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.26226_21",
+      "memory_type": "insight",
+      "content": "[emotion领域] 当前情绪状态: 平和",
+      "metadata": {
+        "domain": "emotion",
+        "confidence": 0.7,
+        "predictions": [
+          "情绪平稳，可以尝试新的挑战"
+        ],
+        "recommendations": [
+          "适当的运动有助于提升情绪"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.262260",
+      "importance": 0.8,
+      "access_count": 1,
+      "last_access": "2026-03-12T20:32:07.769974",
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.317564_22",
+      "memory_type": "insight",
+      "content": "[finance领域] 今日暂无财务活动记录; 建议保持收支平衡",
+      "metadata": {
+        "domain": "finance",
+        "confidence": 0.6,
+        "predictions": [
+          "定期记录支出有助于财务规划"
+        ],
+        "recommendations": [
+          "设置月度预算，控制非必要支出",
+          "建立应急基金，至少3-6个月生活费"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.317564",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.356634_23",
+      "memory_type": "insight",
+      "content": "[health领域] 今日步数: 0 步; 活动量偏低",
+      "metadata": {
+        "domain": "health",
+        "confidence": 0.6,
+        "predictions": [
+          "长期活动不足可能影响健康"
+        ],
+        "recommendations": [
+          "建议每天至少8000步",
+          "可以尝试饭后散步或爬楼梯"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.356634",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "sensor_data_1773318727.409387_24",
+      "memory_type": "sensor_data",
+      "content": "传感器数据: {'photo_time': 1773318727398, 'photo_location': {'latitude': 39.9042, 'longitude': 116.4074}}",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:07.407389",
+        "sensors": {
+          "photo_time": 1773318727398,
+          "photo_location": {
+            "latitude": 39.9042,
+            "longitude": 116.4074
+          }
+        }
+      },
+      "timestamp": "2026-03-12T20:32:07.409387",
+      "importance": 0.4,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.449849_25",
+      "memory_type": "insight",
+      "content": "[time领域] 数据质量: 0.0%; 已记录 4 个时间事件",
+      "metadata": {
+        "domain": "time",
+        "confidence": 0.5,
+        "predictions": [
+          "当前工作节奏可持续"
+        ],
+        "recommendations": [
+          "建议增加数据采集频率，以获得更准确的洞察",
+          "使用时间块管理法，提高工作效率"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.449849",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.488882_26",
+      "memory_type": "insight",
+      "content": "[social领域] 知识图谱中记录了 0 个社交关系; 近期社交活动较少",
+      "metadata": {
+        "domain": "social",
+        "confidence": 0.7,
+        "predictions": [
+          "适当增加社交互动有益身心健康"
+        ],
+        "recommendations": [
+          "本周末可以约朋友见面",
+          "保持每周至少2次社交互动",
+          "尝试拓展社交圈，参加兴趣小组"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.488882",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.534059_27",
+      "memory_type": "insight",
+      "content": "[learning领域] 已建立 0 个学习模式; 今日暂无学习活动记录",
+      "metadata": {
+        "domain": "learning",
+        "confidence": 0.75,
+        "predictions": [
+          "持续记录学习数据，系统将发现最佳学习时段"
+        ],
+        "recommendations": [
+          "建议每天安排固定学习时间",
+          "采用番茄工作法，25分钟专注+5分钟休息"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.534059",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.583017_28",
+      "memory_type": "insight",
+      "content": "[emotion领域] 当前情绪状态: 平和",
+      "metadata": {
+        "domain": "emotion",
+        "confidence": 0.7,
+        "predictions": [
+          "情绪平稳，可以尝试新的挑战"
+        ],
+        "recommendations": [
+          "适当的运动有助于提升情绪"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.583017",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.617768_29",
+      "memory_type": "insight",
+      "content": "[finance领域] 今日暂无财务活动记录; 建议保持收支平衡",
+      "metadata": {
+        "domain": "finance",
+        "confidence": 0.6,
+        "predictions": [
+          "定期记录支出有助于财务规划"
+        ],
+        "recommendations": [
+          "设置月度预算，控制非必要支出",
+          "建立应急基金，至少3-6个月生活费"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.617768",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.655212_30",
+      "memory_type": "insight",
+      "content": "[health领域] 今日步数: 0 步; 活动量偏低",
+      "metadata": {
+        "domain": "health",
+        "confidence": 0.6,
+        "predictions": [
+          "长期活动不足可能影响健康"
+        ],
+        "recommendations": [
+          "建议每天至少8000步",
+          "可以尝试饭后散步或爬楼梯"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.656221",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "sensor_data_1773318727.794996_31",
+      "memory_type": "sensor_data",
+      "content": "传感器数据: {'steps': 8234, 'heart_rate': 78, 'activity': 'walking'}",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:07.793082",
+        "sensors": {
+          "steps": 8234,
+          "heart_rate": 78,
+          "activity": "walking"
+        }
+      },
+      "timestamp": "2026-03-12T20:32:07.794996",
+      "importance": 0.4,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773318727.833324_32",
+      "memory_type": "conversation",
+      "content": "今天完成了一个重要项目，感觉很有成就感",
+      "metadata": {
+        "timestamp": "2026-03-12T20:32:07.793082",
+        "source": "user_input"
+      },
+      "timestamp": "2026-03-12T20:32:07.833324",
+      "importance": 0.6,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.876431_33",
+      "memory_type": "insight",
+      "content": "[time领域] 数据质量: 0.0%; 已记录 5 个时间事件",
+      "metadata": {
+        "domain": "time",
+        "confidence": 0.5,
+        "predictions": [
+          "当前工作节奏可持续"
+        ],
+        "recommendations": [
+          "建议增加数据采集频率，以获得更准确的洞察",
+          "使用时间块管理法，提高工作效率"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.876431",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.912133_34",
+      "memory_type": "insight",
+      "content": "[social领域] 知识图谱中记录了 0 个社交关系; 近期社交活动较少",
+      "metadata": {
+        "domain": "social",
+        "confidence": 0.7,
+        "predictions": [
+          "适当增加社交互动有益身心健康"
+        ],
+        "recommendations": [
+          "本周末可以约朋友见面",
+          "保持每周至少2次社交互动",
+          "尝试拓展社交圈，参加兴趣小组"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.912133",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.948831_35",
+      "memory_type": "insight",
+      "content": "[learning领域] 已建立 0 个学习模式; 今日暂无学习活动记录",
+      "metadata": {
+        "domain": "learning",
+        "confidence": 0.75,
+        "predictions": [
+          "持续记录学习数据，系统将发现最佳学习时段"
+        ],
+        "recommendations": [
+          "建议每天安排固定学习时间",
+          "采用番茄工作法，25分钟专注+5分钟休息"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.948831",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318727.99086_36",
+      "memory_type": "insight",
+      "content": "[emotion领域] 当前情绪状态: 平和",
+      "metadata": {
+        "domain": "emotion",
+        "confidence": 0.7,
+        "predictions": [
+          "情绪平稳，可以尝试新的挑战"
+        ],
+        "recommendations": [
+          "适当的运动有助于提升情绪"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:07.990860",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318728.03077_37",
+      "memory_type": "insight",
+      "content": "[finance领域] 今日暂无财务活动记录; 建议保持收支平衡",
+      "metadata": {
+        "domain": "finance",
+        "confidence": 0.6,
+        "predictions": [
+          "定期记录支出有助于财务规划"
+        ],
+        "recommendations": [
+          "设置月度预算，控制非必要支出",
+          "建立应急基金，至少3-6个月生活费"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:08.030770",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1773318728.071164_38",
+      "memory_type": "insight",
+      "content": "[health领域] 今日步数: 0 步; 活动量偏低",
+      "metadata": {
+        "domain": "health",
+        "confidence": 0.6,
+        "predictions": [
+          "长期活动不足可能影响健康"
+        ],
+        "recommendations": [
+          "建议每天至少8000步",
+          "可以尝试饭后散步或爬楼梯"
+        ]
+      },
+      "timestamp": "2026-03-12T20:32:08.071164",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677096.747517_39",
+      "memory_type": "conversation",
+      "content": "用户: 你好\nAI: 你好！很高兴见到你。我是你的个人 AI 助手，有什么可以帮你的吗？",
+      "metadata": {
+        "conversation_id": "test_1"
+      },
+      "timestamp": "2026-03-17T00:04:56.747517",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.307523_40",
+      "memory_type": "conversation",
+      "content": "用户: 我今天心情不太好\nAI: 我理解你的感受。能告诉我发生了什么吗？我会认真倾听的。",
+      "metadata": {
+        "conversation_id": "test_2"
+      },
+      "timestamp": "2026-03-17T00:04:57.307523",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.345933_41",
+      "memory_type": "conversation",
+      "content": "用户: 工作压力太大了\nAI: 工作压力确实会让人感到疲惫。你可以试着休息一下，或者和我聊聊具体是什么让你感到压力？",
+      "metadata": {
+        "conversation_id": "test_3"
+      },
+      "timestamp": "2026-03-17T00:04:57.345933",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.379808_42",
+      "memory_type": "conversation",
+      "content": "用户: 我想学习 Python\nAI: 很好的选择！Python 是一门非常实用的编程语言。你想从哪里开始学习呢？",
+      "metadata": {
+        "conversation_id": "test_4"
+      },
+      "timestamp": "2026-03-17T00:04:57.379808",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.41144_43",
+      "memory_type": "conversation",
+      "content": "用户: 推荐一些学习资源\nAI: 我推荐你从 Python 官方教程开始，然后可以看看《Python 编程：从入门到实践》这本书。",
+      "metadata": {
+        "conversation_id": "test_5"
+      },
+      "timestamp": "2026-03-17T00:04:57.411440",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.446439_44",
+      "memory_type": "conversation",
+      "content": "用户: 如何提高工作效率\nAI: 提高工作效率可以从时间管理开始，比如使用番茄工作法，每25分钟专注工作，然后休息5分钟。",
+      "metadata": {
+        "conversation_id": "test_6"
+      },
+      "timestamp": "2026-03-17T00:04:57.446439",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.482984_45",
+      "memory_type": "conversation",
+      "content": "用户: 我想锻炼身体\nAI: 很好的决定！规律运动对身心健康都有好处。你想尝试什么类型的运动呢？",
+      "metadata": {
+        "conversation_id": "test_7"
+      },
+      "timestamp": "2026-03-17T00:04:57.482984",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.520982_46",
+      "memory_type": "conversation",
+      "content": "用户: 推荐一些运动方式\nAI: 可以从简单的开始，比如每天快走30分钟，或者尝试瑜伽、游泳等。关键是找到你喜欢的方式。",
+      "metadata": {
+        "conversation_id": "test_8"
+      },
+      "timestamp": "2026-03-17T00:04:57.520982",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.559513_47",
+      "memory_type": "conversation",
+      "content": "用户: 如何保持健康饮食\nAI: 健康饮食的关键是均衡营养，多吃蔬菜水果，适量摄入蛋白质，少吃油腻和高糖食物。",
+      "metadata": {
+        "conversation_id": "test_9"
+      },
+      "timestamp": "2026-03-17T00:04:57.559513",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.592507_48",
+      "memory_type": "conversation",
+      "content": "用户: 我想提升沟通能力\nAI: 沟通能力很重要。可以从倾听开始，理解对方的观点，然后清晰表达自己的想法。",
+      "metadata": {
+        "conversation_id": "test_10"
+      },
+      "timestamp": "2026-03-17T00:04:57.592507",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.628049_49",
+      "memory_type": "conversation",
+      "content": "用户: 如何管理时间\nAI: 时间管理可以用四象限法则：重要紧急的优先做，重要不紧急的计划做，不重要的尽量少做。",
+      "metadata": {
+        "conversation_id": "test_11"
+      },
+      "timestamp": "2026-03-17T00:04:57.628049",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.660596_50",
+      "memory_type": "conversation",
+      "content": "用户: 推荐一些好书\nAI: 根据你的兴趣，我推荐《人类简史》、《思考，快与慢》、《原则》等经典书籍。",
+      "metadata": {
+        "conversation_id": "test_12"
+      },
+      "timestamp": "2026-03-17T00:04:57.660596",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.690599_51",
+      "memory_type": "conversation",
+      "content": "用户: 如何缓解焦虑\nAI: 焦虑时可以尝试深呼吸、冥想，或者做一些让你放松的事情，比如听音乐、散步。",
+      "metadata": {
+        "conversation_id": "test_13"
+      },
+      "timestamp": "2026-03-17T00:04:57.690599",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.723665_52",
+      "memory_type": "conversation",
+      "content": "用户: 我想学习新技能\nAI: 很好！学习新技能能让人保持活力。你对什么领域感兴趣呢？",
+      "metadata": {
+        "conversation_id": "test_14"
+      },
+      "timestamp": "2026-03-17T00:04:57.723665",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.75225_53",
+      "memory_type": "conversation",
+      "content": "用户: 如何提高专注力\nAI: 提高专注力可以尝试：1) 减少干扰 2) 设定明确目标 3) 使用番茄工作法 4) 保证充足睡眠。",
+      "metadata": {
+        "conversation_id": "test_15"
+      },
+      "timestamp": "2026-03-17T00:04:57.752250",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.784406_54",
+      "memory_type": "conversation",
+      "content": "用户: 推荐一些音乐\nAI: 根据不同场景，工作时可以听轻音乐或白噪音，放松时可以听古典音乐或爵士乐。",
+      "metadata": {
+        "conversation_id": "test_16"
+      },
+      "timestamp": "2026-03-17T00:04:57.784406",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.815461_55",
+      "memory_type": "conversation",
+      "content": "用户: 如何建立好习惯\nAI: 建立习惯需要：1) 从小习惯开始 2) 每天坚持 3) 设置提醒 4) 奖励自己。",
+      "metadata": {
+        "conversation_id": "test_17"
+      },
+      "timestamp": "2026-03-17T00:04:57.815461",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.84523_56",
+      "memory_type": "conversation",
+      "content": "用户: 我想旅行\nAI: 旅行是很好的放松方式！你想去哪里呢？我可以帮你规划行程。",
+      "metadata": {
+        "conversation_id": "test_18"
+      },
+      "timestamp": "2026-03-17T00:04:57.845230",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.878744_57",
+      "memory_type": "conversation",
+      "content": "用户: 如何学习英语\nAI: 学习英语可以：1) 每天背单词 2) 看英文电影 3) 练习口语 4) 阅读英文文章。",
+      "metadata": {
+        "conversation_id": "test_19"
+      },
+      "timestamp": "2026-03-17T00:04:57.878744",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.908857_58",
+      "memory_type": "conversation",
+      "content": "用户: 推荐一些电影\nAI: 根据你的喜好，我推荐《肖申克的救赎》、《阿甘正传》、《盗梦空间》等经典电影。",
+      "metadata": {
+        "conversation_id": "test_20"
+      },
+      "timestamp": "2026-03-17T00:04:57.908857",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.935858_59",
+      "memory_type": "conversation",
+      "content": "用户: 如何提高记忆力\nAI: 提高记忆力可以：1) 充足睡眠 2) 规律运动 3) 使用记忆技巧 4) 保持大脑活跃。",
+      "metadata": {
+        "conversation_id": "test_21"
+      },
+      "timestamp": "2026-03-17T00:04:57.935858",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677097.967412_60",
+      "memory_type": "conversation",
+      "content": "用户: 我想创业\nAI: 创业是个勇敢的决定！你有什么想法吗？我可以帮你分析一下。",
+      "metadata": {
+        "conversation_id": "test_22"
+      },
+      "timestamp": "2026-03-17T00:04:57.967412",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677098.000097_61",
+      "memory_type": "conversation",
+      "content": "用户: 如何理财\nAI: 理财的基本原则是：1) 记账 2) 储蓄 3) 分散投资 4) 学习理财知识。",
+      "metadata": {
+        "conversation_id": "test_23"
+      },
+      "timestamp": "2026-03-17T00:04:58.000097",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677098.032761_62",
+      "memory_type": "conversation",
+      "content": "用户: 推荐一些课程\nAI: 根据你的需求，可以看看 Coursera、edX 等平台上的课程，内容丰富且质量高。",
+      "metadata": {
+        "conversation_id": "test_24"
+      },
+      "timestamp": "2026-03-17T00:04:58.032761",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773677098.061307_63",
+      "memory_type": "conversation",
+      "content": "用户: 如何保持动力\nAI: 保持动力需要：1) 设定清晰目标 2) 庆祝小成就 3) 找到意义 4) 与他人分享进展。",
+      "metadata": {
+        "conversation_id": "test_25"
+      },
+      "timestamp": "2026-03-17T00:04:58.061307",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    }
+  ]
+}

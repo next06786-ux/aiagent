@@ -1,0 +1,23 @@
+{
+  "user_id": "test_user_001",
+  "decisions": [
+    {
+      "id": "dec_1773318727.702465_0",
+      "user_id": "test_user_001",
+      "domain": "time",
+      "situation": "周末是否加班完成项目",
+      "timestamp": "2026-03-12T20:32:07.702465",
+      "user_decision": "选择加班，尽快完成项目",
+      "user_reasoning": "项目deadline很紧，必须尽快完成",
+      "ai_recommendation": "建议休息，下周一再处理",
+      "ai_reasoning": "根据你的疲劳状态和项目紧急程度，休息更有利于长期效率",
+      "ai_confidence": 0.75,
+      "is_aligned": false,
+      "outcome": "partial",
+      "outcome_timestamp": "2026-03-12T20:32:07.714198",
+      "outcome_score": 0.6,
+      "outcome_notes": "项目完成了，但周一感觉很疲惫，影响了工作效率",
+      "verification_days": 7
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "string": [
+    {
+      "name": "app_name",
+      "value": "VisionAgent"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "需要相机权限以拍摄照片进行AI分析"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "需要网络权限以连接后端服务"
+    },
+    {
+      "name": "permission_background_reason",
+      "value": "需要后台运行权限以持续采集传感器数据"
+    },
+    {
+      "name": "permission_location_reason",
+      "value": "需要位置权限以提供基于位置的洞察"
+    },
+    {
+      "name": "permission_accelerometer_reason",
+      "value": "需要加速度计权限以检测活动状态"
+    },
+    {
+      "name": "permission_gyroscope_reason",
+      "value": "需要陀螺仪权限以检测设备姿态"
+    },
+    {
+      "name": "permission_activity_reason",
+      "value": "需要活动识别权限以分析运动模式"
+    },
+    {
+      "name": "permission_network_reason",
+      "value": "需要网络信息权限以优化数据传输"
+    },
+    {
+      "name": "permission_album_reason",
+      "value": "需要相册权限以分析照片内容"
+    }
+  ]
+}

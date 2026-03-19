@@ -1,0 +1,370 @@
+"""
+增强的决策API
+集成信息收集（Qwen3.5-plus）和决策模拟（本地模型+LoRA）
+"""
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import logging
+import json
+
+from backend.decision.decision_info_collector import DecisionInfoCollector
+from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/decision/enhanced", tags=["enhanced-decision"])
+
+# 全局实例
+info_collector = DecisionInfoCollector()
+simulator = ParallelUniverseSimulator()
+
+
+class StartCollectionRequest(BaseModel):
+    """开始信息收集请求"""
+    user_id: str
+    initial_question: str
+
+
+class ContinueCollectionRequest(BaseModel):
+    """继续信息收集请求"""
+    session_id: str
+    user_response: str
+
+
+class SimulateWithCollectedInfoRequest(BaseModel):
+    """使用收集的信息进行模拟"""
+    session_id: str
+    options: List[Dict[str, str]]  # [{"title": "选项A", "description": "..."}]
+    use_lora: bool = True
+
+
+@router.post("/collect/start")
+async def start_info_collection(request: StartCollectionRequest) -> Dict[str, Any]:
+    """
+    开始决策信息收集
+    
+    使用 Qwen3.5-plus API 进行多轮对话，收集决策所需信息
+    """
+    try:
+        logger.info(f"📥 收到信息收集请求 - user_id: {request.user_id}, question: {request.initial_question}")
+        
+        result = info_collector.start_collection(
+            user_id=request.user_id,
+            initial_question=request.initial_question
+        )
+        
+        logger.info(f"✅ 信息收集会话创建成功 - session_id: {result['session_id']}")
+        
+        return {
+            "code": 200,
+            "message": "信息收集已开始",
+            "data": result
+        }
+        
+    except Exception as e:
+        logger.error(f"开始信息收集失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/collect/continue")
+async def continue_info_collection(request: ContinueCollectionRequest) -> Dict[str, Any]:
+    """
+    继续信息收集
+    
+    用户回答AI的问题，继续收集信息
+    """
+    try:
+        result = info_collector.continue_collection(
+            session_id=request.session_id,
+            user_response=request.user_response
+        )
+        
+        return {
+            "code": 200,
+            "message": "继续收集" if not result.get("is_complete") else "信息收集完成",
+            "data": result
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"继续信息收集失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/collect/session/{session_id}")
+async def get_collection_session(session_id: str) -> Dict[str, Any]:
+    """
+    获取信息收集会话
+    
+    查看当前收集进度和已收集的信息
+    """
+    try:
+        session = info_collector.get_session(session_id)
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        return {
+            "code": 200,
+            "message": "获取成功",
+            "data": {
+                "session_id": session["session_id"],
+                "user_id": session["user_id"],
+                "initial_question": session["initial_question"],
+                "current_round": session["current_round"],
+                "is_complete": session["is_complete"],
+                "collected_info": session["collected_info"],
+                "conversation_count": len(session["conversation_history"])
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取会话失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/simulate/with-collection")
+async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest) -> Dict[str, Any]:
+    """
+    使用收集的信息进行决策模拟
+    
+    信息收集完成后，使用本地模型+LoRA进行个性化决策模拟
+    """
+    try:
+        logger.info(f"📥 收到决策模拟请求 - session_id: {request.session_id}, use_lora: {request.use_lora}")
+        
+        # 1. 获取收集的信息
+        session = info_collector.get_session(request.session_id)
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        logger.info(f"📋 会话信息 - user_id: {session['user_id']}, question: {session['initial_question']}")
+        
+        if not session["is_complete"]:
+            raise HTTPException(status_code=400, detail="信息收集未完成")
+        
+        # 2. 使用本地模型+LoRA进行决策模拟
+        result = simulator.simulate_decision(
+            user_id=session["user_id"],
+            question=session["initial_question"],
+            options=request.options,
+            use_lora=request.use_lora
+        )
+        
+        # 3. 转换为可序列化格式
+        response_data = {
+            "code": 200,
+            "message": "决策模拟完成",
+            "data": {
+                "simulation_id": result.simulation_id,
+                "user_id": result.user_id,
+                "question": result.question,
+                "collected_info_summary": session["collected_info"],  # 包含收集的信息
+                "options": [
+                    {
+                        "option_id": opt.option_id,
+                        "title": opt.title,
+                        "description": opt.description,
+                        "timeline": [
+                            {
+                                "month": event.month,
+                                "event": event.event,
+                                "impact": event.impact,
+                                "probability": event.probability
+                            }
+                            for event in opt.timeline
+                        ],
+                        "final_score": opt.final_score,
+                        "risk_level": opt.risk_level,
+                        "risk_assessment": opt.risk_assessment
+                    }
+                    for opt in result.options
+                ],
+                "recommendation": result.recommendation,
+                "created_at": result.created_at,
+                "used_lora": request.use_lora
+            }
+        }
+        
+        logger.info(f"决策模拟完成: {result.simulation_id}")
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"决策模拟失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/full-process")
+async def full_decision_process(
+    user_id: str,
+    initial_question: str,
+    options: List[Dict[str, str]],
+    use_lora: bool = True
+) -> Dict[str, Any]:
+    """
+    完整决策流程（快速版）
+    
+    跳过多轮对话，直接使用初始问题进行模拟
+    适合用户已经明确选项的情况
+    """
+    try:
+        result = simulator.simulate_decision(
+            user_id=user_id,
+            question=initial_question,
+            options=options,
+            use_lora=use_lora
+        )
+        
+        response_data = {
+            "code": 200,
+            "message": "决策模拟完成",
+            "data": {
+                "simulation_id": result.simulation_id,
+                "user_id": result.user_id,
+                "question": result.question,
+                "options": [
+                    {
+                        "option_id": opt.option_id,
+                        "title": opt.title,
+                        "description": opt.description,
+                        "timeline": [
+                            {
+                                "month": event.month,
+                                "event": event.event,
+                                "impact": event.impact,
+                                "probability": event.probability
+                            }
+                            for event in opt.timeline
+                        ],
+                        "final_score": opt.final_score,
+                        "risk_level": opt.risk_level,
+                        "risk_assessment": opt.risk_assessment
+                    }
+                    for opt in result.options
+                ],
+                "recommendation": result.recommendation,
+                "created_at": result.created_at,
+                "used_lora": use_lora
+            }
+        }
+        
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"快速决策模拟失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class GenerateOptionsRequest(BaseModel):
+    """生成选项请求"""
+    session_id: str
+    user_options: List[str] = []
+
+
+@router.post("/generate-options")
+async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]:
+    """
+    生成 AI 建议选项
+    
+    根据收集的信息和用户已有选项，生成 1-2 个 AI 建议选项
+    """
+    try:
+        # 获取会话信息
+        session = info_collector.get_session(request.session_id)
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        # 使用 LLM 生成建议选项
+        from backend.llm.llm_service import get_llm_service
+        llm_service = get_llm_service()
+        
+        ai_options = []
+        
+        if llm_service and llm_service.enabled:
+            try:
+                collected_info = session.get("collected_info", {})
+                initial_question = session.get("initial_question", "")
+                
+                prompt = f"""基于以下信息，为用户推荐1-2个决策选项：
+
+问题：{initial_question}
+
+用户已有选项：{', '.join(request.user_options) if request.user_options else '无'}
+
+收集的信息：
+- 背景：{collected_info.get('decision_context', {})}
+- 约束：{collected_info.get('user_constraints', {})}
+- 优先级：{collected_info.get('priorities', {})}
+- 顾虑：{collected_info.get('concerns', [])}
+
+请以JSON格式返回，格式如下：
+{{
+  "options": [
+    {{"title": "选项名称", "description": "简短描述"}},
+    {{"title": "选项名称", "description": "简短描述"}}
+  ]
+}}
+
+要求：
+1. 推荐的选项要与用户已有选项不同
+2. 考虑用户的约束条件和优先级
+3. 每个选项要有实际可行性
+"""
+                
+                messages = [
+                    {"role": "system", "content": "你是一个专业的决策顾问，擅长为用户提供合理的决策选项。"},
+                    {"role": "user", "content": prompt}
+                ]
+                
+                response = llm_service.chat(messages, temperature=0.7, response_format="json_object")
+                
+                print(f"📝 LLM原始响应: {response[:200] if response else '(空响应)'}")
+                
+                if not response or not response.strip():
+                    print("⚠️ LLM返回空响应")
+                    raise ValueError("LLM返回空响应")
+                
+                result = json.loads(response)
+                
+                if "options" in result:
+                    ai_options = result["options"][:2]  # 最多2个
+                
+            except Exception as e:
+                logger.error(f"LLM生成选项失败: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # 如果 LLM 失败或没有生成，使用默认选项
+        if not ai_options:
+            if not request.user_options or len(request.user_options) < 2:
+                ai_options = [
+                    {"title": "保持现状", "description": "维持当前情况，观望一段时间"},
+                    {"title": "寻求建议", "description": "咨询专业人士或有经验的人"}
+                ]
+            else:
+                ai_options = [
+                    {"title": "综合方案", "description": "结合多个选项的优势"}
+                ]
+        
+        return {
+            "code": 200,
+            "message": "AI选项生成成功",
+            "data": {
+                "ai_options": ai_options
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成AI选项失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

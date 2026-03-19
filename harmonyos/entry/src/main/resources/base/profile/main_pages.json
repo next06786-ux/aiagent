@@ -1,0 +1,30 @@
+{
+  "src": [
+    "pages/Login",
+    "pages/Register",
+    "pages/Index",
+    "pages/Welcome",
+    "pages/UserProfile",
+    "pages/AIChat",
+    "pages/Dashboard",
+    "pages/Camera",
+    "pages/KnowledgeGraphCanvas",
+    "pages/LearningProgress",
+    "pages/EmergenceDashboard",
+    "pages/EmergencePatterns",
+    "pages/DecisionComparison",
+    "pages/LifeDomainInsights",
+    "pages/MetaAgentCoordination",
+    "pages/PerceptionLayerTest",
+    "pages/ParallelUniverseSimulation",
+    "pages/RiskAssessmentDetail",
+    "pages/DecisionDungeonInput",
+    "pages/DecisionDungeonMap",
+    "pages/DecisionDungeon2DMap",
+    "pages/DecisionDungeonList",
+    "pages/TestDungeonPage",
+    "pages/QuickDecisionInput",
+    "pages/EnhancedDecisionFlow",
+    "pages/EnhancedDecisionResult"
+  ]
+}

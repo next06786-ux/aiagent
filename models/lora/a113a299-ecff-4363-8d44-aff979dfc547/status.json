@@ -1,0 +1,9 @@
+{
+  "last_train_time": null,
+  "total_trainings": 0,
+  "current_data_size": 0,
+  "is_training": false,
+  "model_version": 1,
+  "last_training_time": "2026-03-17T23:59:54.316515",
+  "training_samples": 5
+}
