@@ -1,6 +1,6 @@
 """
 GPU服务器配置
-针对 AutoDL 32GB vGPU 优化
+针对 AutoDL GPU + SGLang 优化
 """
 import os
 
@@ -12,72 +12,51 @@ PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PATHS = {
     "models_base": f"{DATA_DIR}/models/base",      # 基座模型
     "models_lora": f"{DATA_DIR}/models/lora",      # 用户LoRA
+    "huggingface": f"{DATA_DIR}/huggingface",      # HuggingFace 缓存
     "database": f"{DATA_DIR}/data/database",        # 数据库
     "rag_data": f"{DATA_DIR}/data/rag",            # RAG数据
     "logs": f"{DATA_DIR}/logs",                     # 日志
 }
 
-# 模型配置 - 针对32GB显存优化
+# 模型配置 - 仅 Qwen3.5 系列
 MODEL_CONFIGS = {
-    # 推荐：Qwen3-8B，32GB显存完美运行
-    "qwen3-8b": {
-        "hf_name": "Qwen/Qwen3-8B",
-        "display_name": "Qwen3 8B",
-        "vram_gb": 18,
-        "lora_r": 16,
-        "lora_alpha": 32,
-        "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    # 主力模型：Qwen3.5-9B
+    "qwen3.5-9b": {
+        "hf_name": "Qwen/Qwen3.5-9B",
+        "display_name": "Qwen3.5 9B",
+        "vram_gb": 20,
+        "lora_r": 64,
+        "lora_alpha": 128,
+        "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
         "max_length": 2048,
         "batch_size": 4,
-        "use_4bit": False,
+        "context_length": 32768,
     },
-    # 轻量版：Qwen3-4B
-    "qwen3-4b": {
-        "hf_name": "Qwen/Qwen3-4B", 
-        "display_name": "Qwen3 4B",
-        "vram_gb": 10,
-        "lora_r": 16,
-        "lora_alpha": 32,
-        "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    # 轻量版：Qwen3.5-0.8B
+    "qwen3.5-0.8b": {
+        "hf_name": "Qwen/Qwen3.5-0.8B",
+        "display_name": "Qwen3.5 0.8B", 
+        "vram_gb": 2,
+        "lora_r": 32,
+        "lora_alpha": 64,
+        "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"],
         "max_length": 2048,
         "batch_size": 8,
-        "use_4bit": False,
-    },
-    # 超轻量：你原来用的0.8B（现在叫Qwen3-0.6B或类似）
-    "qwen3-0.6b": {
-        "hf_name": "Qwen/Qwen3-0.6B",
-        "display_name": "Qwen3 0.6B", 
-        "vram_gb": 2,
-        "lora_r": 8,
-        "lora_alpha": 16,
-        "target_modules": ["q_proj", "v_proj"],
-        "max_length": 2048,
-        "batch_size": 16,
-        "use_4bit": False,
-    },
-    # 备选：Qwen2.5-7B（稳定版）
-    "qwen2.5-7b": {
-        "hf_name": "Qwen/Qwen2.5-7B-Instruct",
-        "display_name": "Qwen2.5 7B Instruct",
-        "vram_gb": 16,
-        "lora_r": 16,
-        "lora_alpha": 32,
-        "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-        "max_length": 2048,
-        "batch_size": 4,
-        "use_4bit": False,
+        "context_length": 32768,
     },
 }
 
-# 当前使用的模型（可以改成你想用的）
-CURRENT_MODEL = "qwen2.5-7b"  # 推荐用这个，稳定且效果好
+# 当前使用的模型
+CURRENT_MODEL = "qwen3.5-9b"
 
-# 服务器配置
-SERVER_CONFIG = {
+# SGLang 服务器配置
+SGLANG_CONFIG = {
     "host": "0.0.0.0",
     "port": 8000,
-    "workers": 1,  # GPU推理用单worker
-    "reload": False,
+    "tensor_parallel_size": 1,
+    "mem_fraction_static": 0.8,
+    "context_length": 32768,
+    "reasoning_parser": "qwen3",
 }
 
 # LoRA训练配置
@@ -91,6 +70,13 @@ LORA_TRAINING_CONFIG = {
     "logging_steps": 10,
 }
 
+# 环境变量配置（AutoDL 专用）
+ENV_CONFIG = {
+    "HF_HOME": f"{DATA_DIR}/huggingface",
+    "HF_ENDPOINT": "https://hf-mirror.com",
+    "HF_HUB_ENABLE_HF_TRANSFER": "0",
+}
+
 
 def get_model_config(model_key: str = None):
     """获取模型配置"""
@@ -100,17 +86,43 @@ def get_model_config(model_key: str = None):
     return MODEL_CONFIGS[key]
 
 
+def get_sglang_launch_cmd(model_key: str = None):
+    """生成 SGLang 启动命令"""
+    config = get_model_config(model_key)
+    sglang = SGLANG_CONFIG
+    
+    cmd = f"""python -m sglang.launch_server \\
+  --model-path {config['hf_name']} \\
+  --port {sglang['port']} \\
+  --tensor-parallel-size {sglang['tensor_parallel_size']} \\
+  --mem-fraction-static {sglang['mem_fraction_static']} \\
+  --context-length {sglang['context_length']} \\
+  --reasoning-parser {sglang['reasoning_parser']} \\
+  --download-dir {PATHS['huggingface']}"""
+    
+    return cmd
+
+
 def ensure_dirs():
     """确保所有目录存在"""
     for path in PATHS.values():
         os.makedirs(path, exist_ok=True)
 
 
+def setup_env():
+    """设置环境变量"""
+    for key, value in ENV_CONFIG.items():
+        os.environ[key] = value
+
+
 if __name__ == "__main__":
-    print("GPU服务器配置:")
+    print("GPU服务器配置 (SGLang):")
     print(f"  数据目录: {DATA_DIR}")
     print(f"  当前模型: {CURRENT_MODEL}")
     
     config = get_model_config()
     print(f"  模型名称: {config['hf_name']}")
     print(f"  显存需求: {config['vram_gb']} GB")
+    print()
+    print("SGLang 启动命令:")
+    print(get_sglang_launch_cmd())

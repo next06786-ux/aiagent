@@ -12,26 +12,23 @@ class LLMProvider(Enum):
     """大模型提供商"""
     OPENAI = "openai"
     QWEN = "qwen"  # 通义千问
-    ERNIE = "ernie"  # 文心一言
-    GLM = "glm"  # 智谱
-    OLLAMA = "ollama"  # 本地
-    LOCAL = "local"  # 本地Qwen服务器
+    SGLANG = "sglang"  # SGLang 推理服务器（本地 GPU）
 
 
 class LLMService:
     """大模型服务"""
     
-    def __init__(self, provider: str = "openai", api_key: Optional[str] = None):
+    def __init__(self, provider: str = "sglang", api_key: Optional[str] = None):
         self.provider = LLMProvider(provider)
         # 特殊处理 Qwen，使用 DASHSCOPE_API_KEY
         if provider == "qwen":
             self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
-        elif provider == "local":
+        elif provider == "sglang":
             self.api_key = "local"  # 本地模型不需要API key
         else:
             self.api_key = api_key or os.getenv(f"{provider.upper()}_API_KEY")
         self.client = None
-        self.enabled = False  # 添加enabled属性
+        self.enabled = False
         self._initialize()
     
     def _initialize(self):
@@ -61,14 +58,18 @@ class LLMService:
                 print("⚠️ OpenAI 未安装，请运行: pip install openai")
                 self.enabled = False
         
-        elif self.provider == LLMProvider.OLLAMA:
+        elif self.provider == LLMProvider.SGLANG:
             try:
-                import ollama
-                self.client = ollama
-                self.model = "llama3"
-                self.enabled = True  # 初始化成功
-            except ImportError:
-                print("⚠️ Ollama 未安装，请运行: pip install ollama")
+                from backend.llm.sglang_client import SGLangClientSync, SGLangConfig
+                server_url = os.getenv("SGLANG_SERVER_URL", "http://localhost:8000")
+                model_name = os.getenv("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B")
+                config = SGLangConfig(server_url=server_url, model_name=model_name)
+                self.client = SGLangClientSync(config)
+                self.model = model_name
+                self.enabled = True
+                print(f"✓ SGLang 客户端已初始化: {server_url}")
+            except Exception as e:
+                print(f"⚠️ SGLang 初始化失败: {e}")
                 self.enabled = False
     
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, response_format: Optional[str] = None) -> str:
@@ -88,8 +89,8 @@ class LLMService:
                 return self._chat_openai(messages, temperature, response_format)
             elif self.provider == LLMProvider.QWEN:
                 return self._chat_qwen(messages, temperature, response_format)
-            elif self.provider == LLMProvider.OLLAMA:
-                return self._chat_ollama(messages, temperature)
+            elif self.provider == LLMProvider.SGLANG:
+                return self._chat_sglang(messages, temperature)
             else:
                 return "大模型未配置"
         except Exception as e:
@@ -152,6 +153,8 @@ class LLMService:
         try:
             if self.provider == LLMProvider.QWEN:
                 yield from self._chat_qwen_stream(messages, temperature)
+            elif self.provider == LLMProvider.SGLANG:
+                yield from self._chat_sglang_stream(messages, temperature)
             else:
                 # 其他提供商暂不支持流式
                 content = self.chat(messages, temperature)
@@ -213,14 +216,53 @@ class LLMService:
                 print(f"Qwen普通模式也失败: {e2}")
                 yield {"type": "error", "content": str(e2)}
     
-    def _chat_ollama(self, messages: List[Dict[str, str]], temperature: float) -> str:
-        """Ollama 本地对话"""
-        response = self.client.chat(
-            model=self.model,
-            messages=messages,
-            options={'temperature': temperature}
-        )
-        return response['message']['content']
+    def _chat_sglang(self, messages: List[Dict[str, str]], temperature: float) -> str:
+        """SGLang 对话"""
+        try:
+            return self.client.chat(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=2048
+            )
+        except Exception as e:
+            print(f"SGLang 调用失败: {e}")
+            return f"SGLang 调用失败: {str(e)}"
+    
+    def _chat_sglang_stream(self, messages: List[Dict[str, str]], temperature: float):
+        """SGLang 流式对话"""
+        try:
+            import httpx
+            import json as json_module
+            
+            server_url = os.getenv("SGLANG_SERVER_URL", "http://localhost:8000")
+            model_name = os.getenv("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B")
+            
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": 2048,
+                "stream": True
+            }
+            
+            with httpx.Client(timeout=120.0) as client:
+                with client.stream("POST", f"{server_url}/v1/chat/completions", json=payload) as resp:
+                    for line in resp.iter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:]
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json_module.loads(data)
+                                delta = chunk["choices"][0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    yield {"type": "answer", "content": content}
+                            except:
+                                pass
+        except Exception as e:
+            print(f"SGLang 流式调用失败: {e}")
+            yield {"type": "error", "content": str(e)}
     
     def analyze_health(self, health_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
         """
@@ -464,6 +506,10 @@ def get_llm_service() -> Optional[LLMService]:
         elif provider == 'openai':
             api_key = os.getenv('OPENAI_API_KEY')
             key_name = 'OPENAI_API_KEY'
+        elif provider == 'sglang':
+            # SGLang 不需要 API key，只需要服务器地址
+            api_key = 'local'
+            key_name = 'SGLANG_SERVER_URL'
         else:
             api_key = os.getenv(f'{provider.upper()}_API_KEY')
             key_name = f'{provider.upper()}_API_KEY'

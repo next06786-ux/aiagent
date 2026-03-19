@@ -10,6 +10,68 @@
 
 ---
 
+## SGLang 推理服务器部署（推荐）
+
+### 启动 SGLang 服务器（在 AutoDL GPU 上）
+
+```bash
+# 设置环境变量
+export HF_HOME=/root/autodl-tmp/huggingface
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HUB_ENABLE_HF_TRANSFER=0
+
+# 启动 SGLang（基础模式）
+python -m sglang.launch_server \
+  --model-path Qwen/Qwen3.5-9B \
+  --port 8000 \
+  --tensor-parallel-size 1 \
+  --mem-fraction-static 0.8 \
+  --context-length 32768 \
+  --reasoning-parser qwen3 \
+  --download-dir /root/autodl-tmp/huggingface
+
+# 启动 SGLang（带 LoRA 支持）
+python -m sglang.launch_server \
+  --model-path Qwen/Qwen3.5-9B \
+  --port 8000 \
+  --tensor-parallel-size 1 \
+  --mem-fraction-static 0.8 \
+  --context-length 32768 \
+  --reasoning-parser qwen3 \
+  --download-dir /root/autodl-tmp/huggingface \
+  --max-lora-rank 64 \
+  --lora-target-modules q_proj,k_proj,v_proj,o_proj
+```
+
+### 后端配置（本地或服务器）
+
+在 `backend/.env` 中配置：
+
+```bash
+# 使用 SGLang 作为 LLM 提供商
+LLM_PROVIDER=sglang
+SGLANG_SERVER_URL=http://YOUR_GPU_SERVER_IP:8000
+SGLANG_MODEL_NAME=Qwen/Qwen3.5-9B
+```
+
+### 测试 SGLang 连接
+
+```bash
+# 测试健康检查
+curl http://YOUR_GPU_SERVER_IP:8000/health
+
+# 测试聊天
+curl http://YOUR_GPU_SERVER_IP:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3.5-9B",
+    "messages": [{"role": "user", "content": "你好"}],
+    "max_tokens": 100
+  }'
+```
+
+---
+
 ## 第一步：本地推送到 GitHub
 
 ### 1.1 首次设置（如果还没有仓库）

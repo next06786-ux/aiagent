@@ -1,30 +1,29 @@
 """
-vLLM Multi-LoRA 客户端
-用于后端服务调用 GPU 服务器上的 vLLM
+SGLang 客户端
+用于后端服务调用 GPU 服务器上的 SGLang
+兼容 OpenAI API 格式
 """
 import os
 import httpx
 import asyncio
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator
 from dataclasses import dataclass
 
 
 @dataclass
-class VLLMConfig:
-    """vLLM 服务配置"""
-    # GPU 服务器地址
-    server_url: str = os.environ.get("VLLM_SERVER_URL", "http://localhost:8000")
-    # 超时时间
+class SGLangConfig:
+    """SGLang 服务配置"""
+    server_url: str = os.environ.get("SGLANG_SERVER_URL", "http://localhost:8000")
+    model_name: str = os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B")
     timeout: float = 120.0
-    # 重试次数
     max_retries: int = 3
 
 
-class VLLMClient:
-    """vLLM 异步客户端"""
+class SGLangClient:
+    """SGLang 异步客户端"""
     
-    def __init__(self, config: VLLMConfig = None):
-        self.config = config or VLLMConfig()
+    def __init__(self, config: SGLangConfig = None):
+        self.config = config or SGLangConfig()
         self._client: Optional[httpx.AsyncClient] = None
     
     @property
@@ -44,37 +43,54 @@ class VLLMClient:
         """健康检查"""
         try:
             resp = await self.client.get("/health")
+            if resp.status_code == 200:
+                return {"status": "healthy"}
+            # SGLang 也支持 /health_generate
+            resp = await self.client.get("/health_generate")
+            if resp.status_code == 200:
+                return {"status": "healthy"}
+            return {"status": "unhealthy", "code": resp.status_code}
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+    
+    async def get_model_info(self) -> Dict:
+        """获取模型信息"""
+        try:
+            resp = await self.client.get("/model_info")
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            return {"status": "unhealthy", "error": str(e)}
+            return {"error": str(e)}
     
     async def chat(
         self,
         messages: List[Dict[str, str]],
-        user_id: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        top_p: float = 0.9,
+        stream: bool = False
     ) -> str:
         """
         聊天补全
         
         Args:
             messages: [{"role": "user", "content": "..."}]
-            user_id: 用户 ID（使用该用户的 LoRA）
             temperature: 温度
             max_tokens: 最大生成长度
+            top_p: Top-p 采样
+            stream: 是否流式
         
         Returns:
             助手回复
         """
         payload = {
+            "model": self.config.model_name,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
+            "top_p": top_p,
+            "stream": stream
         }
-        if user_id:
-            payload["user_id"] = user_id
         
         resp = await self.client.post("/v1/chat/completions", json=payload)
         resp.raise_for_status()
@@ -82,86 +98,67 @@ class VLLMClient:
         data = resp.json()
         return data["choices"][0]["message"]["content"]
     
+    async def chat_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        top_p: float = 0.9
+    ) -> AsyncGenerator[str, None]:
+        """流式聊天"""
+        payload = {
+            "model": self.config.model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p,
+            "stream": True
+        }
+        
+        async with self.client.stream("POST", "/v1/chat/completions", json=payload) as resp:
+            async for line in resp.aiter_lines():
+                if line.startswith("data: "):
+                    data = line[6:]
+                    if data == "[DONE]":
+                        break
+                    try:
+                        import json
+                        chunk = json.loads(data)
+                        delta = chunk["choices"][0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            yield content
+                    except:
+                        pass
+    
     async def generate(
         self,
         prompt: str,
-        user_id: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        top_p: float = 0.9
     ) -> str:
         """文本补全"""
         payload = {
+            "model": self.config.model_name,
             "prompt": prompt,
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
+            "top_p": top_p
         }
-        if user_id:
-            payload["user_id"] = user_id
         
         resp = await self.client.post("/v1/completions", json=payload)
         resp.raise_for_status()
         
         data = resp.json()
         return data["choices"][0]["text"]
-    
-    async def get_user_lora(self, user_id: str) -> Dict:
-        """获取用户 LoRA 信息"""
-        resp = await self.client.get(f"/v1/users/{user_id}/lora")
-        resp.raise_for_status()
-        return resp.json()
-    
-    async def has_user_lora(self, user_id: str) -> bool:
-        """检查用户是否有 LoRA"""
-        info = await self.get_user_lora(user_id)
-        return info.get("has_lora", False)
-    
-    async def train_lora(
-        self,
-        user_id: str,
-        conversations: List[Dict[str, str]],
-        num_epochs: int = 3
-    ) -> Dict:
-        """
-        提交 LoRA 训练任务
-        
-        Args:
-            user_id: 用户 ID
-            conversations: [{"user": "...", "assistant": "..."}]
-            num_epochs: 训练轮数
-        
-        Returns:
-            任务信息
-        """
-        payload = {
-            "user_id": user_id,
-            "conversations": conversations,
-            "num_epochs": num_epochs
-        }
-        
-        resp = await self.client.post("/v1/train", json=payload)
-        resp.raise_for_status()
-        return resp.json()
-    
-    async def get_training_status(self, user_id: str) -> Dict:
-        """获取训练状态"""
-        resp = await self.client.get(f"/v1/train/{user_id}/status")
-        if resp.status_code == 404:
-            return {"status": "not_found"}
-        resp.raise_for_status()
-        return resp.json()
-    
-    async def list_loras(self) -> List[Dict]:
-        """列出所有 LoRA"""
-        resp = await self.client.get("/v1/loras")
-        resp.raise_for_status()
-        return resp.json()["loras"]
 
 
-class VLLMClientSync:
-    """vLLM 同步客户端"""
+class SGLangClientSync:
+    """SGLang 同步客户端"""
     
-    def __init__(self, config: VLLMConfig = None):
-        self.config = config or VLLMConfig()
+    def __init__(self, config: SGLangConfig = None):
+        self.config = config or SGLangConfig()
         self._client: Optional[httpx.Client] = None
     
     @property
@@ -180,25 +177,26 @@ class VLLMClientSync:
     def health_check(self) -> Dict:
         try:
             resp = self.client.get("/health")
-            resp.raise_for_status()
-            return resp.json()
+            if resp.status_code == 200:
+                return {"status": "healthy"}
+            return {"status": "unhealthy", "code": resp.status_code}
         except Exception as e:
             return {"status": "unhealthy", "error": str(e)}
     
     def chat(
         self,
         messages: List[Dict[str, str]],
-        user_id: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        top_p: float = 0.9
     ) -> str:
         payload = {
+            "model": self.config.model_name,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
+            "top_p": top_p
         }
-        if user_id:
-            payload["user_id"] = user_id
         
         resp = self.client.post("/v1/chat/completions", json=payload)
         resp.raise_for_status()
@@ -209,73 +207,67 @@ class VLLMClientSync:
     def generate(
         self,
         prompt: str,
-        user_id: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 1024
     ) -> str:
         payload = {
+            "model": self.config.model_name,
             "prompt": prompt,
             "temperature": temperature,
             "max_tokens": max_tokens
         }
-        if user_id:
-            payload["user_id"] = user_id
         
         resp = self.client.post("/v1/completions", json=payload)
         resp.raise_for_status()
         
         data = resp.json()
         return data["choices"][0]["text"]
-    
-    def has_user_lora(self, user_id: str) -> bool:
-        resp = self.client.get(f"/v1/users/{user_id}/lora")
-        if resp.status_code == 200:
-            return resp.json().get("has_lora", False)
-        return False
 
 
 # 全局客户端实例
-_vllm_client: Optional[VLLMClient] = None
-_vllm_client_sync: Optional[VLLMClientSync] = None
+_sglang_client: Optional[SGLangClient] = None
+_sglang_client_sync: Optional[SGLangClientSync] = None
 
 
-def get_vllm_client() -> VLLMClient:
+def get_sglang_client() -> SGLangClient:
     """获取异步客户端"""
-    global _vllm_client
-    if _vllm_client is None:
-        _vllm_client = VLLMClient()
-    return _vllm_client
+    global _sglang_client
+    if _sglang_client is None:
+        _sglang_client = SGLangClient()
+    return _sglang_client
 
 
-def get_vllm_client_sync() -> VLLMClientSync:
+def get_sglang_client_sync() -> SGLangClientSync:
     """获取同步客户端"""
-    global _vllm_client_sync
-    if _vllm_client_sync is None:
-        _vllm_client_sync = VLLMClientSync()
-    return _vllm_client_sync
+    global _sglang_client_sync
+    if _sglang_client_sync is None:
+        _sglang_client_sync = SGLangClientSync()
+    return _sglang_client_sync
 
 
 # ============== 便捷函数 ==============
 
-async def chat_with_lora(
-    user_id: str,
+async def chat_with_sglang(
     message: str,
     system_prompt: str = None,
-    history: List[Dict] = None
+    history: List[Dict] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 1024
 ) -> str:
     """
-    使用用户专属 LoRA 进行对话
+    使用 SGLang 进行对话
     
     Args:
-        user_id: 用户 ID
         message: 用户消息
         system_prompt: 系统提示
         history: 历史对话
+        temperature: 温度
+        max_tokens: 最大长度
     
     Returns:
         AI 回复
     """
-    client = get_vllm_client()
+    client = get_sglang_client()
     
     messages = []
     
@@ -287,17 +279,18 @@ async def chat_with_lora(
     
     messages.append({"role": "user", "content": message})
     
-    return await client.chat(messages, user_id=user_id)
+    return await client.chat(messages, temperature=temperature, max_tokens=max_tokens)
 
 
-def chat_with_lora_sync(
-    user_id: str,
+def chat_with_sglang_sync(
     message: str,
     system_prompt: str = None,
-    history: List[Dict] = None
+    history: List[Dict] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 1024
 ) -> str:
     """同步版本"""
-    client = get_vllm_client_sync()
+    client = get_sglang_client_sync()
     
     messages = []
     
@@ -309,14 +302,14 @@ def chat_with_lora_sync(
     
     messages.append({"role": "user", "content": message})
     
-    return client.chat(messages, user_id=user_id)
+    return client.chat(messages, temperature=temperature, max_tokens=max_tokens)
 
 
 # ============== 测试 ==============
 
 if __name__ == "__main__":
     async def test():
-        client = VLLMClient()
+        client = SGLangClient()
         
         # 健康检查
         print("🔍 健康检查...")
@@ -327,19 +320,19 @@ if __name__ == "__main__":
             print("❌ 服务不可用")
             return
         
+        # 获取模型信息
+        print("\n📋 模型信息...")
+        info = await client.get_model_info()
+        print(f"   {info}")
+        
         # 测试聊天
         print("\n💬 测试聊天...")
         response = await client.chat(
-            messages=[{"role": "user", "content": "你好"}],
-            temperature=0.7
+            messages=[{"role": "user", "content": "你好，请简单介绍一下你自己"}],
+            temperature=0.7,
+            max_tokens=200
         )
-        print(f"   回复: {response[:100]}...")
-        
-        # 列出 LoRA
-        print("\n📦 LoRA 列表...")
-        loras = await client.list_loras()
-        for lora in loras:
-            print(f"   - {lora['user_id']} (v{lora['version']})")
+        print(f"   回复: {response}")
         
         await client.close()
         print("\n✅ 测试完成")

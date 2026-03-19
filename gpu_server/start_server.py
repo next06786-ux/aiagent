@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 GPU服务器统一启动脚本
-启动完整的LifeSwarm后端服务
+启动 SGLang 推理服务
 """
 import os
 import sys
 import argparse
+import subprocess
 import signal
 from pathlib import Path
 
@@ -13,35 +14,25 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# 设置环境变量
-os.environ.setdefault("DATA_DIR", "/root/autodl-tmp")
-
 
 def setup_environment():
-    """设置环境"""
-    from gpu_server.gpu_config import get_config
+    """设置环境变量"""
+    from gpu_server.gpu_config import ENV_CONFIG, PATHS, ensure_dirs
     
-    config = get_config()
-    
-    # 设置CUDA
-    if config.use_gpu:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(config.gpu_device)
-    
-    # 设置HuggingFace缓存目录
-    os.environ["HF_HOME"] = os.path.join(config.data_dir, "huggingface")
-    os.environ["TRANSFORMERS_CACHE"] = os.path.join(config.data_dir, "huggingface")
+    # 设置环境变量
+    for key, value in ENV_CONFIG.items():
+        os.environ[key] = value
     
     # 创建必要目录
-    os.makedirs(config.logs_dir, exist_ok=True)
-    os.makedirs(config.database_dir, exist_ok=True)
+    ensure_dirs()
     
-    return config
+    print("✓ 环境变量已设置:")
+    for key, value in ENV_CONFIG.items():
+        print(f"  {key}={value}")
 
 
-def print_banner(config):
+def print_banner():
     """打印启动横幅"""
-    gpu_info = config.get_gpu_info()
-    
     print("""
 ╔══════════════════════════════════════════════════════════════════╗
 ║                                                                  ║
@@ -52,83 +43,84 @@ def print_banner(config):
 ║     ███████╗██║██║     ███████╗███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║    ║
 ║     ╚══════╝╚═╝╚═╝     ╚══════╝╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝    ║
 ║                                                                  ║
-║                    GPU Server Edition                            ║
+║                    SGLang GPU Server                             ║
 ╚══════════════════════════════════════════════════════════════════╝
     """)
-    
-    print(f"📁 数据目录: {config.data_dir}")
-    print(f"🌐 服务地址: http://{config.host}:{config.port}")
-    
-    if gpu_info.get("available"):
-        print(f"🎮 GPU: {gpu_info['device_name']}")
-        print(f"💾 显存: {gpu_info['memory_total_gb']:.1f} GB")
-    else:
-        print("⚠️  GPU不可用，使用CPU模式")
-    
-    print(f"🤖 默认模型: {config.default_model}")
-    print(f"🔧 LoRA训练: {'启用' if config.lora_enabled else '禁用'}")
-    print(f"📚 RAG系统: {'启用' if config.rag_enabled else '禁用'}")
-    print()
 
 
-def start_server(config, reload: bool = False):
-    """启动服务器"""
-    import uvicorn
+def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False):
+    """启动 SGLang 服务器"""
+    from gpu_server.gpu_config import get_model_config, SGLANG_CONFIG, PATHS
     
-    print("🚀 启动服务...")
-    print(f"📝 API文档: http://{config.host}:{config.port}/docs")
+    config = get_model_config(model)
+    
+    print(f"🚀 启动 SGLang 服务器...")
+    print(f"  模型: {config['hf_name']}")
+    print(f"  端口: {port}")
+    print(f"  显存需求: {config['vram_gb']} GB")
     print()
     
-    uvicorn.run(
-        "backend.main:app",
-        host=config.host,
-        port=config.port,
-        reload=reload,
-        workers=config.workers,
-        log_level="info",
-        access_log=True
-    )
+    cmd = [
+        "python", "-m", "sglang.launch_server",
+        "--model-path", config['hf_name'],
+        "--port", str(port),
+        "--tensor-parallel-size", str(SGLANG_CONFIG['tensor_parallel_size']),
+        "--mem-fraction-static", str(SGLANG_CONFIG['mem_fraction_static']),
+        "--context-length", str(SGLANG_CONFIG['context_length']),
+        "--reasoning-parser", SGLANG_CONFIG['reasoning_parser'],
+        "--download-dir", PATHS['huggingface'],
+    ]
+    
+    # 添加 LoRA 支持
+    if enable_lora:
+        cmd.extend([
+            "--max-lora-rank", str(config['lora_r']),
+            "--lora-target-modules", ",".join(config['target_modules']),
+        ])
+        print("  LoRA: 已启用")
+    
+    print(f"\n执行命令:\n{' '.join(cmd)}\n")
+    
+    # 启动进程
+    process = subprocess.Popen(cmd)
+    
+    return process
 
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description="LifeSwarm GPU Server")
-    parser.add_argument("--host", default=None, help="服务地址")
-    parser.add_argument("--port", type=int, default=None, help="服务端口")
-    parser.add_argument("--reload", action="store_true", help="开发模式（自动重载）")
-    parser.add_argument("--no-gpu", action="store_true", help="禁用GPU")
-    parser.add_argument("--model", default=None, help="指定模型")
-    parser.add_argument("--config", action="store_true", help="仅显示配置")
+    parser = argparse.ArgumentParser(description="LifeSwarm SGLang Server")
+    parser.add_argument("--model", default=None, help="模型名称 (qwen3.5-9b, qwen3.5-0.8b)")
+    parser.add_argument("--port", type=int, default=8000, help="服务端口")
+    parser.add_argument("--enable-lora", action="store_true", help="启用 LoRA 支持")
+    parser.add_argument("--show-config", action="store_true", help="仅显示配置")
     
     args = parser.parse_args()
     
-    # 设置环境
-    if args.no_gpu:
-        os.environ["USE_GPU"] = "false"
-    if args.model:
-        os.environ["DEFAULT_MODEL"] = args.model
-    
-    config = setup_environment()
-    
-    # 覆盖命令行参数
-    if args.host:
-        config.host = args.host
-    if args.port:
-        config.port = args.port
-    
     # 打印横幅
-    print_banner(config)
+    print_banner()
+    
+    # 设置环境
+    setup_environment()
     
     # 仅显示配置
-    if args.config:
-        print("📋 完整配置:")
-        for key, value in config.to_dict().items():
+    if args.show_config:
+        from gpu_server.gpu_config import get_model_config, get_sglang_launch_cmd
+        config = get_model_config(args.model)
+        print("\n📋 模型配置:")
+        for key, value in config.items():
             print(f"  {key}: {value}")
+        print("\n📋 启动命令:")
+        print(get_sglang_launch_cmd(args.model))
         return
     
     # 信号处理
+    process = None
+    
     def signal_handler(sig, frame):
         print("\n🛑 收到停止信号，正在关闭...")
+        if process:
+            process.terminate()
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
@@ -136,9 +128,16 @@ def main():
     
     # 启动服务
     try:
-        start_server(config, reload=args.reload)
+        process = start_sglang(
+            model=args.model,
+            port=args.port,
+            enable_lora=args.enable_lora
+        )
+        process.wait()
     except KeyboardInterrupt:
         print("\n🛑 服务已停止")
+        if process:
+            process.terminate()
     except Exception as e:
         print(f"❌ 启动失败: {e}")
         import traceback
