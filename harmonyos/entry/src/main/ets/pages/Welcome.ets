@@ -40,14 +40,14 @@ struct Welcome {
     } else {
       // 进入主应用
       router.replaceUrl({
-        url: 'pages/Index'
+        url: 'pages/AgentHome'
       });
     }
   }
 
   private skipWelcome() {
     router.replaceUrl({
-      url: 'pages/Index'
+      url: 'pages/AgentHome'
     });
   }
 

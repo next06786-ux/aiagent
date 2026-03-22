@@ -1096,6 +1096,20 @@ async def websocket_chat(websocket: WebSocket):
                     content=message
                 )
                 
+                # 【实时洞察分析】从用户消息中提取情绪、话题、意图等数据
+                try:
+                    from backend.emergence.realtime_analyzer import analyze_message_realtime
+                    insights = analyze_message_realtime(
+                        user_id=user_id,
+                        message=message,
+                        message_id=f"{session_id}_{datetime.now().timestamp()}",
+                        metadata=user_context  # 可包含图像描述、语音情感等
+                    )
+                    if insights:
+                        print(f"🔍 [实时洞察] 提取了 {len(insights)} 条洞察数据")
+                except Exception as e:
+                    print(f"⚠️ [实时洞察] 分析失败: {e}")
+                
                 # 同时保存到内存（用于当前会话）
                 global chat_history_storage
                 if user_id not in chat_history_storage:
@@ -6060,6 +6074,20 @@ from backend.decision.enhanced_decision_api import router as enhanced_decision_r
 app.include_router(enhanced_decision_router)
 
 print("增强决策 API 已加载")
+
+# ==================== 智能洞察 API ====================
+
+# 注册智能洞察 API（涌现检测 + 对话分析）
+from backend.emergence.insight_api import router as insight_router
+app.include_router(insight_router)
+
+print("智能洞察 API 已加载")
+print("   - POST /api/v1/insights/process - 处理对话消息")
+print("   - POST /api/v1/insights/generate - 生成智能洞察")
+print("   - GET /api/v1/insights/dashboard/{user_id} - 获取仪表盘数据")
+print("   - GET /api/v1/insights/list/{user_id} - 获取洞察列表")
+print("   - GET /api/v1/insights/emotion-trend/{user_id} - 获取情绪趋势")
+print("   - GET /api/v1/insights/topic-distribution/{user_id} - 获取话题分布")
 print("   - POST /api/decision/enhanced/collect/start - 开始信息收集")
 print("   - POST /api/decision/enhanced/collect/continue - 继续信息收集")
 print("   - GET /api/decision/enhanced/collect/session/{session_id} - 获取收集会话")

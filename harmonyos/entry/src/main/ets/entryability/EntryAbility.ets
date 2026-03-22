@@ -8,12 +8,17 @@ import { BusinessError } from '@kit.BasicServicesKit';
 // import { SmartVisionService, SamplingStrategy } from '../service/SmartVisionService'; // 
 import preferences from '@ohos.data.preferences';
 import { getUserSessionManager } from '../service/UserSessionManager';
+import { getAuthService } from '../service/AuthService';
 
 export default class EntryAbility extends UIAbility {
   // private smartVisionService: SmartVisionService | null = null; // 
   
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(0x0000, 'VisionAgent', '%{public}s', 'Ability onCreate');
+    
+    // 初始化 AuthService 的 context
+    const authService = getAuthService();
+    authService.setContext(this.context);
     
     // 初始化用户会话管理器
     this.initializeUserSession();
@@ -68,8 +73,8 @@ export default class EntryAbility extends UIAbility {
         
         if (!firstLaunch) {
           // 非首次启动，直接进入主页
-          targetPage = 'pages/Index';
-          hilog.info(0x0000, 'VisionAgent', 'User logged in, loading Index');
+          targetPage = 'pages/AgentHome';
+          hilog.info(0x0000, 'VisionAgent', 'User logged in, loading AgentHome');
         } else {
           // 首次启动，进入欢迎页
           targetPage = 'pages/Welcome';

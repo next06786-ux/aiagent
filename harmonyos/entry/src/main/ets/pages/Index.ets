@@ -700,13 +700,13 @@ struct Index {
             .rowStart(0)
             .rowEnd(0)
             
-            // 知识图谱
+            // 知识星图 (GPU版本)
             GridItem() {
               this.EnhancedBentoCard(
-                '知识图谱',
-                '关系网络',
-                '可视化知识结构',
-                'pages/KnowledgeGraphCanvas',
+                '知识星图',
+                'GPU渲染',
+                '高性能3D星图',
+                'pages/KnowledgeStarMapGL',
                 Theme.Gradient.Ocean,
                 'network'
               )

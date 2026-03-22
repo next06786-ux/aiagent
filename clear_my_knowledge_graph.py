@@ -14,7 +14,7 @@ NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
 NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'your_password')
 
 # 你的用户ID
-USER_ID = '2c2139f7-bab4-483d-9882-ae83ce8734cd'
+USER_ID = 'a113a299-ecff-4363-8d44-aff979dfc547'
 
 def clear_user_knowledge_graph(user_id: str):
     """清除指定用户的所有知识图谱节点和关系"""

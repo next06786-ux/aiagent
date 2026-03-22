@@ -154,6 +154,34 @@
       "access_count": 0,
       "last_access": null,
       "related_memories": []
+    },
+    {
+      "id": "conversation_1773988863.998893_11",
+      "memory_type": "conversation",
+      "content": "我和安妮昨天去玩了",
+      "metadata": {
+        "user_id": "default_user",
+        "response": "SGLang 调用失败: Server error '502 Bad Gateway' for url 'http://localhost:8000/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502"
+      },
+      "timestamp": "2026-03-20T14:41:03.998893",
+      "importance": 0.7,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1773993665.488769_12",
+      "memory_type": "conversation",
+      "content": "你是谁",
+      "metadata": {
+        "user_id": "default_user",
+        "response": "SGLang 调用失败: Server error '502 Bad Gateway' for url 'http://localhost:8000/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502"
+      },
+      "timestamp": "2026-03-20T16:01:05.488769",
+      "importance": 0.7,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
     }
   ]
 }

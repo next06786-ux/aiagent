@@ -1,0 +1,32 @@
+[
+{
+  "directory": "E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a",
+  "command": "E:\\DEVECO~1.640\\DEVECO~1\\sdk\\default\\OPENHA~1\\native\\llvm\\bin\\CLANG_~1.EXE --target=aarch64-linux-ohos --gcc-toolchain=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/llvm\" --sysroot=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/sysroot\" -Dstarmap_render_EXPORTS -I\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/hms/native/sysroot/usr/include\" -IE:/ai/harmonyos/entry/src/main/cpp -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security   -D__MUSL__ -O0 -g -fno-limit-debug-info  -std=gnu++17 -fPIC -o CMakeFiles\\starmap_render.dir\\napi_init.cpp.o -c E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\napi_init.cpp",
+  "file": "E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\napi_init.cpp",
+  "output": "CMakeFiles\\starmap_render.dir\\napi_init.cpp.o"
+},
+{
+  "directory": "E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a",
+  "command": "E:\\DEVECO~1.640\\DEVECO~1\\sdk\\default\\OPENHA~1\\native\\llvm\\bin\\CLANG_~1.EXE --target=aarch64-linux-ohos --gcc-toolchain=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/llvm\" --sysroot=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/sysroot\" -Dstarmap_render_EXPORTS -I\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/hms/native/sysroot/usr/include\" -IE:/ai/harmonyos/entry/src/main/cpp -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security   -D__MUSL__ -O0 -g -fno-limit-debug-info  -std=gnu++17 -fPIC -o CMakeFiles\\starmap_render.dir\\starmap_renderer.cpp.o -c E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\starmap_renderer.cpp",
+  "file": "E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\starmap_renderer.cpp",
+  "output": "CMakeFiles\\starmap_render.dir\\starmap_renderer.cpp.o"
+},
+{
+  "directory": "E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a",
+  "command": "E:\\DEVECO~1.640\\DEVECO~1\\sdk\\default\\OPENHA~1\\native\\llvm\\bin\\CLANG_~1.EXE --target=aarch64-linux-ohos --gcc-toolchain=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/llvm\" --sysroot=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/sysroot\" -Dstarmap_render_EXPORTS -I\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/hms/native/sysroot/usr/include\" -IE:/ai/harmonyos/entry/src/main/cpp -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security   -D__MUSL__ -O0 -g -fno-limit-debug-info  -std=gnu++17 -fPIC -o CMakeFiles\\starmap_render.dir\\shader_utils.cpp.o -c E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\shader_utils.cpp",
+  "file": "E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\shader_utils.cpp",
+  "output": "CMakeFiles\\starmap_render.dir\\shader_utils.cpp.o"
+},
+{
+  "directory": "E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a",
+  "command": "E:\\DEVECO~1.640\\DEVECO~1\\sdk\\default\\OPENHA~1\\native\\llvm\\bin\\CLANG_~1.EXE --target=aarch64-linux-ohos --gcc-toolchain=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/llvm\" --sysroot=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/sysroot\" -Dnebulachat_EXPORTS -I\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/hms/native/sysroot/usr/include\" -IE:/ai/harmonyos/entry/src/main/cpp -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security   -D__MUSL__ -O0 -g -fno-limit-debug-info  -std=gnu++17 -fPIC -o CMakeFiles\\nebulachat.dir\\nebula_napi.cpp.o -c E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\nebula_napi.cpp",
+  "file": "E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\nebula_napi.cpp",
+  "output": "CMakeFiles\\nebulachat.dir\\nebula_napi.cpp.o"
+},
+{
+  "directory": "E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a",
+  "command": "E:\\DEVECO~1.640\\DEVECO~1\\sdk\\default\\OPENHA~1\\native\\llvm\\bin\\CLANG_~1.EXE --target=aarch64-linux-ohos --gcc-toolchain=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/llvm\" --sysroot=\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/sysroot\" -Dnebulachat_EXPORTS -I\"E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/hms/native/sysroot/usr/include\" -IE:/ai/harmonyos/entry/src/main/cpp -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -fno-addrsig -Wa,--noexecstack -Wformat -Werror=format-security   -D__MUSL__ -O0 -g -fno-limit-debug-info  -std=gnu++17 -fPIC -o CMakeFiles\\nebulachat.dir\\nebula_chat_renderer.cpp.o -c E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\nebula_chat_renderer.cpp",
+  "file": "E:\\ai\\harmonyos\\entry\\src\\main\\cpp\\nebula_chat_renderer.cpp",
+  "output": "CMakeFiles\\nebulachat.dir\\nebula_chat_renderer.cpp.o"
+}
+]

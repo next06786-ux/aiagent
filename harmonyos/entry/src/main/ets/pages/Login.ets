@@ -173,7 +173,7 @@ struct Login {
       promptAction.showToast({ message: '登录成功' });
       
       // 跳转到主页
-      router.replaceUrl({ url: 'pages/Index' });
+      router.replaceUrl({ url: 'pages/AgentHome' });
       
     } catch (err) {
       const error = err as Error;

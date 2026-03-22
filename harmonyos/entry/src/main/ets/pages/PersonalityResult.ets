@@ -35,7 +35,7 @@ struct PersonalityResult {
           .fontColor('#007DFF')
           .onClick(() => {
             router.clear()
-            router.pushUrl({ url: 'pages/Index' })
+            router.pushUrl({ url: 'pages/AgentHome' })
           })
       }
       .width('100%')

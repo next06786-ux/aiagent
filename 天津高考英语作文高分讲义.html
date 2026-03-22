@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天津高考英语作文高分讲义</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            line-height: 1.8;
+            background: #f5f3ef;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 950px;
+            margin: 0 auto;
+            background: #fffef9;
+            border-radius: 8px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: #fff;
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+        }
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #c9a959;
+        }
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 12px;
+            font-weight: 600;
+            letter-spacing: 2px;
+        }
+        .header p { font-size: 1.1em; opacity: 0.85; font-weight: 300; }
+        .content { padding: 40px; }
+        
+        /* 真题区域 */
+        .exam-section {
+            background: #f9f7f2;
+            border: 2px solid #c9a959;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 35px;
+        }
+        .exam-title {
+            background: #c9a959;
+            color: #2c3e50;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+        .exam-content {
+            background: #fff;
+            padding: 25px;
+            border-radius: 6px;
+            border-left: 4px solid #2c3e50;
+            color: #333;
+            line-height: 2;
+        }
+        
+        /* 范文区域 */
+        .model-essay {
+            background: #2c3e50;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 35px;
+            color: #fff;
+        }
+        .model-essay-title {
+            color: #c9a959;
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .essay-text {
+            background: rgba(255,255,255,0.08);
+            padding: 25px;
+            border-radius: 6px;
+            line-height: 2.2;
+            font-size: 1.05em;
+        }
+        .essay-text p { margin-bottom: 18px; text-indent: 2em; }
+        .essay-text p:last-child { margin-bottom: 0; }
+        .highlight-sentence {
+            background: rgba(201, 169, 89, 0.3);
+            padding: 2px 6px;
+            border-radius: 3px;
+            border-bottom: 2px solid #c9a959;
+        }
+        
+        /* 剖析区域 */
+        .analysis-section {
+            background: #fff;
+            border: 1px solid #e5e1d8;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        .analysis-header {
+            background: #3d5a73;
+            color: #fff;
+            padding: 15px 25px;
+            font-size: 1.15em;
+            font-weight: 500;
+        }
+        .analysis-content { padding: 25px; }
+        .original-sentence {
+            background: #f0f5f2;
+            padding: 18px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4a6b5d;
+            font-size: 1.05em;
+            color: #2d4a3e;
+        }
+        .original-sentence strong { color: #1a3a2e; }
+        .template-box {
+            background: #fdfbf5;
+            border: 1px solid #e8e0c8;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .template-box h4 {
+            color: #8b6b4a;
+            margin-bottom: 12px;
+            font-size: 1em;
+        }
+        .template-formula {
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Consolas', monospace;
+            color: #c9a959;
+            font-size: 1.05em;
+            border: 1px dashed #c9a959;
+            margin-bottom: 15px;
+        }
+        .replace-examples {
+            background: #faf5f0;
+            padding: 18px;
+            border-radius: 6px;
+        }
+        .replace-examples h4 {
+            color: #6b5a40;
+            margin-bottom: 12px;
+        }
+        .replace-item {
+            background: #fff;
+            padding: 12px 15px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            border-left: 3px solid #c9a959;
+            font-size: 0.95em;
+        }
+        .replace-item:last-child { margin-bottom: 0; }
+        .replace-item .topic { color: #8b6b4a; font-weight: 600; }
+        
+        /* 万能句型库 */
+        .sentence-library {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e5e1d8;
+        }
+        .library-title {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 1.5em;
+            margin-bottom: 30px;
+        }
+        .step-section {
+            margin-bottom: 35px;
+            border: 1px solid #e8e4dc;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .step-header {
+            background: #3d5a73;
+            color: #fff;
+            padding: 16px 25px;
+            display: flex;
+            align-items: center;
+        }
+        .step-number {
+            background: #c9a959;
+            color: #2c3e50;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            font-weight: 700;
+            margin-right: 15px;
+        }
+        .step-title { font-size: 1.15em; font-weight: 500; }
+        .step-content { padding: 25px; background: #fff; }
+        
+        .sentence-card {
+            background: #fff;
+            border: 1px solid #e5e1d8;
+            border-radius: 6px;
+            margin-bottom: 18px;
+            overflow: hidden;
+        }
+        .sentence-num {
+            background: #4a6b5d;
+            color: #fff;
+            padding: 10px 18px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        .sentence-body { padding: 20px; }
+        .advanced-sentence {
+            background: linear-gradient(135deg, #f8f6f0 0%, #f0ede5 100%);
+            padding: 16px 18px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 1.05em;
+            color: #2c3e50;
+            font-weight: 500;
+            border-left: 4px solid #c9a959;
+            font-style: italic;
+        }
+        .translation {
+            color: #777;
+            font-size: 0.92em;
+            margin-bottom: 15px;
+            padding-left: 15px;
+            border-left: 2px solid #ddd;
+        }
+        .grammar-tag {
+            display: inline-block;
+            background: #e8f4f0;
+            color: #3d6b5d;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-right: 8px;
+            margin-bottom: 10px;
+        }
+        .usage-tips {
+            background: #f8f6f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .usage-tips h4 { color: #5a5040; margin-bottom: 10px; font-size: 0.95em; }
+        .usage-tips ul { margin-left: 18px; }
+        .usage-tips li { margin-bottom: 6px; color: #555; font-size: 0.92em; }
+        .highlight { background: #fff3c4; padding: 1px 5px; border-radius: 3px; color: #6b5a30; }
+        
+        .tips-box {
+            background: #2c3e50;
+            color: #fff;
+            padding: 30px;
+            border-radius: 6px;
+            margin-top: 35px;
+        }
+        .tips-box h3 { margin-bottom: 18px; font-size: 1.2em; color: #c9a959; }
+        .tips-box ul { margin-left: 20px; }
+        .tips-box li { margin-bottom: 10px; line-height: 1.7; opacity: 0.92; }
+        
+        .footer {
+            background: #3d5a73;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.6em; }
+            .content { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>天津高考英语作文高分讲义</h1>
+            <p>真题范文精析 + 高级万能句型库</p>
+        </div>
+        
+        <div class="content">
+            <!-- 真题展示 -->
+            <div class="exam-section">
+                <div class="exam-title">2023年天津高考英语作文真题</div>
+                <div class="exam-content">
+                    <p>假设你是晨光中学的李津。你的英国笔友Chris正在学习汉语，他在来信中请你推荐一部中国电视剧帮助他更好地了解中国文化。请你给他写一封回信，内容包括：</p>
+                    <p>1. 推荐一部电视剧；</p>
+                    <p>2. 介绍该剧的相关信息（如：主题、内容等）；</p>
+                    <p>3. 说明推荐理由。</p>
+                    <p style="margin-top: 15px; color: #666;">注意：词数不少于100；可适当加入细节，使内容充实、行文连贯。</p>
+                </div>
+            </div>
+
+            <!-- 满分范文 -->
+            <div class="model-essay">
+                <div class="model-essay-title">满分范文展示（含高级句型标注）</div>
+                <div class="essay-text">
+                    <p>Dear Chris,</p>
+                    <p><span class="highlight-sentence">Thrilled to learn that you are immersing yourself in the Chinese language</span>, I am writing to recommend a TV series that will undoubtedly enrich your understanding of Chinese culture.</p>
+                    <p><span class="highlight-sentence">The drama I would like to bring to your attention is"Mo Du"(Mo Du)</span>, a masterpiece that has garnered widespread acclaim both domestically and internationally. <span class="highlight-sentence">What sets this series apart from others is its exquisite portrayal of</span> traditional Chinese aesthetics, ranging from breathtaking landscapes to elaborate costumes that reflect the essence of ancient Chinese civilization. <span class="highlight-sentence">Not only does it present</span> a compelling narrative of loyalty and righteousness, <span class="highlight-sentence">but it also serves as a window into</span> the profound philosophical concepts embedded in Chinese culture, such as harmony between man and nature.</p>
+                    <p><span class="highlight-sentence">The reason why I am convinced this drama will appeal to you lies in</span> its perfect blend of entertainment and cultural enlightenment. <span class="highlight-sentence">By watching it, you will be exposed to</span> authentic Chinese expressions and idioms in context, which will significantly accelerate your language acquisition.</p>
+                    <p><span class="highlight-sentence">Should you have any questions while watching, do not hesitate to reach out to me.</span> I genuinely hope this recommendation proves valuable to your Chinese learning journey.</p>
+                    <p style="text-align: right; text-indent: 0;">Yours sincerely,<br>Li Jin</p>
+                </div>
+            </div>
+
+            <!-- 范文逐段剖析 -->
+            <h2 style="color: #2c3e50; font-size: 1.4em; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #c9a959;">范文逐段剖析：高级句型如何万能替换</h2>
+
+            <!-- 开头段剖析 -->
+            <div class="analysis-section">
+                <div class="analysis-header">第一段：开头段剖析</div>
+                <div class="analysis-content">
+                    <div class="original-sentence">
+                        <strong>原句：</strong>Thrilled to learn that you are immersing yourself in the Chinese language, I am writing to recommend a TV series that will undoubtedly enrich your understanding of Chinese culture.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            [情感形容词] + to learn that + [对方的情况], I am writing to + [写信目的] + that will + [积极效果]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：过去分词作状语 + 定语从句，展现复杂句式驾驭能力</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">邀请信：</span>Delighted to hear that you are interested in Chinese traditional festivals, I am writing to invite you to our Spring Festival celebration that will undoubtedly leave you with unforgettable memories.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">建议信：</span>Honored to learn that you are seeking advice on adapting to campus life, I am writing to offer some suggestions that will hopefully ease your transition.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">申请信：</span>Excited to discover that your organization is recruiting volunteers, I am writing to apply for the position that will allow me to contribute to this meaningful cause.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">感谢信：</span>Deeply moved to recall the kindness you showed me during my stay, I am writing to express my heartfelt gratitude that words can hardly convey.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主体段1剖析 -->
+            <div class="analysis-section">
+                <div class="analysis-header">第二段：主体段（介绍内容）剖析</div>
+                <div class="analysis-content">
+                    <div class="original-sentence">
+                        <strong>原句1：</strong>The drama I would like to bring to your attention is "Mo Du", a masterpiece that has garnered widespread acclaim both domestically and internationally.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            The [事物] I would like to bring to your attention is [具体名称], a [褒义名词] that has [成就/特点]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：同位语 + 定语从句，句式高级且信息密度大</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">推荐景点：</span>The destination I would like to bring to your attention is the West Lake, a scenic wonder that has inspired countless poets throughout Chinese history.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">推荐书籍：</span>The book I would like to bring to your attention is"erta"(Journey to the West), a literary treasure that has captivated readers for centuries.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">介绍活动：</span>The event I would like to bring to your attention is the Dragon Boat Festival, a cultural celebration that has been inscribed on UNESCO's Intangible Cultural Heritage list.
+                        </div>
+                    </div>
+
+                    <div class="original-sentence" style="margin-top: 25px;">
+                        <strong>原句2：</strong>What sets this series apart from others is its exquisite portrayal of traditional Chinese aesthetics.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            What sets [A] apart from [B] is its [独特优势/特点]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：主语从句，强调独特性，极具说服力</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">介绍学校：</span>What sets our school apart from others is its unwavering commitment to nurturing students' creativity and critical thinking.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">介绍城市：</span>What sets Tianjin apart from other metropolises is its harmonious blend of historical heritage and modern vitality.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">介绍产品：</span>What sets this app apart from its competitors is its user-friendly interface and personalized learning experience.
+                        </div>
+                    </div>
+
+                    <div class="original-sentence" style="margin-top: 25px;">
+                        <strong>原句3：</strong>Not only does it present a compelling narrative, but it also serves as a window into the profound philosophical concepts.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            Not only does it [优点1], but it also serves as [比喻] + [优点2]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：倒装句 + 比喻修辞，句式华丽且富有文采</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">介绍活动：</span>Not only does it provide an opportunity to experience authentic Chinese cuisine, but it also serves as a bridge connecting different cultures.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">介绍课程：</span>Not only does it equip students with practical skills, but it also serves as a catalyst for personal growth and self-discovery.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">介绍志愿服务：</span>Not only does it benefit those in need, but it also serves as a mirror reflecting the best of human nature.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主体段2剖析 -->
+            <div class="analysis-section">
+                <div class="analysis-header">第三段：主体段（说明理由）剖析</div>
+                <div class="analysis-content">
+                    <div class="original-sentence">
+                        <strong>原句1：</strong>The reason why I am convinced this drama will appeal to you lies in its perfect blend of entertainment and cultural enlightenment.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            The reason why I am convinced [观点] lies in [核心原因]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：定语从句 + 主语从句嵌套，展现高超的句法驾驭能力</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">推荐理由：</span>The reason why I am convinced this university will suit you lies in its outstanding faculty and vibrant academic atmosphere.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">建议理由：</span>The reason why I am convinced this approach will work lies in its proven effectiveness in similar situations.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">观点论证：</span>The reason why I am convinced reading remains irreplaceable lies in its unique ability to cultivate deep thinking and empathy.
+                        </div>
+                    </div>
+
+                    <div class="original-sentence" style="margin-top: 25px;">
+                        <strong>原句2：</strong>By watching it, you will be exposed to authentic Chinese expressions and idioms in context, which will significantly accelerate your language acquisition.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            By [doing sth], you will be exposed to [收获内容], which will [积极影响]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：介词短语作状语 + 被动语态 + 非限制性定语从句，信息层层递进</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">参加活动：</span>By participating in this program, you will be exposed to diverse perspectives and innovative ideas, which will significantly broaden your horizons.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">学习建议：</span>By practicing regularly, you will be exposed to various question types and problem-solving strategies, which will substantially boost your confidence.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">旅行收获：</span>By visiting these historical sites, you will be exposed to the rich tapestry of Chinese civilization, which will profoundly deepen your appreciation of our culture.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 结尾段剖析 -->
+            <div class="analysis-section">
+                <div class="analysis-header">第四段：结尾段剖析</div>
+                <div class="analysis-content">
+                    <div class="original-sentence">
+                        <strong>原句：</strong>Should you have any questions while watching, do not hesitate to reach out to me.
+                    </div>
+                    
+                    <div class="template-box">
+                        <h4>万能公式提取</h4>
+                        <div class="template-formula">
+                            Should you [有任何需求], do not hesitate to [联系方式/行动]
+                        </div>
+                        <p style="color: #666; font-size: 0.9em;">语法亮点：虚拟语气省略if的倒装结构，极为正式高级，阅卷老师必给高分</p>
+                    </div>
+                    
+                    <div class="replace-examples">
+                        <h4>万能替换示例</h4>
+                        <div class="replace-item">
+                            <span class="topic">邀请信：</span>Should you require any further information about the event, do not hesitate to contact me at your earliest convenience.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">建议信：</span>Should you encounter any difficulties in implementing these suggestions, do not hesitate to let me know.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">申请信：</span>Should you need any additional materials to support my application, do not hesitate to inform me.
+                        </div>
+                        <div class="replace-item">
+                            <span class="topic">咨询回复：</span>Should you have any further queries regarding this matter, do not hesitate to reach out to our team.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 高级万能句型库 -->
+            <div class="sentence-library">
+                <h2 class="library-title">高级万能句型库（按写作步骤分类）</h2>
+
+                <!-- 步骤一：高级开头 -->
+                <div class="step-section">
+                    <div class="step-header">
+                        <div class="step-number">1</div>
+                        <div class="step-title">开头段：一鸣惊人的高级开场</div>
+                    </div>
+                    <div class="step-content">
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 1 - 分词状语开头</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Overwhelmed with gratitude, I am writing to extend my sincere appreciation for your invaluable assistance.</div>
+                                <div class="translation">满怀感激之情，我写信向您表达对您宝贵帮助的真挚谢意。</div>
+                                <div>
+                                    <span class="grammar-tag">过去分词作状语</span>
+                                    <span class="grammar-tag">高级词汇</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>情感词替换：<span class="highlight">Overwhelmed → Deeply touched / Genuinely honored / Profoundly moved / Utterly delighted</span></li>
+                                        <li>目的替换：extend appreciation → <span class="highlight">convey my heartfelt thanks / voice my sincere gratitude / express my profound respect</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 2 - 强调句开头</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">It is with great pleasure and anticipation that I write to inform you of the upcoming cultural exchange program.</div>
+                                <div class="translation">我怀着极大的喜悦和期待写信通知您即将举行的文化交流项目。</div>
+                                <div>
+                                    <span class="grammar-tag">强调句型</span>
+                                    <span class="grammar-tag">介词短语前置</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>情感替换：with great pleasure → <span class="highlight">with immense honor / with profound respect / with genuine enthusiasm / with heartfelt sincerity</span></li>
+                                        <li>目的替换：inform you of → <span class="highlight">invite you to / recommend to you / share with you / bring to your attention</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 3 - 时间状语从句开头</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Upon learning that you are seeking recommendations for Chinese literary works, I felt compelled to share my insights with you.</div>
+                                <div class="translation">一得知您正在寻求中国文学作品的推荐，我便迫不及待地想与您分享我的见解。</div>
+                                <div>
+                                    <span class="grammar-tag">Upon + doing</span>
+                                    <span class="grammar-tag">feel compelled to</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>Upon learning → <span class="highlight">Upon hearing / Upon discovering / Upon being informed / The moment I learned</span></li>
+                                        <li>felt compelled to → <span class="highlight">could not resist the urge to / was eager to / deemed it necessary to</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 4 - 独立主格开头</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Your letter having reached me yesterday, I am now in a position to address your concerns regarding Chinese customs.</div>
+                                <div class="translation">昨天收到您的来信后，我现在可以就您关于中国习俗的疑问作出回应。</div>
+                                <div>
+                                    <span class="grammar-tag">独立主格结构</span>
+                                    <span class="grammar-tag">be in a position to</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>独立主格可替换为：<span class="highlight">Having received your inquiry / Your request having come to my attention / The matter having been brought to my notice</span></li>
+                                        <li>in a position to → <span class="highlight">delighted to / more than willing to / fully prepared to</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 5 - 倒装句开头</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Rarely have I encountered an opportunity as meaningful as this one, which is why I am writing to express my keen interest in participating.</div>
+                                <div class="translation">我很少遇到如此有意义的机会，这就是为什么我写信表达我对参与的强烈兴趣。</div>
+                                <div>
+                                    <span class="grammar-tag">否定词倒装</span>
+                                    <span class="grammar-tag">which引导非限定从句</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>Rarely have I → <span class="highlight">Seldom have I / Never before have I / Not until now have I</span></li>
+                                        <li>as meaningful as → <span class="highlight">as inspiring as / as rewarding as / as transformative as</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤二：主体段展开 -->
+                <div class="step-section">
+                    <div class="step-header">
+                        <div class="step-number">2</div>
+                        <div class="step-title">主体段：层层递进的高级论述</div>
+                    </div>
+                    <div class="step-content">
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 1 - 主语从句强调</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">What renders this experience particularly memorable is the profound impact it has had on my perspective towards life.</div>
+                                <div class="translation">使这段经历格外难忘的是它对我人生观产生的深远影响。</div>
+                                <div>
+                                    <span class="grammar-tag">What主语从句</span>
+                                    <span class="grammar-tag">render + adj.</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>renders → <span class="highlight">makes / distinguishes / characterizes</span></li>
+                                        <li>particularly memorable → <span class="highlight">exceptionally valuable / uniquely significant / remarkably inspiring</span></li>
+                                        <li>profound impact → <span class="highlight">lasting impression / transformative influence / indelible mark</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 2 - 双重否定强调</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">There is no denying that this initiative has, beyond any shadow of doubt, revolutionized the way we approach environmental conservation.</div>
+                                <div class="translation">不可否认的是，这一举措毫无疑问地彻底改变了我们对待环境保护的方式。</div>
+                                <div>
+                                    <span class="grammar-tag">There is no denying</span>
+                                    <span class="grammar-tag">插入语</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>There is no denying → <span class="highlight">It is an indisputable fact / It goes without saying / It is universally acknowledged</span></li>
+                                        <li>beyond any shadow of doubt → <span class="highlight">unquestionably / indisputably / without exception</span></li>
+                                        <li>revolutionized → <span class="highlight">transformed / reshaped / redefined</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 3 - 让步状语从句</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Compelling as the counterarguments may seem, I remain firmly convinced that the merits of this approach far outweigh its drawbacks.</div>
+                                <div class="translation">尽管反对意见看似很有说服力，但我仍然坚信这种方法的优点远远超过其缺点。</div>
+                                <div>
+                                    <span class="grammar-tag">as引导让步倒装</span>
+                                    <span class="grammar-tag">remain convinced</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>Compelling as... may seem → <span class="highlight">Attractive as... may appear / Reasonable as... may sound / Tempting as... may be</span></li>
+                                        <li>remain firmly convinced → <span class="highlight">hold the unwavering belief / maintain the steadfast view / stand by my conviction</span></li>
+                                        <li>far outweigh → <span class="highlight">considerably surpass / significantly exceed / substantially overshadow</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 4 - 同位语从句</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">The undeniable fact that traditional culture serves as the spiritual anchor of a nation underscores the urgency of its preservation.</div>
+                                <div class="translation">传统文化是一个民族精神支柱这一不可否认的事实，凸显了保护它的紧迫性。</div>
+                                <div>
+                                    <span class="grammar-tag">同位语从句</span>
+                                    <span class="grammar-tag">比喻修辞</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>The undeniable fact that → <span class="highlight">The well-established truth that / The widely recognized reality that / The self-evident principle that</span></li>
+                                        <li>spiritual anchor → <span class="highlight">cultural backbone / collective memory / identity cornerstone</span></li>
+                                        <li>underscores the urgency → <span class="highlight">highlights the necessity / emphasizes the importance / accentuates the significance</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 5 - 虚拟语气</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Were it not for the unwavering support from my mentors, I would never have summoned the courage to pursue my dreams against all odds.</div>
+                                <div class="translation">若非导师们坚定不移的支持，我绝不可能鼓起勇气克服重重困难追求梦想。</div>
+                                <div>
+                                    <span class="grammar-tag">虚拟语气倒装</span>
+                                    <span class="grammar-tag">against all odds</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>Were it not for → <span class="highlight">Had it not been for / But for / Without</span></li>
+                                        <li>unwavering support → <span class="highlight">selfless dedication / tireless encouragement / unconditional love</span></li>
+                                        <li>summon the courage → <span class="highlight">muster the strength / gather the determination / find the resolve</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤三：过渡衔接 -->
+                <div class="step-section">
+                    <div class="step-header">
+                        <div class="step-number">3</div>
+                        <div class="step-title">过渡衔接：行云流水的高级连接</div>
+                    </div>
+                    <div class="step-content">
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 1 - 递进关系</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">What is more compelling is the fact that this phenomenon has transcended geographical boundaries to become a global concern.</div>
+                                <div class="translation">更引人注目的是，这一现象已经超越了地理界限，成为全球关注的问题。</div>
+                                <div>
+                                    <span class="grammar-tag">What从句递进</span>
+                                    <span class="grammar-tag">transcend</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>What is more compelling → <span class="highlight">What is equally noteworthy / What deserves further attention / What adds another dimension</span></li>
+                                        <li>transcended boundaries → <span class="highlight">crossed borders / broken barriers / defied limitations</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 2 - 转折关系</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">That being said, we must not lose sight of the potential pitfalls that may arise from an over-reliance on technology.</div>
+                                <div class="translation">话虽如此，我们不能忽视过度依赖技术可能带来的潜在陷阱。</div>
+                                <div>
+                                    <span class="grammar-tag">独立主格转折</span>
+                                    <span class="grammar-tag">lose sight of</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>That being said → <span class="highlight">Having said that / Be that as it may / Notwithstanding the above</span></li>
+                                        <li>lose sight of → <span class="highlight">overlook / neglect / turn a blind eye to</span></li>
+                                        <li>potential pitfalls → <span class="highlight">underlying risks / hidden dangers / unforeseen consequences</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 3 - 因果关系</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">It is precisely for this reason that an increasing number of educators are advocating for a more holistic approach to student development.</div>
+                                <div class="translation">正是由于这个原因，越来越多的教育工作者正在倡导一种更全面的学生发展方法。</div>
+                                <div>
+                                    <span class="grammar-tag">强调句因果</span>
+                                    <span class="grammar-tag">advocate for</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>It is precisely for this reason that → <span class="highlight">This is exactly why / Herein lies the explanation for why / This accounts for the fact that</span></li>
+                                        <li>advocating for → <span class="highlight">calling for / championing / pushing for</span></li>
+                                        <li>holistic approach → <span class="highlight">comprehensive strategy / integrated method / well-rounded perspective</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 4 - 举例说明</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">A case in point is the remarkable transformation of Shenzhen, which has evolved from a fishing village into a thriving metropolis within mere decades.</div>
+                                <div class="translation">一个恰当的例子是深圳的惊人转变，它在短短几十年内从一个渔村发展成为一个繁荣的大都市。</div>
+                                <div>
+                                    <span class="grammar-tag">A case in point</span>
+                                    <span class="grammar-tag">非限定从句</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>A case in point → <span class="highlight">A prime example / A telling illustration / A striking instance / A testament to this</span></li>
+                                        <li>remarkable transformation → <span class="highlight">dramatic metamorphosis / stunning evolution / extraordinary transition</span></li>
+                                        <li>evolved from... into → <span class="highlight">transformed from... to / progressed from... to / developed from... into</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 5 - 对比关系</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">In stark contrast to the prevailing notion that success is measured solely by material wealth, I subscribe to the belief that fulfillment stems from meaningful contributions to society.</div>
+                                <div class="translation">与成功仅以物质财富衡量的流行观念形成鲜明对比的是，我认同成就感源于对社会的有意义贡献这一信念。</div>
+                                <div>
+                                    <span class="grammar-tag">In stark contrast to</span>
+                                    <span class="grammar-tag">subscribe to</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>In stark contrast to → <span class="highlight">Contrary to / As opposed to / In direct opposition to / Unlike</span></li>
+                                        <li>prevailing notion → <span class="highlight">conventional wisdom / popular belief / mainstream view</span></li>
+                                        <li>subscribe to the belief → <span class="highlight">embrace the idea / hold the conviction / adhere to the principle</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤四：细节描写 -->
+                <div class="step-section">
+                    <div class="step-header">
+                        <div class="step-number">4</div>
+                        <div class="step-title">细节描写：画龙点睛的高级表达</div>
+                    </div>
+                    <div class="step-content">
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 1 - 感官描写</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">The moment I set foot in the ancient town, I was immediately captivated by its timeless charm, where cobblestone streets whispered tales of centuries past.</div>
+                                <div class="translation">我踏入古镇的那一刻，立刻被它永恒的魅力所吸引，鹅卵石街道仿佛在低语着几个世纪前的故事。</div>
+                                <div>
+                                    <span class="grammar-tag">The moment引导时间从句</span>
+                                    <span class="grammar-tag">拟人修辞</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>The moment I → <span class="highlight">The instant I / No sooner had I... than / Scarcely had I... when</span></li>
+                                        <li>was captivated by → <span class="highlight">was mesmerized by / was enchanted by / was spellbound by</span></li>
+                                        <li>timeless charm → <span class="highlight">ethereal beauty / serene elegance / understated grandeur</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 2 - 情感描写</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">A surge of pride welled up within me as I witnessed my country's achievements being recognized on the world stage, a feeling that words could scarcely capture.</div>
+                                <div class="translation">当我目睹祖国的成就在世界舞台上获得认可时，一股自豪感油然而生，这种感觉难以用言语表达。</div>
+                                <div>
+                                    <span class="grammar-tag">A surge of</span>
+                                    <span class="grammar-tag">同位语补充</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>A surge of pride → <span class="highlight">An overwhelming sense of joy / A profound feeling of gratitude / An indescribable wave of emotion</span></li>
+                                        <li>welled up within me → <span class="highlight">swept over me / flooded my heart / coursed through my veins</span></li>
+                                        <li>words could scarcely capture → <span class="highlight">defied description / transcended language / lay beyond expression</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 3 - 人物描写</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">What struck me most profoundly about her was not merely her intellectual brilliance, but rather her unwavering commitment to using her talents for the greater good.</div>
+                                <div class="translation">她给我留下最深刻印象的不仅仅是她的才华横溢，而是她坚定不移地致力于将才能用于更大的善举。</div>
+                                <div>
+                                    <span class="grammar-tag">What从句</span>
+                                    <span class="grammar-tag">not... but rather</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>struck me most profoundly → <span class="highlight">left the deepest impression on me / resonated with me most deeply / touched my heart most</span></li>
+                                        <li>intellectual brilliance → <span class="highlight">academic excellence / professional expertise / remarkable achievements</span></li>
+                                        <li>unwavering commitment → <span class="highlight">steadfast dedication / relentless pursuit / tireless devotion</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 4 - 数据引用</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">According to a comprehensive survey conducted by authoritative institutions, an overwhelming majority of respondents expressed their endorsement of this policy, with the approval rate soaring to an unprecedented 85%.</div>
+                                <div class="translation">根据权威机构进行的一项全面调查，绝大多数受访者表示支持这项政策，支持率飙升至前所未有的85%。</div>
+                                <div>
+                                    <span class="grammar-tag">According to</span>
+                                    <span class="grammar-tag">with复合结构</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>comprehensive survey → <span class="highlight">extensive research / in-depth study / rigorous investigation</span></li>
+                                        <li>overwhelming majority → <span class="highlight">vast proportion / significant percentage / considerable number</span></li>
+                                        <li>soaring to → <span class="highlight">reaching / climbing to / hitting</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 5 - 比喻升华</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Education, in my view, is not merely a ladder to success, but rather a beacon that illuminates the path toward self-discovery and enlightenment.</div>
+                                <div class="translation">在我看来，教育不仅仅是通往成功的阶梯，更是照亮自我发现和启蒙之路的灯塔。</div>
+                                <div>
+                                    <span class="grammar-tag">比喻修辞</span>
+                                    <span class="grammar-tag">not... but rather</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>ladder to success → <span class="highlight">stepping stone to achievement / gateway to opportunity / passport to a brighter future</span></li>
+                                        <li>beacon that illuminates → <span class="highlight">compass that guides / bridge that connects / key that unlocks</span></li>
+                                        <li>self-discovery and enlightenment → <span class="highlight">personal growth and fulfillment / wisdom and maturity / understanding and compassion</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 步骤五：结尾段 -->
+                <div class="step-section">
+                    <div class="step-header">
+                        <div class="step-number">5</div>
+                        <div class="step-title">结尾段：余音绕梁的高级收尾</div>
+                    </div>
+                    <div class="step-content">
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 1 - 虚拟倒装结尾</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Should this recommendation prove helpful in any way, I would consider it my greatest honor. Please do not hesitate to reach out should you require any further assistance.</div>
+                                <div class="translation">如果这个推荐能有任何帮助，我将深感荣幸。如需任何进一步帮助，请随时联系我。</div>
+                                <div>
+                                    <span class="grammar-tag">Should倒装虚拟</span>
+                                    <span class="grammar-tag">consider it + n.</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>prove helpful → <span class="highlight">be of any assistance / serve your purpose / meet your expectations</span></li>
+                                        <li>my greatest honor → <span class="highlight">my utmost pleasure / a source of immense satisfaction / deeply gratifying</span></li>
+                                        <li>reach out → <span class="highlight">get in touch / contact me / drop me a line</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 2 - 期待回复</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">I am eagerly anticipating your favorable response and remain at your disposal for any clarification you may require.</div>
+                                <div class="translation">我热切期待您的积极回复，并随时准备为您提供任何所需的说明。</div>
+                                <div>
+                                    <span class="grammar-tag">anticipate</span>
+                                    <span class="grammar-tag">at your disposal</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>eagerly anticipating → <span class="highlight">looking forward with great enthusiasm to / awaiting with bated breath / counting the days until</span></li>
+                                        <li>favorable response → <span class="highlight">positive reply / affirmative answer / encouraging feedback</span></li>
+                                        <li>at your disposal → <span class="highlight">at your service / ready to assist / available to help</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 3 - 号召行动</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">It is my sincere hope that we can join hands in this endeavor, for only through collective effort can we transform this vision into reality.</div>
+                                <div class="translation">我真诚地希望我们能携手共进，因为只有通过集体努力，我们才能将这一愿景变为现实。</div>
+                                <div>
+                                    <span class="grammar-tag">It is my hope that</span>
+                                    <span class="grammar-tag">only倒装</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>join hands → <span class="highlight">unite our efforts / work in concert / collaborate closely</span></li>
+                                        <li>collective effort → <span class="highlight">concerted action / joint endeavor / unified commitment</span></li>
+                                        <li>transform... into reality → <span class="highlight">bring... to fruition / turn... into actuality / make... come true</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 4 - 表达感谢</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">Words fail to adequately express the depth of my gratitude for your invaluable guidance, which has left an indelible imprint on my personal and academic growth.</div>
+                                <div class="translation">言语难以充分表达我对您宝贵指导的感激之情，它在我的个人和学业成长中留下了不可磨灭的印记。</div>
+                                <div>
+                                    <span class="grammar-tag">Words fail to</span>
+                                    <span class="grammar-tag">indelible imprint</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>Words fail to → <span class="highlight">I can hardly find words to / No words can fully / Language falls short of</span></li>
+                                        <li>invaluable guidance → <span class="highlight">selfless support / generous assistance / unwavering encouragement</span></li>
+                                        <li>indelible imprint → <span class="highlight">lasting impact / profound influence / permanent mark</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sentence-card">
+                            <div class="sentence-num">句型 5 - 展望未来</div>
+                            <div class="sentence-body">
+                                <div class="advanced-sentence">As I stand on the threshold of a new chapter in my life, I carry with me the lessons learned and the memories cherished, confident that the future holds boundless possibilities.</div>
+                                <div class="translation">当我站在人生新篇章的门槛上，我带着所学的经验和珍藏的回忆，坚信未来充满无限可能。</div>
+                                <div>
+                                    <span class="grammar-tag">As引导时间从句</span>
+                                    <span class="grammar-tag">形容词作状语</span>
+                                </div>
+                                <div class="usage-tips">
+                                    <h4>替换公式</h4>
+                                    <ul>
+                                        <li>on the threshold of → <span class="highlight">at the dawn of / on the cusp of / at the beginning of</span></li>
+                                        <li>carry with me → <span class="highlight">take away / hold dear / treasure forever</span></li>
+                                        <li>boundless possibilities → <span class="highlight">infinite opportunities / unlimited potential / endless promise</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 高分技巧总结 -->
+            <div class="tips-box">
+                <h3>阅卷老师眼中的高分作文特征</h3>
+                <ul>
+                    <li>句式多变：简单句、并列句、复合句交替使用，展现语法功底（倒装、强调、虚拟语气是加分项）</li>
+                    <li>词汇高级：用sophisticated替代difficult，用advocate替代support，用paramount替代important</li>
+                    <li>衔接自然：使用高级过渡词（That being said / In stark contrast to / A case in point）而非简单的First, Second</li>
+                    <li>修辞出彩：适当使用比喻（beacon / bridge / ladder）、拟人、排比等修辞手法</li>
+                    <li>观点深刻：不停留在表面，要有思辨性和深度，展现思维品质</li>
+                    <li>书写规范：字迹工整清晰，段落分明，给阅卷老师良好的第一印象</li>
+                    <li>时间把控：5分钟审题构思，18分钟写作，2分钟检查拼写和语法</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>天津高考英语作文高分讲义 | 祝你考试顺利，金榜题名</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -48,6 +48,7 @@ export class AuthService {
   private currentUser: UserInfo | null = null;
   private token: string = '';
   private isInitialized: boolean = false;
+  private globalContext: common.UIAbilityContext | null = null;
   
   private constructor() {
     // 不在构造函数中加载，延迟到第一次使用时
@@ -61,6 +62,13 @@ export class AuthService {
       AuthService.instance = new AuthService();
     }
     return AuthService.instance;
+  }
+  
+  /**
+   * 设置全局 context（应在 EntryAbility 中调用）
+   */
+  setContext(context: common.UIAbilityContext): void {
+    this.globalContext = context;
   }
   
   /**
@@ -81,11 +89,30 @@ export class AuthService {
   }
   
   /**
+   * 获取 context
+   */
+  private getContextSafe(): common.UIAbilityContext | null {
+    if (this.globalContext) {
+      return this.globalContext;
+    }
+    try {
+      return getContext() as common.UIAbilityContext;
+    } catch (e) {
+      console.error('[AuthService] 获取 context 失败:', e);
+      return null;
+    }
+  }
+  
+  /**
    * 从本地存储加载用户信息
    */
   private async loadUserFromStorage(): Promise<void> {
     try {
-      const context = getContext(this) as common.UIAbilityContext;
+      const context = this.getContextSafe();
+      if (!context) {
+        console.error('[AuthService] 无法获取 context');
+        return;
+      }
       const prefs = await preferences.getPreferences(context, 'lifeswarm_auth');
       
       const token = await prefs.get('token', '') as string;
@@ -106,7 +133,11 @@ export class AuthService {
    */
   private async saveUserToStorage(token: string, userInfo: UserInfo): Promise<void> {
     try {
-      const context = getContext(this) as common.UIAbilityContext;
+      const context = this.getContextSafe();
+      if (!context) {
+        console.error('[AuthService] 无法获取 context，保存失败');
+        return;
+      }
       const prefs = await preferences.getPreferences(context, 'lifeswarm_auth');
       
       await prefs.put('token', token);
@@ -127,7 +158,11 @@ export class AuthService {
    */
   private async clearUserFromStorage(): Promise<void> {
     try {
-      const context = getContext(this) as common.UIAbilityContext;
+      const context = this.getContextSafe();
+      if (!context) {
+        console.error('[AuthService] 无法获取 context，清除失败');
+        return;
+      }
       const prefs = await preferences.getPreferences(context, 'lifeswarm_auth');
       
       await prefs.delete('token');

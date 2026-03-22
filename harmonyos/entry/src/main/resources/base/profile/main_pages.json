@@ -2,6 +2,7 @@
   "src": [
     "pages/Login",
     "pages/Register",
+    "pages/AgentHome",
     "pages/Index",
     "pages/Welcome",
     "pages/UserProfile",
@@ -9,6 +10,8 @@
     "pages/Dashboard",
     "pages/Camera",
     "pages/KnowledgeGraphCanvas",
+    "pages/KnowledgeStarMap",
+    "pages/KnowledgeStarMapGL",
     "pages/LearningProgress",
     "pages/EmergenceDashboard",
     "pages/EmergencePatterns",
@@ -25,6 +28,7 @@
     "pages/TestDungeonPage",
     "pages/QuickDecisionInput",
     "pages/EnhancedDecisionFlow",
-    "pages/EnhancedDecisionResult"
+    "pages/EnhancedDecisionResult",
+    "pages/SmartInsights"
   ]
 }

@@ -446,3 +446,83 @@ class EvolutionMetrics(Base):
     
     # 时间戳
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class UserInsight(Base):
+    """用户洞察表 - 存储从对话中实时提取的洞察数据"""
+    __tablename__ = 'user_insights'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String(50), nullable=False, index=True)
+    
+    # 洞察标识
+    insight_id = Column(String(100), nullable=False)
+    
+    # 洞察类型和分类
+    data_type = Column(String(50), nullable=False)  # emotion, topic, intent, entity, image, voice
+    category = Column(String(50), nullable=False, index=True)  # health, work, social, finance, learning, emotion
+    
+    # 洞察内容
+    content = Column(Text)
+    value = Column(Float)  # 量化值（如情绪分数0-10）
+    confidence = Column(Float, default=0.8)
+    
+    # 来源
+    source_message_id = Column(String(100))  # 关联的消息ID
+    
+    # 元数据（改名避免与SQLAlchemy冲突）
+    extra_data = Column(JSON)  # 额外信息（检测到的关键词等）
+    
+    # 时间戳
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_user_insights_user_type', 'user_id', 'data_type'),
+        Index('idx_user_insights_user_category', 'user_id', 'category'),
+        Index('idx_user_insights_user_time', 'user_id', 'timestamp'),
+    )
+
+
+class EmergenceInsight(Base):
+    """涌现洞察表 - 存储涌现分析生成的高级洞察"""
+    __tablename__ = 'emergence_insights'
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String(50), nullable=False, index=True)
+    
+    # 洞察标识
+    insight_id = Column(String(100), nullable=False, unique=True)
+    
+    # 洞察分类和级别
+    category = Column(String(50), nullable=False)  # cascade, synergy, tipping_point, feedback_loop, pattern, trend, anomaly
+    level = Column(String(20), nullable=False)  # critical, warning, suggestion, info
+    
+    # 洞察内容
+    title = Column(String(200), nullable=False)
+    description = Column(Text)
+    evidence = Column(JSON)  # 支撑证据列表
+    recommendations = Column(JSON)  # 建议行动列表
+    
+    # 评分
+    confidence = Column(Float, default=0.8)
+    impact_score = Column(Float, default=50.0)  # 影响力分数 0-100
+    
+    # 相关指标
+    related_metrics = Column(JSON)  # 相关的指标列表
+    
+    # 可视化数据
+    visualization_data = Column(JSON)
+    
+    # 状态
+    status = Column(String(20), default='active')  # active, resolved, dismissed
+    
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    expires_at = Column(DateTime)  # 过期时间
+    
+    __table_args__ = (
+        Index('idx_emergence_user_category', 'user_id', 'category'),
+        Index('idx_emergence_user_level', 'user_id', 'level'),
+    )
