@@ -50,7 +50,7 @@ def print_banner():
 
 def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False):
     """启动 SGLang 服务器"""
-    from gpu_server.gpu_config import get_model_config, SGLANG_CONFIG, PATHS
+    from gpu_server.gpu_config import get_model_config, SGLANG_CONFIG, PATHS, DATA_DIR
     
     config = get_model_config(model)
     
@@ -73,11 +73,13 @@ def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False)
     
     # 添加 LoRA 支持
     if enable_lora:
+        lora_dir = PATHS.get('models_lora', f"{DATA_DIR}/models/lora")
         cmd.extend([
+            "--enable-lora", "true",
             "--max-lora-rank", str(config['lora_r']),
-            "--lora-target-modules", ",".join(config['target_modules']),
+            "--lora-paths", lora_dir,
         ])
-        print("  LoRA: 已启用")
+        print(f"  LoRA: 已启用 (模型目录: {lora_dir})")
     
     print(f"\n执行命令:\n{' '.join(cmd)}\n")
     
@@ -92,7 +94,8 @@ def main():
     parser = argparse.ArgumentParser(description="LifeSwarm SGLang Server")
     parser.add_argument("--model", default=None, help="模型名称 (qwen3.5-9b, qwen3.5-0.8b)")
     parser.add_argument("--port", type=int, default=8000, help="服务端口")
-    parser.add_argument("--enable-lora", action="store_true", help="启用 LoRA 支持")
+    parser.add_argument("--enable-lora", action="store_true", default=True, help="启用 LoRA 支持（默认开启）")
+    parser.add_argument("--no-lora", action="store_true", help="禁用 LoRA 支持")
     parser.add_argument("--show-config", action="store_true", help="仅显示配置")
     
     args = parser.parse_args()
@@ -128,10 +131,11 @@ def main():
     
     # 启动服务
     try:
+        enable_lora = not args.no_lora
         process = start_sglang(
             model=args.model,
             port=args.port,
-            enable_lora=args.enable_lora
+            enable_lora=enable_lora
         )
         process.wait()
     except KeyboardInterrupt:

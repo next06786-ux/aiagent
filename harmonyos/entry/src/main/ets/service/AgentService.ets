@@ -23,14 +23,14 @@ interface TaskResponse {
  * Agent - 
  */
 export class AgentService {
-  private baseUrl: string = 'http://192.168.242.1:8000';
+  private baseUrl: string = 'http://192.168.43.6:8000';
   
   /**
    * Agent
    */
   async getAgentState(): Promise<AgentState> {
     try {
-      const response = await this.request('/api/v1/agent/status', http.RequestMethod.GET);
+      const response = await this.request('/api/v4/meta-agent/analyze', http.RequestMethod.GET);
       const data = JSON.parse(response.result as string) as AgentStateResponse;
       
       const state = new AgentState();
@@ -50,7 +50,7 @@ export class AgentService {
    */
   async startAgent(): Promise<boolean> {
     try {
-      await this.request('/api/v1/agent/start', http.RequestMethod.POST);
+      await this.request('/api/v4/meta-agent/analyze', http.RequestMethod.POST);
       return true;
     } catch (error) {
       console.error('Start agent failed:', JSON.stringify(error));
@@ -63,7 +63,7 @@ export class AgentService {
    */
   async stopAgent(): Promise<boolean> {
     try {
-      await this.request('/api/v1/agent/stop', http.RequestMethod.POST);
+      await this.request('/api/v4/meta-agent/feedback', http.RequestMethod.POST);
       return true;
     } catch (error) {
       console.error('Stop agent failed:', JSON.stringify(error));
@@ -83,7 +83,7 @@ export class AgentService {
         metadata: task.metadata
       };
       
-      const response = await this.request('/api/v1/tasks', http.RequestMethod.POST, taskData);
+      const response = await this.request('/api/v4/conversations/' + task.type + '/list', http.RequestMethod.POST, taskData);
       
       const data = JSON.parse(response.result as string) as TaskResponse;
       return data.task_id;
@@ -99,7 +99,7 @@ export class AgentService {
  */
   async getTaskStatus(taskId: string): Promise<Task | null> {
     try {
-      const response = await this.request(`/api/v1/tasks/${taskId}`, http.RequestMethod.GET);
+      const response = await this.request(`/api/v4/conversations/${taskId}/list`, http.RequestMethod.GET);
       const data = JSON.parse(response.result as string) as TaskResponse;
       
       const task = new Task(data.task_id, data.task_type);
@@ -136,7 +136,7 @@ export class AgentService {
  */
   async cancelTask(taskId: string): Promise<boolean> {
     try {
-      await this.request(`/api/v1/tasks/${taskId}/cancel`, http.RequestMethod.POST);
+      await this.request(`/api/decision/feedback`, http.RequestMethod.POST);
       return true;
     } catch (error) {
       console.error('Cancel task failed:', JSON.stringify(error));

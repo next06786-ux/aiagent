@@ -6110,9 +6110,9 @@ def get_parallel_simulator():
 @app.post("/api/decision/simulate")
 async def simulate_decision(request_data: Dict[str, Any]):
     """
-    模拟决策
+    决策模拟 — 通过 SGLang (Qwen3.5-9B + 用户 LoRA) 推理
     
-    请求个
+    请求体:
     {
         "user_id": "user_001",
         "question": "大三学生,毕业后应该选择什么?",
@@ -6120,15 +6120,13 @@ async def simulate_decision(request_data: Dict[str, Any]):
             {"title": "考研", "description": "继续深造"},
             {"title": "工作", "description": "直接就业"},
             {"title": "创业", "description": "自主创业"}
-        ],
-        "use_lora": false
+        ]
     }
     """
     try:
         user_id = request_data.get("user_id")
         question = request_data.get("question")
         options = request_data.get("options", [])
-        use_lora = request_data.get("use_lora", False)
         
         if not user_id or not question or not options:
             return {
@@ -6140,17 +6138,16 @@ async def simulate_decision(request_data: Dict[str, Any]):
         if len(options) < 2:
             return {
                 "code": 400,
-                "message": "至少需个个选项",
+                "message": "至少需要两个选项",
                 "data": None
             }
         
-        # 执行模拟
+        # 异步执行模拟（SGLang + LoRA）
         simulator = get_parallel_simulator()
-        result = simulator.simulate_decision(
+        result = await simulator.simulate_decision(
             user_id=user_id,
             question=question,
             options=options,
-            use_lora=use_lora
         )
         
         # 转换为可序列化格式

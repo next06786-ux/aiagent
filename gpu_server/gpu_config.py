@@ -52,7 +52,7 @@ CURRENT_MODEL = "qwen3.5-9b"
 # SGLang 服务器配置
 SGLANG_CONFIG = {
     "host": "0.0.0.0",
-    "port": 8000,
+    "port": 8001,
     "tensor_parallel_size": 1,
     "mem_fraction_static": 0.8,
     "context_length": 32768,

@@ -5,7 +5,7 @@ export class AppConfig {
   // 处理逻辑
   // IP
   // 处理逻辑
-  public static readonly BASE_URL: string = 'http://192.168.44.1:8000';
+  public static readonly BASE_URL: string = 'http://192.168.43.6:8000';
   
   // API
   public static readonly API_VERSION: string = 'v4';

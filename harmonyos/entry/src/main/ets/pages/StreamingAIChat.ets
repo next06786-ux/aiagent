@@ -164,7 +164,7 @@ struct StreamingAIChatPage {
       });
 
       httpRequest.request(
-        'http://localhost:8000/api/chat/stream',
+        'http://192.168.43.6:8000/api/chat/stream',
         {
           method: http.RequestMethod.POST,
           header: {

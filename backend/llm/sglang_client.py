@@ -13,7 +13,7 @@ from dataclasses import dataclass
 @dataclass
 class SGLangConfig:
     """SGLang 服务配置"""
-    server_url: str = os.environ.get("SGLANG_SERVER_URL", "http://localhost:8000")
+    server_url: str = os.environ.get("SGLANG_SERVER_URL", "http://localhost:8001")
     model_name: str = os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B")
     timeout: float = 120.0
     max_retries: int = 3
@@ -68,7 +68,8 @@ class SGLangClient:
         temperature: float = 0.7,
         max_tokens: int = 1024,
         top_p: float = 0.9,
-        stream: bool = False
+        stream: bool = False,
+        lora_path: str = None
     ) -> str:
         """
         聊天补全
@@ -79,12 +80,13 @@ class SGLangClient:
             max_tokens: 最大生成长度
             top_p: Top-p 采样
             stream: 是否流式
+            lora_path: LoRA adapter 路径，传入后 SGLang 会在基座上叠加该 LoRA
         
         Returns:
             助手回复
         """
         payload = {
-            "model": self.config.model_name,
+            "model": lora_path if lora_path else self.config.model_name,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -103,11 +105,12 @@ class SGLangClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 1024,
-        top_p: float = 0.9
+        top_p: float = 0.9,
+        lora_path: str = None
     ) -> AsyncGenerator[str, None]:
         """流式聊天"""
         payload = {
-            "model": self.config.model_name,
+            "model": lora_path if lora_path else self.config.model_name,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -136,11 +139,12 @@ class SGLangClient:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = 1024,
-        top_p: float = 0.9
+        top_p: float = 0.9,
+        lora_path: str = None
     ) -> str:
         """文本补全"""
         payload = {
-            "model": self.config.model_name,
+            "model": lora_path if lora_path else self.config.model_name,
             "prompt": prompt,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -188,10 +192,11 @@ class SGLangClientSync:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 1024,
-        top_p: float = 0.9
+        top_p: float = 0.9,
+        lora_path: str = None
     ) -> str:
         payload = {
-            "model": self.config.model_name,
+            "model": lora_path if lora_path else self.config.model_name,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -208,10 +213,11 @@ class SGLangClientSync:
         self,
         prompt: str,
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        lora_path: str = None
     ) -> str:
         payload = {
-            "model": self.config.model_name,
+            "model": lora_path if lora_path else self.config.model_name,
             "prompt": prompt,
             "temperature": temperature,
             "max_tokens": max_tokens

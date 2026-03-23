@@ -1,529 +1,305 @@
 """
 LoRA增强的决策分析器
-使用用户专属的LoRA模型进行个性化决策分析
+通过 SGLang 服务器使用 Qwen3.5-9B 基座 + 用户专属 LoRA 进行个性化决策分析
+
+架构：
+  前端 → 后端 API → LoRADecisionAnalyzer → SGLang Server (基座 + LoRA)
+  
+SGLang 启动时带 --enable-lora，推理时通过 model 字段指定 LoRA adapter 路径，
+SGLang 会自动在基座模型上叠加该用户的 LoRA adapter。
 """
 import os
 import sys
+import json
+import re
 from typing import List, Dict, Any, Optional
 
-# 添加项目根目录到路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from backend.lora.lora_model_manager import lora_manager
+from backend.llm.sglang_client import get_sglang_client, SGLangClient
+
+
+# LoRA 模型存储路径（与 gpu_server/gpu_config.py 中 PATHS['models_lora'] 一致）
+LORA_BASE_DIR = os.environ.get("LORA_MODELS_DIR", "./models/lora")
 
 
 class LoRADecisionAnalyzer:
-    """使用LoRA模型进行个性化决策分析"""
-    
+    """通过 SGLang + LoRA 进行个性化决策分析"""
+
     def __init__(self):
-        self.lora_manager = lora_manager
-    
-    def generate_timeline_with_lora(
+        self.sglang: SGLangClient = get_sglang_client()
+        self.lora_base_dir = LORA_BASE_DIR
+
+    # ==================== LoRA 路径管理 ====================
+
+    def get_user_lora_path(self, user_id: str) -> Optional[str]:
+        """获取用户最新的 LoRA adapter 路径"""
+        lora_dir = os.path.join(self.lora_base_dir, user_id)
+        if not os.path.exists(lora_dir):
+            return None
+
+        versions = [
+            d for d in os.listdir(lora_dir)
+            if d.startswith('v') and os.path.isdir(os.path.join(lora_dir, d))
+        ]
+        if not versions:
+            return None
+
+        latest = sorted(versions, key=lambda x: int(x[1:]))[-1]
+        lora_path = os.path.join(lora_dir, latest, "final")
+        return lora_path if os.path.exists(lora_path) else None
+
+    def has_lora_model(self, user_id: str) -> bool:
+        """检查用户是否有训练好的 LoRA 模型"""
+        return self.get_user_lora_path(user_id) is not None
+
+    # ==================== 时间线生成 ====================
+
+    async def generate_timeline_with_lora(
         self,
         user_id: str,
         question: str,
         option: Dict[str, str],
         profile: Any,
-        num_events: int = 3  # 减少到3
+        num_events: int = 3
     ) -> List[Dict[str, Any]]:
         """
-        使用LoRA模型生成完整的时间线
-        
+        通过 SGLang (基座 + 用户 LoRA) 生成决策时间线
+
         Args:
             user_id: 用户ID
             question: 决策问题
-            option: 选项信息
+            option: 选项 {"title": "...", "description": "..."}
             profile: 用户性格画像
             num_events: 生成事件数量
-        
+
         Returns:
             时间线事件列表
         """
-        if not self.lora_manager.has_lora_model(user_id):
-            return []
-        
+        lora_path = self.get_user_lora_path(user_id)
+        if not lora_path:
+            raise ValueError(f"用户 {user_id} 还没有训练 LoRA 模型")
+
+        messages = self._build_timeline_messages(question, option, profile, num_events)
+
         try:
-            # 构造时间线生成prompt
-            prompt = self._build_timeline_prompt(
-                question=question,
-                option=option,
-                profile=profile,
-                num_events=num_events
+            response = await self.sglang.chat(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=600,
+                top_p=0.9,
+                lora_path=lora_path
             )
-            
-            # 使用LoRA模型生成（减少token数量以节省内存）
-            response = self.lora_manager.generate(
-                user_id=user_id,
-                prompt=prompt,
-                max_new_tokens=400,  # 减少到400
-                temperature=0.7
-            )
-            
-            # 解析JSON响应
             timeline = self._parse_timeline_json(response)
-            
-            # 清理GPU缓存
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            
+            print(f"✅ SGLang+LoRA 生成 {len(timeline)} 个时间线事件 (用户: {user_id})")
             return timeline
-            
+
         except Exception as e:
-            print(f"⚠️ LoRA时间线生成失败: {e}")
+            print(f"⚠️ SGLang+LoRA 时间线生成失败: {e}")
             return []
-    
-    def _build_timeline_prompt(
+
+    # ==================== 个性化推荐 ====================
+
+    async def generate_personalized_recommendation(
+        self,
+        user_id: str,
+        question: str,
+        options: List[Dict],
+        profile: Any
+    ) -> str:
+        """
+        通过 SGLang (基座 + 用户 LoRA) 生成个性化决策推荐
+        """
+        lora_path = self.get_user_lora_path(user_id)
+        if not lora_path:
+            raise ValueError(f"用户 {user_id} 还没有训练 LoRA 模型")
+
+        messages = self._build_recommendation_messages(question, options, profile)
+
+        try:
+            response = await self.sglang.chat(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=400,
+                top_p=0.9,
+                lora_path=lora_path
+            )
+            return self._clean_recommendation(response)
+
+        except Exception as e:
+            print(f"⚠️ SGLang+LoRA 推荐生成失败: {e}")
+            return f"推荐生成失败: {str(e)}"
+
+    # ==================== LoRA 状态 ====================
+
+    def get_lora_status(self, user_id: str) -> Dict[str, Any]:
+        """获取用户的 LoRA 模型状态"""
+        lora_path = self.get_user_lora_path(user_id)
+        status = {
+            "has_lora": lora_path is not None,
+            "lora_path": lora_path,
+            "model_version": 0,
+            "last_train_time": None,
+            "training_data_size": 0,
+        }
+
+        # 尝试读取训练状态文件
+        status_file = os.path.join(self.lora_base_dir, user_id, "status.json")
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, 'r', encoding='utf-8') as f:
+                    saved = json.load(f)
+                    status["model_version"] = saved.get("model_version", 0)
+                    status["last_train_time"] = saved.get("last_train_time")
+                    status["training_data_size"] = saved.get("current_data_size", 0)
+            except Exception:
+                pass
+
+        return status
+
+    # ==================== Prompt 构造 ====================
+
+    def _build_timeline_messages(
         self,
         question: str,
         option: Dict[str, str],
         profile: Any,
         num_events: int
-    ) -> str:
-        """构造时间线生成prompt（简化版，减少内存使用）"""
-        prompt = f"<|im_start|>user\n"
-        prompt += f"决策：{question}\n"
-        prompt += f"选择：{option['title']}\n\n"
-        
+    ) -> List[Dict[str, str]]:
+        """构造时间线生成的 chat messages"""
+        system = (
+            "你是一个决策模拟引擎。根据用户的性格特征和决策选项，"
+            "模拟未来可能发生的事件时间线。"
+            "你必须以纯 JSON 格式输出，不要包含任何其他文字。"
+        )
+
+        personality_info = ""
         if profile:
-            prompt += f"性格：{profile.decision_style}，{profile.risk_preference}\n\n"
-        
-        prompt += f"请直接输出{num_events}个关键事件的JSON数组，不要有其他文字说明：\n"
-        prompt += f'<|im_end|>\n<|im_start|>assistant\n'
-        prompt += f'{{"timeline": ['
-        
-        return prompt
-    
+            personality_info = f"\n我的性格：{getattr(profile, 'decision_style', '未知')}，{getattr(profile, 'risk_preference', '未知')}"
+
+        user_msg = (
+            f"决策问题：{question}\n"
+            f"我选择：{option['title']}"
+            f"{personality_info}\n\n"
+            f"请模拟我做出这个选择后未来12个月内的{num_events}个关键事件。\n"
+            f"输出格式（纯JSON数组）：\n"
+            f'[{{"month": 1, "event": "事件描述", "impact": {{"health": 0.0, "finance": 0.0, "social": 0.0, "emotion": 0.0, "learning": 0.0}}, "probability": 0.8}}]'
+        )
+
+        return [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_msg},
+        ]
+
+    def _build_recommendation_messages(
+        self,
+        question: str,
+        options: List[Dict],
+        profile: Any
+    ) -> List[Dict[str, str]]:
+        """构造推荐生成的 chat messages"""
+        system = "你是用户的个人决策顾问，根据用户性格特点给出个性化建议。"
+
+        options_text = ""
+        for opt in options:
+            options_text += (
+                f"\n{opt['title']}：\n"
+                f"  综合得分：{opt.get('final_score', 0):.1f}/100\n"
+                f"  风险等级：{opt.get('risk_level', 0):.2f}\n"
+            )
+
+        personality_info = ""
+        if profile:
+            personality_info = (
+                f"\n我的性格特点：\n"
+                f"- 决策风格：{getattr(profile, 'decision_style', '未知')}\n"
+                f"- 风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
+                f"- 生活优先级：{getattr(profile, 'life_priority', '未知')}\n"
+            )
+
+        user_msg = (
+            f"我面临一个重要决策：{question}\n\n"
+            f"各选项分析结果：{options_text}"
+            f"{personality_info}\n"
+            f"请给我一个个性化的建议，告诉我应该选择哪个选项，以及为什么。"
+        )
+
+        return [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_msg},
+        ]
+
+    # ==================== 响应解析 ====================
+
     def _parse_timeline_json(self, response: str) -> List[Dict[str, Any]]:
-        """解析时间线JSON响应（支持多种格式）"""
-        import json
-        import re
-        
+        """解析时间线 JSON 响应（兼容多种格式）"""
         timeline = []
-        
         try:
-            print(f"📝 LoRA原始响应长度: {len(response)} 字符")
-            print(f"📝 LoRA原始响应前300字符: {response[:300]}")
-            
-            # 移除markdown代码块标记
+            # 移除 markdown 代码块
             response = re.sub(r'```json\s*', '', response)
             response = re.sub(r'```\s*', '', response)
-            
-            # 尝试多种解析方式
-            
-            # 方式1: 标准格式 {"timeline": [...]}
-            match1 = re.search(r'\{"timeline":\s*\[(.*?)\]\s*\}', response, re.DOTALL)
-            if match1:
+
+            # 方式1: {"timeline": [...]}
+            m1 = re.search(r'\{"timeline":\s*\[(.*?)\]\s*\}', response, re.DOTALL)
+            if m1:
                 try:
-                    json_str = match1.group(0)
-                    data = json.loads(json_str)
-                    if 'timeline' in data:
-                        timeline = self._extract_events(data['timeline'])
-                        if timeline:
-                            print(f"✓ 方式1成功: {len(timeline)} 个事件")
-                            return timeline
-                except:
+                    data = json.loads(m1.group(0))
+                    timeline = self._extract_events(data['timeline'])
+                    if timeline:
+                        return timeline
+                except Exception:
                     pass
-            
+
             # 方式2: 直接数组 [...]
-            match2 = re.search(r'\[\s*\{.*?\}\s*\]', response, re.DOTALL)
-            if match2:
+            m2 = re.search(r'\[\s*\{.*?\}\s*\]', response, re.DOTALL)
+            if m2:
                 try:
-                    json_str = match2.group(0)
-                    data = json.loads(json_str)
+                    data = json.loads(m2.group(0))
                     timeline = self._extract_events(data)
                     if timeline:
-                        print(f"✓ 方式2成功: {len(timeline)} 个事件")
                         return timeline
-                except:
+                except Exception:
                     pass
-            
-            # 方式3: 嵌套格式 [{"timeline": [...]}]
-            match3 = re.search(r'\[\s*\{\s*"timeline":\s*\[(.*?)\]\s*\}\s*\]', response, re.DOTALL)
-            if match3:
-                try:
-                    inner_array = '[' + match3.group(1) + ']'
-                    data = json.loads(inner_array)
+
+            # 方式3: 尝试整个响应作为 JSON
+            try:
+                data = json.loads(response.strip())
+                if isinstance(data, list):
                     timeline = self._extract_events(data)
-                    if timeline:
-                        print(f"✓ 方式3成功: {len(timeline)} 个事件")
-                        return timeline
-                except:
-                    pass
-            
-            print(f"⚠️ 所有解析方式都失败")
-            
+                elif isinstance(data, dict) and 'timeline' in data:
+                    timeline = self._extract_events(data['timeline'])
+            except Exception:
+                pass
+
         except Exception as e:
-            print(f"⚠️ 解析时间线JSON失败: {e}")
-        
+            print(f"⚠️ 解析时间线 JSON 失败: {e}")
+
         return timeline
-    
+
     def _extract_events(self, data) -> List[Dict[str, Any]]:
         """从数据中提取事件"""
         events = []
         if isinstance(data, list):
             for item in data:
-                if isinstance(item, dict):
-                    if 'month' in item and 'event' in item:
-                        events.append({
-                            'month': int(item['month']),
-                            'event': str(item['event']),
-                            'impact': item.get('impact', {}),
-                            'probability': float(item.get('probability', 0.8))
-                        })
+                if isinstance(item, dict) and 'month' in item and 'event' in item:
+                    events.append({
+                        'month': int(item['month']),
+                        'event': str(item['event']),
+                        'impact': item.get('impact', {}),
+                        'probability': float(item.get('probability', 0.8))
+                    })
         events.sort(key=lambda x: x['month'])
         return events
-    
-    def enhance_timeline_events(
-        self,
-        user_id: str,
-        option_title: str,
-        option_description: str,
-        base_events: List[Dict],
-        profile: Any,
-        use_lora: bool = True
-    ) -> List[Dict]:
-        """
-        使用LoRA模型增强时间线事件描述
-        
-        Args:
-            user_id: 用户ID
-            option_title: 选项标题
-            option_description: 选项描述
-            base_events: 基础事件列表
-            profile: 用户性格画像
-            use_lora: 是否使用LoRA模型
-        
-        Returns:
-            增强后的事件列表
-        """
-        if not use_lora or not self.lora_manager.has_lora_model(user_id):
-            # 如果不使用LoRA或用户没有LoRA模型，返回原始事件
-            return base_events
-        
-        try:
-            enhanced_events = []
-            
-            for event in base_events:
-                # 构造个性化分析prompt
-                prompt = self._build_event_analysis_prompt(
-                    option_title=option_title,
-                    option_description=option_description,
-                    event=event,
-                    profile=profile
-                )
-                
-                # 使用LoRA模型生成个性化分析
-                analysis = self.lora_manager.generate(
-                    user_id=user_id,
-                    prompt=prompt,
-                    max_new_tokens=150,
-                    temperature=0.7
-                )
-                
-                # 增强事件描述
-                enhanced_event = event.copy()
-                enhanced_event['event'] = self._extract_event_description(analysis, event['event'])
-                
-                enhanced_events.append(enhanced_event)
-            
-            return enhanced_events
-            
-        except Exception as e:
-            print(f"⚠️ LoRA增强失败，使用基础事件: {e}")
-            return base_events
-    
-    def generate_personalized_recommendation(
-        self,
-        user_id: str,
-        question: str,
-        options: List[Dict],
-        profile: Any,
-        use_lora: bool = True
-    ) -> str:
-        """
-        使用LoRA模型生成个性化推荐
-        
-        必须使用LoRA模型，如果用户没有LoRA模型会抛出异常
-        """
-        if not use_lora:
-            raise ValueError("推荐生成必须启用LoRA模型 (use_lora=True)")
-        
-        if not self.lora_manager.has_lora_model(user_id):
-            raise ValueError(f"用户 {user_id} 还没有训练LoRA模型，无法生成个性化推荐")
-        
-        # 构造推荐prompt
-        prompt = self._build_recommendation_prompt(
-            question=question,
-            options=options,
-            profile=profile
-        )
-        
-        # 使用LoRA模型生成
-        recommendation = self.lora_manager.generate(
-            user_id=user_id,
-            prompt=prompt,
-            max_new_tokens=300,
-            temperature=0.7
-        )
-        
-        return self._clean_recommendation(recommendation)
-    
-    def analyze_decision_with_lora(
-        self,
-        user_id: str,
-        question: str,
-        option: Dict[str, str],
-        profile: Any
-    ) -> Dict[str, Any]:
-        """
-        使用LoRA模型深度分析单个决策选项
-        
-        Args:
-            user_id: 用户ID
-            question: 决策问题
-            option: 单个选项
-            profile: 用户性格画像
-        
-        Returns:
-            分析结果（包含优势、劣势、建议等）
-        """
-        if not self.lora_manager.has_lora_model(user_id):
-            return {
-                "advantages": [],
-                "disadvantages": [],
-                "suggestions": [],
-                "personal_fit": 0.5
-            }
-        
-        try:
-            # 构造分析prompt
-            prompt = self._build_analysis_prompt(
-                question=question,
-                option=option,
-                profile=profile
-            )
-            
-            # 使用LoRA模型生成分析
-            analysis = self.lora_manager.generate(
-                user_id=user_id,
-                prompt=prompt,
-                max_new_tokens=400,
-                temperature=0.7
-            )
-            
-            # 解析分析结果
-            return self._parse_analysis(analysis)
-            
-        except Exception as e:
-            print(f"⚠️ LoRA分析失败: {e}")
-            return {
-                "advantages": [],
-                "disadvantages": [],
-                "suggestions": [],
-                "personal_fit": 0.5
-            }
-    
-    def _build_event_analysis_prompt(
-        self,
-        option_title: str,
-        option_description: str,
-        event: Dict,
-        profile: Any
-    ) -> str:
-        """构造事件分析prompt"""
-        prompt = f"<|im_start|>user\n"
-        prompt += f"我正在考虑「{option_title}」这个选择。\n"
-        prompt += f"在第{event['month']}个月，可能会发生：{event['event']}\n"
-        prompt += f"请根据我的性格特点，用一句话描述这个事件对我的具体影响。\n"
-        prompt += f"<|im_end|>\n<|im_start|>assistant\n"
-        
-        return prompt
-    
-    def _build_recommendation_prompt(
-        self,
-        question: str,
-        options: List[Dict],
-        profile: Any
-    ) -> str:
-        """构造推荐prompt"""
-        prompt = f"<|im_start|>user\n"
-        prompt += f"我面临一个重要决策：{question}\n\n"
-        prompt += f"我分析了以下几个选项：\n"
-        
-        for opt in options:
-            prompt += f"\n{opt['title']}：\n"
-            prompt += f"- 综合得分：{opt['final_score']:.1f}/100\n"
-            prompt += f"- 风险等级：{opt['risk_level']:.2f}\n"
-        
-        if profile:
-            prompt += f"\n我的性格特点：\n"
-            prompt += f"- 决策风格：{profile.decision_style}\n"
-            prompt += f"- 风险偏好：{profile.risk_preference}\n"
-            prompt += f"- 生活优先级：{profile.life_priority}\n"
-        
-        prompt += f"\n请给我一个个性化的建议，告诉我应该选择哪个选项，以及为什么。\n"
-        prompt += f"<|im_end|>\n<|im_start|>assistant\n"
-        
-        return prompt
-    
-    def _build_analysis_prompt(
-        self,
-        question: str,
-        option: Dict[str, str],
-        profile: Any
-    ) -> str:
-        """构造深度分析prompt"""
-        prompt = f"<|im_start|>user\n"
-        prompt += f"我在考虑：{question}\n"
-        prompt += f"其中一个选项是「{option['title']}」：{option.get('description', '')}\n\n"
-        
-        if profile:
-            prompt += f"考虑到我的性格特点（{profile.decision_style}、{profile.risk_preference}），\n"
-        
-        prompt += f"请分析这个选项的：\n"
-        prompt += f"1. 优势（3点）\n"
-        prompt += f"2. 劣势（3点）\n"
-        prompt += f"3. 给我的建议（2点）\n"
-        prompt += f"<|im_end|>\n<|im_start|>assistant\n"
-        
-        return prompt
-    
-    def _extract_event_description(self, analysis: str, fallback: str) -> str:
-        """从LoRA生成的分析中提取事件描述"""
-        # 清理生成的文本
-        analysis = analysis.strip()
-        
-        # 如果生成的文本太短或太长，使用原始描述
-        if len(analysis) < 10 or len(analysis) > 200:
-            return fallback
-        
-        # 取第一句话
-        sentences = analysis.split('。')
-        if sentences:
-            return sentences[0] + '。'
-        
-        return fallback
-    
+
     def _clean_recommendation(self, recommendation: str) -> str:
         """清理推荐文本"""
-        # 移除多余的空白
         recommendation = recommendation.strip()
-        
-        # 移除可能的重复内容
         lines = recommendation.split('\n')
         unique_lines = []
         seen = set()
-        
         for line in lines:
             line = line.strip()
             if line and line not in seen:
                 unique_lines.append(line)
                 seen.add(line)
-        
         return '\n'.join(unique_lines)
-    
-    def _parse_analysis(self, analysis: str) -> Dict[str, Any]:
-        """解析LoRA生成的分析结果"""
-        result = {
-            "advantages": [],
-            "disadvantages": [],
-            "suggestions": [],
-            "personal_fit": 0.7  # 默认适配度
-        }
-        
-        # 简单的文本解析
-        lines = analysis.split('\n')
-        current_section = None
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            if '优势' in line or 'advantage' in line.lower():
-                current_section = 'advantages'
-            elif '劣势' in line or 'disadvantage' in line.lower():
-                current_section = 'disadvantages'
-            elif '建议' in line or 'suggestion' in line.lower():
-                current_section = 'suggestions'
-            elif current_section and (line.startswith('-') or line.startswith('•') or line[0].isdigit()):
-                # 提取列表项
-                item = line.lstrip('-•0123456789. ').strip()
-                if item:
-                    result[current_section].append(item)
-        
-        return result
-    
-    def get_lora_status(self, user_id: str) -> Dict[str, Any]:
-        """获取用户的LoRA模型状态"""
-        try:
-            info = self.lora_manager.get_model_info(user_id)
-            
-            return {
-                "has_lora": info.get('has_lora', False),
-                "model_version": info.get('model_version', 0),
-                "is_loaded": info.get('is_loaded', False),
-                "last_train_time": info.get('last_train_time'),
-                "training_data_size": info.get('current_data_size', 0)
-            }
-        except Exception as e:
-            print(f"⚠️ 获取LoRA状态失败: {e}")
-            # 返回默认状态
-            return {
-                "has_lora": False,
-                "model_version": 0,
-                "is_loaded": False,
-                "last_train_time": None,
-                "training_data_size": 0,
-                "error": str(e)
-            }
-
-
-# 测试代码
-if __name__ == "__main__":
-    analyzer = LoRADecisionAnalyzer()
-    
-    # 测试用户
-    user_id = "test_user_001"
-    
-    # 检查LoRA状态
-    status = analyzer.get_lora_status(user_id)
-    print("="*60)
-    print("LoRA模型状态")
-    print("="*60)
-    print(f"有LoRA模型: {status['has_lora']}")
-    print(f"模型版本: v{status['model_version']}")
-    print(f"训练数据量: {status['training_data_size']}")
-    print()
-    
-    if status['has_lora']:
-        # 测试推荐生成
-        print("="*60)
-        print("测试个性化推荐生成")
-        print("="*60)
-        
-        options = [
-            {"title": "考研", "final_score": 75.5, "risk_level": 0.35},
-            {"title": "工作", "final_score": 82.3, "risk_level": 0.15},
-            {"title": "创业", "final_score": 65.0, "risk_level": 0.65}
-        ]
-        
-        # 模拟性格画像
-        class MockProfile:
-            decision_style = "rational"
-            risk_preference = "risk_neutral"
-            life_priority = "career_first"
-        
-        recommendation = analyzer.generate_personalized_recommendation(
-            user_id=user_id,
-            question="毕业后应该选择什么？",
-            options=options,
-            profile=MockProfile(),
-            use_lora=True
-        )
-        
-        print(f"\n个性化推荐:\n{recommendation}")
-    else:
-        print("⚠️ 用户还没有训练LoRA模型")
-        print("💡 提示: 运行 test_lora_training.py 来训练模型")

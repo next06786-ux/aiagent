@@ -8,7 +8,7 @@ export class ApiConfig {
   // 
   // - : 'http://localhost:8000'  'http://10.0.2.2:8000'
   // - : IP 'http://192.168.1.192:8000'
-  private static BASE_URL: string = 'http://192.168.1.192:8000';
+  private static BASE_URL: string = 'http://192.168.43.6:8000';
   
   /**
    *  API 
@@ -40,9 +40,9 @@ export class ApiConfig {
     endpoints['KNOWLEDGE_GRAPH_QUERY'] = '/api/v4/knowledge-graph';
     endpoints['KNOWLEDGE_GRAPH_STATS'] = '/api/v4/knowledge-graph';
     endpoints['LEARNING_PROGRESS'] = '/api/v4/learning/progress';
-    endpoints['HYBRID_INSIGHTS'] = '/api/hybrid/insights';
-    endpoints['HYBRID_PROCESS'] = '/api/hybrid/process';
-    endpoints['HYBRID_FEEDBACK'] = '/api/hybrid/feedback';
+    endpoints['HYBRID_INSIGHTS'] = '/api/v2/hybrid/status';
+    endpoints['HYBRID_PROCESS'] = '/api/v2/hybrid/process-task';
+    endpoints['HYBRID_FEEDBACK'] = '/api/v2/hybrid/feedback';
     endpoints['HYBRID_STRATEGY'] = '/api/hybrid/strategy';
     endpoints['PREDICTIONS'] = '/api/predictions';
     endpoints['DATA_INPUT'] = '/api/data/input';
@@ -56,7 +56,7 @@ export class ApiConfig {
     endpoints['USER_CONFIG'] = '/api/config';
     endpoints['DOMAINS'] = '/api/domains';
     endpoints['DECISION_SIMULATE'] = '/api/decision/simulate';
-    endpoints['DECISION_COMPARE'] = '/api/decision/compare';
+    endpoints['DECISION_COMPARE'] = '/api/decision/quick-analyze';
     endpoints['DECISION_CREATE_DUNGEON'] = '/api/decision/create-dungeon';
     endpoints['DECISION_GET_DUNGEON'] = '/api/decision/dungeon';
     endpoints['DECISION_LIST_DUNGEONS'] = '/api/decision/dungeons';
