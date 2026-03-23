@@ -1,6 +1,6 @@
 """
 LifeSim AI 系统启动脚本
-启动后端服务器和LoRA训练调度器
+同机部署模式：启动 SGLang、后端服务器和 LoRA 训练调度器
 """
 import os
 import sys
@@ -9,33 +9,48 @@ import subprocess
 import signal
 from multiprocessing import Process
 from dotenv import load_dotenv
+import requests
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 # 加载环境变量
 load_dotenv()
-load_dotenv('backend/.env.local_model')  # 加载本地模型配置
+load_dotenv('backend/.env')
 
 
-def start_local_model_server():
-    """启动本地Qwen3.5-0.8B模型服务器"""
+def wait_for_http_ready(url: str, name: str, timeout: int = 120, interval: int = 2):
+    """等待 HTTP 服务就绪，超时则抛错"""
+    print(f"⏳ 等待 {name} 就绪: {url}")
+    start = time.time()
+    last_error = None
+    while time.time() - start < timeout:
+        try:
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                print(f"✅ {name} 已就绪")
+                return
+            last_error = f"status={resp.status_code}"
+        except Exception as e:
+            last_error = str(e)
+        time.sleep(interval)
+    raise RuntimeError(f"{name} 在 {timeout} 秒内未就绪: {last_error}")
+
+
+def start_sglang_server():
+    """启动同机部署的 SGLang 服务（Qwen3.5-9B + LoRA）"""
     print("\n" + "="*70)
-    print("🤖 启动本地模型服务器 (Qwen3.5-0.8B)...")
+    print("🤖 启动 SGLang 服务 (Qwen3.5-9B + LoRA)...")
     print("="*70 + "\n")
-    
-    # 确保在项目根目录
+
     project_root = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, project_root)
-    
-    # 使用uvicorn启动本地模型服务器
-    import uvicorn
-    uvicorn.run(
-        "backend.llm.local_qwen_server_optimized:app",
-        host="0.0.0.0",
-        port=8001,  # 使用8001端口，避免与主服务器冲突
-        log_level="info"
-    )
+    cmd = [
+        sys.executable,
+        os.path.join(project_root, "gpu_server", "start_server.py"),
+        "--port", "8001"
+    ]
+
+    subprocess.run(cmd, check=True)
 
 
 def start_backend_server():
@@ -50,15 +65,14 @@ def start_backend_server():
     # 设置PYTHONPATH环境变量，包含项目根目录
     sys.path.insert(0, project_root)
     
-    # 使用uvicorn启动（开发模式使用--reload）
+    # 使用 uvicorn 启动
     import uvicorn
     uvicorn.run(
-        "backend.main:app",  # 使用完整的模块路径
+        "backend.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
-        log_level="info",
-        reload_dirs=[os.path.join(project_root, "backend")]  # 只监控backend目录
+        reload=False,
+        log_level="info"
     )
 
 
@@ -90,6 +104,9 @@ def main():
     print("  LifeSim AI - 智能生活决策系统")
     print("="*70)
     print("\n系统组件:")
+    print("  ✓ GPU 主后端部署")
+    print("  ✓ SGLang 推理服务 (Qwen3.5-9B + LoRA)")
+    print("  ✓ FastAPI 后端")
     print("  ✓ 心理测评系统")
     print("  ✓ LoRA个性化模型")
     print("  ✓ 平行宇宙模拟器")
@@ -97,42 +114,46 @@ def main():
     print("  ✓ 决策反馈循环")
     print("  ✓ 动态画像更新")
     
-    # 检查是否启用本地模型
-    enable_local_model = os.getenv('ENABLE_LOCAL_MODEL', 'false').lower() == 'true'
-    if enable_local_model:
-        print("  ✓ 本地Qwen3.5-0.8B模型")
-    
     print("\n" + "="*70 + "\n")
     
     # 创建进程列表
     processes = []
     
     try:
-        # 先启动后端服务器（避免内存冲突）
+        # 1. 先启动 SGLang（提供 Qwen3.5-9B + LoRA 推理）
+        sglang_process = Process(target=start_sglang_server, name="SGLang")
+        sglang_process.start()
+        processes.append(('SGLang服务', sglang_process))
+        wait_for_http_ready(os.environ.get("SGLANG_SERVER_URL", "http://127.0.0.1:8001") + "/health", "SGLang", timeout=180)
+
+        # 2. 启动后端服务器
         backend_process = Process(target=start_backend_server, name="Backend")
         backend_process.start()
         processes.append(('后端服务器', backend_process))
-        time.sleep(3)  # 等待后端初始化
+        wait_for_http_ready(os.environ.get("API_BASE_URL", "http://127.0.0.1:8000") + "/health", "FastAPI", timeout=60)
         
-        # 如果启用本地模型，再启动本地模型服务器
-        if enable_local_model:
-            print("正在启动本地模型服务器...")
-            local_model_process = Process(target=start_local_model_server, name="LocalModel")
-            local_model_process.start()
-            processes.append(('本地模型服务器', local_model_process))
-            time.sleep(5)  # 等待模型加载
-        
-        # 启动调度器
+        # 3. 启动调度器
         scheduler_process = Process(target=start_lora_scheduler, name="Scheduler")
         scheduler_process.start()
         processes.append(('调度器', scheduler_process))
         
         print("\n✅ 系统启动成功!")
         print("\n访问地址:")
-        print("  - 主服务API: http://localhost:8000/docs")
-        if enable_local_model:
-            print("  - 本地模型API: http://localhost:8001/health")
-        print("  - 健康检查: http://localhost:8000/health")
+        print("  - FastAPI:      http://0.0.0.0:8000/docs")
+        print("  - SGLang:       http://127.0.0.1:8001/health")
+        print("  - 健康检查文件: ./data/health_check.json")
+        print("  - FastAPI健康:  http://127.0.0.1:8000/health")
+
+        # 4. 启动后自动跑一次健康检查
+        print("\n🔍 执行启动后健康检查...")
+        from backend.utils.health_checker import HealthChecker
+        checker = HealthChecker(
+            api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:8000"),
+            sglang_base_url=os.environ.get("SGLANG_SERVER_URL", "http://127.0.0.1:8001"),
+            lora_dir=os.environ.get("LORA_MODELS_DIR", "./models/lora"),
+        )
+        checker.check_all()
+
         print("\n按 Ctrl+C 停止系统\n")
         
         # 等待进程

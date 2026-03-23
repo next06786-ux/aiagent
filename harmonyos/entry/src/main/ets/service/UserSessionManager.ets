@@ -50,8 +50,8 @@ export class UserSessionManager {
         this.currentUserId = user.user_id;
         console.info('[UserSessionManager] 加载用户ID:', this.currentUserId);
       } else {
-        this.currentUserId = 'default_user';
-        console.warn('[UserSessionManager] 未登录，使用默认用户ID');
+        this.currentUserId = '';
+        console.warn('[UserSessionManager] 未登录，不提供默认用户ID给个性化能力');
       }
       
       this.isInitialized = true;
@@ -61,21 +61,21 @@ export class UserSessionManager {
       
     } catch (err) {
       console.error('[UserSessionManager] 初始化失败:', err);
-      this.currentUserId = 'default_user';
+      this.currentUserId = '';
       this.isInitialized = true;
     }
   }
   
   /**
    * 获取当前用户ID（同步方法）
-   * 如果未初始化，返回 default_user
+   * 如果未初始化或未登录，返回空字符串
    */
   getCurrentUserId(): string {
     if (!this.isInitialized) {
-      console.warn('[UserSessionManager] 未初始化，返回默认用户ID');
-      return 'default_user';
+      console.warn('[UserSessionManager] 未初始化，返回空用户ID');
+      return '';
     }
-    return this.currentUserId || 'default_user';
+    return this.currentUserId || '';
   }
   
   /**
@@ -83,7 +83,7 @@ export class UserSessionManager {
    */
   async getUserId(): Promise<string> {
     await this.initialize();
-    return this.currentUserId || 'default_user';
+    return this.currentUserId || '';
   }
   
   /**
@@ -116,7 +116,7 @@ export class UserSessionManager {
   async onUserLogout(): Promise<void> {
     console.info('[UserSessionManager] 用户登出');
     const oldUserId = this.currentUserId;
-    this.currentUserId = 'default_user';
+    this.currentUserId = '';
     
     // 通知所有监听器
     this.notifyListeners();
@@ -166,7 +166,7 @@ export class UserSessionManager {
    * 检查是否已登录
    */
   isLoggedIn(): boolean {
-    return this.currentUserId !== '' && this.currentUserId !== 'default_user';
+    return this.currentUserId !== '';
   }
   
   /**

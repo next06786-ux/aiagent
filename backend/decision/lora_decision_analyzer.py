@@ -53,6 +53,18 @@ class LoRADecisionAnalyzer:
         """检查用户是否有训练好的 LoRA 模型"""
         return self.get_user_lora_path(user_id) is not None
 
+    def is_user_training(self, user_id: str) -> bool:
+        """检查用户是否正在训练 LoRA，训练期间拒绝高成本个性化推理以避免 GPU 争抢"""
+        status_file = os.path.join(self.lora_base_dir, user_id, "status.json")
+        if not os.path.exists(status_file):
+            return False
+        try:
+            with open(status_file, "r", encoding="utf-8") as f:
+                status = json.load(f)
+            return bool(status.get("is_training", False))
+        except Exception:
+            return False
+
     # ==================== 时间线生成 ====================
 
     async def generate_timeline_with_lora(
@@ -65,20 +77,16 @@ class LoRADecisionAnalyzer:
     ) -> List[Dict[str, Any]]:
         """
         通过 SGLang (基座 + 用户 LoRA) 生成决策时间线
-
-        Args:
-            user_id: 用户ID
-            question: 决策问题
-            option: 选项 {"title": "...", "description": "..."}
-            profile: 用户性格画像
-            num_events: 生成事件数量
-
-        Returns:
-            时间线事件列表
         """
         lora_path = self.get_user_lora_path(user_id)
         if not lora_path:
             raise ValueError(f"用户 {user_id} 还没有训练 LoRA 模型")
+        if self.is_user_training(user_id):
+            raise RuntimeError(f"用户 {user_id} 的 LoRA 正在训练中，请稍后再试个性化决策模拟")
+
+        health = await self.sglang.health_check()
+        if health.get("status") != "healthy":
+            raise RuntimeError(f"SGLang 服务不可用: {health}")
 
         messages = self._build_timeline_messages(question, option, profile, num_events)
 
@@ -113,6 +121,12 @@ class LoRADecisionAnalyzer:
         lora_path = self.get_user_lora_path(user_id)
         if not lora_path:
             raise ValueError(f"用户 {user_id} 还没有训练 LoRA 模型")
+        if self.is_user_training(user_id):
+            raise RuntimeError(f"用户 {user_id} 的 LoRA 正在训练中，请稍后再试个性化推荐生成")
+
+        health = await self.sglang.health_check()
+        if health.get("status") != "healthy":
+            raise RuntimeError(f"SGLang 服务不可用: {health}")
 
         messages = self._build_recommendation_messages(question, options, profile)
 

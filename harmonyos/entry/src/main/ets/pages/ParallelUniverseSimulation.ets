@@ -155,8 +155,7 @@ struct ParallelUniverseSimulation {
       const requestData: Record<string, Object> = {
         'user_id': this.userId,
         'question': question,
-        'options': options,
-        'use_lora': true
+        'options': options
       }
 
       console.info('Starting simulation with data:', JSON.stringify(requestData))
@@ -187,10 +186,19 @@ struct ParallelUniverseSimulation {
           this.simulationResult = result.data
           this.currentMonth = 1
           console.info('Simulation completed successfully')
+        } else if (result.code === 404) {
+          this.showErrorMessage('你还没有训练专属 LoRA，先去完成个性化训练')
+        } else if (result.code === 409) {
+          this.showErrorMessage('你的 LoRA 正在训练中，请稍后再试')
+        } else if (result.code === 503) {
+          this.showErrorMessage('推理服务暂时不可用，请稍后重试')
         } else {
           console.error('Simulation failed: ' + result.message)
           this.showErrorMessage('模拟失败: ' + result.message)
         }
+      } else if (response.responseCode === 503) {
+        console.error('Simulation failed: HTTP ' + response.responseCode)
+        this.showErrorMessage('GPU推理服务未就绪，请稍后重试')
       } else {
         console.error('Simulation failed: HTTP ' + response.responseCode)
         this.showErrorMessage('请求失败，请检查网络连接')

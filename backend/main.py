@@ -165,20 +165,42 @@ def get_or_create_user_system(user_id: str):
 
 @app.get("/health")
 async def health_check():
-    """健康检查"""
+    """单机 GPU 主后端健康检查"""
     from backend.startup_manager import get_init_status
-    
+    from backend.llm.sglang_client import get_sglang_client
+
     status = get_init_status()
-    
+    sglang_health = await get_sglang_client().health_check()
+    lora_dir = os.environ.get("LORA_MODELS_DIR", "./models/lora")
+    lora_dir_exists = os.path.exists(lora_dir)
+    lora_user_count = 0
+    if lora_dir_exists:
+        lora_user_count = len([
+            d for d in os.listdir(lora_dir)
+            if os.path.isdir(os.path.join(lora_dir, d))
+        ])
+
+    overall_status = "healthy" if sglang_health.get("status") == "healthy" else "degraded"
+
     return {
-        "status": "healthy",
+        "status": overall_status,
         "timestamp": datetime.now().isoformat(),
+        "deployment_mode": "single_gpu_host",
+        "model": os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B"),
         "services": {
+            "fastapi": "✓ 就绪",
+            "sglang": "✓ 就绪" if sglang_health.get("status") == "healthy" else f"⚠️ {sglang_health}",
             "llm": "✓ 就绪" if status['llm_service'] else "⚠️ 未就绪",
             "knowledge_graph": "✓ 就绪" if status['knowledge_graph'] else "⚠️ 未就绪",
             "rag": "✓ 就绪" if status['rag_system'] else "⚠️ 未就绪",
             "emergence_detector": "✓ 就绪" if status['emergence_detector'] else "⚠️ 未就绪",
-            "database": "✓ 就绪"
+            "database": "✓ 就绪",
+            "lora_dir": "✓ 就绪" if lora_dir_exists else "⚠️ 不存在"
+        },
+        "lora": {
+            "path": lora_dir,
+            "exists": lora_dir_exists,
+            "user_count": lora_user_count
         }
     }
 
@@ -5778,113 +5800,6 @@ async def list_memories(user_id: str, memory_type: Optional[str] = None, limit: 
             "data": None
         }
 
-
-# ==================== LoRA  性化训练 API ====================
-
-# 全局 LoRA 管理器缓个lora_trainers = {}
-lora_manager = None
-
-def get_lora_manager():
-    """获取 LoRA 模型管理器(单例)"""
-    global lora_manager
-    if lora_manager is None:
-        from lora.lora_model_manager import LoRAModelManager
-        lora_manager = LoRAModelManager()  # 直接实例化,__new__ 会处理单    return lora_manager
-
-def get_lora_trainer(user_id: str):
-    """获取用户的LoRA 训练器"""
-    if user_id not in lora_trainers:
-        from lora.auto_lora_trainer import AutoLoRATrainer
-        lora_trainers[user_id] = AutoLoRATrainer(user_id)
-    return lora_trainers[user_id]
-
-@app.get("/api/lora/status/{user_id}")
-async def get_lora_status(user_id: str):
-    """获取用户的LoRA 训练状态"""
-    try:
-        trainer = get_lora_trainer(user_id)
-        manager = get_lora_manager()
-        
-        # 获取训练状态        status = trainer.status
-        
-        # 获取模型信息
-        has_model = manager.has_lora_model(user_id)
-        model_path = manager.get_lora_path(user_id) if has_model else None
-        
-        # 获取对话数据        conversations = trainer.get_user_conversations()
-        
-        return {
-            "code": 200,
-            "message": "Success",
-            "data": {
-                "user_id": user_id,
-                "has_model": has_model,
-                "model_path": model_path,
-                "model_version": f"v{status['model_version']}" if status['model_version'] > 0 else "未训",
-                "last_train_time": status['last_train_time'].isoformat() if status['last_train_time'] else None,
-                "total_trainings": status['total_trainings'],
-                "current_data_size": len(conversations),
-                "min_data_size": trainer.training_config['min_data_size'],
-                "is_training": status['is_training'],
-                "can_train": len(conversations) >= trainer.training_config['min_data_size'] and not status['is_training']
-            }
-        }
-    except Exception as e:
-        print(f"获取 LoRA 状态失 {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "code": 500,
-            "message": f"Error: {str(e)}",
-            "data": None
-        }
-
-@app.post("/api/lora/train/{user_id}")
-async def trigger_lora_training(user_id: str, background_tasks: BackgroundTasks):
-    """手动触发 LoRA 训练"""
-    try:
-        trainer = get_lora_trainer(user_id)
-        
-        # 检查是否可以训练
-        if trainer.status['is_training']:
-            return {
-                "code": 400,
-                "message": "训练任务已在进行",
-                "data": None
-            }
-        
-        conversations = trainer.get_user_conversations()
-        if len(conversations) < trainer.training_config['min_data_size']:
-            return {
-                "code": 400,
-                "message": f"数据不足,需要至个{trainer.training_config['min_data_size']} 条对",
-                "data": {
-                    "current": len(conversations),
-                    "required": trainer.training_config['min_data_size']
-                }
-            }
-        
-        # 在后台执行训        background_tasks.add_task(trainer.auto_train_workflow)
-        
-        return {
-            "code": 200,
-            "message": "训练任务已启",
-            "data": {
-                "user_id": user_id,
-                "data_size": len(conversations),
-                "estimated_time": "3-5 分钟"
-            }
-        }
-    except Exception as e:
-        print(f"触发 LoRA 训练失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "code": 500,
-            "message": f"Error: {str(e)}",
-            "data": None
-        }
-
 @app.get("/api/lora/models")
 async def list_lora_models():
     """列出所有用户的 LoRA 模型"""
@@ -6111,17 +6026,6 @@ def get_parallel_simulator():
 async def simulate_decision(request_data: Dict[str, Any]):
     """
     决策模拟 — 通过 SGLang (Qwen3.5-9B + 用户 LoRA) 推理
-    
-    请求体:
-    {
-        "user_id": "user_001",
-        "question": "大三学生,毕业后应该选择什么?",
-        "options": [
-            {"title": "考研", "description": "继续深造"},
-            {"title": "工作", "description": "直接就业"},
-            {"title": "创业", "description": "自主创业"}
-        ]
-    }
     """
     try:
         user_id = request_data.get("user_id")
@@ -6134,6 +6038,12 @@ async def simulate_decision(request_data: Dict[str, Any]):
                 "message": "user_id, question, options 不能为空",
                 "data": None
             }
+        if user_id == "default_user":
+            return {
+                "code": 403,
+                "message": "默认用户不允许使用个性化决策模拟，请先登录真实账号",
+                "data": None
+            }
         
         if len(options) < 2:
             return {
@@ -6142,7 +6052,6 @@ async def simulate_decision(request_data: Dict[str, Any]):
                 "data": None
             }
         
-        # 异步执行模拟（SGLang + LoRA）
         simulator = get_parallel_simulator()
         result = await simulator.simulate_decision(
             user_id=user_id,
@@ -6150,7 +6059,6 @@ async def simulate_decision(request_data: Dict[str, Any]):
             options=options,
         )
         
-        # 转换为可序列化格式
         response_data = {
             "simulation_id": result.simulation_id,
             "question": result.question,
@@ -6182,6 +6090,27 @@ async def simulate_decision(request_data: Dict[str, Any]):
             "code": 200,
             "message": "模拟完成",
             "data": response_data
+        }
+    except ValueError as e:
+        message = str(e)
+        code = 404 if "还没有训练 LoRA 模型" in message else 400
+        return {
+            "code": code,
+            "message": message,
+            "data": None
+        }
+    except RuntimeError as e:
+        message = str(e)
+        if "正在训练中" in message:
+            code = 409
+        elif "SGLang 服务不可用" in message:
+            code = 503
+        else:
+            code = 500
+        return {
+            "code": code,
+            "message": message,
+            "data": None
         }
     except Exception as e:
         print(f"决策模拟失败: {e}")
@@ -6216,13 +6145,18 @@ async def create_dungeon(request_data: Dict[str, Any]):
         context = request_data.get("context", "")
         urgency = request_data.get("urgency", "medium")
         options = request_data.get("options", [])
-        use_lora = request_data.get("use_lora", True)
         
         # 验证输入
         if not user_id or not title or not description:
             return {
                 "code": 400,
                 "message": "user_id, title, description 不能为空",
+                "data": None
+            }
+        if user_id == "default_user":
+            return {
+                "code": 403,
+                "message": "默认用户不允许创建个性化决策副本，请先登录真实账号",
                 "data": None
             }
         
@@ -6233,22 +6167,19 @@ async def create_dungeon(request_data: Dict[str, Any]):
                 "data": None
             }
         
-        # 生成副本ID
         import time
         dungeon_id = f"dungeon_{user_id}_{int(time.time())}"
         
-        # 生成平行宇宙模拟
         option_inputs = [
             {"title": opt, "description": f"选择{opt}的发展路径"}
             for opt in options
         ]
         
         simulator = get_parallel_simulator()
-        simulation_result = simulator.simulate_decision(
+        simulation_result = await simulator.simulate_decision(
             user_id=user_id,
             question=title,
             options=option_inputs,
-            use_lora=use_lora
         )
         
         # 构建副本数据
@@ -6281,7 +6212,7 @@ async def create_dungeon(request_data: Dict[str, Any]):
             ],
             "recommendation": simulation_result.recommendation,
             "created_at": datetime.now().isoformat(),
-            "lora_trained": use_lora
+            "lora_trained": True
         }
         
         # 保存副本数据
@@ -6297,6 +6228,27 @@ async def create_dungeon(request_data: Dict[str, Any]):
                 "options_count": len(options),
                 "created_at": dungeon_data["created_at"]
             }
+        }
+    except ValueError as e:
+        message = str(e)
+        code = 404 if "还没有训练 LoRA 模型" in message else 400
+        return {
+            "code": code,
+            "message": message,
+            "data": None
+        }
+    except RuntimeError as e:
+        message = str(e)
+        if "正在训练中" in message:
+            code = 409
+        elif "SGLang 服务不可用" in message:
+            code = 503
+        else:
+            code = 500
+        return {
+            "code": code,
+            "message": message,
+            "data": None
         }
     except Exception as e:
         print(f"创建副本失败: {e}")
@@ -6776,6 +6728,12 @@ async def get_lora_status(user_id: str):
     参数:
     - user_id: 用户ID
     """
+    if not user_id or user_id == "default_user":
+        return {
+            "code": 403,
+            "message": "默认用户不允许访问个性化 LoRA 状态，请先登录真实账号",
+            "data": None
+        }
     try:
         from backend.decision.lora_decision_analyzer import LoRADecisionAnalyzer
         
@@ -6806,6 +6764,12 @@ async def trigger_lora_training(user_id: str, priority: str = "normal"):
     - user_id: 用户ID
     - priority: 优先级 (normal/high)
     """
+    if not user_id or user_id == "default_user":
+        return {
+            "code": 403,
+            "message": "默认用户不允许触发个性化 LoRA 训练，请先登录真实账号",
+            "data": None
+        }
     try:
         scheduler = get_lora_scheduler()
         scheduler.add_training_task(user_id, priority)

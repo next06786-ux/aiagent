@@ -104,8 +104,7 @@ struct DecisionDungeonInput {
         'description': this.decisionDescription,
         'context': this.decisionContext,
         'urgency': this.urgency,
-        'options': validOptions,
-        'use_lora': true  // 启用LoRA，使用本地Qwen模型
+        'options': validOptions
       }
 
       console.info('Submitting decision:', JSON.stringify(requestData))
@@ -168,11 +167,24 @@ struct DecisionDungeonInput {
               this.isLoading = false
             })
           }, 800)
+        } else if (result.code === 404) {
+          this.debugInfo = '未找到 LoRA 模型'
+          this.showToast('你还没有训练专属 LoRA，先去完成个性化训练')
+        } else if (result.code === 409) {
+          this.debugInfo = 'LoRA 训练中'
+          this.showToast('你的 LoRA 正在训练中，请稍后再试')
+        } else if (result.code === 503) {
+          this.debugInfo = 'SGLang 不可用'
+          this.showToast('推理服务暂时不可用，请稍后重试')
         } else {
           console.error('创建失败:', result.message)
           this.debugInfo = `失败: ${result.message}`
           this.showToast('创建副本失败: ' + result.message)
         }
+      } else if (response.responseCode === 503) {
+        console.error('HTTP请求失败:', response.responseCode)
+        this.debugInfo = `HTTP错误: ${response.responseCode}`
+        this.showToast('GPU推理服务未就绪，请稍后重试')
       } else {
         console.error('HTTP请求失败:', response.responseCode)
         this.debugInfo = `HTTP错误: ${response.responseCode}`
