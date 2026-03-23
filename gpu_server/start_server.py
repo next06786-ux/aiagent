@@ -75,7 +75,7 @@ def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False)
     if enable_lora:
         lora_dir = PATHS.get('models_lora', f"{DATA_DIR}/models/lora")
         cmd.extend([
-            "--enable-lora", "true",
+            "--enable-lora",
             "--max-lora-rank", str(config['lora_r']),
             "--lora-paths", lora_dir,
         ])
