@@ -1,6 +1,7 @@
 """
 LifeSim AI 系统启动脚本
-同机部署模式：启动 SGLang、后端服务器和 LoRA 训练调度器
+单机部署模式：启动 FastAPI 后端和 LoRA 训练调度器
+决策模拟推理直接使用本地 Qwen3.5-9B + 用户专属 LoRA
 """
 import os
 import sys
@@ -35,22 +36,6 @@ def wait_for_http_ready(url: str, name: str, timeout: int = 120, interval: int =
             last_error = str(e)
         time.sleep(interval)
     raise RuntimeError(f"{name} 在 {timeout} 秒内未就绪: {last_error}")
-
-
-def start_sglang_server():
-    """启动同机部署的 SGLang 服务（Qwen3.5-9B + LoRA）"""
-    print("\n" + "="*70)
-    print("🤖 启动 SGLang 服务 (Qwen3.5-9B + LoRA)...")
-    print("="*70 + "\n")
-
-    project_root = os.path.dirname(os.path.abspath(__file__))
-    cmd = [
-        sys.executable,
-        os.path.join(project_root, "gpu_server", "start_server.py"),
-        "--port", "8001"
-    ]
-
-    subprocess.run(cmd, check=True)
 
 
 def start_backend_server():
@@ -105,7 +90,8 @@ def main():
     print("="*70)
     print("\n系统组件:")
     print("  ✓ GPU 主后端部署")
-    print("  ✓ SGLang 推理服务 (Qwen3.5-9B + LoRA)")
+    print("  ✓ 本地 Qwen3.5-9B 基座")
+    print("  ✓ 用户专属 LoRA 推理")
     print("  ✓ FastAPI 后端")
     print("  ✓ 心理测评系统")
     print("  ✓ LoRA个性化模型")
@@ -120,19 +106,13 @@ def main():
     processes = []
     
     try:
-        # 1. 先启动 SGLang（提供 Qwen3.5-9B + LoRA 推理）
-        sglang_process = Process(target=start_sglang_server, name="SGLang")
-        sglang_process.start()
-        processes.append(('SGLang服务', sglang_process))
-        wait_for_http_ready(os.environ.get("SGLANG_SERVER_URL", "http://127.0.0.1:8001") + "/health", "SGLang", timeout=180)
-
-        # 2. 启动后端服务器
+        # 1. 启动后端服务器
         backend_process = Process(target=start_backend_server, name="Backend")
         backend_process.start()
         processes.append(('后端服务器', backend_process))
         wait_for_http_ready(os.environ.get("API_BASE_URL", "http://127.0.0.1:8000") + "/health", "FastAPI", timeout=60)
         
-        # 3. 启动调度器
+        # 2. 启动调度器
         scheduler_process = Process(target=start_lora_scheduler, name="Scheduler")
         scheduler_process.start()
         processes.append(('调度器', scheduler_process))
@@ -140,7 +120,6 @@ def main():
         print("\n✅ 系统启动成功!")
         print("\n访问地址:")
         print("  - FastAPI:      http://0.0.0.0:8000/docs")
-        print("  - SGLang:       http://127.0.0.1:8001/health")
         print("  - 健康检查文件: ./data/health_check.json")
         print("  - FastAPI健康:  http://127.0.0.1:8000/health")
 
@@ -149,7 +128,6 @@ def main():
         from backend.utils.health_checker import HealthChecker
         checker = HealthChecker(
             api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:8000"),
-            sglang_base_url=os.environ.get("SGLANG_SERVER_URL", "http://127.0.0.1:8001"),
             lora_dir=os.environ.get("LORA_MODELS_DIR", "./models/lora"),
         )
         checker.check_all()

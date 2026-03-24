@@ -49,7 +49,7 @@ def print_banner():
 
 
 def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False):
-    """启动 SGLang 服务器"""
+    """启动 SGLang 服务器（默认只加载基座模型；用户 LoRA 在请求级按需指定）"""
     from gpu_server.gpu_config import get_model_config, SGLANG_CONFIG, PATHS, DATA_DIR
     
     config = get_model_config(model)
@@ -73,13 +73,14 @@ def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False)
     
     # 添加 LoRA 支持
     if enable_lora:
-        lora_dir = PATHS.get('models_lora', f"{DATA_DIR}/models/lora")
+        # 注意：当前 SGLang 版本要求 --lora-paths 传入具体 adapter 目录，
+        # 不能直接传 models/lora 根目录。
+        # 这里仅开启 LoRA 能力，具体用户 LoRA 由后端在请求级按 user_id 指定。
         cmd.extend([
             "--enable-lora",
             "--max-lora-rank", str(config['lora_r']),
-            "--lora-paths", lora_dir,
         ])
-        print(f"  LoRA: 已启用 (模型目录: {lora_dir})")
+        print("  LoRA: 已启用（按用户在请求级动态指定 adapter）")
     
     print(f"\n执行命令:\n{' '.join(cmd)}\n")
     
@@ -92,7 +93,7 @@ def start_sglang(model: str = None, port: int = 8000, enable_lora: bool = False)
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="LifeSwarm SGLang Server")
-    parser.add_argument("--model", default=None, help="模型名称 (qwen3.5-9b, qwen3.5-0.8b)")
+    parser.add_argument("--model", default=None, help="模型名称 (默认 qwen3.5-9b)")
     parser.add_argument("--port", type=int, default=8000, help="服务端口")
     parser.add_argument("--enable-lora", action="store_true", default=True, help="启用 LoRA 支持（默认开启）")
     parser.add_argument("--no-lora", action="store_true", help="禁用 LoRA 支持")

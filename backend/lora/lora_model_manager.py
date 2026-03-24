@@ -31,16 +31,16 @@ class LoRAModelManager:
         self.base_model = None
         self.tokenizer = None
         self.loaded_loras = {}  # {user_id: model}
-        self.base_model_name = get_model_hf_name()
+        self.base_model_name = os.environ.get("LOCAL_BASE_MODEL_PATH") or get_model_hf_name()
         self._initialized = True
     
     def load_base_model(self):
         """加载基础模型（只加载一次）"""
         if self.base_model is None:
-            print("📥 加载基础模型...")
+            print(f"📥 加载基础模型: {self.base_model_name}")
             self.base_model = AutoModelForCausalLM.from_pretrained(
                 self.base_model_name,
-                torch_dtype=torch.float16,
+                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
                 device_map="auto",
                 trust_remote_code=True
             )
@@ -48,6 +48,8 @@ class LoRAModelManager:
                 self.base_model_name,
                 trust_remote_code=True
             )
+            if self.tokenizer.pad_token_id is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
             print("✅ 基础模型加载完成\n")
     
     def get_user_lora_path(self, user_id: str) -> Optional[str]:

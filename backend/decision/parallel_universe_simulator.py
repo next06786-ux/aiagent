@@ -1,12 +1,12 @@
 """
 平行宇宙模拟器
-通过 SGLang (Qwen3.5-9B 基座 + 用户 LoRA) 模拟不同决策选项的未来时间线
+通过本地 Qwen3.5-9B 基座 + 用户专属 LoRA 模拟不同决策选项的未来时间线
 
 架构：
   simulate_decision (async)
-    → 对每个选项调用 LoRADecisionAnalyzer.generate_timeline_with_lora (async → SGLang API)
+    → 对每个选项调用 LoRADecisionAnalyzer.generate_timeline_with_lora (async → transformers+peft)
     → 本地计算得分 & 风险评估
-    → 调用 LoRADecisionAnalyzer.generate_personalized_recommendation (async → SGLang API)
+    → 调用 LoRADecisionAnalyzer.generate_personalized_recommendation (async → transformers+peft)
 """
 import os
 import sys
@@ -57,7 +57,7 @@ class SimulationResult:
 
 
 class ParallelUniverseSimulator:
-    """平行宇宙模拟器 — 通过 SGLang + LoRA 推理"""
+    """平行宇宙模拟器 — 通过本地 transformers + LoRA 推理"""
 
     def __init__(self):
         self.personality_test = PersonalityTest()
@@ -71,7 +71,7 @@ class ParallelUniverseSimulator:
         options: List[Dict[str, str]],
     ) -> SimulationResult:
         """
-        模拟决策（异步，通过 SGLang + 用户 LoRA 推理）
+        模拟决策（异步，通过本地 Qwen3.5-9B + 用户 LoRA 推理）
 
         Args:
             user_id: 用户ID

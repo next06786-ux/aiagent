@@ -1,6 +1,6 @@
 """
 系统健康检查工具
-单机 GPU 部署模式：FastAPI + SGLang + Qwen3.5-9B + 用户 LoRA
+单机 GPU 部署模式：FastAPI + 本地 Qwen3.5-9B + 用户专属 LoRA
 """
 import os
 import sys
@@ -18,11 +18,9 @@ class HealthChecker:
     def __init__(
         self,
         api_base_url: str = "http://127.0.0.1:8000",
-        sglang_base_url: str = "http://127.0.0.1:8001",
         lora_dir: str = "./models/lora"
     ):
         self.api_base_url = api_base_url
-        self.sglang_base_url = sglang_base_url
         self.lora_dir = lora_dir
 
     def check_all(self) -> Dict:
@@ -38,7 +36,6 @@ class HealthChecker:
 
         checks = {
             "api_server": ("FastAPI", self.check_api_server),
-            "sglang_server": ("SGLang", self.check_sglang_server),
             "database": ("数据库", self.check_database),
             "decision_system": ("决策系统", self.check_decision_system),
             "lora_system": ("LoRA系统", self.check_lora_system),
@@ -75,20 +72,6 @@ class HealthChecker:
             return {"status": "unhealthy", "message": f"FastAPI 状态码异常: {resp.status_code}"}
         except Exception as e:
             return {"status": "unhealthy", "message": f"FastAPI 不可达: {e}"}
-
-    def check_sglang_server(self) -> Dict:
-        for path in ["/health", "/health_generate", "/model_info"]:
-            try:
-                resp = requests.get(f"{self.sglang_base_url}{path}", timeout=5)
-                if resp.status_code == 200:
-                    return {
-                        "status": "healthy",
-                        "message": f"SGLang 运行正常 ({path})",
-                        "response_time": resp.elapsed.total_seconds()
-                    }
-            except Exception:
-                continue
-        return {"status": "unhealthy", "message": "SGLang 不可达或未启动"}
 
     def check_database(self) -> Dict:
         mysql_host = os.environ.get("MYSQL_HOST", "localhost")
@@ -150,7 +133,7 @@ class HealthChecker:
             return {"status": "unknown", "message": f"无法检查磁盘空间: {e}"}
 
     def check_ports(self) -> Dict:
-        port_map = {8000: "FastAPI", 8001: "SGLang"}
+        port_map = {8000: "FastAPI"}
         unavailable = []
         for port, name in port_map.items():
             try:
@@ -160,7 +143,7 @@ class HealthChecker:
                 unavailable.append(f"{name}:{port}")
         if unavailable:
             return {"status": "degraded", "message": f"端口未监听: {', '.join(unavailable)}"}
-        return {"status": "healthy", "message": "关键端口监听正常 (8000/8001)"}
+        return {"status": "healthy", "message": "关键端口监听正常 (8000)"}
 
     def _print_check_result(self, name: str, result: Dict):
         icons = {
@@ -177,7 +160,6 @@ if __name__ == "__main__":
 
     checker = HealthChecker(
         api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:8000"),
-        sglang_base_url=os.environ.get("SGLANG_SERVER_URL", "http://127.0.0.1:8001"),
         lora_dir=os.environ.get("LORA_MODELS_DIR", "./models/lora"),
     )
     results = checker.check_all()
