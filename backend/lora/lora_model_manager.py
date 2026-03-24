@@ -103,6 +103,12 @@ class LoRAModelManager:
         if not lora_path:
             print(f"⚠️  用户 {user_id} 还没有训练 LoRA 模型，使用基础模型")
             return None
+
+        adapter_safetensors = os.path.join(lora_path, "adapter_model.safetensors")
+        adapter_bin = os.path.join(lora_path, "adapter_model.bin")
+        if not os.path.exists(adapter_safetensors) and not os.path.exists(adapter_bin):
+            print(f"❌ 用户 {user_id} 的 LoRA 模型不完整，缺少 adapter 权重文件: {lora_path}")
+            return None
         
         try:
             print(f"📥 加载用户 {user_id} 的 LoRA 模型...")
@@ -145,6 +151,8 @@ class LoRAModelManager:
         
         # Tokenize
         inputs = self.tokenizer(prompt, return_tensors="pt")
+        if torch.cuda.is_available():
+            inputs = {k: v.to("cuda:0") for k, v in inputs.items()}
         
         # 生成参数（优化内存使用）
         gen_kwargs = {
