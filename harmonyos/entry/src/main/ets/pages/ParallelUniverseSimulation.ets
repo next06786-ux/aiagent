@@ -101,6 +101,36 @@ interface GraphNode {
   revealed: boolean
 }
 
+interface RouteParamsPayload {
+  dungeonId: string
+  question: string
+  userId: string
+  simulationData: string
+}
+
+interface RoutePushRequest {
+  url: string
+  params: RouteParamsPayload
+}
+
+interface SimulationOptionPayload {
+  option_id: string
+  title: string
+  description: string
+  timeline: Array<Record<string, Object>>
+  final_score: number
+  risk_level: number
+}
+
+interface SimulationDataPayload {
+  simulation_id: string
+  user_id: string
+  question: string
+  options: SimulationOptionPayload[]
+  recommendation: string
+  created_at: string
+}
+
 @Entry
 @Component
 struct ParallelUniverseSimulation {
@@ -176,8 +206,9 @@ struct ParallelUniverseSimulation {
     }
 
     try {
-      const optionPayload: Array<Record<string, Object>> = options.map((item: DecisionOptionInput, index: number): Record<string, Object> => {
-        return {
+      const optionPayload: SimulationOptionPayload[] = []
+      options.forEach((item: DecisionOptionInput, index: number) => {
+        const optionItem: SimulationOptionPayload = {
           option_id: `option_${index + 1}`,
           title: item.title,
           description: item.description,
@@ -185,8 +216,10 @@ struct ParallelUniverseSimulation {
           final_score: 0,
           risk_level: 0
         }
+        optionPayload.push(optionItem)
       })
-      const simulationData: Record<string, Object> = {
+
+      const simulationData: SimulationDataPayload = {
         simulation_id: `stream_${Date.now()}`,
         user_id: this.userId,
         question: question,
@@ -195,15 +228,18 @@ struct ParallelUniverseSimulation {
         created_at: new Date().toISOString()
       }
 
-      router.pushUrl({
+      const routeParams: RouteParamsPayload = {
+        dungeonId: `stream_${Date.now()}`,
+        question: question,
+        userId: this.userId,
+        simulationData: JSON.stringify(simulationData)
+      }
+      const routeRequest: RoutePushRequest = {
         url: 'pages/DecisionDungeon2DMap',
-        params: {
-          dungeonId: `stream_${Date.now()}`,
-          question: question,
-          userId: this.userId,
-          simulationData: JSON.stringify(simulationData)
-        }
-      }).then(() => {
+        params: routeParams
+      }
+
+      router.pushUrl(routeRequest).then(() => {
         console.info('[ParallelUniverseSimulation] navigate to DecisionDungeon2DMap success')
       }).catch((err: Error) => {
         console.error('[ParallelUniverseSimulation] navigate failed: ' + err.message)

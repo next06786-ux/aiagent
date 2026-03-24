@@ -54,19 +54,36 @@ class LoRADecisionAnalyzer:
         if self.is_user_training(user_id):
             raise RuntimeError(f"用户 {user_id} 的 LoRA 正在训练中，请稍后再试个性化决策模拟")
 
-        prompt = self._build_timeline_prompt(question, option, profile, num_events)
+        prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=False)
         response = await asyncio.to_thread(
             self.lora_manager.generate,
             user_id,
             prompt,
-            600,
-            0.7,
+            220,
+            0.4,
         )
         print(f"📝 LoRA原始响应长度: {len(response)}")
         print(f"📝 LoRA原始响应前500字符: {response[:500]}")
         timeline = self._parse_timeline_json(response)
         if not timeline:
             timeline = self._parse_timeline_text(response)
+
+        # 第一次失败则使用更强约束 prompt 再试一次
+        if not timeline:
+            retry_prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=True)
+            retry_response = await asyncio.to_thread(
+                self.lora_manager.generate,
+                user_id,
+                retry_prompt,
+                180,
+                0.2,
+            )
+            print(f"📝 LoRA重试响应长度: {len(retry_response)}")
+            print(f"📝 LoRA重试响应前500字符: {retry_response[:500]}")
+            timeline = self._parse_timeline_json(retry_response)
+            if not timeline:
+                timeline = self._parse_timeline_text(retry_response)
+
         if not timeline:
             raise RuntimeError("LoRA 时间线生成结果为空或无法解析")
         return timeline
@@ -88,8 +105,8 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            400,
-            0.7,
+            220,
+            0.5,
         )
         return self._clean_recommendation(response)
 
@@ -113,19 +130,20 @@ class LoRADecisionAnalyzer:
             pass
         return status
 
-    def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any, num_events: int) -> str:
-        prompt = f"<|im_start|>system\n你是一个决策模拟引擎，必须输出纯JSON。<|im_end|>\n"
-        prompt += f"<|im_start|>user\n决策问题：{question}\n"
-        prompt += f"选择：{option['title']}\n"
+    def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any, num_events: int, strict: bool = False) -> str:
+        if strict:
+            prompt = "<|im_start|>system\n只输出 JSON 数组，不要解释，不要思考，不要前缀，不要后缀。<|im_end|>\n"
+        else:
+            prompt = "<|im_start|>system\n你是决策模拟引擎，只输出 JSON 数组。<|im_end|>\n"
+        prompt += f"<|im_start|>user\n问题：{question}\n"
+        prompt += f"选项：{option['title']}\n"
         if option.get('description'):
             prompt += f"说明：{option['description']}\n"
         if profile:
-            prompt += f"决策风格：{getattr(profile, 'decision_style', '未知')}\n"
-            prompt += f"风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
-            prompt += f"生活优先级：{getattr(profile, 'life_priority', '未知')}\n"
+            prompt += f"风格：{getattr(profile, 'decision_style', '未知')}\n"
+            prompt += f"偏好：{getattr(profile, 'risk_preference', '未知')}\n"
         prompt += (
-            f"请模拟未来12个月内最关键的{num_events}个事件，只输出 JSON 数组。"
-            f"每个元素格式为：{{\"month\":1,\"event\":\"...\",\"impact\":{{\"健康\":0.0,\"财务\":0.0,\"社交\":0.0,\"情绪\":0.0,\"学习\":0.0,\"时间\":0.0}},\"probability\":0.8}}"
+            f"输出{num_events}个事件。格式：[{{\"month\":1,\"event\":\"事件\",\"impact\":{{\"健康\":0.0,\"财务\":0.0,\"社交\":0.0,\"情绪\":0.0,\"学习\":0.0,\"时间\":0.0}},\"probability\":0.8}}]"
             f"<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt
