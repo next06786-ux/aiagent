@@ -2,7 +2,7 @@
 增强的决策API
 集成信息收集（Qwen3.5-plus）和决策模拟（本地模型+LoRA）
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
@@ -10,6 +10,7 @@ import json
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
 from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
+from dataclasses import asdict
 
 logger = logging.getLogger(__name__)
 
@@ -169,15 +170,7 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
                         "option_id": opt.option_id,
                         "title": opt.title,
                         "description": opt.description,
-                        "timeline": [
-                            {
-                                "month": event.month,
-                                "event": event.event,
-                                "impact": event.impact,
-                                "probability": event.probability
-                            }
-                            for event in opt.timeline
-                        ],
+                        "timeline": [asdict(event) for event in opt.timeline],
                         "final_score": opt.final_score,
                         "risk_level": opt.risk_level,
                         "risk_assessment": opt.risk_assessment
@@ -241,15 +234,7 @@ async def full_decision_process(
                         "option_id": opt.option_id,
                         "title": opt.title,
                         "description": opt.description,
-                        "timeline": [
-                            {
-                                "month": event.month,
-                                "event": event.event,
-                                "impact": event.impact,
-                                "probability": event.probability
-                            }
-                            for event in opt.timeline
-                        ],
+                        "timeline": [asdict(event) for event in opt.timeline],
                         "final_score": opt.final_score,
                         "risk_level": opt.risk_level,
                         "risk_assessment": opt.risk_assessment
@@ -384,3 +369,163 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
         logger.error(f"生成AI选项失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+@router.websocket("/ws/simulate")
+async def simulate_with_collection_ws(websocket: WebSocket):
+    """
+    WebSocket 实时决策模拟
+
+    客户端发送:
+    {
+      "session_id": "...",
+      "options": [{"title": "...", "description": "..."}]
+    }
+
+    服务端返回:
+    {"type": "start", ...}
+    {"type": "option_start", ...}
+    {"type": "node", "node": {...}}
+    {"type": "option_complete", ...}
+    {"type": "recommendation", ...}
+    {"type": "done", ...}
+    """
+    await websocket.accept()
+    try:
+        while True:
+            payload = await websocket.receive_text()
+            request = json.loads(payload)
+            session_id = request.get("session_id")
+            options = request.get("options", [])
+
+            if not session_id or not options:
+                await websocket.send_json({"type": "error", "content": "session_id 和 options 不能为空"})
+                continue
+
+            session = info_collector.get_session(session_id)
+            if not session:
+                await websocket.send_json({"type": "error", "content": "会话不存在"})
+                continue
+            if not session.get("is_complete"):
+                await websocket.send_json({"type": "error", "content": "信息收集未完成"})
+                continue
+
+            user_id = session["user_id"]
+            question = session["initial_question"]
+            await websocket.send_json({
+                "type": "start",
+                "session_id": session_id,
+                "user_id": user_id,
+                "question": question
+            })
+
+            profile = simulator.personality_test.load_profile(user_id)
+            simulated_options = []
+
+            for i, option in enumerate(options):
+                await websocket.send_json({
+                    "type": "option_start",
+                    "option_id": f"option_{i+1}",
+                    "title": option.get("title", f"选项{i+1}")
+                })
+
+                timeline_data = await simulator.lora_analyzer.generate_timeline_with_lora(
+                    user_id=user_id,
+                    question=question,
+                    option=option,
+                    profile=profile,
+                    num_events=3
+                )
+
+                timeline = []
+                option_branch = option['title'].lower().replace(' ', '_')
+                previous_event_id = None
+                for idx, e in enumerate(timeline_data):
+                    negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
+                    positive_impact = sum(v for v in e['impact'].values() if v > 0)
+                    risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                    opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
+                    event_obj = simulator.__class__.__dict__  # 占位防 lint
+                    from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
+                    node = TimelineEvent(
+                        event_id=f"{option_branch}_node_{idx+1}",
+                        parent_event_id=previous_event_id,
+                        month=e['month'],
+                        event=e['event'],
+                        impact=e['impact'],
+                        probability=e['probability'],
+                        event_type=simulator._infer_event_type(e['event']),
+                        branch_group=option_branch,
+                        node_level=idx + 1,
+                        risk_tag=risk_tag,
+                        opportunity_tag=opportunity_tag,
+                        visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                    )
+                    previous_event_id = node.event_id
+                    timeline.append(node)
+                    await websocket.send_json({
+                        "type": "node",
+                        "option_id": f"option_{i+1}",
+                        "option_title": option['title'],
+                        "node": asdict(node)
+                    })
+                    await asyncio.sleep(0.25)
+
+                final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
+                risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5
+                simulated_options.append(DecisionOption(
+                    option_id=f"option_{i+1}",
+                    title=option['title'],
+                    description=option.get('description', ''),
+                    timeline=timeline,
+                    final_score=final_score,
+                    risk_level=risk_level,
+                    risk_assessment=None
+                ))
+
+                await websocket.send_json({
+                    "type": "option_complete",
+                    "option_id": f"option_{i+1}",
+                    "title": option['title'],
+                    "final_score": final_score,
+                    "risk_level": risk_level
+                })
+
+            options_for_rec = [
+                {
+                    "title": opt.title,
+                    "description": opt.description,
+                    "final_score": opt.final_score,
+                    "risk_level": opt.risk_level,
+                    "timeline_summary": simulator._summarize_timeline(opt.timeline)
+                }
+                for opt in simulated_options
+            ]
+            recommendation = await simulator.lora_analyzer.generate_personalized_recommendation(
+                user_id=user_id,
+                question=question,
+                options=options_for_rec,
+                profile=profile
+            )
+
+            await websocket.send_json({
+                "type": "recommendation",
+                "content": recommendation
+            })
+
+            simulation_id = f"sim_{user_id}_{int(__import__('time').time())}"
+            await websocket.send_json({
+                "type": "done",
+                "simulation_id": simulation_id,
+                "user_id": user_id,
+                "question": question
+            })
+
+    except WebSocketDisconnect:
+        logger.info("决策模拟 WebSocket 已断开")
+    except Exception as e:
+        logger.error(f"决策模拟 WebSocket 失败: {e}")
+        try:
+            await websocket.send_json({"type": "error", "content": str(e)})
+        except Exception:
+            pass
