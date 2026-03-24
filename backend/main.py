@@ -112,6 +112,15 @@ async def startup_event():
     """应用启动时初始化所有系统"""
     await StartupManager.startup()
     
+    # 在 FastAPI 进程内预热加载本地 Qwen3.5-9B 基座模型
+    try:
+        from backend.lora.lora_model_manager import lora_manager
+        print("🔥 在 FastAPI 进程内预热加载 Qwen3.5-9B 基座模型...")
+        lora_manager.load_base_model()
+        print("✅ FastAPI 进程内基座模型预热完成")
+    except Exception as e:
+        print(f"⚠️ 基座模型预热失败: {e}")
+    
     # 启动 LoRA 训练调度器
     try:
         from backend.lora.lora_scheduler import get_scheduler
