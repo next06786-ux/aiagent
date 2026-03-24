@@ -132,10 +132,10 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
     """
     使用收集的信息进行决策模拟
     
-    信息收集完成后，使用本地模型+LoRA进行个性化决策模拟
+    信息收集完成后，使用本地 Qwen3.5-9B + 用户 LoRA 进行个性化决策模拟
     """
     try:
-        logger.info(f"📥 收到决策模拟请求 - session_id: {request.session_id}, use_lora: {request.use_lora}")
+        logger.info(f"📥 收到决策模拟请求 - session_id: {request.session_id}")
         
         # 1. 获取收集的信息
         session = info_collector.get_session(request.session_id)
@@ -148,12 +148,11 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
         if not session["is_complete"]:
             raise HTTPException(status_code=400, detail="信息收集未完成")
         
-        # 2. 使用本地模型+LoRA进行决策模拟
-        result = simulator.simulate_decision(
+        # 2. 使用本地 Qwen3.5-9B + 用户 LoRA 进行决策模拟
+        result = await simulator.simulate_decision(
             user_id=session["user_id"],
             question=session["initial_question"],
             options=request.options,
-            use_lora=request.use_lora
         )
         
         # 3. 转换为可序列化格式
@@ -164,7 +163,7 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
                 "simulation_id": result.simulation_id,
                 "user_id": result.user_id,
                 "question": result.question,
-                "collected_info_summary": session["collected_info"],  # 包含收集的信息
+                "collected_info_summary": session["collected_info"],
                 "options": [
                     {
                         "option_id": opt.option_id,
@@ -187,7 +186,7 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
                 ],
                 "recommendation": result.recommendation,
                 "created_at": result.created_at,
-                "used_lora": request.use_lora
+                "used_lora": True
             }
         }
         
@@ -196,6 +195,13 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
         
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "LoRA" in str(e) else 400, detail=str(e))
+    except RuntimeError as e:
+        msg = str(e)
+        if "正在训练中" in msg:
+            raise HTTPException(status_code=409, detail=msg)
+        raise HTTPException(status_code=500, detail=msg)
     except Exception as e:
         logger.error(f"决策模拟失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -215,11 +221,10 @@ async def full_decision_process(
     适合用户已经明确选项的情况
     """
     try:
-        result = simulator.simulate_decision(
+        result = await simulator.simulate_decision(
             user_id=user_id,
             question=initial_question,
             options=options,
-            use_lora=use_lora
         )
         
         response_data = {
@@ -251,12 +256,19 @@ async def full_decision_process(
                 ],
                 "recommendation": result.recommendation,
                 "created_at": result.created_at,
-                "used_lora": use_lora
+                "used_lora": True
             }
         }
         
         return response_data
         
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "LoRA" in str(e) else 400, detail=str(e))
+    except RuntimeError as e:
+        msg = str(e)
+        if "正在训练中" in msg:
+            raise HTTPException(status_code=409, detail=msg)
+        raise HTTPException(status_code=500, detail=msg)
     except Exception as e:
         logger.error(f"快速决策模拟失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
