@@ -144,7 +144,7 @@ class LoRAModelManager:
             print(f"ℹ️  使用基础模型（用户 {user_id} 的 LoRA 未找到）")
         
         # Tokenize
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
+        inputs = self.tokenizer(prompt, return_tensors="pt")
         
         # 生成参数（优化内存使用）
         gen_kwargs = {
@@ -170,7 +170,7 @@ class LoRAModelManager:
         # 生成
         try:
             with torch.no_grad():
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast("cuda"):
                     outputs = model.generate(
                         **inputs,
                         **gen_kwargs
