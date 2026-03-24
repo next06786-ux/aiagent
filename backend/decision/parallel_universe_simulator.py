@@ -26,11 +26,19 @@ from backend.decision.risk_assessment_engine import RiskAssessmentEngine
 
 @dataclass
 class TimelineEvent:
-    """时间线事件"""
+    """时间线事件 / 副本节点"""
+    event_id: str
+    parent_event_id: Optional[str]
     month: int
     event: str
     impact: Dict[str, float]
     probability: float
+    event_type: str = "general"
+    branch_group: str = "main"
+    node_level: int = 1
+    risk_tag: str = "medium"
+    opportunity_tag: str = "medium"
+    visual_weight: float = 0.5
 
 
 @dataclass
@@ -106,15 +114,38 @@ class ParallelUniverseSimulator:
         # 3. 本地计算得分和风险
         simulated_options = []
         for i, (option, timeline_data) in enumerate(zip(options, timelines)):
-            timeline = [
-                TimelineEvent(
+            timeline = []
+            option_branch = option['title'].lower().replace(' ', '_')
+            previous_event_id = None
+            for idx, e in enumerate(timeline_data):
+                risk_tag = "medium"
+                opportunity_tag = "medium"
+                negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
+                positive_impact = sum(v for v in e['impact'].values() if v > 0)
+                if negative_impact >= 0.5:
+                    risk_tag = "high"
+                elif negative_impact <= 0.1:
+                    risk_tag = "low"
+                if positive_impact >= 0.5:
+                    opportunity_tag = "high"
+                elif positive_impact <= 0.1:
+                    opportunity_tag = "low"
+
+                timeline.append(TimelineEvent(
+                    event_id=f"{option_branch}_node_{idx+1}",
+                    parent_event_id=previous_event_id,
                     month=e['month'],
                     event=e['event'],
                     impact=e['impact'],
-                    probability=e['probability']
-                )
-                for e in timeline_data
-            ]
+                    probability=e['probability'],
+                    event_type=self._infer_event_type(e['event']),
+                    branch_group=option_branch,
+                    node_level=idx + 1,
+                    risk_tag=risk_tag,
+                    opportunity_tag=opportunity_tag,
+                    visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                ))
+                previous_event_id = timeline[-1].event_id
 
             if len(timeline) < 2:
                 print(f"⚠️ 选项 '{option['title']}' 时间线事件不足，跳过风险评估")
@@ -194,6 +225,22 @@ class ParallelUniverseSimulator:
             return "无关键事件"
         parts = [f"第{e.month}月：{e.event}" for e in timeline[:3]]
         return "；".join(parts)
+
+    def _infer_event_type(self, event_text: str) -> str:
+        text = event_text.lower()
+        if any(k in text for k in ["工作", "职业", "入职", "实习", "公司", "面试"]):
+            return "career"
+        if any(k in text for k in ["学习", "考试", "课程", "培训", "技术"]):
+            return "learning"
+        if any(k in text for k in ["情绪", "焦虑", "压力", "自信", "心态"]):
+            return "emotion"
+        if any(k in text for k in ["社交", "朋友", "家人", "关系", "沟通"]):
+            return "social"
+        if any(k in text for k in ["收入", "财务", "花费", "存款", "薪资"]):
+            return "finance"
+        if any(k in text for k in ["健康", "睡眠", "身体", "运动"]):
+            return "health"
+        return "general"
 
     def _calculate_final_score(self, timeline: List[TimelineEvent], profile: Any) -> float:
         weights = {"健康": 1.0, "财务": 1.0, "社交": 1.0, "情绪": 1.0, "学习": 1.0, "时间": 1.0}

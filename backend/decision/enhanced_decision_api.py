@@ -358,16 +358,16 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
                 import traceback
                 traceback.print_exc()
         
-        # 如果 LLM 失败或没有生成，使用默认选项
+        # 如果 LLM 失败或没有生成，使用更适合副本模拟的默认选项
         if not ai_options:
             if not request.user_options or len(request.user_options) < 2:
                 ai_options = [
-                    {"title": "保持现状", "description": "维持当前情况，观望一段时间"},
-                    {"title": "寻求建议", "description": "咨询专业人士或有经验的人"}
+                    {"title": "直接行动", "description": "先按当前倾向执行，边做边调整"},
+                    {"title": "小规模试错", "description": "先做低成本试验，再决定是否全面投入"}
                 ]
             else:
                 ai_options = [
-                    {"title": "综合方案", "description": "结合多个选项的优势"}
+                    {"title": "综合方案", "description": "结合多个选项的优势，先做阶段性组合尝试"}
                 ]
         
         return {
