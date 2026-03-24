@@ -32,7 +32,7 @@ class LoRAModelManager:
         self.tokenizer = None
         self.loaded_loras = {}  # {user_id: model}
         local_base_model_path = os.environ.get("LOCAL_BASE_MODEL_PATH")
-        self.base_model_name = local_base_model_path if local_base_model_path else get_model_hf_name()
+        self.base_model_name = local_base_model_path if local_base_model_path else "/root/autodl-tmp/models/base/Qwen3.5-9B"
         self._initialized = True
     
     def load_base_model(self):
@@ -60,7 +60,7 @@ class LoRAModelManager:
     
     def get_user_lora_path(self, user_id: str) -> Optional[str]:
         """获取用户最新的 LoRA 模型路径"""
-        lora_dir = f"./models/lora/{user_id}"
+        lora_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora", user_id))
         
         if not os.path.exists(lora_dir):
             return None
@@ -108,8 +108,8 @@ class LoRAModelManager:
             print(f"📥 加载用户 {user_id} 的 LoRA 模型...")
             model = PeftModel.from_pretrained(
                 self.base_model,
-                lora_path,
-                torch_dtype=torch.float16
+                model_id=lora_path,
+                is_trainable=False
             )
             
             self.loaded_loras[user_id] = model
@@ -209,7 +209,7 @@ class LoRAModelManager:
         }
         
         # 读取训练状态
-        status_file = f"./models/lora/{user_id}/status.json"
+        status_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora", user_id, "status.json"))
         if os.path.exists(status_file):
             import json
             with open(status_file, 'r', encoding='utf-8') as f:

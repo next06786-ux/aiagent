@@ -9,7 +9,7 @@ import time
 import subprocess
 import signal
 import socket
-from multiprocessing import Process
+from multiprocessing import Process, set_start_method
 from dotenv import load_dotenv
 import requests
 
@@ -261,4 +261,5 @@ def main():
 
 
 if __name__ == "__main__":
+    set_start_method("spawn", force=True)
     main()

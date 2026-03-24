@@ -54,16 +54,16 @@ class ConversationDataset(Dataset):
 class AutoLoRATrainer:
     """LoRA 自动化训练器"""
     
-    def __init__(self, user_id: str, base_model_name: str = "Qwen/Qwen3.5-0.8B"):
+    def __init__(self, user_id: str, base_model_name: str = "/root/autodl-tmp/models/base/Qwen3.5-9B"):
         self.user_id = user_id
         self.base_model_name = base_model_name
         
-        # LoRA 配置（轻量版，适合 RTX 3050）
+        # LoRA 配置（Qwen3.5-9B 用户专属适配）
         self.lora_config = LoraConfig(
-            r=4,                    # LoRA 秩（轻量版）
-            lora_alpha=16,          # LoRA 缩放因子
-            target_modules=["q_proj", "v_proj"],  # 只训练注意力层
-            lora_dropout=0.1,
+            r=64,
+            lora_alpha=128,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+            lora_dropout=0.05,
             bias="none",
             task_type=TaskType.CAUSAL_LM
         )
@@ -250,7 +250,28 @@ class AutoLoRATrainer:
             
             # 6. 保存模型
             final_path = f"{output_dir}/final"
-            model.save_pretrained(final_path)
+            os.makedirs(final_path, exist_ok=True)
+
+            # 优先保存 PEFT adapter 权重
+            model.save_pretrained(final_path, safe_serialization=True)
+
+            # 同时保存 tokenizer，便于后续排查与复用
+            tokenizer = AutoTokenizer.from_pretrained(
+                self.base_model_name,
+                trust_remote_code=True,
+                local_files_only=True if os.path.exists(self.base_model_name) else False
+            )
+            tokenizer.save_pretrained(final_path)
+
+            # 7. 校验关键文件
+            expected_files = [
+                os.path.join(final_path, "adapter_config.json"),
+                os.path.join(final_path, "adapter_model.safetensors")
+            ]
+            missing_files = [f for f in expected_files if not os.path.exists(f)]
+            if missing_files:
+                raise RuntimeError(f"LoRA 保存不完整，缺少文件: {missing_files}")
+
             print(f"\n✅ 训练完成!")
             print(f"⏱️  耗时: {duration:.1f} 秒")
             print(f"💾 模型已保存到: {final_path}\n")
