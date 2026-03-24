@@ -8,6 +8,7 @@ import sys
 import time
 import subprocess
 import signal
+import socket
 from multiprocessing import Process
 from dotenv import load_dotenv
 import requests
@@ -36,6 +37,79 @@ def wait_for_http_ready(url: str, name: str, timeout: int = 120, interval: int =
             last_error = str(e)
         time.sleep(interval)
     raise RuntimeError(f"{name} 在 {timeout} 秒内未就绪: {last_error}")
+
+
+def is_port_open(host: str, port: int, timeout: int = 2) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def try_start_service(name: str, commands: list[list[str]], host: str, port: int, wait_seconds: int = 8):
+    """尽力启动外部依赖服务；适配 AutoDL 容器，不依赖 systemd"""
+    if is_port_open(host, port):
+        print(f"✅ {name} 已在运行 ({host}:{port})")
+        return True
+
+    print(f"⏳ 尝试启动 {name}...")
+    for cmd in commands:
+        try:
+            print(f"   执行: {' '.join(cmd)}")
+            subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(wait_seconds)
+            if is_port_open(host, port):
+                print(f"✅ {name} 启动成功 ({host}:{port})")
+                return True
+        except Exception:
+            pass
+
+    print(f"⚠️ {name} 未启动成功，请手动检查 ({host}:{port})")
+    return False
+
+
+def start_dependencies():
+    """启动外部依赖（Neo4j / MySQL / MariaDB），失败不阻塞主后端启动"""
+    print("\n" + "="*70)
+    print("🔧 检查并启动外部依赖服务...")
+    print("="*70 + "\n")
+
+    # Neo4j
+    try_start_service(
+        "Neo4j",
+        commands=[
+            ["neo4j", "start"],
+            ["/usr/bin/neo4j", "start"],
+            ["/bin/bash", "-lc", "neo4j start"],
+        ],
+        host="127.0.0.1",
+        port=7687,
+        wait_seconds=10,
+    )
+
+    # MySQL / MariaDB
+    db_started = try_start_service(
+        "MySQL",
+        commands=[
+            ["service", "mysql", "start"],
+            ["/bin/bash", "-lc", "service mysql start"],
+        ],
+        host="127.0.0.1",
+        port=3306,
+        wait_seconds=6,
+    )
+    if not db_started:
+        try_start_service(
+            "MariaDB",
+            commands=[
+                ["service", "mariadb", "start"],
+                ["/bin/bash", "-lc", "service mariadb start"],
+            ],
+            host="127.0.0.1",
+            port=3306,
+            wait_seconds=6,
+        )
 
 
 def start_backend_server():
@@ -106,6 +180,9 @@ def main():
     processes = []
     
     try:
+        # 0. 先尝试启动外部依赖
+        start_dependencies()
+
         # 1. 启动后端服务器
         backend_process = Process(target=start_backend_server, name="Backend")
         backend_process.start()

@@ -23,7 +23,7 @@ interface TaskResponse {
  * Agent - 
  */
 export class AgentService {
-  private baseUrl: string = 'http://192.168.43.6:8000';
+  private baseUrl: string = 'https://u821458-a197-3cecd37e.westc.seetacloud.com:8443';
   
   /**
    * Agent

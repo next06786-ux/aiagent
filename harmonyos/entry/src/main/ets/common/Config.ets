@@ -5,7 +5,7 @@ export class AppConfig {
   // 处理逻辑
   // IP
   // 处理逻辑
-  public static readonly BASE_URL: string = 'http://192.168.43.6:8000';
+  public static readonly BASE_URL: string = 'https://u821458-a197-3cecd37e.westc.seetacloud.com:8443';
   
   // API
   public static readonly API_VERSION: string = 'v4';

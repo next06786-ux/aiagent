@@ -164,7 +164,7 @@ struct StreamingAIChatPage {
       });
 
       httpRequest.request(
-        'http://192.168.43.6:8000/api/chat/stream',
+        'https://u821458-a197-3cecd37e.westc.seetacloud.com:8443/api/chat/stream',
         {
           method: http.RequestMethod.POST,
           header: {

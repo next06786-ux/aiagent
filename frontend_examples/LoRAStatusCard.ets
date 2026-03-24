@@ -251,7 +251,7 @@ export struct LoRAStatusCard {
 
     try {
       // 调用API触发训练
-      const response = await fetch('http://192.168.43.6:8000/api/lora/train/user_001?priority=high', {
+      const response = await fetch('https://u821458-a197-3cecd37e.westc.seetacloud.com:8443/api/lora/train/user_001?priority=high', {
         method: 'POST'
       })
 
@@ -287,7 +287,7 @@ export struct LoRAStatusCard {
   // 加载LoRA状态
   async loadLoRAStatus() {
     try {
-      const response = await fetch('http://192.168.43.6:8000/api/lora/status/user_001')
+      const response = await fetch('https://u821458-a197-3cecd37e.westc.seetacloud.com:8443/api/lora/status/user_001')
       const result = await response.json()
 
       if (result.code === 200) {

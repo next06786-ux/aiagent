@@ -8,7 +8,7 @@ export class ApiConfig {
   // 
   // - : 'http://localhost:8000'  'http://10.0.2.2:8000'
   // - : IP 'http://192.168.1.192:8000'
-  private static BASE_URL: string = 'http://192.168.43.6:8000';
+  private static BASE_URL: string = 'https://u821458-a197-3cecd37e.westc.seetacloud.com:8443';
   
   /**
    *  API 
