@@ -62,7 +62,11 @@ class LoRADecisionAnalyzer:
             600,
             0.7,
         )
+        print(f"📝 LoRA原始响应长度: {len(response)}")
+        print(f"📝 LoRA原始响应前500字符: {response[:500]}")
         timeline = self._parse_timeline_json(response)
+        if not timeline:
+            timeline = self._parse_timeline_text(response)
         if not timeline:
             raise RuntimeError("LoRA 时间线生成结果为空或无法解析")
         return timeline
@@ -181,13 +185,48 @@ class LoRADecisionAnalyzer:
         if isinstance(data, list):
             for item in data:
                 if isinstance(item, dict) and 'month' in item and 'event' in item:
+                    impact = item.get('impact', {})
+                    if not isinstance(impact, dict):
+                        impact = {}
                     events.append({
                         'month': int(item['month']),
                         'event': str(item['event']),
-                        'impact': item.get('impact', {}),
+                        'impact': impact,
                         'probability': float(item.get('probability', 0.8))
                     })
         events.sort(key=lambda x: x['month'])
+        return events
+
+    def _parse_timeline_text(self, response: str) -> List[Dict[str, Any]]:
+        """从半结构化文本中兜底提取时间线"""
+        events = []
+        lines = [line.strip() for line in response.splitlines() if line.strip()]
+        month = 1
+        for line in lines:
+            m = re.search(r'(第?\s*(\d+)\s*月)', line)
+            if m:
+                month = int(m.group(2))
+            if len(line) < 6:
+                continue
+            # 跳过明显不是事件的行
+            if any(keyword in line.lower() for keyword in ['json', 'timeline', 'assistant', 'user', '```']):
+                continue
+            events.append({
+                'month': month,
+                'event': line[:120],
+                'impact': {
+                    '健康': 0.0,
+                    '财务': 0.0,
+                    '社交': 0.0,
+                    '情绪': 0.0,
+                    '学习': 0.0,
+                    '时间': 0.0,
+                },
+                'probability': 0.7
+            })
+            month += 1
+            if len(events) >= 3:
+                break
         return events
 
     def _clean_recommendation(self, recommendation: str) -> str:
