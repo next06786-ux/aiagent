@@ -39,7 +39,7 @@ try:
     
     # 2. 初始化训练器
     print(f"\n2. 初始化LoRA训练器")
-    trainer = AutoLoRATrainer()
+    trainer = AutoLoRATrainer(user_id=USER_ID)
     
     # 3. 开始训练
     print(f"\n3. 开始训练LoRA模型...")

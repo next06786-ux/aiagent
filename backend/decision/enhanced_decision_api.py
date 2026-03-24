@@ -203,7 +203,9 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
             raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=500, detail=msg)
     except Exception as e:
+        import traceback
         logger.error(f"决策模拟失败: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -270,7 +272,9 @@ async def full_decision_process(
             raise HTTPException(status_code=409, detail=msg)
         raise HTTPException(status_code=500, detail=msg)
     except Exception as e:
+        import traceback
         logger.error(f"快速决策模拟失败: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
