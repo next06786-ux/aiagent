@@ -91,18 +91,17 @@ class ParallelUniverseSimulator:
         # 1. 加载用户性格画像
         profile = self.personality_test.load_profile(user_id)
 
-        # 2. 并发为每个选项生成时间线（SGLang 支持并发请求）
-        timeline_tasks = [
-            self.lora_analyzer.generate_timeline_with_lora(
+        # 2. 串行为每个选项生成时间线，避免一次请求并发加载多个 LoRA 导致显存冲突
+        timelines = []
+        for opt in options:
+            timeline_data = await self.lora_analyzer.generate_timeline_with_lora(
                 user_id=user_id,
                 question=question,
                 option=opt,
                 profile=profile,
                 num_events=3
             )
-            for opt in options
-        ]
-        timelines = await asyncio.gather(*timeline_tasks)
+            timelines.append(timeline_data)
 
         # 3. 本地计算得分和风险
         simulated_options = []
