@@ -17,7 +17,7 @@ class HealthChecker:
 
     def __init__(
         self,
-        api_base_url: str = "http://127.0.0.1:8000",
+        api_base_url: str = "http://127.0.0.1:6006",
         lora_dir: str = "./models/lora"
     ):
         self.api_base_url = api_base_url
@@ -133,7 +133,7 @@ class HealthChecker:
             return {"status": "unknown", "message": f"无法检查磁盘空间: {e}"}
 
     def check_ports(self) -> Dict:
-        port_map = {8000: "FastAPI"}
+        port_map = {6006: "FastAPI"}
         unavailable = []
         for port, name in port_map.items():
             try:
@@ -143,7 +143,7 @@ class HealthChecker:
                 unavailable.append(f"{name}:{port}")
         if unavailable:
             return {"status": "degraded", "message": f"端口未监听: {', '.join(unavailable)}"}
-        return {"status": "healthy", "message": "关键端口监听正常 (8000)"}
+        return {"status": "healthy", "message": "关键端口监听正常 (6006)"}
 
     def _print_check_result(self, name: str, result: Dict):
         icons = {
@@ -159,7 +159,7 @@ if __name__ == "__main__":
     import json
 
     checker = HealthChecker(
-        api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:8000"),
+        api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:6006"),
         lora_dir=os.environ.get("LORA_MODELS_DIR", "./models/lora"),
     )
     results = checker.check_all()

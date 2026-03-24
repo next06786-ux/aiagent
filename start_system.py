@@ -55,7 +55,7 @@ def start_backend_server():
     uvicorn.run(
         "backend.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=6006,
         reload=False,
         log_level="info"
     )
@@ -110,7 +110,7 @@ def main():
         backend_process = Process(target=start_backend_server, name="Backend")
         backend_process.start()
         processes.append(('后端服务器', backend_process))
-        wait_for_http_ready(os.environ.get("API_BASE_URL", "http://127.0.0.1:8000") + "/health", "FastAPI", timeout=60)
+        wait_for_http_ready(os.environ.get("API_BASE_URL", "http://127.0.0.1:6006") + "/health", "FastAPI", timeout=60)
         
         # 2. 启动调度器
         scheduler_process = Process(target=start_lora_scheduler, name="Scheduler")
@@ -119,15 +119,15 @@ def main():
         
         print("\n✅ 系统启动成功!")
         print("\n访问地址:")
-        print("  - FastAPI:      http://0.0.0.0:8000/docs")
+        print("  - FastAPI:      http://0.0.0.0:6006/docs")
         print("  - 健康检查文件: ./data/health_check.json")
-        print("  - FastAPI健康:  http://127.0.0.1:8000/health")
+        print("  - FastAPI健康:  http://127.0.0.1:6006/health")
 
         # 4. 启动后自动跑一次健康检查
         print("\n🔍 执行启动后健康检查...")
         from backend.utils.health_checker import HealthChecker
         checker = HealthChecker(
-            api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:8000"),
+            api_base_url=os.environ.get("API_BASE_URL", "http://127.0.0.1:6006"),
             lora_dir=os.environ.get("LORA_MODELS_DIR", "./models/lora"),
         )
         checker.check_all()
