@@ -31,22 +31,28 @@ class LoRAModelManager:
         self.base_model = None
         self.tokenizer = None
         self.loaded_loras = {}  # {user_id: model}
-        self.base_model_name = os.environ.get("LOCAL_BASE_MODEL_PATH") or get_model_hf_name()
+        local_base_model_path = os.environ.get("LOCAL_BASE_MODEL_PATH")
+        self.base_model_name = local_base_model_path if local_base_model_path else get_model_hf_name()
         self._initialized = True
     
     def load_base_model(self):
         """加载基础模型（只加载一次）"""
         if self.base_model is None:
-            print(f"📥 加载基础模型: {self.base_model_name}")
+            model_path = self.base_model_name
+            print(f"📥 加载基础模型: {model_path}")
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"本地基础模型目录不存在: {model_path}")
             self.base_model = AutoModelForCausalLM.from_pretrained(
-                self.base_model_name,
+                model_path,
                 torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
                 device_map="auto",
-                trust_remote_code=True
+                trust_remote_code=True,
+                local_files_only=True
             )
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.base_model_name,
-                trust_remote_code=True
+                model_path,
+                trust_remote_code=True,
+                local_files_only=True
             )
             if self.tokenizer.pad_token_id is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token

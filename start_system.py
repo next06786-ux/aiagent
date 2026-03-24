@@ -135,6 +135,20 @@ def start_backend_server():
     )
 
 
+def warmup_base_model():
+    """预热加载 Qwen3.5-9B 基座模型到显存，用户 LoRA 保持按需加载"""
+    print("\n" + "="*70)
+    print("🔥 预热加载 Qwen3.5-9B 基座模型...")
+    print("="*70 + "\n")
+    try:
+        from backend.lora.lora_model_manager import lora_manager
+        lora_manager.load_base_model()
+        print("✅ Qwen3.5-9B 基座模型预热完成")
+    except Exception as e:
+        print(f"⚠️ 基座模型预热失败: {e}")
+        raise
+
+
 def start_lora_scheduler():
     """启动LoRA训练调度器"""
     print("\n" + "="*70)
@@ -167,6 +181,7 @@ def main():
     print("  ✓ 本地 Qwen3.5-9B 基座")
     print("  ✓ 用户专属 LoRA 推理")
     print("  ✓ FastAPI 后端")
+    print("  ✓ 基座模型启动预热")
     print("  ✓ 心理测评系统")
     print("  ✓ LoRA个性化模型")
     print("  ✓ 平行宇宙模拟器")
@@ -182,6 +197,9 @@ def main():
     try:
         # 0. 先尝试启动外部依赖
         start_dependencies()
+
+        # 0.5 预热加载本地 Qwen3.5-9B 基座模型
+        warmup_base_model()
 
         # 1. 启动后端服务器
         backend_process = Process(target=start_backend_server, name="Backend")
