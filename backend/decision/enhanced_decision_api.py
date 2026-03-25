@@ -27,6 +27,11 @@ class DecisionSimulator:
         self.lora_analyzer = LoRADecisionAnalyzer()
         self.personality_test = None
         try:
+            from backend.personality.personality_test import PersonalityTest
+            self.personality_test = PersonalityTest()
+        except Exception as e:
+            print(f"PersonalityTest 初始化失败: {e}")
+        try:
             from backend.decision.risk_assessment_engine import RiskAssessmentEngine
             self._risk_engine = RiskAssessmentEngine()
         except Exception:
@@ -464,7 +469,12 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 "content": "已建立推演连接，正在读取用户画像与决策上下文"
             })
 
-            profile = simulator.personality_test.load_profile(user_id)
+            profile = None
+            if simulator.personality_test:
+                try:
+                    profile = simulator.personality_test.load_profile(user_id)
+                except Exception:
+                    profile = None
             await websocket.send_json({
                 "type": "status",
                 "stage": "profile_loaded",

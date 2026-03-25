@@ -29,16 +29,25 @@ def get_training_progress(user_id: str) -> Dict:
 
 class ProgressCallback(TrainerCallback):
     """训练进度回调"""
-    def __init__(self, user_id: str, total_steps: int):
+    def __init__(self, user_id: str):
         self.user_id = user_id
-        self.total_steps = max(total_steps, 1)
+        self.total_steps = 1
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.total_steps = max(state.max_steps, 1)
+        _training_progress[self.user_id] = {
+            "is_training": True,
+            "progress": 5,
+            "stage": f"开始训练 共{self.total_steps}步",
+            "error": None
+        }
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         progress = min(95, int(state.global_step / self.total_steps * 90) + 5)
         _training_progress[self.user_id] = {
             "is_training": True,
             "progress": progress,
-            "stage": f"训练中 step {state.global_step}/{self.total_steps}",
+            "stage": f"训练中 {state.global_step}/{self.total_steps}",
             "error": None
         }
 
@@ -145,7 +154,7 @@ class AutoLoRATrainer:
         return True
 
     def get_user_conversations(self) -> List[Dict]:
-        """从数据库获取用户对话数据用于训练"""
+        """从数据库获取用户对话数据用于训练（只取上次训练后的新对话）"""
         try:
             from backend.database.models import ConversationHistory, Database
             from backend.database.config import DatabaseConfig
@@ -153,11 +162,14 @@ class AutoLoRATrainer:
             db = Database(DatabaseConfig.get_database_url())
             session = db.get_session()
             
-            # 查询所有对话，按时间排序
-            rows = session.query(ConversationHistory).filter(
+            # 只查询上次训练之后的新对话
+            query = session.query(ConversationHistory).filter(
                 ConversationHistory.user_id == self.user_id
-            ).order_by(ConversationHistory.timestamp.asc()).all()
+            )
+            if self.status.get("last_train_time"):
+                query = query.filter(ConversationHistory.timestamp > self.status["last_train_time"])
             
+            rows = query.order_by(ConversationHistory.timestamp.asc()).all()
             session.close()
             
             # 配对 user/assistant 消息
@@ -177,10 +189,10 @@ class AutoLoRATrainer:
                 else:
                     i += 1
             
-            print(f"📊 从数据库获取 {len(conversations)} 条有效对话对")
+            print(f"从数据库获取 {len(conversations)} 条新对话对（上次训练后）")
             return conversations
         except Exception as e:
-            print(f"⚠️ 从数据库获取对话失败: {e}")
+            print(f"从数据库获取对话失败: {e}")
             return []
 
     def prepare_dataset(self, conversations: List[Dict]) -> Dataset:
@@ -264,15 +276,11 @@ class AutoLoRATrainer:
                 max_grad_norm=0.3,
             )
 
-            num_epochs = self.training_config["num_epochs"]
-            batch_size = self.training_config["batch_size"]
-            total_steps = max(1, (len(dataset) // (batch_size * 4)) * num_epochs)
-
             trainer = Trainer(
                 model=model,
                 args=training_args,
                 train_dataset=dataset,
-                callbacks=[ProgressCallback(self.user_id, total_steps)],
+                callbacks=[ProgressCallback(self.user_id)],
             )
 
             print("🎯 开始训练...\n")

@@ -186,26 +186,49 @@ class LoRADecisionAnalyzer:
             "training_data_size": 0,
             "is_loaded": False,
         }
+        
+        # 从训练状态文件读取版本和上次训练时间
+        last_train_time = None
         try:
-            info = self.lora_manager.get_model_info(user_id)
-            status["is_loaded"] = info.get("is_loaded", False)
-            status["model_version"] = info.get("model_version", 0)
-            status["last_train_time"] = info.get("last_train_time")
+            from backend.lora.auto_lora_trainer import AutoLoRATrainer
+            trainer = AutoLoRATrainer.__new__(AutoLoRATrainer)
+            trainer.user_lora_root = os.path.abspath(os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                '..', 'models', 'lora', user_id
+            ))
+            trainer.status_file = os.path.join(trainer.user_lora_root, "status.json")
+            train_status = trainer.load_status()
+            status["model_version"] = train_status.get("model_version", 0)
+            last_train_time = train_status.get("last_train_time")
+            if last_train_time and isinstance(last_train_time, str):
+                from datetime import datetime as dt
+                last_train_time = dt.fromisoformat(last_train_time)
+            status["last_train_time"] = last_train_time.isoformat() if last_train_time else None
         except Exception:
             pass
         
-        # 从数据库统计有效对话对数（与训练时统计方式一致）
+        try:
+            info = self.lora_manager.get_model_info(user_id)
+            status["is_loaded"] = info.get("is_loaded", False)
+        except Exception:
+            pass
+        
+        # 只统计上次训练之后的新对话对数（训练后重置计数）
         try:
             from backend.database.models import ConversationHistory, Database
             from backend.database.config import DatabaseConfig
             db = Database(DatabaseConfig.get_database_url())
             session = db.get_session()
-            rows = session.query(ConversationHistory.role, ConversationHistory.content).filter(
+            
+            query = session.query(ConversationHistory.role, ConversationHistory.content).filter(
                 ConversationHistory.user_id == user_id
-            ).order_by(ConversationHistory.timestamp.asc()).all()
+            )
+            if last_train_time:
+                query = query.filter(ConversationHistory.timestamp > last_train_time)
+            
+            rows = query.order_by(ConversationHistory.timestamp.asc()).all()
             session.close()
             
-            # 配对计数，和训练时逻辑一致
             pair_count = 0
             i = 0
             while i < len(rows) - 1:
