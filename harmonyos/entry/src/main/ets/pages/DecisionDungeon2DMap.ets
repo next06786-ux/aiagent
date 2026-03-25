@@ -88,15 +88,23 @@ interface StreamRequestPayload {
   options: StreamRequestOption[]
 }
 
-interface StreamRequestOption {
-  title: string
-  description: string
+interface RecommendationData {
+  summary: string
+  recommended_option: string
+  reasons: string[]
+  risks: string[]
+  actions: string[]
 }
 
 interface ActivityLogItem {
   id: string
   kind: string
   text: string
+}
+
+interface StreamRequestOption {
+  title: string
+  description: string
 }
 
 @Entry
@@ -115,6 +123,9 @@ struct DecisionDungeon2DMap {
   @State viewportOffsetY: number = 0
   @State dragHintVisible: boolean = true
   @State activityLogs: ActivityLogItem[] = []
+  @State liveThinkingText: string = ''
+  @State liveRecommendationText: string = ''
+  @State structuredRecommendation: RecommendationData | null = null
 
   private dungeonId: string = ''
   private userId: string = ''
@@ -401,6 +412,18 @@ struct DecisionDungeon2DMap {
             if (type === 'start') {
               this.streamStatus = '推演已启动'
               this.pushActivityLog('system', '推演已启动，系统正在准备实时路径图')
+            } else if (type === 'thinking_chunk') {
+              const chunk = (event.content as string) || ''
+              if (chunk !== '') {
+                this.liveThinkingText = (this.liveThinkingText + chunk).slice(-1200)
+                this.streamStatus = '模型正在生成推演内容...'
+              }
+            } else if (type === 'recommendation_chunk') {
+              const chunk = (event.content as string) || ''
+              if (chunk !== '') {
+                this.liveRecommendationText = (this.liveRecommendationText + chunk).slice(-1200)
+                this.streamStatus = '模型正在生成推荐结论...'
+              }
             } else if (type === 'status' || type === 'thinking') {
               const content = (event.content as string) || ''
               if (content !== '') {
@@ -437,8 +460,14 @@ struct DecisionDungeon2DMap {
                   created_at: this.dungeonData.created_at
                 }
               }
+              try {
+                this.structuredRecommendation = JSON.parse((event.content as string) || '') as RecommendationData
+              } catch (_err) {
+                this.structuredRecommendation = null
+              }
               this.showRecommendation = true
               this.streamStatus = '推演完成'
+              this.liveRecommendationText = (event.content as string) || this.liveRecommendationText
               this.pushActivityLog('system', '个性化推荐结论已生成')
             } else if (type === 'done') {
               this.streamStatus = '全部推演完成'
@@ -679,9 +708,11 @@ struct DecisionDungeon2DMap {
     text = text.replace(/\(风险分支\)/g, '')
     text = text.replace(/进展顺利，带来额外机遇/g, '带来机遇')
     text = text.replace(/遇到阻碍，需要调整策略/g, '遇到阻碍')
+    text = text.replace(/开始围绕/g, '')
+    text = text.replace(/系统正在/g, '')
     text = text.replace(/\s+/g, ' ').trim()
-    if (text.length > 16) {
-      return text.slice(0, 16) + '...'
+    if (text.length > 22) {
+      return text.slice(0, 22) + '...'
     }
     return text === '' ? '新事件' : text
   }
@@ -691,14 +722,41 @@ struct DecisionDungeon2DMap {
     this.activityLogs = next.length > 10 ? next.slice(next.length - 10) : next
   }
 
+  private getNodeInterpretation(node: MapNode | null): string {
+    if (!node) return ''
+    const impacts = Object.keys(node.impact)
+      .filter((key: string) => Math.abs(node.impact[key]) > 0.05)
+      .map((key: string) => `${key}${node.impact[key] > 0 ? '提升' : '承压'}`)
+    const impactSummary = impacts.length > 0 ? impacts.join('、') : '整体影响较平稳'
+    if (node.isBranch) {
+      return `这是一个分支事件，表示主路径在这里出现了新的变化方向，当前更偏向 ${node.riskTag === 'high' ? '风险上升' : (node.opportunityTag === 'high' ? '机会增加' : '中性波动')}，主要影响 ${impactSummary}。`
+    }
+    return `这是主路径上的关键事件，表示该选项在这个阶段出现了新的推进或反馈，当前主要影响 ${impactSummary}。`
+  }
+
+  private getNodeImportance(node: MapNode): number {
+    const impactScore = Object.keys(node.impact).reduce((sum: number, key: string) => {
+      return sum + Math.abs(node.impact[key])
+    }, 0)
+    if (node.id.startsWith('root_')) return 3
+    if (impactScore >= 1.2 || node.riskTag === 'high' || node.opportunityTag === 'high') return 3
+    if (impactScore >= 0.5) return 2
+    return 1
+  }
+
   build() {
     Column() {
       this.HeaderBar()
 
       if (this.isLoading) {
-        Column({ space: 16 }) {
-          LoadingProgress().width(44).height(44).color('#7AC7FF')
-          Text('正在构建动态决策平面...').fontSize(16).fontWeight(600).fontColor('#B0C4DE')
+        Column({ space: 18 }) {
+          LoadingProgress().width(48).height(48).color('#7AC7FF')
+          Text('正在准备基座 + LoRA 决策推演').fontSize(17).fontWeight(700).fontColor('#E7EEF8')
+          Text('系统正在读取用户画像、收集信息摘要并构建初始推演平面')
+            .fontSize(12)
+            .fontColor('#8EA3B7')
+            .textAlign(TextAlign.Center)
+            .lineHeight(18)
         }
         .layoutWeight(1)
         .width('100%')
@@ -706,6 +764,9 @@ struct DecisionDungeon2DMap {
       } else if (this.optionSummaries.length > 0) {
         Column({ space: 0 }) {
           this.TopPinnedSummary()
+          if (this.structuredRecommendation) {
+            this.DecisionRecommendationCard()
+          }
           Stack() {
             this.InfiniteCanvasView()
             this.ActivityOverlay()
@@ -834,41 +895,52 @@ struct DecisionDungeon2DMap {
     Row({ space: 10 }) {
       Stack() {
         Column()
-          .width(node.id.startsWith('root_') ? 56 : 28)
-          .height(node.id.startsWith('root_') ? 56 : 28)
+          .width(node.id.startsWith('root_') ? 56 : (this.getNodeImportance(node) === 3 ? 34 : (this.getNodeImportance(node) === 2 ? 30 : 26)))
+          .height(node.id.startsWith('root_') ? 56 : (this.getNodeImportance(node) === 3 ? 34 : (this.getNodeImportance(node) === 2 ? 30 : 26)))
           .backgroundColor(node.color)
           .borderRadius(node.id.startsWith('root_') ? 16 : 14)
           .border({
-            width: node.id === this.selectedNodeId ? 2.5 : 1,
+            width: node.id === this.selectedNodeId ? 2.5 : (this.getNodeImportance(node) === 3 ? 1.5 : 1),
             color: node.id === this.selectedNodeId ? '#FFFFFF' : 'rgba(255,255,255,0.16)'
           })
           .shadow({
-            radius: node.id === this.selectedNodeId ? 18 : 8,
+            radius: node.id === this.selectedNodeId ? 18 : (this.getNodeImportance(node) === 3 ? 12 : 8),
             color: node.color,
             offsetX: 0,
             offsetY: 0
           })
 
         Text(node.id.startsWith('root_') ? '起' : `${node.month}`)
-          .fontSize(node.id.startsWith('root_') ? 15 : 10)
+          .fontSize(node.id.startsWith('root_') ? 15 : (this.getNodeImportance(node) === 3 ? 11 : 10))
           .fontWeight(700)
           .fontColor('#FFFFFF')
       }
 
-      Text(node.title)
-        .fontSize(node.id.startsWith('root_') ? 14 : 12)
-        .fontWeight(node.id === this.selectedNodeId ? 700 : 600)
-        .fontColor(node.id === this.selectedNodeId ? '#F8FBFF' : '#D7E0EA')
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .width(node.id.startsWith('root_') ? 180 : 150)
+      Column({ space: 4 }) {
+        Text(node.title)
+          .fontSize(node.id.startsWith('root_') ? 14 : 12)
+          .fontWeight(node.id === this.selectedNodeId ? 700 : 600)
+          .fontColor(node.id === this.selectedNodeId ? '#F8FBFF' : '#D7E0EA')
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width(node.id.startsWith('root_') ? 200 : 170)
+        if (!node.id.startsWith('root_') && this.getNodeImportance(node) === 3) {
+          Text('关键节点')
+            .fontSize(9)
+            .fontColor('#FFD166')
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .backgroundColor('rgba(255,209,102,0.12)')
+            .borderRadius(6)
+        }
+      }
+      .alignItems(HorizontalAlign.Start)
     }
     .padding({ left: 8, right: 12, top: 8, bottom: 8 })
     .backgroundColor(node.id === this.selectedNodeId ? 'rgba(122,199,255,0.14)' : 'rgba(255,255,255,0.04)')
     .borderRadius(18)
     .border({
       width: 1,
-      color: node.id === this.selectedNodeId ? 'rgba(122,199,255,0.36)' : 'rgba(255,255,255,0.06)'
+      color: node.id === this.selectedNodeId ? 'rgba(122,199,255,0.36)' : (this.getNodeImportance(node) === 3 ? 'rgba(255,209,102,0.18)' : 'rgba(255,255,255,0.06)')
     })
     .position({ x: node.position.x, y: node.position.y })
     .onClick(() => {
@@ -916,14 +988,6 @@ struct DecisionDungeon2DMap {
       }
       .scrollable(ScrollDirection.Horizontal)
       .scrollBar(BarState.Off)
-
-      if (this.showRecommendation && this.dungeonData && this.dungeonData.recommendation) {
-        Text(this.dungeonData.recommendation)
-          .fontSize(11)
-          .fontColor('#C5D3E2')
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
     }
     .width('100%')
     .padding({ left: 14, right: 14, top: 10, bottom: 10 })
@@ -931,29 +995,175 @@ struct DecisionDungeon2DMap {
   }
 
   @Builder
-  ActivityOverlay() {
-    Column({ space: 8 }) {
-      Text('实时推演状态')
-        .fontSize(11)
-        .fontWeight(700)
-        .fontColor('#EAF2FA')
-      if (this.streamStatus !== '') {
-        Text(this.streamStatus)
+  DecisionRecommendationCard() {
+    if (this.structuredRecommendation) {
+      Column({ space: 8 }) {
+        Row({ space: 8 }) {
+          Column().width(10).height(10).borderRadius(5).backgroundColor('#5AD8A6')
+          Text(`当前建议：${this.structuredRecommendation!.recommended_option}`)
+            .fontSize(14)
+            .fontWeight(700)
+            .fontColor('#F0F6FC')
+        }
+        Text(this.structuredRecommendation!.summary)
           .fontSize(11)
-          .fontColor('#7AC7FF')
-          .maxLines(2)
-      }
-      ForEach(this.activityLogs, (item: ActivityLogItem) => {
-        Text(`• ${item.text}`)
-          .fontSize(10)
-          .fontColor(item.kind === 'thinking' ? '#F6D06F' : '#B9C8D8')
-          .maxLines(2)
+          .fontColor('#C9D7E5')
+          .lineHeight(18)
+          .maxLines(3)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-      })
+      }
+      .width('100%')
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .backgroundColor('rgba(90,216,166,0.10)')
+      .border({ width: 1, color: 'rgba(90,216,166,0.18)' })
     }
-    .width(280)
+  }
+
+  @Builder
+  ActivityOverlay() {
+    Column({ space: 10 }) {
+      Row({ space: 8 }) {
+        Column().width(8).height(8).borderRadius(4).backgroundColor('#7AC7FF')
+        Text('推演时间轴')
+          .fontSize(12)
+          .fontWeight(700)
+          .fontColor('#EAF2FA')
+      }
+      if (this.streamStatus !== '') {
+        Row({ space: 8 }) {
+          LoadingProgress().width(14).height(14).color('#7AC7FF')
+          Text(this.streamStatus)
+            .fontSize(11)
+            .fontColor('#7AC7FF')
+            .maxLines(2)
+        }
+      }
+
+      Scroll() {
+        Column({ space: 10 }) {
+          ForEach(this.activityLogs, (item: ActivityLogItem) => {
+            Row({ space: 8 }) {
+              Column()
+                .width(8)
+                .height(8)
+                .borderRadius(4)
+                .backgroundColor(item.kind === 'thinking' ? '#F6D06F' : (item.kind === 'node' ? '#4DD0A8' : '#7AC7FF'))
+                .margin({ top: 5 })
+              Text(item.text)
+                .fontSize(10)
+                .fontColor(item.kind === 'thinking' ? '#F6D06F' : '#D7E3EF')
+                .maxLines(3)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .layoutWeight(1)
+            }
+            .width('100%')
+          })
+
+          if (this.liveThinkingText !== '') {
+            Column({ space: 4 }) {
+              Text('模型实时输出')
+                .fontSize(10)
+                .fontColor('#F6D06F')
+              Text(this.liveThinkingText)
+                .fontSize(10)
+                .fontColor('#F6D06F')
+                .maxLines(8)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .width('100%')
+            .padding(10)
+            .backgroundColor('rgba(246,208,111,0.08)')
+            .borderRadius(10)
+          }
+
+          if (this.liveRecommendationText !== '') {
+            Column({ space: 4 }) {
+              Text('推荐结论生成中')
+                .fontSize(10)
+                .fontColor('#9FD3FF')
+              Text(this.liveRecommendationText)
+                .fontSize(10)
+                .fontColor('#9FD3FF')
+                .maxLines(6)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .width('100%')
+            .padding(10)
+            .backgroundColor('rgba(122,199,255,0.08)')
+            .borderRadius(10)
+          }
+
+          if (this.structuredRecommendation) {
+            Column({ space: 8 }) {
+              Text('结构化推荐')
+                .fontSize(10)
+                .fontColor('#7AC7FF')
+              Text(`建议选择：${this.structuredRecommendation!.recommended_option}`)
+                .fontSize(11)
+                .fontWeight(700)
+                .fontColor('#EAF2FA')
+              Text(this.structuredRecommendation!.summary)
+                .fontSize(10)
+                .fontColor('#C8D6E5')
+                .maxLines(3)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+              if (this.structuredRecommendation!.reasons.length > 0) {
+                Column({ space: 4 }) {
+                  Text('推荐原因').fontSize(10).fontColor('#9FD3FF')
+                  ForEach(this.structuredRecommendation!.reasons, (reason: string) => {
+                    Text(`• ${reason}`)
+                      .fontSize(10)
+                      .fontColor('#D7E3EF')
+                      .maxLines(2)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  })
+                }
+                .width('100%')
+              }
+
+              if (this.structuredRecommendation!.risks.length > 0) {
+                Column({ space: 4 }) {
+                  Text('风险提醒').fontSize(10).fontColor('#FFB3A7')
+                  ForEach(this.structuredRecommendation!.risks, (risk: string) => {
+                    Text(`• ${risk}`)
+                      .fontSize(10)
+                      .fontColor('#FFD6CF')
+                      .maxLines(2)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  })
+                }
+                .width('100%')
+              }
+
+              if (this.structuredRecommendation!.actions.length > 0) {
+                Column({ space: 4 }) {
+                  Text('建议动作').fontSize(10).fontColor('#5AD8A6')
+                  ForEach(this.structuredRecommendation!.actions, (action: string) => {
+                    Text(`• ${action}`)
+                      .fontSize(10)
+                      .fontColor('#D8F5EA')
+                      .maxLines(2)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  })
+                }
+                .width('100%')
+              }
+            }
+            .width('100%')
+            .padding(10)
+            .backgroundColor('rgba(90,216,166,0.10)')
+            .borderRadius(10)
+          }
+        }
+        .width('100%')
+      }
+      .height(260)
+      .scrollBar(BarState.Off)
+    }
+    .width(300)
     .padding(12)
-    .backgroundColor('rgba(8,16,30,0.84)')
+    .backgroundColor('rgba(8,16,30,0.88)')
     .borderRadius(14)
     .border({ width: 1, color: 'rgba(255,255,255,0.06)' })
     .alignItems(HorizontalAlign.Start)
@@ -995,6 +1205,15 @@ struct DecisionDungeon2DMap {
             .fontSize(13)
             .fontColor('#B8C5D4')
             .lineHeight(20)
+
+          Text(this.getNodeInterpretation(this.getSelectedNode()))
+            .fontSize(11)
+            .fontColor('#9FD3FF')
+            .lineHeight(18)
+            .padding(10)
+            .backgroundColor('rgba(122,199,255,0.08)')
+            .borderRadius(10)
+            .width('100%')
 
           Row({ space: 8 }) {
             Text(this.getSelectedNode() ? this.getSelectedNode()!.optionTitle : '')

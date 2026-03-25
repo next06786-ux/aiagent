@@ -449,52 +449,106 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "content": f"开始推演 {option.get('title', f'选项{i+1}')} 的主时间线"
                 })
 
-                timeline_data = await simulator.lora_analyzer.generate_timeline_with_lora(
+                stream_buffer = ""
+                emitted_months = []
+                timeline = []
+                option_branch = option['title'].lower().replace(' ', '_')
+                previous_event_id = None
+                from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
+
+                async for chunk in simulator.lora_analyzer.stream_timeline_generation(
                     user_id=user_id,
                     question=question,
                     option=option,
                     profile=profile,
                     num_events=8
-                )
+                ):
+                    stream_buffer += chunk
+                    await websocket.send_json({
+                        "type": "thinking_chunk",
+                        "stage": "timeline_generation_stream",
+                        "option_id": f"option_{i+1}",
+                        "option_title": option.get("title", f"选项{i+1}"),
+                        "content": chunk
+                    })
 
-                timeline = []
-                option_branch = option['title'].lower().replace(' ', '_')
-                previous_event_id = None
-                from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
-                for idx, e in enumerate(timeline_data):
-                    await websocket.send_json({
-                        "type": "thinking",
-                        "stage": "timeline_event",
-                        "option_id": f"option_{i+1}",
-                        "option_title": option['title'],
-                        "content": f"正在生成 {option['title']} 的第 {idx + 1} 个关键事件"
-                    })
-                    negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
-                    positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                    risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
-                    opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
-                    node = TimelineEvent(
-                        event_id=f"{option_branch}_node_{idx+1}",
-                        parent_event_id=previous_event_id,
-                        month=e['month'],
-                        event=e['event'],
-                        impact=e['impact'],
-                        probability=e['probability'],
-                        event_type=simulator._infer_event_type(e['event']),
-                        branch_group=option_branch,
-                        node_level=idx + 1,
-                        risk_tag=risk_tag,
-                        opportunity_tag=opportunity_tag,
-                        visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                    incremental_events = simulator.lora_analyzer.extract_incremental_events(stream_buffer, emitted_months)
+                    for e in incremental_events:
+                        idx = len(timeline)
+                        negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
+                        positive_impact = sum(v for v in e['impact'].values() if v > 0)
+                        risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                        opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
+                        node = TimelineEvent(
+                            event_id=f"{option_branch}_node_{idx+1}",
+                            parent_event_id=previous_event_id,
+                            month=e['month'],
+                            event=e['event'],
+                            impact=e['impact'],
+                            probability=e['probability'],
+                            event_type=simulator._infer_event_type(e['event']),
+                            branch_group=option_branch,
+                            node_level=idx + 1,
+                            risk_tag=risk_tag,
+                            opportunity_tag=opportunity_tag,
+                            visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                        )
+                        previous_event_id = node.event_id
+                        timeline.append(node)
+                        await websocket.send_json({
+                            "type": "node",
+                            "option_id": f"option_{i+1}",
+                            "option_title": option['title'],
+                            "node": asdict(node)
+                        })
+
+                timeline_data = simulator.lora_analyzer._parse_timeline_json(stream_buffer)
+                if not timeline_data:
+                    retry_timeline = await simulator.lora_analyzer.generate_timeline_with_lora(
+                        user_id=user_id,
+                        question=question,
+                        option=option,
+                        profile=profile,
+                        num_events=8
                     )
-                    previous_event_id = node.event_id
-                    timeline.append(node)
-                    await websocket.send_json({
-                        "type": "node",
-                        "option_id": f"option_{i+1}",
-                        "option_title": option['title'],
-                        "node": asdict(node)
-                    })
+                    timeline_data = retry_timeline
+
+                if not timeline:
+                    previous_event_id = None
+                    for idx, e in enumerate(timeline_data):
+                        await websocket.send_json({
+                            "type": "thinking",
+                            "stage": "timeline_event",
+                            "option_id": f"option_{i+1}",
+                            "option_title": option['title'],
+                            "content": f"正在生成 {option['title']} 的第 {idx + 1} 个关键事件"
+                        })
+                        negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
+                        positive_impact = sum(v for v in e['impact'].values() if v > 0)
+                        risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                        opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
+                        node = TimelineEvent(
+                            event_id=f"{option_branch}_node_{idx+1}",
+                            parent_event_id=previous_event_id,
+                            month=e['month'],
+                            event=e['event'],
+                            impact=e['impact'],
+                            probability=e['probability'],
+                            event_type=simulator._infer_event_type(e['event']),
+                            branch_group=option_branch,
+                            node_level=idx + 1,
+                            risk_tag=risk_tag,
+                            opportunity_tag=opportunity_tag,
+                            visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                        )
+                        previous_event_id = node.event_id
+                        timeline.append(node)
+                        await websocket.send_json({
+                            "type": "node",
+                            "option_id": f"option_{i+1}",
+                            "option_title": option['title'],
+                            "node": asdict(node)
+                        })
 
                 final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
                 risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5
@@ -507,15 +561,47 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "option_title": option['title'],
                     "content": f"正在扩展 {option['title']} 的风险与机遇分支"
                 })
-                branch_nodes = simulator._generate_branch_events(timeline, option_branch)
-                for bnode in branch_nodes:
-                    timeline.append(bnode)
-                    await websocket.send_json({
-                        "type": "node",
-                        "option_id": f"option_{i+1}",
-                        "option_title": option['title'],
-                        "node": asdict(bnode)
-                    })
+                branch_nodes = []
+                candidate_parents = timeline[:2]
+                for parent in candidate_parents:
+                    parent_payload = {
+                        "month": parent.month,
+                        "event": parent.event,
+                        "impact": parent.impact,
+                        "probability": parent.probability
+                    }
+                    generated_branches = await simulator.lora_analyzer.generate_branch_events_with_lora(
+                        user_id=user_id,
+                        question=question,
+                        option=option,
+                        parent_event=parent_payload,
+                        profile=profile
+                    )
+                    for branch_idx, b in enumerate(generated_branches):
+                        negative_impact = sum(abs(v) for v in b['impact'].values() if v < 0)
+                        positive_impact = sum(v for v in b['impact'].values() if v > 0)
+                        branch_node = TimelineEvent(
+                            event_id=f"{option_branch}_fork_{parent.node_level}_{branch_idx + 1}",
+                            parent_event_id=parent.event_id,
+                            month=b['month'],
+                            event=b['event'],
+                            impact=b['impact'],
+                            probability=b['probability'],
+                            event_type=simulator._infer_event_type(b['event']),
+                            branch_group=f"{option_branch}_fork",
+                            node_level=parent.node_level + 1,
+                            risk_tag="high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium"),
+                            opportunity_tag="high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium"),
+                            visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                        )
+                        branch_nodes.append(branch_node)
+                        timeline.append(branch_node)
+                        await websocket.send_json({
+                            "type": "node",
+                            "option_id": f"option_{i+1}",
+                            "option_title": option['title'],
+                            "node": asdict(branch_node)
+                        })
 
                 await websocket.send_json({
                     "type": "status",
@@ -562,12 +648,19 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 "stage": "recommendation",
                 "content": "所有选项推演完成，正在生成个性化推荐结论"
             })
-            recommendation = await simulator.lora_analyzer.generate_personalized_recommendation(
+            recommendation_stream = ""
+            async for chunk in simulator.lora_analyzer.stream_recommendation_generation(
                 user_id=user_id,
                 question=question,
                 options=options_for_rec,
                 profile=profile
-            )
+            ):
+                recommendation_stream += chunk
+                await websocket.send_json({
+                    "type": "recommendation_chunk",
+                    "content": chunk
+                })
+            recommendation = simulator.lora_analyzer._clean_recommendation(recommendation_stream)
 
             await websocket.send_json({
                 "type": "recommendation",

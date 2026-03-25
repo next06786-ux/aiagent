@@ -3,11 +3,12 @@ LoRA 模型管理器
 负责加载和使用用户的 LoRA 模型
 """
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 from peft import PeftModel
 import os
 from typing import Optional
 import sys
+import threading
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llm.model_config import get_model_hf_name
@@ -203,6 +204,62 @@ class LoRAModelManager:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             raise
+
+    def generate_stream(self, user_id: str, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7):
+        """使用用户的 LoRA 模型流式生成回复"""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        model = self.load_user_lora(user_id)
+        if model is None:
+            self.load_base_model()
+            model = self.base_model
+            print(f"ℹ️  使用基础模型流式生成（用户 {user_id} 的 LoRA 未找到）")
+
+        inputs = self.tokenizer(prompt, return_tensors="pt")
+        if torch.cuda.is_available():
+            inputs = {k: v.to("cuda:0") for k, v in inputs.items()}
+
+        streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
+        gen_kwargs = {
+            **inputs,
+            "max_new_tokens": max_new_tokens,
+            "temperature": temperature,
+            "do_sample": temperature > 0,
+            "top_p": 0.9,
+            "top_k": 50,
+            "repetition_penalty": 1.05,
+            "pad_token_id": self.tokenizer.pad_token_id,
+            "eos_token_id": self.tokenizer.eos_token_id,
+            "use_cache": True,
+            "num_beams": 1,
+            "streamer": streamer
+        }
+        if temperature == 0:
+            gen_kwargs["do_sample"] = False
+            gen_kwargs.pop("temperature", None)
+            gen_kwargs.pop("top_p", None)
+            gen_kwargs.pop("top_k", None)
+
+        def _run_generate():
+            try:
+                with torch.no_grad():
+                    with torch.amp.autocast("cuda"):
+                        model.generate(**gen_kwargs)
+            except Exception as e:
+                print(f"❌ 流式生成失败: {e}")
+            finally:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+        thread = threading.Thread(target=_run_generate)
+        thread.start()
+
+        for text in streamer:
+            if text:
+                yield text
+
+        thread.join()
     
     def get_model_info(self, user_id: str) -> dict:
         """获取用户模型信息"""

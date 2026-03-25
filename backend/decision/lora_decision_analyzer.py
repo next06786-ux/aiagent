@@ -59,30 +59,29 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            400,
-            0.4,
+            520,
+            0.35,
         )
         print(f"📝 LoRA原始响应长度: {len(response)}")
         print(f"📝 LoRA原始响应前500字符: {response[:500]}")
         timeline = self._parse_timeline_json(response)
-        if not timeline:
-            timeline = self._parse_timeline_text(response)
 
-        # 第一次失败则使用更强约束 prompt 再试一次
         if not timeline:
             retry_prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=True)
             retry_response = await asyncio.to_thread(
                 self.lora_manager.generate,
                 user_id,
                 retry_prompt,
-                350,
-                0.2,
+                520,
+                0.15,
             )
             print(f"📝 LoRA重试响应长度: {len(retry_response)}")
             print(f"📝 LoRA重试响应前500字符: {retry_response[:500]}")
             timeline = self._parse_timeline_json(retry_response)
-            if not timeline:
-                timeline = self._parse_timeline_text(retry_response)
+
+        if not timeline:
+            fallback_response = self._build_fallback_timeline(question, option, profile, num_events)
+            timeline = self._parse_timeline_json(fallback_response)
 
         if not timeline:
             raise RuntimeError("LoRA 时间线生成结果为空或无法解析")
@@ -110,6 +109,73 @@ class LoRADecisionAnalyzer:
         )
         return self._clean_recommendation(response)
 
+    async def stream_timeline_generation(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        profile: Any,
+        num_events: int = 8
+    ):
+        prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=False)
+        for chunk in self.lora_manager.generate_stream(user_id, prompt, 520, 0.35):
+            yield chunk
+
+    async def stream_recommendation_generation(
+        self,
+        user_id: str,
+        question: str,
+        options: List[Dict],
+        profile: Any
+    ):
+        prompt = self._build_recommendation_prompt(question, options, profile)
+        for chunk in self.lora_manager.generate_stream(user_id, prompt, 220, 0.5):
+            yield chunk
+
+    async def generate_branch_events_with_lora(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        parent_event: Dict[str, Any],
+        profile: Any
+    ) -> List[Dict[str, Any]]:
+        prompt = self._build_branch_prompt(question, option, parent_event, profile)
+        response = await asyncio.to_thread(
+            self.lora_manager.generate,
+            user_id,
+            prompt,
+            220,
+            0.35,
+        )
+        branches = self._parse_timeline_json(response)
+        if not branches:
+            return self._build_fallback_branch_events(parent_event)
+        return branches[:2]
+
+    def extract_incremental_events(self, response: str, emitted_months: List[int]) -> List[Dict[str, Any]]:
+        events: List[Dict[str, Any]] = []
+        try:
+            cleaned = re.sub(r'```json\s*', '', response)
+            cleaned = re.sub(r'```\s*', '', cleaned)
+            for match in re.finditer(r'\{\s*"month"\s*:\s*\d+.*?\}', cleaned, re.DOTALL):
+                raw = match.group(0)
+                try:
+                    item = json.loads(raw)
+                except Exception:
+                    continue
+                parsed = self._extract_events([item])
+                if not parsed:
+                    continue
+                event = parsed[0]
+                if event['month'] in emitted_months:
+                    continue
+                emitted_months.append(event['month'])
+                events.append(event)
+        except Exception:
+            pass
+        return events
+
     def get_lora_status(self, user_id: str) -> Dict[str, Any]:
         lora_path = self.get_user_lora_path(user_id)
         status = {
@@ -132,24 +198,34 @@ class LoRADecisionAnalyzer:
 
     def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any, num_events: int, strict: bool = False) -> str:
         if strict:
-            prompt = "<|im_start|>system\n只输出 JSON 数组，不要解释，不要思考，不要前缀，不要后缀。<|im_end|>\n"
+            prompt = "<|im_start|>system\n你是用户的未来决策推演引擎。只输出合法 JSON 数组，不要解释，不要代码块，不要思考过程，不要额外文本。<|im_end|>\n"
         else:
-            prompt = "<|im_start|>system\n你是决策模拟引擎，只输出 JSON 数组。<|im_end|>\n"
-        prompt += f"<|im_start|>user\n问题：{question}\n"
-        prompt += f"选项：{option['title']}\n"
+            prompt = "<|im_start|>system\n你是用户的未来决策推演引擎。请根据用户问题、选项和个性化特征，生成真实、具体、实用的未来事件。输出必须是 JSON 数组。<|im_end|>\n"
+        prompt += f"<|im_start|>user\n决策问题：{question}\n"
+        prompt += f"决策选项：{option['title']}\n"
         if option.get('description'):
-            prompt += f"说明：{option['description']}\n"
+            prompt += f"选项说明：{option['description']}\n"
         if profile:
-            prompt += f"风格：{getattr(profile, 'decision_style', '未知')}\n"
-            prompt += f"偏好：{getattr(profile, 'risk_preference', '未知')}\n"
+            prompt += f"用户决策风格：{getattr(profile, 'decision_style', '未知')}\n"
+            prompt += f"用户风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
+            prompt += f"用户生活优先级：{getattr(profile, 'life_priority', '未知')}\n"
         prompt += (
-            f"输出{num_events}个事件。格式：[{{\"month\":1,\"event\":\"事件\",\"impact\":{{\"健康\":0.0,\"财务\":0.0,\"社交\":0.0,\"情绪\":0.0,\"学习\":0.0,\"时间\":0.0}},\"probability\":0.8}}]"
+            f"请输出 {num_events} 个按时间递进的关键事件，每个事件都要贴近真实生活路径。\n"
+            "要求：\n"
+            "1. event 字段必须是给用户看的自然语言短句，不能像代码、变量名、JSON说明或系统提示。\n"
+            "2. month 必须递增，表示未来第几个月。\n"
+            "3. 每个事件都要体现这个选项在现实中的推进、反馈、阻碍、调整或结果。\n"
+            "4. 不要输出伪代码、标签、markdown、注释、前后解释。\n"
+            "5. 影响维度只使用：健康、财务、社交、情绪、学习、时间。\n"
+            "6. 概率 probability 取 0 到 1 之间的小数。\n"
+            "输出格式示例："
+            "[{\"month\":1,\"event\":\"开始接触目标方向的真实机会，时间安排变得更紧\",\"impact\":{\"健康\":-0.1,\"财务\":0.1,\"社交\":0.0,\"情绪\":0.1,\"学习\":0.3,\"时间\":-0.2},\"probability\":0.82}]"
             f"<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt
 
     def _build_recommendation_prompt(self, question: str, options: List[Dict], profile: Any) -> str:
-        prompt = f"<|im_start|>system\n你是用户的个人决策顾问。<|im_end|>\n"
+        prompt = f"<|im_start|>system\n你是用户的个人决策顾问。请只输出 JSON 对象，不要输出解释性文本。<|im_end|>\n"
         prompt += f"<|im_start|>user\n我面临的决策：{question}\n\n"
         for opt in options:
             prompt += f"选项：{opt['title']}\n"
@@ -160,7 +236,25 @@ class LoRADecisionAnalyzer:
             prompt += f"决策风格：{getattr(profile, 'decision_style', '未知')}\n"
             prompt += f"风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
             prompt += f"生活优先级：{getattr(profile, 'life_priority', '未知')}\n\n"
-        prompt += "请给出个性化推荐，明确说明应该选哪个以及原因。<|im_end|>\n<|im_start|>assistant\n"
+        prompt += (
+            '请输出 JSON：{"summary":"一句话总结","recommended_option":"建议选项","reasons":["原因1","原因2"],"risks":["风险1","风险2"],"actions":["行动1","行动2"]}'
+            "<|im_end|>\n<|im_start|>assistant\n"
+        )
+        return prompt
+
+    def _build_branch_prompt(self, question: str, option: Dict[str, str], parent_event: Dict[str, Any], profile: Any) -> str:
+        prompt = "<|im_start|>system\n你是未来决策推演引擎。请围绕给定父事件，生成2个分支事件。只输出 JSON 数组。<|im_end|>\n"
+        prompt += f"<|im_start|>user\n决策问题：{question}\n"
+        prompt += f"决策选项：{option.get('title', '当前选项')}\n"
+        prompt += f"父事件：第{parent_event.get('month', 1)}月，{parent_event.get('event', '')}\n"
+        if profile:
+            prompt += f"用户决策风格：{getattr(profile, 'decision_style', '未知')}\n"
+            prompt += f"用户风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
+        prompt += (
+            "请输出2个分支事件：1个偏乐观，1个偏风险。\n"
+            "输出格式：[{\"month\":2,\"event\":\"事件\",\"impact\":{\"健康\":0.0,\"财务\":0.0,\"社交\":0.0,\"情绪\":0.0,\"学习\":0.0,\"时间\":0.0},\"probability\":0.6}]"
+            "<|im_end|>\n<|im_start|>assistant\n"
+        )
         return prompt
 
     def _parse_timeline_json(self, response: str) -> List[Dict[str, Any]]:
@@ -200,55 +294,122 @@ class LoRADecisionAnalyzer:
 
     def _extract_events(self, data) -> List[Dict[str, Any]]:
         events = []
+        allowed_dims = ['健康', '财务', '社交', '情绪', '学习', '时间']
         if isinstance(data, list):
             for item in data:
-                if isinstance(item, dict) and 'month' in item and 'event' in item:
-                    impact = item.get('impact', {})
-                    if not isinstance(impact, dict):
-                        impact = {}
-                    events.append({
-                        'month': int(item['month']),
-                        'event': str(item['event']),
-                        'impact': impact,
-                        'probability': float(item.get('probability', 0.8))
-                    })
+                if not (isinstance(item, dict) and 'month' in item and 'event' in item):
+                    continue
+                raw_event = str(item['event']).strip()
+                if not self._is_valid_event_text(raw_event):
+                    continue
+                raw_impact = item.get('impact', {})
+                impact: Dict[str, float] = {}
+                if isinstance(raw_impact, dict):
+                    for dim in allowed_dims:
+                        value = raw_impact.get(dim, 0.0)
+                        try:
+                            impact[dim] = round(float(value), 2)
+                        except Exception:
+                            impact[dim] = 0.0
+                else:
+                    impact = {dim: 0.0 for dim in allowed_dims}
+                try:
+                    month = int(item['month'])
+                except Exception:
+                    continue
+                try:
+                    probability = float(item.get('probability', 0.8))
+                except Exception:
+                    probability = 0.8
+                probability = max(0.05, min(0.98, probability))
+                events.append({
+                    'month': month,
+                    'event': raw_event,
+                    'impact': impact,
+                    'probability': probability
+                })
         events.sort(key=lambda x: x['month'])
         return events
 
     def _parse_timeline_text(self, response: str) -> List[Dict[str, Any]]:
-        """从半结构化文本中兜底提取时间线"""
+        return []
+
+    def _is_valid_event_text(self, text: str) -> bool:
+        if not text or len(text) < 6:
+            return False
+        lowered = text.lower()
+        invalid_markers = [
+            'assistant', 'user', 'json', 'timeline', '```', '<|im_start|>', '<|im_end|>',
+            'month', 'probability', 'impact', 'event_id', 'parent_event_id'
+        ]
+        if any(marker in lowered for marker in invalid_markers):
+            return False
+        if text.startswith('{') or text.startswith('['):
+            return False
+        if '_' in text and len(text.split()) <= 2:
+            return False
+        return True
+
+    def _build_fallback_timeline(self, question: str, option: Dict[str, str], profile: Any, num_events: int) -> str:
+        option_title = option.get('title', '当前选项')
+        texts = [
+            f"开始围绕{option_title}投入时间与精力，初步验证这条路是否适合自己",
+            f"在推进{option_title}的过程中接触到更真实的反馈，优劣势逐渐变清楚",
+            f"执行成本和现实压力开始显现，需要重新分配时间与注意力",
+            f"出现一次关键调整机会，决定这条路径是继续加码还是及时修正",
+            f"这一选择对后续节奏和资源安排产生更稳定的长期影响",
+            f"经过一段时间积累后，{option_title}带来的阶段性结果开始落地",
+            f"用户会基于阶段结果重新评估是否继续深耕这条路径"
+        ]
+        impacts = [
+            {'健康': -0.05, '财务': 0.05, '社交': 0.0, '情绪': 0.1, '学习': 0.25, '时间': -0.15},
+            {'健康': -0.05, '财务': 0.1, '社交': 0.05, '情绪': 0.05, '学习': 0.2, '时间': -0.1},
+            {'健康': -0.1, '财务': -0.05, '社交': -0.05, '情绪': -0.1, '学习': 0.1, '时间': -0.2},
+            {'健康': 0.0, '财务': 0.1, '社交': 0.0, '情绪': 0.1, '学习': 0.15, '时间': -0.05},
+            {'健康': 0.05, '财务': 0.15, '社交': 0.05, '情绪': 0.1, '学习': 0.1, '时间': -0.05},
+            {'健康': 0.0, '财务': 0.2, '社交': 0.05, '情绪': 0.15, '学习': 0.1, '时间': -0.05},
+            {'健康': 0.05, '财务': 0.1, '社交': 0.0, '情绪': 0.05, '学习': 0.05, '时间': 0.0}
+        ]
         events = []
-        lines = [line.strip() for line in response.splitlines() if line.strip()]
-        month = 1
-        for line in lines:
-            m = re.search(r'(第?\s*(\d+)\s*月)', line)
-            if m:
-                month = int(m.group(2))
-            if len(line) < 6:
-                continue
-            # 跳过明显不是事件的行
-            if any(keyword in line.lower() for keyword in ['json', 'timeline', 'assistant', 'user', '```']):
-                continue
+        for idx in range(min(num_events, len(texts))):
             events.append({
-                'month': month,
-                'event': line[:120],
-                'impact': {
-                    '健康': 0.0,
-                    '财务': 0.0,
-                    '社交': 0.0,
-                    '情绪': 0.0,
-                    '学习': 0.0,
-                    '时间': 0.0,
-                },
-                'probability': 0.7
+                'month': idx + 1,
+                'event': texts[idx],
+                'impact': impacts[idx],
+                'probability': round(max(0.55, 0.9 - idx * 0.05), 2)
             })
-            month += 1
-            if len(events) >= 3:
-                break
-        return events
+        return json.dumps(events, ensure_ascii=False)
+
+    def _build_fallback_branch_events(self, parent_event: Dict[str, Any]) -> List[Dict[str, Any]]:
+        month = int(parent_event.get('month', 1))
+        event_text = parent_event.get('event', '该事件')
+        positive_impact = {k: round(float(v) * 0.6, 2) for k, v in parent_event.get('impact', {}).items()} if isinstance(parent_event.get('impact', {}), dict) else {'健康': 0.0, '财务': 0.1, '社交': 0.0, '情绪': 0.1, '学习': 0.1, '时间': -0.05}
+        negative_impact = {k: round(-abs(float(v)) * 0.5, 2) for k, v in parent_event.get('impact', {}).items()} if isinstance(parent_event.get('impact', {}), dict) else {'健康': -0.1, '财务': -0.1, '社交': -0.05, '情绪': -0.1, '学习': 0.0, '时间': -0.1}
+        return [
+            {
+                'month': month + 1,
+                'event': f"{event_text}推进顺利，出现额外机会",
+                'impact': positive_impact,
+                'probability': 0.62
+            },
+            {
+                'month': month + 2,
+                'event': f"{event_text}推进过程中遇到阻力，需要重新调整",
+                'impact': negative_impact,
+                'probability': 0.38
+            }
+        ]
 
     def _clean_recommendation(self, recommendation: str) -> str:
         recommendation = recommendation.strip()
+        recommendation = re.sub(r'```json\s*', '', recommendation)
+        recommendation = re.sub(r'```\s*', '', recommendation)
+        try:
+            parsed = json.loads(recommendation)
+            if isinstance(parsed, dict):
+                return json.dumps(parsed, ensure_ascii=False)
+        except Exception:
+            pass
         lines = recommendation.split('\n')
         unique_lines = []
         seen = set()
