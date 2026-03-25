@@ -145,28 +145,42 @@ class AutoLoRATrainer:
         return True
 
     def get_user_conversations(self) -> List[Dict]:
+        """从数据库获取用户对话数据用于训练"""
         try:
-            from learning.production_rag_system import ProductionRAGSystem
-            if self._rag_system is None:
-                self._rag_system = ProductionRAGSystem(self.user_id)
-            memories = self._rag_system.get_all_memories()
+            from backend.database.models import ConversationHistory, Database
+            from backend.database.config import DatabaseConfig
+            
+            db = Database(DatabaseConfig.get_database_url())
+            session = db.get_session()
+            
+            # 查询所有对话，按时间排序
+            rows = session.query(ConversationHistory).filter(
+                ConversationHistory.user_id == self.user_id
+            ).order_by(ConversationHistory.timestamp.asc()).all()
+            
+            session.close()
+            
+            # 配对 user/assistant 消息
             conversations = []
-            for mem in memories:
-                if mem.memory_type.value == "conversation":
-                    content = mem.content
-                    if "用户:" in content and "AI:" in content:
-                        parts = content.split("AI:")
-                        user_msg = parts[0].replace("用户:", "").strip()
-                        ai_msg = parts[1].strip() if len(parts) > 1 else ""
-                        if user_msg and ai_msg:
-                            conversations.append({
-                                "user": user_msg,
-                                "assistant": ai_msg,
-                                "timestamp": mem.timestamp
-                            })
+            i = 0
+            while i < len(rows) - 1:
+                if rows[i].role == 'user' and rows[i + 1].role == 'assistant':
+                    user_msg = rows[i].content or ""
+                    ai_msg = rows[i + 1].content or ""
+                    if user_msg.strip() and ai_msg.strip() and '无法回答' not in ai_msg:
+                        conversations.append({
+                            "user": user_msg,
+                            "assistant": ai_msg,
+                            "timestamp": rows[i].timestamp.isoformat() if rows[i].timestamp else ""
+                        })
+                    i += 2
+                else:
+                    i += 1
+            
+            print(f"📊 从数据库获取 {len(conversations)} 条有效对话对")
             return conversations
         except Exception as e:
-            print(f"⚠️ 获取对话数据失败: {e}")
+            print(f"⚠️ 从数据库获取对话失败: {e}")
             return []
 
     def prepare_dataset(self, conversations: List[Dict]) -> Dataset:

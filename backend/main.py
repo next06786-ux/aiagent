@@ -1470,54 +1470,51 @@ chat_history_storage = {}
 
 @app.get("/api/chat/sessions/{user_id}")
 async def get_user_sessions(user_id: str):
-    """
-    获取用户的所有会话列表
-    
-    返回格式:
-    {
-        "code": 200,
-        "data": {
-            "sessions": [
-                {
-                    "session_id": "xxx",
-                    "title": "关于健康的对话",
-                    "message_count": 10,
-                    "created_at": "2024-01-01T10:00:00",
-                    "updated_at": "2024-01-01T11:00:00"
-                }
-            ]
-        }
-    }
-    """
+    """获取用户的所有会话列表 - 从数据库读取"""
     try:
-        if user_id not in chat_history_storage:
-            return {
-                "code": 200,
-                "message": "Success",
-                "data": {"sessions": []}
-            }
+        from backend.database.models import ConversationHistory, Database
+        from backend.database.config import DatabaseConfig
+        from sqlalchemy import func, distinct
         
-        user_sessions = chat_history_storage[user_id]
+        db = Database(DatabaseConfig.get_database_url())
+        session = db.get_session()
+        
+        # 查询该用户所有不同的session_id及其消息统计
+        results = session.query(
+            ConversationHistory.session_id,
+            func.count(ConversationHistory.id).label('msg_count'),
+            func.min(ConversationHistory.timestamp).label('created_at'),
+            func.max(ConversationHistory.timestamp).label('updated_at')
+        ).filter(
+            ConversationHistory.user_id == user_id,
+            ConversationHistory.session_id != None
+        ).group_by(
+            ConversationHistory.session_id
+        ).order_by(
+            func.max(ConversationHistory.timestamp).desc()
+        ).all()
+        
         sessions = []
-        
-        for session_id, messages in user_sessions.items():
-            if not messages:
-                continue
+        for row in results:
+            # 获取第一条用户消息作为标题
+            first_msg = session.query(ConversationHistory.content).filter(
+                ConversationHistory.user_id == user_id,
+                ConversationHistory.session_id == row.session_id,
+                ConversationHistory.role == 'user'
+            ).order_by(ConversationHistory.timestamp.asc()).first()
             
-            # 生成会话标题（使用第一条用户消息）
-            first_user_msg = next((m for m in messages if m.get('role') == 'user'), None)
-            title = first_user_msg['content'][:30] + "..." if first_user_msg else "新对话"
+            title = (first_msg.content[:30] + "...") if first_msg and first_msg.content else "新对话"
             
             sessions.append({
-                "session_id": session_id,
+                "session_id": row.session_id,
                 "title": title,
-                "message_count": len(messages),
-                "created_at": messages[0].get('timestamp', datetime.now().isoformat()),
-                "updated_at": messages[-1].get('timestamp', datetime.now().isoformat())
+                "message_count": row.msg_count,
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "last_time": row.updated_at.isoformat() if row.updated_at else "",
+                "preview": first_msg.content[:50] if first_msg and first_msg.content else ""
             })
         
-        # 按更新时间倒序排列
-        sessions.sort(key=lambda x: x['updated_at'], reverse=True)
+        session.close()
         
         return {
             "code": 200,
@@ -1527,6 +1524,8 @@ async def get_user_sessions(user_id: str):
     
     except Exception as e:
         print(f"获取会话列表失败: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "code": 500,
             "message": f"Error: {str(e)}",
@@ -1561,21 +1560,36 @@ async def get_session_history(user_id: str, session_id: str):
     }
     """
     try:
-        if user_id not in chat_history_storage:
-            return {
-                "code": 404,
-                "message": "User not found",
-                "data": None
-            }
+        from backend.database.models import ConversationHistory, Database
+        from backend.database.config import DatabaseConfig
         
-        if session_id not in chat_history_storage[user_id]:
-            return {
-                "code": 404,
-                "message": "Session not found",
-                "data": None
-            }
+        db = Database(DatabaseConfig.get_database_url())
+        session = db.get_session()
         
-        messages = chat_history_storage[user_id][session_id]
+        rows = session.query(ConversationHistory).filter(
+            ConversationHistory.user_id == user_id,
+            ConversationHistory.session_id == session_id
+        ).order_by(ConversationHistory.timestamp.asc()).all()
+        
+        session.close()
+        
+        if not rows:
+            # 也检查内存
+            if user_id in chat_history_storage and session_id in chat_history_storage[user_id]:
+                messages = chat_history_storage[user_id][session_id]
+            else:
+                return {"code": 404, "message": "Session not found", "data": None}
+        else:
+            messages = [
+                {
+                    "id": str(r.id),
+                    "role": r.role,
+                    "content": r.content or "",
+                    "thinking": r.thinking,
+                    "timestamp": r.timestamp.isoformat() if r.timestamp else ""
+                }
+                for r in rows
+            ]
         
         return {
             "code": 200,
