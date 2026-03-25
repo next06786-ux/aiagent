@@ -10,6 +10,7 @@ import json
 import asyncio
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
+from backend.decision.lora_decision_analyzer import LoRADecisionAnalyzer
 from dataclasses import asdict
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,46 @@ router = APIRouter(prefix="/api/decision/enhanced", tags=["enhanced-decision"])
 
 # 全局实例
 info_collector = DecisionInfoCollector()
+
+
+class DecisionSimulator:
+    """决策模拟器包装类"""
+    def __init__(self):
+        self.lora_analyzer = LoRADecisionAnalyzer()
+        self.personality_test = None
+        try:
+            from backend.decision.risk_assessment_engine import RiskAssessmentEngine
+            self._risk_engine = RiskAssessmentEngine()
+        except Exception:
+            self._risk_engine = None
+
+    def _infer_event_type(self, event_text: str) -> str:
+        keywords = {'风险': 'risk', '机会': 'opportunity', '挑战': 'challenge', '成功': 'milestone', '失败': 'setback'}
+        for k, v in keywords.items():
+            if k in event_text:
+                return v
+        return 'normal'
+
+    def _calculate_final_score(self, timeline, profile) -> float:
+        if not timeline:
+            return 50.0
+        scores = [e.probability * 100 for e in timeline if hasattr(e, 'probability')]
+        return sum(scores) / len(scores) if scores else 50.0
+
+    def _calculate_risk_level(self, timeline) -> float:
+        if not timeline:
+            return 0.5
+        risks = [1 - e.probability for e in timeline if hasattr(e, 'probability')]
+        return sum(risks) / len(risks) if risks else 0.5
+
+    def _summarize_timeline(self, timeline) -> str:
+        if not timeline:
+            return '暂无推演数据'
+        events = [e.event for e in timeline[:3] if hasattr(e, 'event')]
+        return ' → '.join(events) if events else '暂无推演数据'
+
+
+simulator = DecisionSimulator()
 
 
 class StartCollectionRequest(BaseModel):

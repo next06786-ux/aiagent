@@ -40,6 +40,9 @@ struct QuickDecisionInput {
   @State loraStatus: LoraStatusInfo | null = null
   @State isLoadingLora: boolean = false
   @State isTrainingLora: boolean = false
+  @State trainingProgress: number = 0
+  @State trainingStage: string = ''
+  private trainingPollTimer: number = -1
   @State selectedMenuIdx: number = -1
   private userId: string = ''
 
@@ -78,6 +81,8 @@ struct QuickDecisionInput {
 
   private async startLoraTraining() {
     this.isTrainingLora = true
+    this.trainingProgress = 0
+    this.trainingStage = '提交训练任务...'
     try {
       const httpRequest = http.createHttp()
       const response = await httpRequest.request(
@@ -88,15 +93,82 @@ struct QuickDecisionInput {
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>
         if ((result.code as number) === 200) {
-          promptAction.showToast({ message: '模型训练已启动，约需3-5分钟' })
-          setTimeout(() => { this.loadLoraStatus() }, 2000)
+          this.trainingStage = '准备训练数据...'
+          this.trainingProgress = 5
+          this.startTrainingProgressPoll()
         } else {
           promptAction.showToast({ message: (result.message as string) || '训练启动失败' })
+          this.isTrainingLora = false
+          this.trainingProgress = 0
+          this.trainingStage = ''
         }
       }
     } catch (err) {
       promptAction.showToast({ message: '训练启动失败' })
-    } finally { this.isTrainingLora = false }
+      this.isTrainingLora = false
+      this.trainingProgress = 0
+      this.trainingStage = ''
+    }
+  }
+
+  private startTrainingProgressPoll() {
+    if (this.trainingPollTimer !== -1) return
+    this.trainingPollTimer = setInterval(() => {
+      this.pollTrainingProgress()
+    }, 2000)
+  }
+
+  private async pollTrainingProgress() {
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/lora/progress/${this.userId}`,
+        { method: http.RequestMethod.GET, connectTimeout: 3000, readTimeout: 3000 }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if ((result.code as number) === 200 && result.data) {
+          const data = result.data as Record<string, Object>
+          this.trainingProgress = (data.progress as number) || 0
+          this.trainingStage = (data.stage as string) || ''
+          const isTraining = data.is_training as boolean
+          const error = data.error as string | null
+
+          if (!isTraining && this.trainingProgress >= 100) {
+            // 训练完成
+            this.stopTrainingPoll()
+            setTimeout(() => {
+              this.isTrainingLora = false
+              this.trainingProgress = 0
+              this.trainingStage = ''
+              this.loadLoraStatus()
+              promptAction.showToast({ message: '模型训练完成' })
+            }, 1500)
+          } else if (!isTraining && error) {
+            // 训练失败
+            this.stopTrainingPoll()
+            this.isTrainingLora = false
+            this.trainingProgress = 0
+            this.trainingStage = ''
+            promptAction.showToast({ message: `训练失败: ${error}` })
+          }
+        }
+      }
+    } catch (err) {
+      // 轮询失败不中断
+    }
+  }
+
+  private async checkTrainingComplete() {
+    // 已合并到 pollTrainingProgress
+  }
+
+  private stopTrainingPoll() {
+    if (this.trainingPollTimer !== -1) {
+      clearInterval(this.trainingPollTimer)
+      this.trainingPollTimer = -1
+    }
   }
 
   private templates: QuickTemplate[] = [
@@ -264,6 +336,22 @@ struct QuickDecisionInput {
           .shadow((this.loraStatus.training_data_size || 0) >= 20 ? Theme.Shadow.GlowPrimary : Theme.Shadow.Soft)
           .enabled((this.loraStatus.training_data_size || 0) >= 20 && !this.isTrainingLora)
           .onClick(() => { this.startLoraTraining() })
+
+        // 训练进度条
+        if (this.isTrainingLora) {
+          Column({ space: 8 }) {
+            Row() {
+              Text(this.trainingStage).fontSize(12).fontColor(Theme.Color.Primary).layoutWeight(1)
+              Text(`${Math.round(this.trainingProgress)}%`).fontSize(12).fontWeight(600).fontColor(Theme.Color.Primary)
+            }.width('100%')
+            Progress({ value: this.trainingProgress, total: 100, type: ProgressType.Linear })
+              .width('100%').color(Theme.Color.Primary)
+          }
+          .width('100%').padding(12)
+          .backgroundColor('rgba(10, 89, 247, 0.04)')
+          .borderRadius(Theme.Radius.m)
+          .border({ width: 1, color: 'rgba(10, 89, 247, 0.1)' })
+        }
 
         if ((this.loraStatus.training_data_size || 0) < 20) {
           Text(`还需 ${20 - (this.loraStatus.training_data_size || 0)} 条对话数据才能训练`)

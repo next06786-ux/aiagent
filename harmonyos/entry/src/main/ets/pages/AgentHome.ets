@@ -289,7 +289,7 @@ struct AgentHome {
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>;
         const data = result.data as Record<string, Object>;
-        const history = (data.history as Array<Record<string, string>>) || [];
+        const history = (data.messages as Array<Record<string, string>>) || [];
         this.messages = history.map((m: Record<string, string>) => new ChatMessage(
           m.id || Date.now().toString(), m.role as 'user' | 'assistant',
           m.content || '', m.timestamp ? new Date(m.timestamp).getTime() : Date.now(), m.thinking));

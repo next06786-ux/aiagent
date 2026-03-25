@@ -6707,6 +6707,18 @@ def get_lora_scheduler():
         lora_scheduler = get_scheduler()
     return lora_scheduler
 
+
+@app.get("/api/lora/progress/{user_id}")
+async def get_lora_training_progress(user_id: str):
+    """获取LoRA训练实时进度"""
+    try:
+        from backend.lora.auto_lora_trainer import get_training_progress
+        progress = get_training_progress(user_id)
+        return {"code": 200, "data": progress}
+    except Exception as e:
+        return {"code": 200, "data": {"is_training": False, "progress": 0, "stage": "", "error": None}}
+
+
 @app.get("/api/lora/status/{user_id}")
 async def get_lora_status(user_id: str):
     """

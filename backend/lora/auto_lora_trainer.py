@@ -10,11 +10,37 @@ from typing import List, Dict, Optional
 
 import torch
 from torch.utils.data import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, TrainerCallback
 from peft import LoraConfig, get_peft_model, TaskType
 
 # 添加项目根目录到路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 全局训练进度存储 {user_id: {progress, stage, is_training}}
+_training_progress: Dict[str, Dict] = {}
+
+
+def get_training_progress(user_id: str) -> Dict:
+    """获取用户的训练进度"""
+    return _training_progress.get(user_id, {
+        "is_training": False, "progress": 0, "stage": "", "error": None
+    })
+
+
+class ProgressCallback(TrainerCallback):
+    """训练进度回调"""
+    def __init__(self, user_id: str, total_steps: int):
+        self.user_id = user_id
+        self.total_steps = max(total_steps, 1)
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        progress = min(95, int(state.global_step / self.total_steps * 90) + 5)
+        _training_progress[self.user_id] = {
+            "is_training": True,
+            "progress": progress,
+            "stage": f"训练中 step {state.global_step}/{self.total_steps}",
+            "error": None
+        }
 
 
 class ConversationDataset(Dataset):
@@ -159,8 +185,14 @@ class AutoLoRATrainer:
         print(f"📊 训练数据量: {len(dataset)}")
         print(f"{'='*60}\n")
 
+        _training_progress[self.user_id] = {
+            "is_training": True, "progress": 0, "stage": "加载基础模型...", "error": None
+        }
+
         try:
             print(f"📥 加载基础模型: {self.base_model_name}")
+            _training_progress[self.user_id]["stage"] = "加载基础模型..."
+            _training_progress[self.user_id]["progress"] = 2
             base_model = AutoModelForCausalLM.from_pretrained(
                 self.base_model_name,
                 torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
@@ -170,6 +202,8 @@ class AutoLoRATrainer:
             )
 
             print("🔧 添加 LoRA 适配器...")
+            _training_progress[self.user_id]["stage"] = "初始化LoRA适配器..."
+            _training_progress[self.user_id]["progress"] = 5
             model = get_peft_model(base_model, self.lora_config)
 
             trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -193,16 +227,24 @@ class AutoLoRATrainer:
                 remove_unused_columns=False
             )
 
+            num_epochs = self.training_config["num_epochs"]
+            batch_size = self.training_config["batch_size"]
+            total_steps = max(1, (len(dataset) // (batch_size * 4)) * num_epochs)
+
             trainer = Trainer(
                 model=model,
                 args=training_args,
                 train_dataset=dataset,
+                callbacks=[ProgressCallback(self.user_id, total_steps)],
             )
 
             print("🎯 开始训练...\n")
             start_time = datetime.now()
             trainer.train()
             duration = (datetime.now() - start_time).total_seconds()
+
+            _training_progress[self.user_id]["stage"] = "保存模型权重..."
+            _training_progress[self.user_id]["progress"] = 96
 
             final_path = os.path.join(output_dir, "final")
             os.makedirs(final_path, exist_ok=True)
@@ -228,12 +270,18 @@ class AutoLoRATrainer:
             print(f"\n✅ 训练完成!")
             print(f"⏱️  耗时: {duration:.1f} 秒")
             print(f"💾 模型已保存到: {final_path}\n")
+            _training_progress[self.user_id] = {
+                "is_training": False, "progress": 100, "stage": "训练完成", "error": None
+            }
             return final_path
 
         except Exception as e:
             print(f"\n❌ 训练失败: {e}")
             import traceback
             traceback.print_exc()
+            _training_progress[self.user_id] = {
+                "is_training": False, "progress": 0, "stage": "训练失败", "error": str(e)
+            }
             return None
 
     def auto_train_workflow(self):
