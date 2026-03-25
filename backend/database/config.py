@@ -7,7 +7,10 @@ from enum import Enum
 from dotenv import load_dotenv
 
 # 加载 .env 文件
-load_dotenv()
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+if not os.path.exists(_env_path):
+    _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
+load_dotenv(_env_path)
 
 
 class DatabaseType(Enum):
