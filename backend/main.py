@@ -15,7 +15,8 @@ import asyncio
 import threading
 
 # 加载环境变量
-load_dotenv()
+_env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(_env_file)
 
 # 设置 HuggingFace 离线模式(避免网络问题)
 os.environ['HF_HUB_OFFLINE'] = '1'
