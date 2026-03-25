@@ -1308,53 +1308,55 @@ async def websocket_chat(websocket: WebSocket):
                     info_count = 0
                     node_names = []  # 记录本次添加的节点名称，用于关系推断
                     
+                    # 确保"我"节点存在
+                    if entities:
+                        info_kg.add_information(
+                            name='我', info_type='entity', category='自己',
+                            confidence=1.0,
+                            attributes={'entity_type': 'person', 'session_id': session_id}
+                        )
+                    
                     for entity in entities:
                         node_id = info_kg.add_information(
                             name=entity['name'],
                             info_type='entity',
-                            category=entity.get('category', 'general'),
+                            category=entity.get('category', 'friends'),
                             confidence=entity.get('confidence', 0.8),
                             attributes={
                                 **entity.get('attributes', {}),
-                                'session_id': session_id,  # 场景标识
+                                'entity_type': 'person',
+                                'session_id': session_id,
                                 'timestamp': time.time()
                             }
                         )
                         node_names.append(entity['name'])
-                        print(f"  ➕ 添加实体: {entity['name']} (会话: {session_id})")
+                        print(f"  ➕ 添加人物: {entity['name']} ({entity.get('category', 'friends')}) (会话: {session_id})")
                         info_count += 1
-                    
-                    for event in events:
-                        node_id = info_kg.add_information(
-                            name=event['name'],
-                            info_type='event',
-                            category=event.get('category', 'general'),
-                            confidence=event.get('confidence', 0.8),
-                            attributes={
-                                **event.get('attributes', {}),
+                        
+                        # 自动建立与"我"的关系
+                        category = entity.get('category', 'friends')
+                        rel_type_map = {
+                            'family': 'FAMILY',
+                            'close_friends': 'CLOSE_FRIEND',
+                            'colleagues': 'COLLEAGUE',
+                            'friends': 'FRIEND',
+                            'weak_ties': 'KNOWS'
+                        }
+                        rel_type = rel_type_map.get(category, 'KNOWS')
+                        description = entity.get('attributes', {}).get('description', '')
+                        info_kg.add_information_relationship(
+                            source_name='我',
+                            target_name=entity['name'],
+                            relation_type=rel_type,
+                            properties={
+                                'description': description,
+                                'confidence': entity.get('confidence', 0.8),
                                 'session_id': session_id,
-                                'timestamp': time.time()
                             }
                         )
-                        node_names.append(event['name'])
-                        print(f"  ➕ 添加事件: {event['name']} (会话: {session_id})")
-                        info_count += 1
+                        print(f"  🔗 关系: 我 --[{rel_type}]--> {entity['name']}")
                     
-                    for concept in concepts:
-                        node_id = info_kg.add_information(
-                            name=concept['name'],
-                            info_type='concept',
-                            category=concept.get('category', 'general'),
-                            confidence=concept.get('confidence', 0.8),
-                            attributes={
-                                **concept.get('attributes', {}),
-                                'session_id': session_id,
-                                'timestamp': time.time()
-                            }
-                        )
-                        node_names.append(concept['name'])
-                        print(f"  ➕ 添加概念: {concept['name']} (会话: {session_id})")
-                        info_count += 1
+                    # events 和 concepts 不再作为独立节点（只提取人物）
                     
                     # 使用Qwen3.5-plus推断节点之间的关系
                     if len(node_names) >= 2:

@@ -249,13 +249,13 @@ struct QuickDecisionInput {
           Blank()
           Column({ space: 4 }) {
             Text('对话数据').fontSize(11).fontColor(Theme.Color.TextTertiary)
-            Text(`${this.loraStatus.current_data_size} / ${this.loraStatus.min_data_size}`)
+            Text(`${this.loraStatus.current_data_size || 0} / ${this.loraStatus.min_data_size || 20}`)
               .fontSize(16).fontWeight(600)
               .fontColor(this.loraStatus.can_train ? Theme.Color.Primary : Theme.Color.Warning)
           }.alignItems(HorizontalAlign.End)
         }.width('100%')
 
-        Progress({ value: this.loraStatus.current_data_size, total: this.loraStatus.min_data_size, type: ProgressType.Linear })
+        Progress({ value: this.loraStatus.current_data_size || 0, total: this.loraStatus.min_data_size || 20, type: ProgressType.Linear })
           .width('100%')
           .color(this.loraStatus.can_train ? Theme.Color.Primary : Theme.Color.Warning)
 
@@ -268,7 +268,7 @@ struct QuickDecisionInput {
           .onClick(() => { this.startLoraTraining() })
 
         if (!this.loraStatus.can_train) {
-          Text(`还需 ${this.loraStatus.min_data_size - this.loraStatus.current_data_size} 条对话数据才能训练`)
+          Text(`还需 ${Math.max(0, (this.loraStatus.min_data_size || 20) - (this.loraStatus.current_data_size || 0))} 条对话数据才能训练`)
             .fontSize(12).fontColor(Theme.Color.Warning)
         }
       } else {
