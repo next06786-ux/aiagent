@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
 import json
+import asyncio
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
 from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
@@ -434,7 +435,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     question=question,
                     option=option,
                     profile=profile,
-                    num_events=3
+                    num_events=5
                 )
 
                 timeline = []
@@ -473,6 +474,19 @@ async def simulate_with_collection_ws(websocket: WebSocket):
 
                 final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
                 risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5
+
+                # 生成分支事件并流式推送
+                branch_nodes = simulator._generate_branch_events(timeline, option_branch)
+                for bnode in branch_nodes:
+                    timeline.append(bnode)
+                    await websocket.send_json({
+                        "type": "node",
+                        "option_id": f"option_{i+1}",
+                        "option_title": option['title'],
+                        "node": asdict(bnode)
+                    })
+                    await asyncio.sleep(0.35)
+
                 simulated_options.append(DecisionOption(
                     option_id=f"option_{i+1}",
                     title=option['title'],

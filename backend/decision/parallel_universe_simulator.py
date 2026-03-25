@@ -107,7 +107,7 @@ class ParallelUniverseSimulator:
                 question=question,
                 option=opt,
                 profile=profile,
-                num_events=3
+                num_events=5
             )
             timelines.append(timeline_data)
 
@@ -146,6 +146,10 @@ class ParallelUniverseSimulator:
                     visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
                 ))
                 previous_event_id = timeline[-1].event_id
+
+            # 为高影响节点生成分支事件，形成思维导图拓扑
+            branch_nodes = self._generate_branch_events(timeline, option_branch)
+            timeline.extend(branch_nodes)
 
             if len(timeline) < 2:
                 print(f"⚠️ 选项 '{option['title']}' 时间线事件不足，跳过风险评估")
@@ -217,6 +221,59 @@ class ParallelUniverseSimulator:
         )
         self._save_simulation(result)
         return result
+
+    # ==================== 分支生成 ====================
+
+    def _generate_branch_events(
+        self, main_timeline: List[TimelineEvent], branch_prefix: str
+    ) -> List[TimelineEvent]:
+        """
+        从主时间线中选出高影响力节点，为其生成 1-2 个分支事件，
+        形成思维导图式的拓扑结构。
+        """
+        branch_nodes: List[TimelineEvent] = []
+        # 筛选影响力较大的节点作为分支点
+        candidates = [
+            e for e in main_timeline
+            if sum(abs(v) for v in e.impact.values()) >= 0.3
+        ]
+        # 最多取 2 个分支点
+        for parent in candidates[:2]:
+            # 正面分支
+            pos_impact = {k: round(v * 0.6, 2) for k, v in parent.impact.items()}
+            branch_id = f"{branch_prefix}_fork_{parent.node_level}_pos"
+            branch_nodes.append(TimelineEvent(
+                event_id=branch_id,
+                parent_event_id=parent.event_id,
+                month=parent.month + 1,
+                event=f"（乐观分支）{parent.event}进展顺利，带来额外机遇",
+                impact=pos_impact,
+                probability=round(parent.probability * 0.6, 2),
+                event_type=parent.event_type,
+                branch_group=f"{branch_prefix}_fork",
+                node_level=parent.node_level + 1,
+                risk_tag="low",
+                opportunity_tag="high",
+                visual_weight=0.4,
+            ))
+            # 负面分支
+            neg_impact = {k: round(-abs(v) * 0.4, 2) for k, v in parent.impact.items()}
+            neg_branch_id = f"{branch_prefix}_fork_{parent.node_level}_neg"
+            branch_nodes.append(TimelineEvent(
+                event_id=neg_branch_id,
+                parent_event_id=parent.event_id,
+                month=parent.month + 2,
+                event=f"（风险分支）{parent.event}遇到阻碍，需要调整策略",
+                impact=neg_impact,
+                probability=round(parent.probability * 0.3, 2),
+                event_type=parent.event_type,
+                branch_group=f"{branch_prefix}_fork",
+                node_level=parent.node_level + 1,
+                risk_tag="high",
+                opportunity_tag="low",
+                visual_weight=0.35,
+            ))
+        return branch_nodes
 
     # ==================== 辅助计算 ====================
 

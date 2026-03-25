@@ -373,47 +373,27 @@ struct EnhancedDecisionFlow {
 
   // 开始决策模拟
   private async startSimulation(options: OptionInput[]): Promise<void> {
-    this.isLoading = true
-
     try {
-      const httpRequest = http.createHttp()
-      const response = await httpRequest.request(
-        ApiConfig.getApiUrl('/api/decision/enhanced/simulate/with-collection'),
-        {
-          method: http.RequestMethod.POST,
-          header: { 'Content-Type': 'application/json' },
-          extraData: JSON.stringify({
-            session_id: this.sessionId,
+      router.replaceUrl({
+        url: 'pages/DecisionDungeon2DMap',
+        params: {
+          dungeonId: this.sessionId,
+          question: this.initialQuestion,
+          userId: this.userId,
+          simulationData: JSON.stringify({
+            simulation_id: this.sessionId,
+            user_id: this.userId,
+            question: this.initialQuestion,
             options: options,
-            use_lora: true
-          }),
-          connectTimeout: 60000,
-          readTimeout: 60000
-        }
-      )
-      httpRequest.destroy()
-
-      if (response.responseCode === 200) {
-        const result = JSON.parse(response.result as string) as Record<string, Object>
-        if (result.code === 200 && result.data) {
-          const data = result.data as SimulationResult
-          this.simulationResult = data
-          
-          // 跳转到副本列表页面
-          router.replaceUrl({
-            url: 'pages/DecisionDungeonList',
-            params: {
-              userId: this.userId,
-              simulationData: JSON.stringify(data)
-            }
+            recommendation: '',
+            created_at: new Date().toISOString()
           })
         }
-      }
+      })
     } catch (error) {
-      console.error('决策模拟失败:', (error as Error).message)
+      console.error('跳转到决策地图失败:', (error as Error).message)
+      promptAction.showToast({ message: '进入决策地图失败' })
     }
-
-    this.isLoading = false
   }
 
   build() {
