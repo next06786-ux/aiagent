@@ -59,7 +59,7 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            220,
+            400,
             0.4,
         )
         print(f"📝 LoRA原始响应长度: {len(response)}")
@@ -75,7 +75,7 @@ class LoRADecisionAnalyzer:
                 self.lora_manager.generate,
                 user_id,
                 retry_prompt,
-                180,
+                350,
                 0.2,
             )
             print(f"📝 LoRA重试响应长度: {len(retry_response)}")

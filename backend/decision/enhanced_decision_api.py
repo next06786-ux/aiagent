@@ -423,7 +423,9 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             profile = simulator.personality_test.load_profile(user_id)
             simulated_options = []
 
-            for i, option in enumerate(options):
+            # 并行为所有选项生成时间线（32GB 显存足够并行 2-3 个推理）
+            async def generate_option_timeline(i: int, option: dict):
+                """为单个选项生成时间线并流式推送节点"""
                 await websocket.send_json({
                     "type": "option_start",
                     "option_id": f"option_{i+1}",
@@ -441,13 +443,12 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 timeline = []
                 option_branch = option['title'].lower().replace(' ', '_')
                 previous_event_id = None
+                from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
                 for idx, e in enumerate(timeline_data):
                     negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
                     positive_impact = sum(v for v in e['impact'].values() if v > 0)
                     risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
                     opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
-                    event_obj = simulator.__class__.__dict__  # 占位防 lint
-                    from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
                     node = TimelineEvent(
                         event_id=f"{option_branch}_node_{idx+1}",
                         parent_event_id=previous_event_id,
@@ -470,7 +471,6 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         "option_title": option['title'],
                         "node": asdict(node)
                     })
-                    await asyncio.sleep(0.25)
 
                 final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
                 risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5
@@ -485,17 +485,6 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         "option_title": option['title'],
                         "node": asdict(bnode)
                     })
-                    await asyncio.sleep(0.35)
-
-                simulated_options.append(DecisionOption(
-                    option_id=f"option_{i+1}",
-                    title=option['title'],
-                    description=option.get('description', ''),
-                    timeline=timeline,
-                    final_score=final_score,
-                    risk_level=risk_level,
-                    risk_assessment=None
-                ))
 
                 await websocket.send_json({
                     "type": "option_complete",
@@ -504,6 +493,21 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "final_score": final_score,
                     "risk_level": risk_level
                 })
+
+                return DecisionOption(
+                    option_id=f"option_{i+1}",
+                    title=option['title'],
+                    description=option.get('description', ''),
+                    timeline=timeline,
+                    final_score=final_score,
+                    risk_level=risk_level,
+                    risk_assessment=None
+                )
+
+            # 串行执行（共享同一个 LoRA 模型实例，并行会冲突）
+            for i, option in enumerate(options):
+                opt_result = await generate_option_timeline(i, option)
+                simulated_options.append(opt_result)
 
             options_for_rec = [
                 {
