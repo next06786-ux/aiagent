@@ -419,8 +419,18 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 "user_id": user_id,
                 "question": question
             })
+            await websocket.send_json({
+                "type": "status",
+                "stage": "init",
+                "content": "已建立推演连接，正在读取用户画像与决策上下文"
+            })
 
             profile = simulator.personality_test.load_profile(user_id)
+            await websocket.send_json({
+                "type": "status",
+                "stage": "profile_loaded",
+                "content": "用户画像已加载，准备逐个推演决策选项"
+            })
             simulated_options = []
 
             # 并行为所有选项生成时间线（32GB 显存足够并行 2-3 个推理）
@@ -431,13 +441,20 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "option_id": f"option_{i+1}",
                     "title": option.get("title", f"选项{i+1}")
                 })
+                await websocket.send_json({
+                    "type": "status",
+                    "stage": "option_start",
+                    "option_id": f"option_{i+1}",
+                    "option_title": option.get("title", f"选项{i+1}"),
+                    "content": f"开始推演 {option.get('title', f'选项{i+1}')} 的主时间线"
+                })
 
                 timeline_data = await simulator.lora_analyzer.generate_timeline_with_lora(
                     user_id=user_id,
                     question=question,
                     option=option,
                     profile=profile,
-                    num_events=5
+                    num_events=8
                 )
 
                 timeline = []
@@ -445,6 +462,13 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 previous_event_id = None
                 from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
                 for idx, e in enumerate(timeline_data):
+                    await websocket.send_json({
+                        "type": "thinking",
+                        "stage": "timeline_event",
+                        "option_id": f"option_{i+1}",
+                        "option_title": option['title'],
+                        "content": f"正在生成 {option['title']} 的第 {idx + 1} 个关键事件"
+                    })
                     negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
                     positive_impact = sum(v for v in e['impact'].values() if v > 0)
                     risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
@@ -476,6 +500,13 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5
 
                 # 生成分支事件并流式推送
+                await websocket.send_json({
+                    "type": "thinking",
+                    "stage": "branch_generation",
+                    "option_id": f"option_{i+1}",
+                    "option_title": option['title'],
+                    "content": f"正在扩展 {option['title']} 的风险与机遇分支"
+                })
                 branch_nodes = simulator._generate_branch_events(timeline, option_branch)
                 for bnode in branch_nodes:
                     timeline.append(bnode)
@@ -486,6 +517,13 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         "node": asdict(bnode)
                     })
 
+                await websocket.send_json({
+                    "type": "status",
+                    "stage": "option_scoring",
+                    "option_id": f"option_{i+1}",
+                    "option_title": option['title'],
+                    "content": f"{option['title']} 主线与分支已生成，正在计算得分与风险"
+                })
                 await websocket.send_json({
                     "type": "option_complete",
                     "option_id": f"option_{i+1}",
@@ -519,6 +557,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 }
                 for opt in simulated_options
             ]
+            await websocket.send_json({
+                "type": "status",
+                "stage": "recommendation",
+                "content": "所有选项推演完成，正在生成个性化推荐结论"
+            })
             recommendation = await simulator.lora_analyzer.generate_personalized_recommendation(
                 user_id=user_id,
                 question=question,
@@ -532,6 +575,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             })
 
             simulation_id = f"sim_{user_id}_{int(__import__('time').time())}"
+            await websocket.send_json({
+                "type": "status",
+                "stage": "completed",
+                "content": "推荐结论已生成，正在整理最终结果"
+            })
             await websocket.send_json({
                 "type": "done",
                 "simulation_id": simulation_id,
