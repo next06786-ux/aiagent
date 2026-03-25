@@ -4619,6 +4619,50 @@ async def get_information_sources(user_id: str, info_name: str):
         }
 
 
+@app.get("/api/v4/knowledge-graph/{user_id}/stories/{person_a}/{person_b}")
+async def get_person_stories(user_id: str, person_a: str, person_b: str):
+    """获取两个人物之间的故事"""
+    try:
+        global info_kg_systems
+        if user_id not in info_kg_systems:
+            info_kg_systems[user_id] = InformationKnowledgeGraph(user_id)
+        info_kg = info_kg_systems.get(user_id)
+        if not info_kg:
+            return {"success": False, "data": {"stories": []}}
+        
+        # 从Neo4j查询两人之间的关系属性（description字段就是故事）
+        stories = []
+        try:
+            with info_kg.driver.session() as session:
+                result = session.run("""
+                    MATCH (a {user_id: $uid, name: $pa})-[r]-(b {user_id: $uid, name: $pb})
+                    RETURN r, type(r) as rel_type
+                """, uid=user_id, pa=person_a, pb=person_b)
+                for record in result:
+                    rel = dict(record["r"])
+                    desc = rel.get("description", "")
+                    if desc:
+                        stories.append(desc)
+                
+                # 也查询来源中提到这两个人的对话
+                result2 = session.run("""
+                    MATCH (a {user_id: $uid, name: $pa})-[:EXTRACTED_FROM|MENTIONED_IN]->(s:Source)
+                    WHERE s.message CONTAINS $pb OR s.response CONTAINS $pb
+                    RETURN s.message as msg, s.response as resp
+                    ORDER BY s.timestamp DESC LIMIT 10
+                """, uid=user_id, pa=person_a, pb=person_b)
+                for record in result2:
+                    msg = record.get("msg", "")
+                    if msg:
+                        stories.append(f"对话提及: {msg}")
+        except Exception as e:
+            print(f"查询故事失败: {e}")
+        
+        return {"success": True, "data": {"stories": stories}}
+    except Exception as e:
+        return {"success": False, "data": {"stories": []}, "message": str(e)}
+
+
 @app.get("/api/v4/knowledge-graph/{user_id}/statistics")
 async def get_kg_statistics(user_id: str):
     """获取知识图谱统计信息"""

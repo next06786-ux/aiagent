@@ -585,6 +585,16 @@ struct AgentHome {
               .fontSize(11).fontColor(Theme.Color.TextTertiary)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
 
+          // 历史消息按钮
+          Stack() {
+            Circle({ width: 34, height: 34 }).fill(Theme.Color.GlassMedium)
+            SimpleIcon({ iconName: 'history', iconSize: 16, color: Theme.Color.TextSecondary })
+          }.width(34).height(34)
+          .onClick(() => {
+            this.showAiCorePanel = false;
+            this.showHistoryPanel = true;
+          })
+
           Button('更新模型').fontSize(11).fontColor(Theme.Color.Accent)
             .backgroundColor('rgba(0, 200, 83, 0.08)')
             .borderRadius(Theme.Radius.round).padding({ left: 12, right: 12 }).height(30)

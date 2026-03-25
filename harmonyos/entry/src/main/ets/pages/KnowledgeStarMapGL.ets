@@ -35,7 +35,14 @@ interface NodeRelation {
   name: string
   category: string
   strength: number
-  targetIdx: number  // 新增：目标节点索引
+  targetIdx: number
+}
+
+// 故事弹窗数据
+interface StoryData {
+  personName: string
+  category: string
+  stories: string[]
 }
 
 // 节点屏幕位置
@@ -142,6 +149,9 @@ struct KnowledgeStarMapGL {
   @State zoomScale: number = 1.0
   @State nodeScreenPositions: NodeScreenPos[] = []
   @State selectedNodeRelations: NodeRelation[] = []
+  @State showStoryPanel: boolean = false
+  @State storyData: StoryData | null = null
+  @State isLoadingStory: boolean = false
   
   // 触摸状态
   @State isDragging: boolean = false
@@ -912,7 +922,7 @@ struct KnowledgeStarMapGL {
               Scroll() {
                 Column({ space: 6 }) {
                   ForEach(this.selectedNodeRelations, (rel: NodeRelation) => {
-                    Row({ space: 10 }) {
+                    Row({ space: 8 }) {
                       // 头像圆
                       Stack() {
                         Circle({ width: 32, height: 32 })
@@ -931,25 +941,36 @@ struct KnowledgeStarMapGL {
                       }
                       .alignItems(HorizontalAlign.Start)
                       .layoutWeight(1)
-                      
-                      Text('→')
-                        .fontSize(14)
-                        .fontColor('rgba(255, 255, 255, 0.4)')
+
+                      // 故事按钮
+                      Button('故事')
+                        .fontSize(10).fontColor('#F59E0B').height(26)
+                        .backgroundColor('rgba(245, 158, 11, 0.15)')
+                        .borderRadius(13).padding({ left: 10, right: 10 })
+                        .onClick(() => {
+                          this.loadStory(
+                            this.nodes[this.selectedNodeIdx]?.name || '我',
+                            rel.name, rel.category
+                          )
+                        })
+
+                      // 跳转按钮
+                      Button('跳转')
+                        .fontSize(10).fontColor('#64B5F6').height(26)
+                        .backgroundColor('rgba(100, 181, 246, 0.15)')
+                        .borderRadius(13).padding({ left: 10, right: 10 })
+                        .onClick(() => {
+                          if (this.nativeModule && rel.targetIdx >= 0) {
+                            this.nativeModule.focusOnNode(rel.targetIdx)
+                            this.selectedNodeIdx = rel.targetIdx
+                            this.selectedNodeRelations = this.nativeModule.getNodeRelations(rel.targetIdx)
+                          }
+                        })
                     }
                     .width('100%')
                     .padding({ top: 8, bottom: 8, left: 10, right: 10 })
                     .backgroundColor('rgba(255, 255, 255, 0.05)')
                     .borderRadius(10)
-                    .onClick(() => {
-                      // 点击关联人物，丝滑滑动到该节点
-                      if (this.nativeModule && rel.targetIdx >= 0) {
-                        console.info(`StarMap: Focusing on node ${rel.targetIdx} '${rel.name}'`)
-                        this.nativeModule.focusOnNode(rel.targetIdx)
-                        // 更新选中状态和关系列表
-                        this.selectedNodeIdx = rel.targetIdx
-                        this.selectedNodeRelations = this.nativeModule.getNodeRelations(rel.targetIdx)
-                      }
-                    })
                   })
                 }
               }
@@ -985,6 +1006,66 @@ struct KnowledgeStarMapGL {
       .borderRadius(8)
       .position({ x: 12, y: 70 })
       .hitTestBehavior(HitTestMode.Transparent)
+
+      // 故事弹窗
+      if (this.showStoryPanel && this.storyData) {
+        Stack() {
+          Column().width('100%').height('100%')
+            .backgroundColor('rgba(0, 0, 0, 0.6)')
+            .onClick(() => { this.showStoryPanel = false })
+
+          Column({ space: 14 }) {
+            Row() {
+              Stack() {
+                Circle({ width: 36, height: 36 })
+                  .fill(this.getNodeColor(this.storyData.category))
+                Text(this.storyData.personName.substring(0, 1))
+                  .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+              }.width(36).height(36)
+
+              Text(`与 ${this.storyData.personName} 的故事`)
+                .fontSize(17).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+                .margin({ left: 10 }).layoutWeight(1)
+
+              Button('关闭').fontSize(11).fontColor('rgba(255,255,255,0.6)')
+                .backgroundColor('rgba(255,255,255,0.1)').height(28).borderRadius(14)
+                .onClick(() => { this.showStoryPanel = false })
+            }.width('100%')
+
+            Divider().color('rgba(255, 255, 255, 0.1)')
+
+            if (this.isLoadingStory) {
+              Column() {
+                LoadingProgress().width(32).height(32).color('#64B5F6')
+                Text('加载中...').fontSize(12).fontColor('rgba(255,255,255,0.5)').margin({ top: 8 })
+              }.width('100%').height(120).justifyContent(FlexAlign.Center)
+            } else if (this.storyData.stories.length === 0) {
+              Text('暂无故事记录，继续和AI对话会自动积累')
+                .fontSize(13).fontColor('rgba(255,255,255,0.4)')
+                .padding(20).textAlign(TextAlign.Center).width('100%')
+            } else {
+              Scroll() {
+                Column({ space: 8 }) {
+                  ForEach(this.storyData.stories, (story: string, idx: number) => {
+                    Row({ space: 8 }) {
+                      Circle({ width: 6, height: 6 }).fill('#F59E0B').margin({ top: 6 })
+                      Text(story).fontSize(13).fontColor('rgba(255,255,255,0.85)')
+                        .lineHeight(20).layoutWeight(1)
+                    }.width('100%').padding(10)
+                    .backgroundColor('rgba(255,255,255,0.04)').borderRadius(8)
+                  })
+                }
+              }.scrollBar(BarState.Off).constraintSize({ maxHeight: 300 })
+            }
+          }
+          .width('85%')
+          .padding(20)
+          .backgroundColor('rgba(20, 15, 45, 0.96)')
+          .borderRadius(20)
+          .border({ width: 1, color: 'rgba(150, 100, 255, 0.2)' })
+        }
+        .width('100%').height('100%')
+      }
     }
     .width('100%')
     .height('100%')
@@ -997,5 +1078,39 @@ struct KnowledgeStarMapGL {
         this.handleTouchEnd(event)
       }
     })
+  }
+
+  // 加载两个人物之间的故事
+  async loadStory(personA: string, personB: string, category: string) {
+    this.storyData = { personName: personB, category: category, stories: [] }
+    this.showStoryPanel = true
+    this.isLoadingStory = true
+
+    try {
+      const httpRequest = http.createHttp()
+      const url = `${ApiConfig.getBaseUrl()}/api/v4/knowledge-graph/${this.userId}/stories/${encodeURIComponent(personA)}/${encodeURIComponent(personB)}`
+      const response = await httpRequest.request(url, {
+        method: http.RequestMethod.GET,
+        connectTimeout: 10000,
+        readTimeout: 10000
+      })
+      httpRequest.destroy()
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if (result.success) {
+          const data = result.data as Record<string, Object>
+          this.storyData = {
+            personName: personB,
+            category: category,
+            stories: (data.stories as string[]) || []
+          }
+        }
+      }
+    } catch (err) {
+      console.error('加载故事失败:', err)
+    } finally {
+      this.isLoadingStory = false
+    }
   }
 }

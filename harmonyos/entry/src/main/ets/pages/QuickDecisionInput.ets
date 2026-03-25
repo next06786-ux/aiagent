@@ -20,14 +20,12 @@ interface QuickTemplate {
 }
 
 interface LoraStatusInfo {
-  has_model: boolean
-  model_version: string
+  has_lora: boolean
+  lora_path: string | null
+  model_version: number
   last_train_time: string | null
-  total_trainings: number
-  current_data_size: number
-  min_data_size: number
-  is_training: boolean
-  can_train: boolean
+  training_data_size: number
+  is_loaded: boolean
 }
 
 @Entry
@@ -241,34 +239,34 @@ struct QuickDecisionInput {
       } else if (this.loraStatus) {
         Row() {
           Column({ space: 4 }) {
-            Text('模型版本').fontSize(11).fontColor(Theme.Color.TextTertiary)
-            Text(this.loraStatus.has_model ? this.loraStatus.model_version : '未训练')
+            Text('模型状态').fontSize(11).fontColor(Theme.Color.TextTertiary)
+            Text(this.loraStatus.has_lora ? `v${this.loraStatus.model_version}` : '未训练')
               .fontSize(16).fontWeight(600)
-              .fontColor(this.loraStatus.has_model ? Theme.Color.Accent : Theme.Color.TextTertiary)
+              .fontColor(this.loraStatus.has_lora ? Theme.Color.Accent : Theme.Color.TextTertiary)
           }.alignItems(HorizontalAlign.Start)
           Blank()
           Column({ space: 4 }) {
             Text('对话数据').fontSize(11).fontColor(Theme.Color.TextTertiary)
-            Text(`${this.loraStatus.current_data_size || 0} / ${this.loraStatus.min_data_size || 20}`)
+            Text(`${this.loraStatus.training_data_size || 0} / 20`)
               .fontSize(16).fontWeight(600)
-              .fontColor(this.loraStatus.can_train ? Theme.Color.Primary : Theme.Color.Warning)
+              .fontColor((this.loraStatus.training_data_size || 0) >= 20 ? Theme.Color.Primary : Theme.Color.Warning)
           }.alignItems(HorizontalAlign.End)
         }.width('100%')
 
-        Progress({ value: this.loraStatus.current_data_size || 0, total: this.loraStatus.min_data_size || 20, type: ProgressType.Linear })
+        Progress({ value: this.loraStatus.training_data_size || 0, total: 20, type: ProgressType.Linear })
           .width('100%')
-          .color(this.loraStatus.can_train ? Theme.Color.Primary : Theme.Color.Warning)
+          .color((this.loraStatus.training_data_size || 0) >= 20 ? Theme.Color.Primary : Theme.Color.Warning)
 
-        Button(this.loraStatus.is_training || this.isTrainingLora ? '训练中...' : '更新模型')
+        Button(this.isTrainingLora ? '训练中...' : '更新模型')
           .width('100%').height(44).fontSize(15).fontWeight(600).fontColor('#FFFFFF')
-          .backgroundColor(this.loraStatus.can_train && !this.loraStatus.is_training && !this.isTrainingLora ? Theme.Color.Secondary : '#CCCCCC')
+          .backgroundColor((this.loraStatus.training_data_size || 0) >= 20 && !this.isTrainingLora ? Theme.Color.Secondary : '#CCCCCC')
           .borderRadius(Theme.Radius.l)
-          .shadow(this.loraStatus.can_train ? Theme.Shadow.GlowPrimary : Theme.Shadow.Soft)
-          .enabled(this.loraStatus.can_train === true && !this.loraStatus.is_training && !this.isTrainingLora)
+          .shadow((this.loraStatus.training_data_size || 0) >= 20 ? Theme.Shadow.GlowPrimary : Theme.Shadow.Soft)
+          .enabled((this.loraStatus.training_data_size || 0) >= 20 && !this.isTrainingLora)
           .onClick(() => { this.startLoraTraining() })
 
-        if (!this.loraStatus.can_train) {
-          Text(`还需 ${Math.max(0, (this.loraStatus.min_data_size || 20) - (this.loraStatus.current_data_size || 0))} 条对话数据才能训练`)
+        if ((this.loraStatus.training_data_size || 0) < 20) {
+          Text(`还需 ${20 - (this.loraStatus.training_data_size || 0)} 条对话数据才能训练`)
             .fontSize(12).fontColor(Theme.Color.Warning)
         }
       } else {
