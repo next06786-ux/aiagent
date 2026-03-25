@@ -6,6 +6,11 @@ import os
 from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
+from dotenv import load_dotenv
+
+# 加载 backend/.env
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(_env_path)
 
 
 class LLMProvider(Enum):

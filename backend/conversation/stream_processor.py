@@ -5,9 +5,14 @@
 
 import asyncio
 import json
+import os
 from typing import AsyncGenerator, Optional, Dict, Any
 from dataclasses import dataclass
 from enum import Enum
+from dotenv import load_dotenv
+
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+load_dotenv(_env_path)
 import logging
 import os
 from datetime import datetime
