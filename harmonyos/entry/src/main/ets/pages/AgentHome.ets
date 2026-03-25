@@ -112,6 +112,7 @@ struct AgentHome {
   
   @State showFunctionPanel: boolean = false;
   @State showHistoryPanel: boolean = false;
+  @State showAiCorePanel: boolean = false;
   @State conversations: ConversationItem[] = [];
   @State currentSessionId: string = '';
   @State isLoadingHistory: boolean = false;
@@ -153,7 +154,6 @@ struct AgentHome {
   private features: FeatureCard[] = [
     { id: 'starmap', title: '知识星图', subtitle: '3D人脉', route: 'pages/KnowledgeStarMapGL', gradient: ['#00D4FF', '#0099CC'], iconName: 'network' },
     { id: 'decision', title: '决策副本', subtitle: '探索未来', route: 'pages/QuickDecisionInput', gradient: ['#FF6B9D', '#C44569'], iconName: 'comparison' },
-    { id: 'parallel', title: '平行宇宙', subtitle: '模拟人生', route: 'pages/ParallelUniverseSimulation', gradient: ['#A855F7', '#7C3AED'], iconName: 'insight' },
     { id: 'dashboard', title: '智能洞察', subtitle: '涌现发现', route: 'pages/SmartInsights', gradient: ['#F59E0B', '#D97706'], iconName: 'analytics' },
     { id: 'profile', title: '我的账号', subtitle: '个人中心', route: 'pages/UserProfile', gradient: ['#10B981', '#059669'], iconName: 'user' },
   ];
@@ -354,12 +354,22 @@ struct AgentHome {
     try {
       const userId = this.authService.getCurrentUserId();
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/v4/conversations/${userId}/list`;
+      const url = `${ApiConfig.getBaseUrl()}/api/chat/sessions/${userId}`;
       const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
       httpRequest.destroy();
       if (response.responseCode === 200) {
-        const result = JSON.parse(response.result as string) as ConversationsResponse;
-        if (result.success && result.data) this.conversations = result.data;
+        const result = JSON.parse(response.result as string) as Record<string, Object>;
+        const data = result.data as Record<string, Object>;
+        const sessions = (data.sessions as Array<Record<string, Object>>) || [];
+        this.conversations = sessions.map((item: Record<string, Object>): ConversationItem => {
+          return {
+            id: item.session_id as string,
+            title: item.title as string || '新对话',
+            preview: item.preview as string || '',
+            message_count: item.message_count as number || 0,
+            last_message_time: item.last_time as string || ''
+          }
+        });
       }
     } catch (err) { console.error('加载历史对话失败:', err); }
   }
@@ -396,6 +406,7 @@ struct AgentHome {
     this.inputText = '';
     this.isLoading = true;
     this.startLoadingAnimation();
+    this.showAiCorePanel = true;
     
     const userMsg = new ChatMessage(Date.now().toString(), 'user', userMessage, Date.now());
     this.addMessageWithAnimation(userMsg);
@@ -434,6 +445,21 @@ struct AgentHome {
       this.isLoading = false; this.stopLoadingAnimation();
     }
   }
+
+  private async triggerModelUpdate() {
+    if (!this.userInfo) return;
+    try {
+      const httpRequest = http.createHttp();
+      const url = `${ApiConfig.getBaseUrl()}/api/lora/train/${this.userInfo.user_id}`;
+      const response = await httpRequest.request(url, { method: http.RequestMethod.POST });
+      httpRequest.destroy();
+      if (response.responseCode === 200) {
+        this.processingProgress = '用户模型训练已触发';
+      }
+    } catch (err) {
+      console.error('触发用户模型训练失败:', err);
+    }
+  }
   
   private updateMessage(messageId: string, field: 'thinking' | 'content', value: string): void {
     const idx = this.messages.findIndex(m => m.id === messageId);
@@ -453,18 +479,23 @@ struct AgentHome {
     try {
       const userId = this.authService.getCurrentUserId();
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/v4/conversations/${userId}/${sessionId}/messages`;
+      const url = `${ApiConfig.getBaseUrl()}/api/chat/session/${userId}/${sessionId}`;
       const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
       httpRequest.destroy();
       if (response.responseCode === 200) {
-        const result = JSON.parse(response.result as string) as MessagesResponse;
-        if (result.success && result.data) {
-          this.messages = result.data.map((m: MessageData) => new ChatMessage(
-            m.id || Date.now().toString(), m.role, m.content,
-            m.timestamp ? new Date(m.timestamp).getTime() : Date.now(), m.thinking));
-          this.currentSessionId = sessionId;
-          this.showHistoryPanel = false;
-        }
+        const result = JSON.parse(response.result as string) as Record<string, Object>;
+        const data = result.data as Record<string, Object>;
+        const history = (data.history as Array<Record<string, string>>) || [];
+        this.messages = history.map((m: Record<string, string>) => new ChatMessage(
+          m.id || Date.now().toString(),
+          m.role as 'user' | 'assistant',
+          m.content || '',
+          m.timestamp ? new Date(m.timestamp).getTime() : Date.now(),
+          m.thinking
+        ));
+        this.currentSessionId = sessionId;
+        this.showHistoryPanel = false;
+        this.showAiCorePanel = true;
       }
     } catch (err) { console.error('加载对话消息失败:', err); }
     finally { this.isLoadingHistory = false; }
@@ -474,16 +505,18 @@ struct AgentHome {
     try {
       const userId = this.authService.getCurrentUserId();
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/v4/conversations/${userId}/create`;
+      const url = `${ApiConfig.getBaseUrl()}/api/chat/session/new/${userId}`;
       const response = await httpRequest.request(url, { method: http.RequestMethod.POST });
       httpRequest.destroy();
       if (response.responseCode === 200) {
-        const result = JSON.parse(response.result as string) as CreateConversationResponse;
-        if (result.success && result.data) {
-          this.currentSessionId = result.data.conversation_id;
+        const result = JSON.parse(response.result as string) as Record<string, Object>;
+        const data = result.data as Record<string, string>;
+        if (data && data.session_id) {
+          this.currentSessionId = data.session_id;
           this.messages = [];
           this.addWelcomeMessage();
           this.showHistoryPanel = false;
+          this.showAiCorePanel = true;
           this.loadConversations();
         }
       }
@@ -558,18 +591,15 @@ struct AgentHome {
         this.LoadingIndicator()
       }
       
-      // 5. 输入区域
-      this.InputArea()
-      
-      // 6. 功能按钮
-      this.FloatingButtons()
-      
-      // 7. 消息详情弹窗（点击气泡后显示完整内容）
-      if (this.showMessageDetail) {
-        this.MessageDetailPanel()
+      // 5. 中心AI核心交互入口
+      this.AICoreEntry()
+
+      // 6. AI对话面板
+      if (this.showAiCorePanel) {
+        this.AICorePanel()
       }
-      
-      // 8. 历史面板
+
+      // 7. 历史面板
       if (this.showHistoryPanel) { this.HistoryPanel() }
     }
     .width('100%')
@@ -722,13 +752,6 @@ struct AgentHome {
         Button({ type: ButtonType.Circle }) { Text('📜').fontSize(16) }
           .width(38).height(38).backgroundColor('rgba(100, 80, 180, 0.3)')
           .onClick(() => { this.showHistoryPanel = true; })
-        
-        Button({ type: ButtonType.Circle }) { Text('💬').fontSize(16) }
-          .width(38).height(38).backgroundColor('rgba(100, 80, 180, 0.3)')
-          .onClick(() => { 
-            this.selectedMessageId = '';  // 清除选中，显示所有消息
-            this.showMessageDetail = !this.showMessageDetail; 
-          })
       }
     }
     .width('100%')
@@ -812,189 +835,24 @@ struct AgentHome {
   
   @Builder
   FloatingButtons() {
-    // 功能已经在3D球体上，这里只保留历史记录快捷按钮
-    Column({ space: 12 }) {
-      Button({ type: ButtonType.Circle }) {
-        Text('📜').fontSize(20).fontColor('#FFFFFF')
-      }
-      .width(50)
-      .height(50)
-      .backgroundColor('rgba(100, 80, 180, 0.6)')
-      .shadow({ radius: 16, color: 'rgba(100, 60, 180, 0.3)' })
-      .onClick(() => { this.showHistoryPanel = true; })
-    }
-    .position({ x: '85%', y: '75%' })
-    .zIndex(10)
+    Column() {}
+      .position({ x: '85%', y: '75%' })
+      .zIndex(10)
   }
   
   @Builder
   MessageDetailPanel() {
-    Stack() {
-      // 背景
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('rgba(5, 0, 20, 0.85)')
-        .onClick(() => { this.showMessageDetail = false; })
-      
-      // 根据是否有选中消息显示不同内容
-      if (this.selectedMessageId) {
-        // 显示单条选中的消息
-        this.SingleMessageDetail()
-      } else {
-        // 显示所有消息列表
-        this.AllMessagesPanel()
-      }
-    }
-    .width('100%')
-    .height('100%')
-    .zIndex(200)
+    Column() {}
   }
   
   @Builder
   SingleMessageDetail() {
-    Column() {
-      // 获取选中的消息
-      ForEach(this.messages.filter((m: ChatMessage) => m.id === this.selectedMessageId), (msg: ChatMessage) => {
-        Column({ space: 16 }) {
-          // 头部
-          Row() {
-            Row({ space: 8 }) {
-              Text(msg.role === 'user' ? '👤' : '✦').fontSize(24)
-              Text(msg.role === 'user' ? '你的消息' : 'AI 回复')
-                .fontSize(18)
-                .fontWeight(600)
-                .fontColor('#FFFFFF')
-            }
-            Blank()
-            Button({ type: ButtonType.Circle }) { 
-              Text('✕').fontSize(20).fontColor('rgba(200, 180, 255, 0.9)') 
-            }
-              .width(36).height(36).backgroundColor('rgba(100, 60, 180, 0.4)')
-              .onClick(() => { 
-                this.selectedMessageId = '';
-                this.showMessageDetail = false; 
-              })
-          }
-          .width('100%')
-          
-          // 时间
-          Text(this.formatTime(msg.timestamp))
-            .fontSize(12)
-            .fontColor('rgba(150, 130, 200, 0.6)')
-          
-          // 思考过程（如果有）
-          if (msg.thinking) {
-            Column({ space: 6 }) {
-              Text('💭 思考过程').fontSize(12).fontColor('rgba(255, 200, 150, 0.8)')
-              Scroll() {
-                Text(msg.thinking)
-                  .fontSize(13)
-                  .fontColor('rgba(255, 220, 180, 0.85)')
-                  .lineHeight(20)
-              }
-              .height(100)
-              .scrollBar(BarState.Auto)
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor('rgba(255, 180, 100, 0.1)')
-            .borderRadius(12)
-          }
-          
-          // 消息内容
-          Scroll() {
-            Text(msg.content)
-              .fontSize(15)
-              .fontColor('rgba(230, 220, 250, 0.95)')
-              .lineHeight(24)
-          }
-          .layoutWeight(1)
-          .scrollBar(BarState.Auto)
-          .width('100%')
-        }
-        .width('100%')
-        .height('100%')
-        .padding(20)
-      })
-    }
-    .width('85%')
-    .height('60%')
-    .backgroundColor(this.getSelectedMessage()?.role === 'user' 
-      ? 'rgba(30, 60, 120, 0.95)' 
-      : 'rgba(60, 30, 100, 0.95)')
-    .borderRadius(24)
-    .border({ width: 1.5, color: this.getSelectedMessage()?.role === 'user' 
-      ? 'rgba(100, 150, 255, 0.4)' 
-      : 'rgba(180, 100, 255, 0.4)' })
-    .shadow({ radius: 30, color: 'rgba(100, 50, 200, 0.3)' })
+    Column() {}
   }
   
   @Builder
   AllMessagesPanel() {
-    Column() {
-      Row() {
-        Text('💬 对话记录').fontSize(16).fontWeight(600).fontColor('#FFFFFF')
-        Blank()
-        Button({ type: ButtonType.Circle }) { Text('✕').fontSize(18).fontColor('rgba(200, 180, 255, 0.8)') }
-          .width(32).height(32).backgroundColor('transparent')
-          .onClick(() => { this.showMessageDetail = false; })
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 14, bottom: 10 })
-      
-      List({ space: 12 }) {
-        ForEach(this.messages, (msg: ChatMessage) => {
-          ListItem() {
-            Column({ space: 8 }) {
-              Row() {
-                Text(msg.role === 'user' ? '👤 你' : '✦ AI')
-                  .fontSize(11)
-                  .fontColor(msg.role === 'user' ? 'rgba(150, 200, 255, 0.8)' : 'rgba(200, 150, 255, 0.8)')
-                Blank()
-                Text(this.formatTime(msg.timestamp))
-                  .fontSize(10)
-                  .fontColor('rgba(150, 130, 200, 0.5)')
-              }
-              .width('100%')
-              
-              if (msg.thinking) {
-                Text(msg.thinking)
-                  .fontSize(11)
-                  .fontColor('rgba(255, 200, 150, 0.7)')
-                  .padding(10)
-                  .backgroundColor('rgba(255, 180, 100, 0.1)')
-                  .borderRadius(8)
-                  .width('100%')
-                  .maxLines(3)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-              }
-              
-              Text(msg.content)
-                .fontSize(13)
-                .fontColor('rgba(220, 210, 240, 0.9)')
-                .lineHeight(20)
-                .width('100%')
-            }
-            .width('100%')
-            .padding(12)
-            .backgroundColor(msg.role === 'user' ? 'rgba(60, 100, 180, 0.3)' : 'rgba(100, 60, 160, 0.3)')
-            .borderRadius(12)
-            .onClick(() => {
-              this.selectedMessageId = msg.id;
-            })
-          }
-        })
-      }
-      .width('100%')
-      .layoutWeight(1)
-      .padding({ left: 12, right: 12 })
-    }
-    .width('90%')
-    .height('70%')
-    .backgroundColor('rgba(15, 8, 40, 0.95)')
-    .borderRadius(20)
-    .border({ width: 1, color: 'rgba(150, 100, 255, 0.3)' })
+    Column() {}
   }
 
   @Builder
@@ -1047,3 +905,130 @@ struct AgentHome {
     }.width('100%').height('100%').zIndex(150)
   }
 }
+
+
+  @Builder
+  AICoreEntry() {
+    Column({ space: 8 }) {
+      Stack() {
+        Circle({ width: 110, height: 110 }).fill('rgba(120, 100, 255, 0.18)').blur(24)
+        Circle({ width: 84, height: 84 }).fill('rgba(102, 126, 234, 0.85)')
+        Text('AI').fontSize(20).fontWeight(700).fontColor('#FFFFFF')
+      }
+      Text('AI核心').fontSize(13).fontWeight(600).fontColor('#FFFFFF')
+      Text('点击展开对话').fontSize(10).fontColor('rgba(200, 190, 255, 0.7)')
+    }
+    .position({ x: this.centerX - 55, y: this.centerY - 70 })
+    .zIndex(120)
+    .onClick(() => {
+      this.showAiCorePanel = true;
+      this.showHistoryPanel = false;
+    })
+  }
+
+  @Builder
+  AICorePanel() {
+    Stack() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('rgba(5, 0, 20, 0.78)')
+        .onClick(() => { this.showAiCorePanel = false; })
+
+      Column({ space: 12 }) {
+        Row() {
+          Column({ space: 2 }) {
+            Text('AI核心').fontSize(18).fontWeight(700).fontColor('#FFFFFF')
+            Text('对话会沉淀为用户信息，并可触发用户模型更新').fontSize(11).fontColor('rgba(200, 190, 255, 0.7)')
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+
+          Button('更新用户模型')
+            .fontSize(11)
+            .fontColor('#10B981')
+            .backgroundColor('rgba(255,255,255,0.08)')
+            .borderRadius(14)
+            .onClick(() => { this.triggerModelUpdate(); })
+
+          Button({ type: ButtonType.Circle }) { Text('✕').fontSize(18).fontColor('rgba(200, 180, 255, 0.8)') }
+            .width(34)
+            .height(34)
+            .backgroundColor('transparent')
+            .onClick(() => { this.showAiCorePanel = false; })
+        }
+        .width('100%')
+
+        Scroll() {
+          Column({ space: 10 }) {
+            ForEach(this.messages, (msg: ChatMessage) => {
+              Column({ space: 6 }) {
+                Row() {
+                  Text(msg.role === 'user' ? '你' : 'AI').fontSize(11).fontColor(msg.role === 'user' ? 'rgba(150, 200, 255, 0.8)' : 'rgba(200, 150, 255, 0.8)')
+                  Blank()
+                  Text(this.formatTime(msg.timestamp)).fontSize(10).fontColor('rgba(150, 130, 200, 0.5)')
+                }
+                .width('100%')
+                if (msg.thinking) {
+                  Text(msg.thinking)
+                    .fontSize(11)
+                    .fontColor('rgba(255, 210, 160, 0.85)')
+                    .padding(10)
+                    .backgroundColor('rgba(255, 180, 100, 0.08)')
+                    .borderRadius(8)
+                    .width('100%')
+                }
+                Text(msg.content)
+                  .fontSize(13)
+                  .fontColor('#F3F4F6')
+                  .lineHeight(20)
+                  .width('100%')
+              }
+              .width('100%')
+              .padding(12)
+              .backgroundColor(msg.role === 'user' ? 'rgba(60, 100, 180, 0.22)' : 'rgba(100, 60, 160, 0.22)')
+              .borderRadius(12)
+            })
+          }
+          .width('100%')
+          .padding({ bottom: 8 })
+        }
+        .layoutWeight(1)
+        .scrollBar(BarState.Auto)
+
+        Row({ space: 10 }) {
+          TextInput({ placeholder: '和AI核心对话，系统会据此持续理解你...', text: this.inputText })
+            .layoutWeight(1)
+            .height(48)
+            .fontSize(14)
+            .fontColor('#FFFFFF')
+            .placeholderColor('rgba(180, 160, 220, 0.5)')
+            .backgroundColor('rgba(30, 15, 60, 0.6)')
+            .borderRadius(24)
+            .padding({ left: 18, right: 18 })
+            .onChange((v: string) => { this.inputText = v; })
+            .onSubmit(() => { this.sendMessage(); })
+
+          Button({ type: ButtonType.Circle }) {
+            Text('✦').fontSize(18).fontColor('#FFFFFF')
+          }
+          .width(48)
+          .height(48)
+          .backgroundColor(this.inputText.trim() && !this.isLoading ? 'rgba(124, 58, 237, 0.9)' : 'rgba(60, 40, 100, 0.5)')
+          .enabled(this.inputText.trim().length > 0 && !this.isLoading)
+          .onClick(() => { this.sendMessage(); })
+        }
+        .width('100%')
+      }
+      .width('88%')
+      .height('72%')
+      .padding(16)
+      .backgroundColor('rgba(15, 8, 40, 0.96)')
+      .borderRadius(24)
+      .border({ width: 1, color: 'rgba(150, 100, 255, 0.25)' })
+      .position({ x: '6%', y: '14%' })
+    }
+    .width('100%')
+    .height('100%')
+    .zIndex(180)
+  }

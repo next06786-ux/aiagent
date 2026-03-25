@@ -236,42 +236,7 @@ def create_tool_registry(
     # ==================== 决策工具 ====================
     
     def simulate_decision(question: str, options: List[str]) -> str:
-        """模拟决策结果"""
-        try:
-            from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
-            
-            simulator = ParallelUniverseSimulator()
-            
-            # 转换选项格式
-            formatted_options = [
-                {"title": opt, "description": opt}
-                for opt in options
-            ]
-            
-            result = simulator.simulate_decision(
-                user_id=user_id,
-                question=question,
-                options=formatted_options,
-                use_lora=False  # 快速模式
-            )
-            
-            # 简化输出
-            output = {
-                "question": question,
-                "recommendation": result.recommendation,
-                "options_analysis": []
-            }
-            
-            for opt in result.options:
-                output["options_analysis"].append({
-                    "title": opt.title,
-                    "final_score": opt.final_score,
-                    "risk_level": opt.risk_level
-                })
-            
-            return json.dumps(output, ensure_ascii=False, indent=2)
-        except Exception as e:
-            return f"模拟失败: {str(e)}"
+        return "该功能已下线，请使用决策副本入口进行决策推演。"
     
     registry.register(Tool(
         name="simulate_decision",

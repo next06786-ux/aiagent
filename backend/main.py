@@ -12,6 +12,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 import asyncio
+import threading
 
 # 加载环境变量
 load_dotenv()
@@ -61,6 +62,9 @@ from backend.database.db_manager import db_manager
 
 # 全局信息知识图谱系统字典
 info_kg_systems = {}
+
+# 轻量训练任务状态
+lora_training_tasks: Dict[str, Dict[str, Any]] = {}
 
 def get_or_init_llm_service():
     """获取 LLM 服务"""
@@ -6018,62 +6022,16 @@ print("   - GET /api/decision/enhanced/collect/session/{session_id} - 获取收�
 print("   - POST /api/decision/enhanced/simulate/with-collection - 使用收集信息模拟")
 print("   - POST /api/decision/enhanced/full-process - 完整决策流程（快速版）")
 
-# 全局平行宇宙模拟器
-parallel_simulator = None
 # 全局副本存储
 dungeons_storage: Dict[str, Dict[str, Any]] = {}
 
-def get_parallel_simulator():
-    """获取平行宇宙模拟器(单例)"""
-    global parallel_simulator
-    if parallel_simulator is None:
-        from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
-        parallel_simulator = ParallelUniverseSimulator()
-    return parallel_simulator
-
 @app.post("/api/decision/simulate")
 async def simulate_decision(request_data: Dict[str, Any]):
-    """
-    决策模拟 — 通过 SGLang (Qwen3.5-9B + 用户 LoRA) 推理
-    """
-    try:
-        user_id = request_data.get("user_id")
-        question = request_data.get("question")
-        options = request_data.get("options", [])
-        
-        if not user_id or not question or not options:
-            return {
-                "code": 400,
-                "message": "user_id, question, options 不能为空",
-                "data": None
-            }
-        if user_id == "default_user":
-            return {
-                "code": 403,
-                "message": "默认用户不允许使用个性化决策模拟，请先登录真实账号",
-                "data": None
-            }
-        
-        if len(options) < 2:
-            return {
-                "code": 400,
-                "message": "至少需要两个选项",
-                "data": None
-            }
-        
-        simulator = get_parallel_simulator()
-        result = await simulator.simulate_decision(
-            user_id=user_id,
-            question=question,
-            options=options,
-        )
-        
-        response_data = {
-            "simulation_id": result.simulation_id,
-            "question": result.question,
-            "options": [
-                {
-                    "option_id": opt.option_id,
+    return {
+        "code": 410,
+        "message": "平行宇宙模拟功能已下线，请使用增强决策副本接口。",
+        "data": None
+    }
                     "title": opt.title,
                     "description": opt.description,
                     "final_score": opt.final_score,
@@ -6984,3 +6942,59 @@ if __name__ == "__main__":
     )
 
 
+
+
+@app.post("/api/lora/train/{user_id}")
+async def trigger_lora_training(user_id: str):
+    """触发指定用户的 LoRA 训练"""
+    try:
+        from backend.lora.auto_lora_trainer import AutoLoRATrainer
+
+        if user_id in lora_training_tasks and lora_training_tasks[user_id].get("status") == "running":
+            return {
+                "code": 200,
+                "message": "训练任务已在进行中",
+                "data": lora_training_tasks[user_id]
+            }
+
+        lora_training_tasks[user_id] = {
+            "user_id": user_id,
+            "status": "running",
+            "started_at": datetime.now().isoformat()
+        }
+
+        def _run_training():
+            try:
+                trainer = AutoLoRATrainer(user_id=user_id)
+                trainer.auto_train_workflow()
+                lora_training_tasks[user_id] = {
+                    "user_id": user_id,
+                    "status": "completed",
+                    "finished_at": datetime.now().isoformat()
+                }
+            except Exception as e:
+                lora_training_tasks[user_id] = {
+                    "user_id": user_id,
+                    "status": "failed",
+                    "error": str(e),
+                    "finished_at": datetime.now().isoformat()
+                }
+
+        threading.Thread(target=_run_training, daemon=True).start()
+
+        return {
+            "code": 200,
+            "message": "LoRA训练已触发",
+            "data": lora_training_tasks[user_id]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/lora/train/status/{user_id}")
+async def get_lora_training_status(user_id: str):
+    return {
+        "code": 200,
+        "message": "success",
+        "data": lora_training_tasks.get(user_id, {"user_id": user_id, "status": "idle"})
+    }

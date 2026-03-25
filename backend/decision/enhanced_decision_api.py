@@ -10,7 +10,6 @@ import json
 import asyncio
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
-from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
 from dataclasses import asdict
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,6 @@ router = APIRouter(prefix="/api/decision/enhanced", tags=["enhanced-decision"])
 
 # 全局实例
 info_collector = DecisionInfoCollector()
-simulator = ParallelUniverseSimulator()
 
 
 class StartCollectionRequest(BaseModel):
@@ -454,7 +452,32 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 timeline = []
                 option_branch = option['title'].lower().replace(' ', '_')
                 previous_event_id = None
-                from backend.decision.parallel_universe_simulator import TimelineEvent, DecisionOption
+                from dataclasses import dataclass
+
+                @dataclass
+                class TimelineEvent:
+                    event_id: str
+                    parent_event_id: Optional[str]
+                    month: int
+                    event: str
+                    impact: Dict[str, float]
+                    probability: float
+                    event_type: str = "general"
+                    branch_group: str = "main"
+                    node_level: int = 1
+                    risk_tag: str = "medium"
+                    opportunity_tag: str = "medium"
+                    visual_weight: float = 0.5
+
+                @dataclass
+                class DecisionOption:
+                    option_id: str
+                    title: str
+                    description: str
+                    timeline: List[TimelineEvent]
+                    final_score: float
+                    risk_level: float
+                    risk_assessment: Optional[Dict] = None
 
                 async for chunk in simulator.lora_analyzer.stream_timeline_generation(
                     user_id=user_id,

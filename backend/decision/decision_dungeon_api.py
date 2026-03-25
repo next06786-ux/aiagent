@@ -10,16 +10,9 @@ import logging
 import json
 import uuid
 
-from backend.decision.parallel_universe_simulator import ParallelUniverseSimulator
-from backend.llm.auto_lora_trainer import AutoLoRATrainer
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/decision", tags=["decision"])
-
-# 全局实例
-simulator = ParallelUniverseSimulator()
-lora_trainer = AutoLoRATrainer()
 
 # 存储副本数据
 dungeons_storage: Dict[str, Dict[str, Any]] = {}
@@ -90,67 +83,10 @@ class DecisionDungeonAPI:
                     logger.error(f"LoRA training error: {str(e)}")
                     # 继续执行，不中断流程
 
-            # 2. 生成平行宇宙模拟
-            option_inputs = [
-                {"title": opt, "description": f"选择{opt}的发展路径"}
-                for opt in options
-            ]
-
-            simulation_result = simulator.simulate_decision(
-                user_id=user_id,
-                question=title,
-                options=option_inputs,
-                use_lora=use_lora
-            )
-
-            # 3. 构建副本数据
-            dungeon_data = {
-                "dungeon_id": dungeon_id,
-                "user_id": user_id,
-                "title": title,
-                "description": description,
-                "context": context,
-                "urgency": urgency,
-                "options": [
-                    {
-                        "option_id": opt.option_id,
-                        "title": opt.title,
-                        "description": opt.description,
-                        "timeline": [
-                            {
-                                "month": event.month,
-                                "event": event.event,
-                                "impact": event.impact,
-                                "probability": event.probability
-                            }
-                            for event in opt.timeline
-                        ],
-                        "final_score": opt.final_score,
-                        "risk_level": opt.risk_level,
-                        "risk_assessment": opt.risk_assessment
-                    }
-                    for opt in simulation_result.options
-                ],
-                "recommendation": simulation_result.recommendation,
-                "created_at": datetime.now().isoformat(),
-                "lora_trained": use_lora
-            }
-
-            # 4. 保存副本数据
-            dungeons_storage[dungeon_id] = dungeon_data
-
-            logger.info(f"Dungeon created successfully: {dungeon_id}")
-
             return {
-                "code": 200,
-                "message": "Dungeon created successfully",
-                "data": {
-                    "dungeon_id": dungeon_id,
-                    "user_id": user_id,
-                    "title": title,
-                    "options_count": len(options),
-                    "created_at": dungeon_data["created_at"]
-                }
+                "code": 410,
+                "message": "平行宇宙模拟功能已下线，请使用增强决策副本功能。",
+                "data": None
             }
 
         except Exception as e:

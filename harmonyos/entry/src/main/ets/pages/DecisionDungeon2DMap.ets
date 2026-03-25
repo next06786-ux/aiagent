@@ -1,6 +1,6 @@
 /**
  * 决策副本 2D 地图
- * 单画布动态推演版：近似无限平面 + 实时节点更新 + 点击查看详情
+ * 白色极简版：每个选项独立地图 + 左侧可收起时间轴 + 单地图箭头链路
  */
 import router from '@ohos.router'
 import http from '@ohos.net.http'
@@ -72,6 +72,9 @@ interface EdgeLine {
   toX: number
   toY: number
   color: string
+  fromId?: string
+  toId?: string
+  isBranch?: boolean
 }
 
 interface OptionSummary {
@@ -89,6 +92,11 @@ interface StreamRequestPayload {
   options: StreamRequestOption[]
 }
 
+interface StreamRequestOption {
+  title: string
+  description: string
+}
+
 interface RecommendationData {
   summary: string
   recommended_option: string
@@ -101,11 +109,7 @@ interface ActivityLogItem {
   id: string
   kind: string
   text: string
-}
-
-interface StreamRequestOption {
-  title: string
-  description: string
+  running?: boolean
 }
 
 @Entry
@@ -116,38 +120,34 @@ struct DecisionDungeon2DMap {
   @State optionSummaries: OptionSummary[] = []
   @State nodes: MapNode[] = []
   @State edges: EdgeLine[] = []
+  @State activeOptionIndex: number = 0
   @State selectedNodeId: string = ''
+  @State processingNodeId: string = ''
   @State streamStatus: string = ''
   @State showRecommendation: boolean = false
-  @State viewportScale: number = 1
-  @State viewportOffsetX: number = 0
-  @State viewportOffsetY: number = 0
-  @State dragHintVisible: boolean = true
-  @State activityLogs: ActivityLogItem[] = []
+  @State timelineCollapsed: boolean = false
   @State liveThinkingText: string = ''
   @State liveRecommendationText: string = ''
   @State structuredRecommendation: RecommendationData | null = null
+  @State activityLogs: ActivityLogItem[] = []
+  @State zoomScale: number = 1
+  @State isUpdatingModel: boolean = false
 
   private dungeonId: string = ''
   private userId: string = ''
   private ws: WebSocketUtil | null = null
-  private canvasWidth: number = 5200
-  private canvasHeight: number = 3600
+  private canvasWidth: number = 3600
+  private canvasHeight: number = 2200
   private canvasContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
 
   aboutToAppear() {
     const params = router.getParams() as Record<string, string>
-    this.viewportOffsetX = 480
-    this.viewportOffsetY = 900
-
     if (params?.simulationData) {
       try {
         const simData = JSON.parse(params.simulationData) as Record<string, Object>
         const options = simData.options as DungeonOption[]
-        const hasTimeline = options && options.length > 0 &&
-          options[0].timeline && options[0].timeline.length > 0
-
+        const hasTimeline = options && options.length > 0 && options[0].timeline && options[0].timeline.length > 0
         if (hasTimeline) {
           this.dungeonData = this.convertSimulationToDungeon(simData, params.question || '')
           this.buildGraphFromDungeon()
@@ -185,7 +185,6 @@ struct DecisionDungeon2DMap {
       }
       return
     }
-
     if (params?.dungeonId) {
       this.dungeonId = params.dungeonId
       this.userId = params.userId || ''
@@ -230,20 +229,16 @@ struct DecisionDungeon2DMap {
 
   private buildGraphFromDungeon() {
     if (!this.dungeonData) return
-
     const allNodes: MapNode[] = []
     const allEdges: EdgeLine[] = []
     const summaries: OptionSummary[] = []
-    const laneGap = 560
-    const startX = 280
-    const rootX = 260
-    const baseY = 520
-    const mainStepX = 300
 
     this.dungeonData.options.forEach((option: DungeonOption, optionIndex: number) => {
       const optionColor = this.getOptionColor(optionIndex)
-      const laneY = baseY + optionIndex * laneGap
       const rootId = `root_${optionIndex}`
+      const rootY = 320
+      const startX = 240
+      const stepX = 360
 
       summaries.push({
         index: optionIndex,
@@ -262,7 +257,7 @@ struct DecisionDungeon2DMap {
         description: option.description || '推演起点',
         month: 0,
         probability: 1,
-        position: { x: rootX, y: laneY },
+        position: { x: 120, y: rootY },
         color: optionColor,
         riskTag: 'medium',
         opportunityTag: 'medium',
@@ -280,10 +275,10 @@ struct DecisionDungeon2DMap {
 
       mainEvents.forEach((event: TimelineEvent, idx: number) => {
         const nodeId = event.event_id || `opt${optionIndex}_main_${idx}`
-        const x = startX + (idx + 1) * mainStepX
-        const y = laneY + (idx % 2 === 0 ? -90 : 90)
         const parentId = event.parent_event_id || previousId
         const parentNode = allNodes.find((item: MapNode) => item.id === parentId)
+        const x = startX + idx * stepX
+        const y = rootY + (((idx % 2) === 0) ? -120 : 120)
 
         allNodes.push({
           id: nodeId,
@@ -310,7 +305,10 @@ struct DecisionDungeon2DMap {
             fromY: parentNode.position.y,
             toX: x,
             toY: y,
-            color: optionColor
+            color: optionColor,
+            fromId: parentNode.id,
+            toId: nodeId,
+            isBranch: false
           })
         }
         previousId = nodeId
@@ -321,9 +319,9 @@ struct DecisionDungeon2DMap {
         const parentId = event.parent_event_id || previousId
         const parentNode = allNodes.find((item: MapNode) => item.id === parentId)
         const isPositive = event.risk_tag === 'low' || event.opportunity_tag === 'high'
-        const x = (parentNode ? parentNode.position.x : startX + 400) + 220
-        const y = (parentNode ? parentNode.position.y : laneY) + (isPositive ? -200 : 200)
-        const color = isPositive ? '#4DD0A8' : '#FF6B6B'
+        const x = (parentNode ? parentNode.position.x : startX + 300) + 280
+        const y = (parentNode ? parentNode.position.y : rootY) + (isPositive ? -(240 + idx * 80) : (240 + idx * 80))
+        const color = isPositive ? '#5AD8A6' : '#E8684A'
 
         allNodes.push({
           id: nodeId,
@@ -350,7 +348,10 @@ struct DecisionDungeon2DMap {
             fromY: parentNode.position.y,
             toX: x,
             toY: y,
-            color
+            color,
+            fromId: parentNode.id,
+            toId: nodeId,
+            isBranch: true
           })
         }
       })
@@ -365,32 +366,42 @@ struct DecisionDungeon2DMap {
   }
 
 
+  private getVisibleNodes(): MapNode[] {
+    return this.nodes.filter((item: MapNode) => item.optionIndex === this.activeOptionIndex)
+  }
+
+  private getVisibleEdges(): EdgeLine[] {
+    return this.edges.filter((item: EdgeLine) => {
+      const fromNode = this.nodes.find((node: MapNode) => node.id === item.fromId)
+      return !!fromNode && fromNode.optionIndex === this.activeOptionIndex
+    })
+  }
+
   private drawEdges() {
     this.canvasContext.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
-    this.edges.forEach((edge: EdgeLine) => {
+    this.getVisibleEdges().forEach((edge: EdgeLine) => {
+      const isActivePath = this.processingNodeId !== '' && (edge.toId === this.processingNodeId || edge.fromId === this.processingNodeId)
       this.canvasContext.beginPath()
-      this.canvasContext.strokeStyle = edge.color
-      this.canvasContext.lineWidth = 2.5
-      this.canvasContext.globalAlpha = 0.72
-      const midX = (edge.fromX + edge.toX) / 2
-      this.canvasContext.moveTo(edge.fromX, edge.fromY)
-      this.canvasContext.bezierCurveTo(midX, edge.fromY, midX, edge.toY, edge.toX, edge.toY)
+      this.canvasContext.strokeStyle = isActivePath ? '#3B82F6' : edge.color
+      this.canvasContext.lineWidth = isActivePath ? 4 : (edge.isBranch ? 2 : 3)
+      this.canvasContext.globalAlpha = isActivePath ? 0.95 : (edge.isBranch ? 0.55 : 0.82)
+      if (Math.abs(edge.fromY - edge.toY) < 90) {
+        this.canvasContext.moveTo(edge.fromX, edge.fromY)
+        this.canvasContext.lineTo(edge.toX, edge.toY)
+      } else {
+        const midX = (edge.fromX + edge.toX) / 2
+        this.canvasContext.moveTo(edge.fromX, edge.fromY)
+        this.canvasContext.bezierCurveTo(midX, edge.fromY, midX, edge.toY, edge.toX, edge.toY)
+      }
       this.canvasContext.stroke()
       this.canvasContext.globalAlpha = 1
-
       const angle = Math.atan2(edge.toY - edge.fromY, edge.toX - edge.fromX)
-      const arrowLen = 12
+      const arrowLen = isActivePath ? 14 : 12
       this.canvasContext.beginPath()
-      this.canvasContext.fillStyle = edge.color
+      this.canvasContext.fillStyle = isActivePath ? '#3B82F6' : edge.color
       this.canvasContext.moveTo(edge.toX, edge.toY)
-      this.canvasContext.lineTo(
-        edge.toX - arrowLen * Math.cos(angle - Math.PI / 6),
-        edge.toY - arrowLen * Math.sin(angle - Math.PI / 6)
-      )
-      this.canvasContext.lineTo(
-        edge.toX - arrowLen * Math.cos(angle + Math.PI / 6),
-        edge.toY - arrowLen * Math.sin(angle + Math.PI / 6)
-      )
+      this.canvasContext.lineTo(edge.toX - arrowLen * Math.cos(angle - Math.PI / 6), edge.toY - arrowLen * Math.sin(angle - Math.PI / 6))
+      this.canvasContext.lineTo(edge.toX - arrowLen * Math.cos(angle + Math.PI / 6), edge.toY - arrowLen * Math.sin(angle + Math.PI / 6))
       this.canvasContext.closePath()
       this.canvasContext.fill()
     })
@@ -406,7 +417,6 @@ struct DecisionDungeon2DMap {
 
     try {
       this.ws = new WebSocketUtil()
-
       this.ws.onMessage((data: string) => {
         setTimeout(() => {
           try {
@@ -437,9 +447,12 @@ struct DecisionDungeon2DMap {
               const title = event.title as string
               const optionIndex = this.findOptionIndexByTitle(title)
               if (optionIndex >= 0) {
+                this.activeOptionIndex = optionIndex
                 this.updateOptionStatus(optionIndex, '推演中...')
                 this.addRootNode(optionIndex, title)
+                this.processingNodeId = `root_${optionIndex}`
                 this.pushActivityLog('option', `开始推演 ${title}`)
+                this.drawEdges()
               }
             } else if (type === 'node') {
               this.handleStreamNode(event)
@@ -449,7 +462,9 @@ struct DecisionDungeon2DMap {
               if (optionIndex >= 0) {
                 this.updateOptionScore(optionIndex, event.final_score as number, event.risk_level as number)
                 this.updateOptionStatus(optionIndex, '推演完成')
+                this.processingNodeId = ''
                 this.pushActivityLog('option', `${title} 推演完成，已完成评分与风险计算`)
+                this.drawEdges()
               }
             } else if (type === 'recommendation') {
               if (this.dungeonData) {
@@ -492,25 +507,14 @@ struct DecisionDungeon2DMap {
           }
         }, 0)
       })
-
-      this.ws.onError((_error: string) => {
-        this.streamStatus = '连接失败'
-      })
-      this.ws.onClose(() => {
-        console.info('推演 WebSocket 已关闭')
-      })
-
+      this.ws.onError((_error: string) => { this.streamStatus = '连接失败' })
+      this.ws.onClose(() => { console.info('推演 WebSocket 已关闭') })
       await this.ws.connect('/api/decision/enhanced/ws/simulate')
       this.streamStatus = '推演通道已建立，等待模型响应...'
-      const streamOptions: StreamRequestOption[] = this.dungeonData
-        ? this.dungeonData.options.map((item: DungeonOption): StreamRequestOption => {
-          return { title: item.title, description: item.description }
-        })
-        : []
-      const payload: StreamRequestPayload = {
-        session_id: this.dungeonId,
-        options: streamOptions
-      }
+      const streamOptions: StreamRequestOption[] = this.dungeonData ? this.dungeonData.options.map((item: DungeonOption): StreamRequestOption => {
+        return { title: item.title, description: item.description }
+      }) : []
+      const payload: StreamRequestPayload = { session_id: this.dungeonId, options: streamOptions }
       this.ws.send(payload)
     } catch (error) {
       this.streamStatus = '推演启动失败'
@@ -518,13 +522,13 @@ struct DecisionDungeon2DMap {
     }
   }
 
+
   private handleStreamNode(event: Record<string, Object>) {
     const node = event.node as Record<string, Object>
     const optionTitle = event.option_title as string
     const optionIndex = this.findOptionIndexByTitle(optionTitle)
     if (optionIndex < 0) return
 
-    const laneY = 520 + optionIndex * 560
     const parentId = (node.parent_event_id as string) || `root_${optionIndex}`
     const parentNode = this.nodes.find((item: MapNode) => item.id === parentId)
     const optionNodes = this.nodes.filter((item: MapNode) => item.optionIndex === optionIndex && !item.id.startsWith('root_'))
@@ -537,15 +541,15 @@ struct DecisionDungeon2DMap {
     if (isBranch && parentNode) {
       const isPositive = (node.risk_tag as string) === 'low' || (node.opportunity_tag as string) === 'high'
       const branchSiblings = this.nodes.filter((item: MapNode) => item.parentId === parentId && item.isBranch).length
-      x = parentNode.position.x + 260
-      y = parentNode.position.y + (isPositive ? -(180 + branchSiblings * 70) : (180 + branchSiblings * 70))
+      x = parentNode.position.x + 320
+      y = parentNode.position.y + (isPositive ? -(220 + branchSiblings * 90) : (220 + branchSiblings * 90))
     } else {
-      x = 280 + month * 280
-      y = laneY + ((month % 3) - 1) * 110
+      x = 320 + month * 320
+      y = 320 + (((month - 1) % 2 === 0) ? -140 : 140)
     }
 
     const color = isBranch
-      ? (((node.risk_tag as string) === 'low' || (node.opportunity_tag as string) === 'high') ? '#4DD0A8' : '#FF6B6B')
+      ? (((node.risk_tag as string) === 'low' || (node.opportunity_tag as string) === 'high') ? '#5AD8A6' : '#E8684A')
       : this.getOptionColor(optionIndex)
 
     const mapNode: MapNode = {
@@ -575,45 +579,28 @@ struct DecisionDungeon2DMap {
         fromY: parentNode.position.y,
         toX: x,
         toY: y,
-        color
+        color,
+        fromId: parentNode.id,
+        toId: mapNode.id,
+        isBranch
       })
     }
 
     this.nodes = nextNodes
     this.edges = nextEdges
+    this.activeOptionIndex = optionIndex
     this.selectedNodeId = mapNode.id
+    this.processingNodeId = mapNode.id
     this.pushActivityLog('node', `${optionTitle} 新增节点：${mapNode.title}`)
-    this.centerOnNode(mapNode)
     this.drawEdges()
   }
-
 
   private addRootNode(optionIndex: number, title: string) {
     const rootId = `root_${optionIndex}`
     const exists = this.nodes.some((item: MapNode) => item.id === rootId)
     if (exists) return
-
-    this.nodes = this.nodes.concat([{
-      id: rootId,
-      parentId: '',
-      title,
-      description: '推演起点',
-      month: 0,
-      probability: 1,
-      position: { x: 260, y: 520 + optionIndex * 560 },
-      color: this.getOptionColor(optionIndex),
-      riskTag: 'medium',
-      opportunityTag: 'medium',
-      eventType: 'origin',
-      impact: {},
-      isBranch: false,
-      revealed: true,
-      optionIndex,
-      optionTitle: title
-    }])
-    if (this.selectedNodeId === '') {
-      this.selectedNodeId = rootId
-    }
+    this.nodes = this.nodes.concat([{ id: rootId, parentId: '', title, description: '推演起点', month: 0, probability: 1, position: { x: 120, y: 320 }, color: this.getOptionColor(optionIndex), riskTag: 'medium', opportunityTag: 'medium', eventType: 'origin', impact: {}, isBranch: false, revealed: true, optionIndex, optionTitle: title }])
+    if (this.selectedNodeId === '') this.selectedNodeId = rootId
   }
 
   private findOptionIndexByTitle(title: string): number {
@@ -631,51 +618,27 @@ struct DecisionDungeon2DMap {
   private updateOptionStatus(optionIndex: number, status: string) {
     this.optionSummaries = this.optionSummaries.map((item: OptionSummary) => {
       if (item.index !== optionIndex) return item
-      return {
-        index: item.index,
-        title: item.title,
-        color: item.color,
-        finalScore: item.finalScore,
-        riskLevel: item.riskLevel,
-        status,
-        progress: status === '推演中...' ? Math.max(item.progress, 0.35) : item.progress
-      }
+      return { index: item.index, title: item.title, color: item.color, finalScore: item.finalScore, riskLevel: item.riskLevel, status, progress: status === '推演中...' ? Math.max(item.progress, 0.35) : item.progress }
     })
   }
 
   private updateOptionScore(optionIndex: number, score: number, risk: number) {
     this.optionSummaries = this.optionSummaries.map((item: OptionSummary) => {
       if (item.index !== optionIndex) return item
-      return {
-        index: item.index,
-        title: item.title,
-        color: item.color,
-        finalScore: score,
-        riskLevel: risk,
-        status: item.status,
-        progress: 1
-      }
+      return { index: item.index, title: item.title, color: item.color, finalScore: score, riskLevel: risk, status: item.status, progress: 1 }
     })
-  }
-
-  private centerOnNode(node: MapNode) {
-    this.viewportOffsetX = Math.max(0, node.position.x - 500)
-    this.viewportOffsetY = Math.max(0, node.position.y - 800)
   }
 
   private async loadDungeonData() {
     this.isLoading = true
     try {
       const httpRequest = http.createHttp()
-      const response = await httpRequest.request(
-        ApiConfig.getApiUrl(`/api/decision/result/${this.dungeonId}`),
-        {
-          method: http.RequestMethod.GET,
-          header: { 'Content-Type': 'application/json' },
-          connectTimeout: 30000,
-          readTimeout: 30000
-        }
-      )
+      const response = await httpRequest.request(ApiConfig.getApiUrl(`/api/decision/result/${this.dungeonId}`), {
+        method: http.RequestMethod.GET,
+        header: { 'Content-Type': 'application/json' },
+        connectTimeout: 30000,
+        readTimeout: 30000
+      })
       httpRequest.destroy()
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>
@@ -693,14 +656,14 @@ struct DecisionDungeon2DMap {
   }
 
   private getOptionColor(index: number): string {
-    const colors = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#9270CA']
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
     return colors[index % colors.length]
   }
 
   private getRiskColor(tag: string): string {
-    if (tag === 'low') return '#4DD0A8'
-    if (tag === 'high') return '#FF6B6B'
-    return '#F5B041'
+    if (tag === 'low') return '#10B981'
+    if (tag === 'high') return '#EF4444'
+    return '#F59E0B'
   }
 
   private getSelectedNode(): MapNode | null {
@@ -716,611 +679,341 @@ struct DecisionDungeon2DMap {
     text = text.replace(/\(风险分支\)/g, '')
     text = text.replace(/进展顺利，带来额外机遇/g, '带来机遇')
     text = text.replace(/遇到阻碍，需要调整策略/g, '遇到阻碍')
-    text = text.replace(/开始围绕/g, '')
-    text = text.replace(/系统正在/g, '')
     text = text.replace(/\s+/g, ' ').trim()
-    if (text.length > 22) {
-      return text.slice(0, 22) + '...'
-    }
-    return text === '' ? '新事件' : text
+    return text.length > 20 ? text.slice(0, 20) + '...' : (text === '' ? '新事件' : text)
   }
 
-  private pushActivityLog(kind: string, text: string) {
-    const next = this.activityLogs.concat([{ id: `${Date.now()}_${this.activityLogs.length}`, kind, text }])
-    this.activityLogs = next.length > 10 ? next.slice(next.length - 10) : next
+  private pushActivityLog(kind: string, text: string, running: boolean = false) {
+    const next = this.activityLogs.concat([{ id: `${Date.now()}_${this.activityLogs.length}`, kind, text, running }])
+    this.activityLogs = next.length > 14 ? next.slice(next.length - 14) : next
   }
 
   private getNodeInterpretation(node: MapNode | null): string {
     if (!node) return ''
-    const impacts = Object.keys(node.impact)
-      .filter((key: string) => Math.abs(node.impact[key]) > 0.05)
-      .map((key: string) => `${key}${node.impact[key] > 0 ? '提升' : '承压'}`)
+    const impacts = Object.keys(node.impact).filter((key: string) => Math.abs(node.impact[key]) > 0.05).map((key: string) => `${key}${node.impact[key] > 0 ? '提升' : '承压'}`)
     const impactSummary = impacts.length > 0 ? impacts.join('、') : '整体影响较平稳'
-    if (node.isBranch) {
-      return `这是一个分支事件，表示主路径在这里出现了新的变化方向，当前更偏向 ${node.riskTag === 'high' ? '风险上升' : (node.opportunityTag === 'high' ? '机会增加' : '中性波动')}，主要影响 ${impactSummary}。`
-    }
-    return `这是主路径上的关键事件，表示该选项在这个阶段出现了新的推进或反馈，当前主要影响 ${impactSummary}。`
+    return node.isBranch
+      ? `这是一个分支事件，表示主路径在这里出现了新的变化方向，主要影响 ${impactSummary}。`
+      : `这是主路径上的关键事件，表示该选项在这个阶段出现了新的推进或反馈，主要影响 ${impactSummary}。`
   }
 
   private getNodeImportance(node: MapNode): number {
-    const impactScore = Object.keys(node.impact).reduce((sum: number, key: string) => {
-      return sum + Math.abs(node.impact[key])
-    }, 0)
+    const impactScore = Object.keys(node.impact).reduce((sum: number, key: string) => sum + Math.abs(node.impact[key]), 0)
     if (node.id.startsWith('root_')) return 3
     if (impactScore >= 1.2 || node.riskTag === 'high' || node.opportunityTag === 'high') return 3
     if (impactScore >= 0.5) return 2
     return 1
   }
 
+  private resetZoom() {
+    this.zoomScale = 1
+    this.drawEdges()
+  }
+
+  private fitCurrentOption() {
+    const visible = this.getVisibleNodes()
+    if (visible.length <= 0) {
+      this.zoomScale = 1
+    } else if (visible.length <= 4) {
+      this.zoomScale = 1.1
+    } else if (visible.length <= 8) {
+      this.zoomScale = 0.9
+    } else {
+      this.zoomScale = 0.75
+    }
+    this.drawEdges()
+  }
+
+
   build() {
     Column() {
       this.HeaderBar()
-
       if (this.isLoading) {
-        Column({ space: 18 }) {
-          LoadingProgress().width(48).height(48).color('#7AC7FF')
-          Text('正在准备基座 + LoRA 决策推演').fontSize(17).fontWeight(700).fontColor('#E7EEF8')
-          Text('系统正在读取用户画像、收集信息摘要并构建初始推演平面')
-            .fontSize(12)
-            .fontColor('#8EA3B7')
-            .textAlign(TextAlign.Center)
-            .lineHeight(18)
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
+        Column({ space: 16 }) {
+          LoadingProgress().width(42).height(42).color('#3B82F6')
+          Text('正在准备推演').fontSize(16).fontWeight(700).fontColor('#111827')
+          Text('系统正在读取信息并准备地图').fontSize(12).fontColor('#6B7280')
+        }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
       } else if (this.optionSummaries.length > 0) {
         Column({ space: 0 }) {
-          this.TopPinnedSummary()
+          this.TopOptionTabs()
           if (this.structuredRecommendation) {
             this.DecisionRecommendationCard()
           }
-          Stack() {
-            this.InfiniteCanvasView()
-            this.ActivityOverlay()
-            this.NodeDetailOverlay()
+          Row() {
+            this.ActivitySidebar()
+            Stack() {
+              this.OptionCanvasView()
+              this.NodeDetailOverlay()
+            }
+            .layoutWeight(1)
           }
           .layoutWeight(1)
         }
         .layoutWeight(1)
       } else {
         Column({ space: 12 }) {
-          Text('等待推演数据...').fontSize(16).fontColor('#6B7A90')
-          if (this.streamStatus !== '') {
-            Text(this.streamStatus).fontSize(13).fontColor('#7AC7FF')
-          }
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
+          Text('等待推演数据...').fontSize(16).fontColor('#6B7280')
+          Text(this.streamStatus).fontSize(12).fontColor('#3B82F6')
+        }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
       }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#0A0F1E')
+    .backgroundColor('#F8FAFC')
   }
-
 
   @Builder
   HeaderBar() {
     Row() {
-      Button({ type: ButtonType.Circle }) {
-        Text('←').fontSize(22).fontColor('#E0E8F5').fontWeight(700)
-      }
-      .width(40)
-      .height(40)
-      .backgroundColor('rgba(255,255,255,0.06)')
-      .onClick(() => router.back())
-
+      Button({ type: ButtonType.Circle }) { Text('←').fontSize(22).fontColor('#111827').fontWeight(700) }
+        .width(40).height(40).backgroundColor('#FFFFFF').onClick(() => router.back())
       Column({ space: 2 }) {
-        Text('决策动态推演平面').fontSize(20).fontWeight(700).fontColor('#F0F4FA')
-        if (this.dungeonData) {
-          Text(this.dungeonData.title).fontSize(12).fontColor('#6B7A90').maxLines(1)
-        }
-        if (this.streamStatus !== '') {
-          Text(this.streamStatus).fontSize(11).fontColor('#7AC7FF')
-        }
+        Text('决策推演地图').fontSize(20).fontWeight(700).fontColor('#111827')
+        if (this.dungeonData) { Text(this.dungeonData.title).fontSize(12).fontColor('#6B7280').maxLines(1) }
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
       .margin({ left: 12 })
-
-      Row({ space: 10 }) {
-        this.LegendDot('#5B8FF9', '主线')
-        this.LegendDot('#4DD0A8', '机遇')
-        this.LegendDot('#FF6B6B', '风险')
+      Row({ space: 8 }) {
+        Button(this.isUpdatingModel ? '更新中' : '更新用户模型')
+          .fontSize(11)
+          .fontColor('#10B981')
+          .backgroundColor('#FFFFFF')
+          .enabled(!this.isUpdatingModel)
+          .onClick(() => { this.triggerModelUpdate() })
+        Button('适配').fontSize(11).fontColor('#3B82F6').backgroundColor('#FFFFFF').onClick(() => { this.fitCurrentOption() })
+        Button('重置').fontSize(11).fontColor('#374151').backgroundColor('#FFFFFF').onClick(() => { this.resetZoom() })
       }
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 16, bottom: 10 })
-    .backgroundColor('rgba(10,15,30,0.95)')
+    .padding({ left: 16, right: 16, top: 16, bottom: 12 })
+    .backgroundColor('#F8FAFC')
   }
 
   @Builder
-  LegendDot(dotColor: string, label: string) {
-    Row({ space: 4 }) {
-      Column().width(10).height(10).borderRadius(5).backgroundColor(dotColor)
-      Text(label).fontSize(10).fontColor('#8899AA')
+  TopOptionTabs() {
+    Scroll() {
+      Row({ space: 10 }) {
+        ForEach(this.optionSummaries, (item: OptionSummary) => {
+          Column({ space: 6 }) {
+            Text(item.title).fontSize(12).fontWeight(600).fontColor(this.activeOptionIndex === item.index ? '#111827' : '#6B7280')
+            Text(item.status).fontSize(10).fontColor(item.color)
+            Row() {
+              Column().width(`${item.progress * 100}%`).height(4).borderRadius(2).backgroundColor(item.color)
+            }
+            .width(120)
+            .height(4)
+            .backgroundColor('#E5E7EB')
+            .borderRadius(2)
+          }
+          .padding(10)
+          .backgroundColor(this.activeOptionIndex === item.index ? '#FFFFFF' : '#F3F4F6')
+          .borderRadius(12)
+          .border({ width: 1, color: this.activeOptionIndex === item.index ? '#D1D5DB' : 'transparent' })
+          .onClick(() => {
+            this.activeOptionIndex = item.index
+            this.fitCurrentOption()
+          })
+        })
+      }
+    }
+    .scrollable(ScrollDirection.Horizontal)
+    .scrollBar(BarState.Off)
+    .width('100%')
+    .padding({ left: 14, right: 14, top: 6, bottom: 10 })
+  }
+
+  @Builder
+  DecisionRecommendationCard() {
+    if (this.structuredRecommendation) {
+      Column({ space: 6 }) {
+        Text(`建议选择：${this.structuredRecommendation!.recommended_option}`).fontSize(14).fontWeight(700).fontColor('#111827')
+        Text(this.structuredRecommendation!.summary).fontSize(11).fontColor('#4B5563').maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .width('100%')
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .backgroundColor('#FFFFFF')
+      .border({ width: 1, color: '#E5E7EB' })
     }
   }
 
   @Builder
-  InfiniteCanvasView() {
+  ActivitySidebar() {
+    Column({ space: 10 }) {
+      if (!this.timelineCollapsed) {
+        Column({ space: 10 }) {
+          Row() {
+            Text('推演时间轴').fontSize(12).fontWeight(700).fontColor('#111827').layoutWeight(1)
+            Button('收起')
+              .fontSize(10)
+              .fontColor('#3B82F6')
+              .backgroundColor('#FFFFFF')
+              .onClick(() => { this.timelineCollapsed = true })
+          }
+          .width('100%')
+
+          Column({ space: 6 }) {
+            Row({ space: 6 }) { LoadingProgress().width(10).height(10).color('#3B82F6'); Text('1. 主链生成').fontSize(10).fontColor('#6B7280') }
+            Row({ space: 6 }) { LoadingProgress().width(10).height(10).color('#F59E0B'); Text('2. 分支补全').fontSize(10).fontColor('#6B7280') }
+            Row({ space: 6 }) { LoadingProgress().width(10).height(10).color('#10B981'); Text('3. 推荐汇总').fontSize(10).fontColor('#6B7280') }
+          }
+          .width('100%')
+          .padding(8)
+          .backgroundColor('#FFFFFF')
+          .borderRadius(10)
+
+          Scroll() {
+            Column({ space: 10 }) {
+              ForEach(this.activityLogs, (item: ActivityLogItem) => {
+                Row({ space: 8 }) {
+                  if (item.running) {
+                    LoadingProgress().width(10).height(10).color('#3B82F6')
+                  } else {
+                    Column().width(6).height(6).borderRadius(3).backgroundColor(item.kind === 'thinking' ? '#F59E0B' : (item.kind === 'node' ? '#10B981' : '#3B82F6')).margin({ top: 6 })
+                  }
+                  Text(item.text).fontSize(10).fontColor('#374151').maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                }.width('100%')
+              })
+              if (this.liveThinkingText !== '') {
+                Column({ space: 4 }) {
+                  Text('模型实时输出').fontSize(10).fontColor('#F59E0B')
+                  Text(this.liveThinkingText).fontSize(10).fontColor('#92400E').maxLines(12).textOverflow({ overflow: TextOverflow.Ellipsis })
+                }
+                .width('100%').padding(8).backgroundColor('#FEF3C7').borderRadius(10)
+              }
+            }
+            .width('100%')
+          }
+          .height('100%')
+          .scrollBar(BarState.Off)
+        }
+        .width('100%')
+      } else {
+        Button('展开')
+          .fontSize(11)
+          .fontColor('#3B82F6')
+          .backgroundColor('#FFFFFF')
+          .onClick(() => { this.timelineCollapsed = false })
+      }
+    }
+    .width(this.timelineCollapsed ? 68 : 220)
+    .height('100%')
+    .padding(10)
+    .backgroundColor('#F3F4F6')
+  }
+
+  @Builder
+  OptionCanvasView() {
     Scroll() {
       Scroll() {
         Stack() {
-          Column()
-            .width(this.canvasWidth)
-            .height(this.canvasHeight)
-            .backgroundColor('#09111F')
-            .backgroundImage('/resources/base/media/grid_bg.png')
-            .opacity(0.98)
-
+          Column().width(this.canvasWidth * this.zoomScale).height(this.canvasHeight * this.zoomScale).backgroundColor('#FFFFFF')
           Canvas(this.canvasContext)
-            .width(this.canvasWidth)
-            .height(this.canvasHeight)
+            .width(this.canvasWidth * this.zoomScale)
+            .height(this.canvasHeight * this.zoomScale)
             .backgroundColor('transparent')
-            .onReady(() => {
-              this.drawEdges()
-            })
-
-          ForEach(this.nodes, (node: MapNode) => {
+            .onReady(() => { this.drawEdges() })
+          ForEach(this.getVisibleNodes(), (node: MapNode) => {
             if (node.revealed) {
               this.MapNodeView(node)
             }
           })
-
-          if (this.dragHintVisible) {
-            Column({ space: 6 }) {
-              Text('可双向拖动画布查看全部路径')
-                .fontSize(12)
-                .fontColor('#C8D4E3')
-              Text('点击节点查看详情')
-                .fontSize(10)
-                .fontColor('#7AC7FF')
-            }
-            .padding(12)
-            .backgroundColor('rgba(8,16,30,0.78)')
-            .borderRadius(12)
-            .position({ x: 24, y: 24 })
-          }
         }
-        .width(this.canvasWidth)
-        .height(this.canvasHeight)
+        .width(this.canvasWidth * this.zoomScale)
+        .height(this.canvasHeight * this.zoomScale)
       }
       .scrollable(ScrollDirection.Horizontal)
       .scrollBar(BarState.Off)
-      .onScroll(() => { this.dragHintVisible = false })
     }
     .scrollable(ScrollDirection.Vertical)
     .scrollBar(BarState.Auto)
-    .onScroll(() => { this.dragHintVisible = false })
-    .edgeEffect(EdgeEffect.Spring)
   }
 
   @Builder
   MapNodeView(node: MapNode) {
     Row({ space: 10 }) {
       Stack() {
-        Column()
-          .width(node.id.startsWith('root_') ? 56 : (this.getNodeImportance(node) === 3 ? 34 : (this.getNodeImportance(node) === 2 ? 30 : 26)))
-          .height(node.id.startsWith('root_') ? 56 : (this.getNodeImportance(node) === 3 ? 34 : (this.getNodeImportance(node) === 2 ? 30 : 26)))
+        Column().width(node.id.startsWith('root_') ? 56 : 30).height(node.id.startsWith('root_') ? 56 : 30)
           .backgroundColor(node.color)
-          .borderRadius(node.id.startsWith('root_') ? 16 : 14)
-          .border({
-            width: node.id === this.selectedNodeId ? 2.5 : (this.getNodeImportance(node) === 3 ? 1.5 : 1),
-            color: node.id === this.selectedNodeId ? '#FFFFFF' : 'rgba(255,255,255,0.16)'
-          })
-          .shadow({
-            radius: node.id === this.selectedNodeId ? 18 : (this.getNodeImportance(node) === 3 ? 12 : 8),
-            color: node.color,
-            offsetX: 0,
-            offsetY: 0
-          })
-
-        Text(node.id.startsWith('root_') ? '起' : `${node.month}`)
-          .fontSize(node.id.startsWith('root_') ? 15 : (this.getNodeImportance(node) === 3 ? 11 : 10))
-          .fontWeight(700)
-          .fontColor('#FFFFFF')
+          .borderRadius(node.id.startsWith('root_') ? 16 : 15)
+          .border({ width: node.id === this.selectedNodeId ? 2.5 : 1, color: node.id === this.selectedNodeId ? '#111827' : '#D1D5DB' })
+        if (this.processingNodeId === node.id) {
+          Column().width(node.id.startsWith('root_') ? 66 : 40).height(node.id.startsWith('root_') ? 66 : 40)
+            .border({ width: 2, color: '#3B82F6' }).borderRadius(20).opacity(0.85)
+            .animation({ duration: 700, curve: Curve.EaseInOut, iterations: -1, playMode: PlayMode.Alternate })
+        }
+        Text(node.id.startsWith('root_') ? '起' : `${node.month}`).fontSize(11).fontWeight(700).fontColor('#FFFFFF')
       }
-
       Column({ space: 4 }) {
-        Text(node.title)
-          .fontSize(node.id.startsWith('root_') ? 14 : 12)
-          .fontWeight(node.id === this.selectedNodeId ? 700 : 600)
-          .fontColor(node.id === this.selectedNodeId ? '#F8FBFF' : '#D7E0EA')
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width(node.id.startsWith('root_') ? 200 : 170)
+        Text(node.title).fontSize(12).fontWeight(600).fontColor('#111827').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width(170)
         Row({ space: 6 }) {
-          Text(node.isBranch ? '分支' : '主链')
-            .fontSize(9)
-            .fontColor(node.isBranch ? '#FFB3A7' : '#7AC7FF')
-            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .backgroundColor(node.isBranch ? 'rgba(255,107,107,0.10)' : 'rgba(122,199,255,0.10)')
-            .borderRadius(6)
-          if (!node.id.startsWith('root_') && this.getNodeImportance(node) === 3) {
-            Text('关键节点')
-              .fontSize(9)
-              .fontColor('#FFD166')
-              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-              .backgroundColor('rgba(255,209,102,0.12)')
-              .borderRadius(6)
+          Text(node.isBranch ? '分支' : '主链').fontSize(9).fontColor(node.isBranch ? '#B45309' : '#2563EB')
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 }).backgroundColor(node.isBranch ? '#FEF3C7' : '#DBEAFE').borderRadius(6)
+          if (this.processingNodeId === node.id) {
+            Row({ space: 4 }) { LoadingProgress().width(10).height(10).color('#3B82F6'); Text('处理中').fontSize(9).fontColor('#3B82F6') }
           }
         }
-      }
-      .alignItems(HorizontalAlign.Start)
+      }.alignItems(HorizontalAlign.Start)
     }
     .padding({ left: 8, right: 12, top: 8, bottom: 8 })
-    .backgroundColor(node.id === this.selectedNodeId ? 'rgba(122,199,255,0.14)' : 'rgba(255,255,255,0.04)')
+    .backgroundColor(node.id === this.selectedNodeId ? '#EFF6FF' : '#FFFFFF')
     .borderRadius(18)
-    .border({
-      width: 1,
-      color: node.id === this.selectedNodeId ? 'rgba(122,199,255,0.36)' : (this.getNodeImportance(node) === 3 ? 'rgba(255,209,102,0.18)' : 'rgba(255,255,255,0.06)')
-    })
-    .position({ x: node.position.x, y: node.position.y })
-    .onClick(() => {
-      this.selectedNodeId = node.id
-      this.dragHintVisible = false
-    })
-    .animation({ duration: 260, curve: Curve.EaseOut })
+    .border({ width: 1, color: node.isBranch ? '#FDE68A' : '#E5E7EB' })
+    .position({ x: node.position.x * this.zoomScale, y: node.position.y * this.zoomScale })
+    .onClick(() => { this.selectedNodeId = node.id })
   }
 
-
-  @Builder
-  TopPinnedSummary() {
-    Column({ space: 8 }) {
-      Scroll() {
-        Row({ space: 10 }) {
-          ForEach(this.optionSummaries, (item: OptionSummary) => {
-            Column({ space: 6 }) {
-              Row({ space: 6 }) {
-                Column().width(8).height(8).borderRadius(4).backgroundColor(item.color)
-                Text(item.title)
-                  .fontSize(12)
-                  .fontWeight(600)
-                  .fontColor('#E6EDF5')
-                  .maxLines(1)
-              }
-              Row({ space: 8 }) {
-                Text(item.status)
-                  .fontSize(10)
-                  .fontColor(item.status === '推演中...' ? '#F5B041' : '#7AC7FF')
-                if (item.finalScore > 0) {
-                  Text(`${item.finalScore.toFixed(0)}分`)
-                    .fontSize(10)
-                    .fontColor(item.color)
-                }
-              }
-              Row() {
-                Column()
-                  .width(`${item.progress * 100}%`)
-                  .height(4)
-                  .borderRadius(2)
-                  .backgroundColor(item.color)
-              }
-              .width('100%')
-              .height(4)
-              .backgroundColor('rgba(255,255,255,0.08)')
-              .borderRadius(2)
-            }
-            .width(150)
-            .padding(10)
-            .backgroundColor('rgba(8,16,30,0.92)')
-            .borderRadius(12)
-            .border({ width: 1, color: 'rgba(255,255,255,0.06)' })
-            .alignItems(HorizontalAlign.Start)
-          })
-        }
-      }
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-    }
-    .width('100%')
-    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-    .backgroundColor('rgba(10,15,30,0.90)')
-  }
-
-  @Builder
-  DecisionRecommendationCard() {
-    if (this.structuredRecommendation) {
-      Column({ space: 8 }) {
-        Row({ space: 8 }) {
-          Column().width(10).height(10).borderRadius(5).backgroundColor('#5AD8A6')
-          Text(`当前建议：${this.structuredRecommendation!.recommended_option}`)
-            .fontSize(14)
-            .fontWeight(700)
-            .fontColor('#F0F6FC')
-        }
-        Text(this.structuredRecommendation!.summary)
-          .fontSize(11)
-          .fontColor('#C9D7E5')
-          .lineHeight(18)
-          .maxLines(3)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      }
-      .width('100%')
-      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-      .backgroundColor('rgba(90,216,166,0.10)')
-      .border({ width: 1, color: 'rgba(90,216,166,0.18)' })
-    }
-  }
-
-  @Builder
-  ActivityOverlay() {
-    Column({ space: 10 }) {
-      Row({ space: 8 }) {
-        Column().width(8).height(8).borderRadius(4).backgroundColor('#7AC7FF')
-        Text('推演时间轴')
-          .fontSize(12)
-          .fontWeight(700)
-          .fontColor('#EAF2FA')
-      }
-      if (this.streamStatus !== '') {
-        Row({ space: 8 }) {
-          LoadingProgress().width(14).height(14).color('#7AC7FF')
-          Text(this.streamStatus)
-            .fontSize(11)
-            .fontColor('#7AC7FF')
-            .maxLines(2)
-        }
-      }
-
-      Scroll() {
-        Column({ space: 10 }) {
-          ForEach(this.activityLogs, (item: ActivityLogItem) => {
-            Row({ space: 8 }) {
-              Column()
-                .width(8)
-                .height(8)
-                .borderRadius(4)
-                .backgroundColor(item.kind === 'thinking' ? '#F6D06F' : (item.kind === 'node' ? '#4DD0A8' : '#7AC7FF'))
-                .margin({ top: 5 })
-              Text(item.text)
-                .fontSize(10)
-                .fontColor(item.kind === 'thinking' ? '#F6D06F' : '#D7E3EF')
-                .maxLines(3)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-            }
-            .width('100%')
-          })
-
-          if (this.liveThinkingText !== '') {
-            Column({ space: 4 }) {
-              Text('模型实时输出')
-                .fontSize(10)
-                .fontColor('#F6D06F')
-              Text(this.liveThinkingText)
-                .fontSize(10)
-                .fontColor('#F6D06F')
-                .maxLines(8)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            .width('100%')
-            .padding(10)
-            .backgroundColor('rgba(246,208,111,0.08)')
-            .borderRadius(10)
-          }
-
-          if (this.liveRecommendationText !== '') {
-            Column({ space: 4 }) {
-              Text('推荐结论生成中')
-                .fontSize(10)
-                .fontColor('#9FD3FF')
-              Text(this.liveRecommendationText)
-                .fontSize(10)
-                .fontColor('#9FD3FF')
-                .maxLines(6)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            .width('100%')
-            .padding(10)
-            .backgroundColor('rgba(122,199,255,0.08)')
-            .borderRadius(10)
-          }
-
-          if (this.structuredRecommendation) {
-            Column({ space: 8 }) {
-              Text('结构化推荐')
-                .fontSize(10)
-                .fontColor('#7AC7FF')
-              Text(`建议选择：${this.structuredRecommendation!.recommended_option}`)
-                .fontSize(11)
-                .fontWeight(700)
-                .fontColor('#EAF2FA')
-              Text(this.structuredRecommendation!.summary)
-                .fontSize(10)
-                .fontColor('#C8D6E5')
-                .maxLines(3)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-              if (this.structuredRecommendation!.reasons.length > 0) {
-                Column({ space: 4 }) {
-                  Text('推荐原因').fontSize(10).fontColor('#9FD3FF')
-                  ForEach(this.structuredRecommendation!.reasons, (reason: string) => {
-                    Text(`• ${reason}`)
-                      .fontSize(10)
-                      .fontColor('#D7E3EF')
-                      .maxLines(2)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  })
-                }
-                .width('100%')
-              }
-
-              if (this.structuredRecommendation!.risks.length > 0) {
-                Column({ space: 4 }) {
-                  Text('风险提醒').fontSize(10).fontColor('#FFB3A7')
-                  ForEach(this.structuredRecommendation!.risks, (risk: string) => {
-                    Text(`• ${risk}`)
-                      .fontSize(10)
-                      .fontColor('#FFD6CF')
-                      .maxLines(2)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  })
-                }
-                .width('100%')
-              }
-
-              if (this.structuredRecommendation!.actions.length > 0) {
-                Column({ space: 4 }) {
-                  Text('建议动作').fontSize(10).fontColor('#5AD8A6')
-                  ForEach(this.structuredRecommendation!.actions, (action: string) => {
-                    Text(`• ${action}`)
-                      .fontSize(10)
-                      .fontColor('#D8F5EA')
-                      .maxLines(2)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  })
-                }
-                .width('100%')
-              }
-            }
-            .width('100%')
-            .padding(10)
-            .backgroundColor('rgba(90,216,166,0.10)')
-            .borderRadius(10)
-          }
-        }
-        .width('100%')
-      }
-      .height(260)
-      .scrollBar(BarState.Off)
-    }
-    .width(300)
-    .padding(12)
-    .backgroundColor('rgba(8,16,30,0.88)')
-    .borderRadius(14)
-    .border({ width: 1, color: 'rgba(255,255,255,0.06)' })
-    .alignItems(HorizontalAlign.Start)
-    .position({ x: 16, y: 16 })
-  }
 
   @Builder
   NodeDetailOverlay() {
     if (this.selectedNodeId !== '') {
       Column() {
         Blank().layoutWeight(1)
-
         Column({ space: 10 }) {
           Row() {
-            Row({ space: 8 }) {
-              Column()
-                .width(12)
-                .height(12)
-                .borderRadius(6)
-                .backgroundColor(this.getSelectedNode() ? this.getSelectedNode()!.color : '#5B8FF9')
-              Text(this.getSelectedNode() ? this.getSelectedNode()!.title : '')
-                .fontSize(17)
-                .fontWeight(700)
-                .fontColor('#F2F6FB')
-                .layoutWeight(1)
-            }
-            .layoutWeight(1)
-
-            Button('关闭')
-              .fontSize(11)
-              .fontColor('#D7E4F3')
-              .backgroundColor('rgba(255,255,255,0.06)')
-              .borderRadius(10)
-              .onClick(() => { this.selectedNodeId = '' })
+            Text(this.getSelectedNode() ? this.getSelectedNode()!.title : '').fontSize(17).fontWeight(700).fontColor('#111827').layoutWeight(1)
+            Button('关闭').fontSize(11).fontColor('#374151').backgroundColor('#FFFFFF').onClick(() => { this.selectedNodeId = '' })
           }
-          .width('100%')
-
-          Text(this.getSelectedNode() ? this.getSelectedNode()!.description : '')
-            .fontSize(13)
-            .fontColor('#B8C5D4')
-            .lineHeight(20)
-
-          Text(this.getNodeInterpretation(this.getSelectedNode()))
-            .fontSize(11)
-            .fontColor('#9FD3FF')
-            .lineHeight(18)
-            .padding(10)
-            .backgroundColor('rgba(122,199,255,0.08)')
-            .borderRadius(10)
-            .width('100%')
-
-          Row({ space: 8 }) {
-            Text(this.getSelectedNode() ? this.getSelectedNode()!.optionTitle : '')
-              .fontSize(11)
-              .fontColor(this.getSelectedNode() ? this.getSelectedNode()!.color : '#5B8FF9')
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor('rgba(255,255,255,0.05)')
-              .borderRadius(8)
-            Text(`月 ${this.getSelectedNode() ? this.getSelectedNode()!.month : 0}`)
-              .fontSize(11)
-              .fontColor('#DCE7F2')
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor('rgba(255,255,255,0.05)')
-              .borderRadius(8)
-            Text(`概率 ${this.getSelectedNode() ? (this.getSelectedNode()!.probability * 100).toFixed(0) : '0'}%`)
-              .fontSize(11)
-              .fontColor('#7AC7FF')
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor('rgba(255,255,255,0.05)')
-              .borderRadius(8)
-          }
-
-          Row({ space: 8 }) {
-            Text(`风险 ${this.getSelectedNode() ? this.getSelectedNode()!.riskTag : 'medium'}`)
-              .fontSize(11)
-              .fontColor(this.getRiskColor(this.getSelectedNode() ? this.getSelectedNode()!.riskTag : 'medium'))
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .backgroundColor('rgba(255,255,255,0.05)')
-              .borderRadius(8)
-            if (this.getSelectedNode() && this.getSelectedNode()!.isBranch) {
-              Text('分支节点')
-                .fontSize(11)
-                .fontColor('#F5B041')
-                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                .backgroundColor('rgba(255,255,255,0.05)')
-                .borderRadius(8)
-            }
-          }
-
-          if (this.getSelectedNode() && Object.keys(this.getSelectedNode()!.impact).length > 0) {
-            Column({ space: 6 }) {
-              Text('影响维度')
-                .fontSize(11)
-                .fontColor('#7F91A5')
-                .width('100%')
-                .textAlign(TextAlign.Start)
-
-              ForEach(Object.keys(this.getSelectedNode()!.impact), (key: string) => {
-                Row({ space: 8 }) {
-                  Text(key).fontSize(11).fontColor('#B9C6D4').width(52)
-                  Row() {
-                    Column()
-                      .width(`${Math.min(Math.abs(this.getSelectedNode()!.impact[key]) * 100, 100)}%`)
-                      .height(6)
-                      .borderRadius(3)
-                      .backgroundColor(this.getSelectedNode()!.impact[key] >= 0 ? '#4DD0A8' : '#FF6B6B')
-                  }
-                  .layoutWeight(1)
-                  .height(6)
-                  .backgroundColor('rgba(255,255,255,0.06)')
-                  .borderRadius(3)
-
-                  Text(`${this.getSelectedNode()!.impact[key] > 0 ? '+' : ''}${this.getSelectedNode()!.impact[key].toFixed(1)}`)
-                    .fontSize(10)
-                    .fontColor(this.getSelectedNode()!.impact[key] >= 0 ? '#4DD0A8' : '#FF6B6B')
-                }
-                .width('100%')
-              })
-            }
-            .width('100%')
-          }
+          Text(this.getSelectedNode() ? this.getSelectedNode()!.description : '').fontSize(13).fontColor('#4B5563').lineHeight(20)
+          Text(this.getNodeInterpretation(this.getSelectedNode())).fontSize(11).fontColor('#2563EB').lineHeight(18).padding(10).backgroundColor('#EFF6FF').borderRadius(10).width('100%')
         }
         .width('100%')
         .padding(16)
-        .backgroundColor('rgba(8,15,28,0.96)')
-        .borderRadius({ topLeft: 20, topRight: 20, bottomLeft: 0, bottomRight: 0 })
-        .border({ width: 1, color: 'rgba(255,255,255,0.08)' })
+        .backgroundColor('#FFFFFF')
+        .border({ width: 1, color: '#E5E7EB' })
       }
       .width('100%')
       .height('100%')
     }
   }
 }
+
+
+  private async triggerModelUpdate() {
+    if (!this.dungeonData || this.isUpdatingModel) return
+    this.isUpdatingModel = true
+    this.pushActivityLog('system', '正在更新用户模型...', true)
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        ApiConfig.getApiUrl(`/api/lora/train/${this.dungeonData.user_id}`),
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          connectTimeout: 30000,
+          readTimeout: 30000
+        }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        promptAction.showToast({ message: '已触发用户模型更新', duration: 2000 })
+        this.pushActivityLog('system', '用户模型更新任务已触发')
+      } else {
+        promptAction.showToast({ message: '模型更新触发失败', duration: 2000 })
+      }
+    } catch (error) {
+      promptAction.showToast({ message: '模型更新失败', duration: 2000 })
+    }
+    this.isUpdatingModel = false
+  }

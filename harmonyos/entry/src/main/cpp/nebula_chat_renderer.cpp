@@ -401,8 +401,8 @@ bool NebulaChatRenderer::init(OHNativeWindow* window, int width, int height) {
     LOGI("Nebula: init() called, size=%{public}dx%{public}d", width, height);
     
     if (initialized_) {
-        LOGI("Nebula: Already initialized, returning true");
-        return true;
+        destroy();
+        initialized_ = false;
     }
     
     if (!window) {
@@ -1556,6 +1556,16 @@ int NebulaChatRenderer::hitTest(float screenX, float screenY) {
 void NebulaChatRenderer::destroy() {
     if (!initialized_) return;
     
+    totalTime_ = 0.0f;
+    lastTime_ = 0.0f;
+    starRotation_ = 0.0f;
+    cameraRotX_ = 0.15f;
+    cameraRotY_ = 0.0f;
+    cameraTargetZ_ = 0.0f;
+    nebulas_.clear();
+    featureOrbs_.clear();
+    stars_.clear();
+    
     if (starProgram_) glDeleteProgram(starProgram_);
     if (coreProgram_) glDeleteProgram(coreProgram_);
     if (nebulaProgram_) glDeleteProgram(nebulaProgram_);
@@ -1573,6 +1583,17 @@ void NebulaChatRenderer::destroy() {
     if (lineVAO_) glDeleteVertexArrays(1, &lineVAO_);
     if (lineVBO_) glDeleteBuffers(1, &lineVBO_);
     
+    starProgram_ = 0;
+    coreProgram_ = 0;
+    nebulaProgram_ = 0;
+    particleProgram_ = 0;
+    lineProgram_ = 0;
+    starVAO_ = starVBO_ = 0;
+    coreVAO_ = coreVBO_ = 0;
+    nebulaVAO_ = nebulaVBO_ = 0;
+    particleVAO_ = particleVBO_ = 0;
+    lineVAO_ = lineVBO_ = 0;
+    
     if (eglDisplay_ != EGL_NO_DISPLAY) {
         eglMakeCurrent(eglDisplay_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (eglSurface_ != EGL_NO_SURFACE) {
@@ -1584,8 +1605,11 @@ void NebulaChatRenderer::destroy() {
         eglTerminate(eglDisplay_);
     }
     
+    eglDisplay_ = EGL_NO_DISPLAY;
+    eglSurface_ = EGL_NO_SURFACE;
+    eglContext_ = EGL_NO_CONTEXT;
     initialized_ = false;
-    LOGI("Nebula: Renderer destroyed");
+    LOGI("Nebula: Renderer destroyed and state reset");
 }
 
 

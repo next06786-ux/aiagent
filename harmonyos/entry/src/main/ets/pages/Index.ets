@@ -218,14 +218,6 @@ struct Index {
       gradient: Theme.Gradient.Mint
     },
     {
-      id: 'parallel_universe',
-      title: '平行宇宙模拟',
-      subtitle: '未来12个月',
-      description: '模拟不同决策选项的未来时间线，6维风险评估',
-      route: 'pages/ParallelUniverseSimulation',
-      gradient: Theme.Gradient.Mystic
-    },
-    {
       id: 'decision_dungeon',
       title: '决策副本',
       subtitle: '个性化闯关',
@@ -796,7 +788,6 @@ struct Index {
             this.EnhancedListCard('学习进化', '强化学习系统', 'pages/LearningProgress', Theme.Color.Accent, 'learning', 0)
             this.EnhancedListCard('生活领域', '6大维度洞察', 'pages/LifeDomainInsights', Theme.Color.Secondary, 'life', 1)
             this.EnhancedListCard('决策对比', '智能决策分析', 'pages/DecisionComparison', Theme.Color.Warning, 'comparison', 2)
-            this.EnhancedListCard('平行宇宙', '未来12个月模拟', 'pages/ParallelUniverseSimulation', '#9C27B0', 'universe', 3)
           }
           .padding({ left: Theme.Spacing.m, right: Theme.Spacing.m, bottom: 120 })
         }
