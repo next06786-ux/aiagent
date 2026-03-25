@@ -16,6 +16,11 @@ git add .
 git commit -m "feat: enhance decision simulation streaming and canvas UX"
 git push origin main
 git clone https://github.com/next06786-ux/aiagent.git
+
+git clone https://ghfast.top/https://github.com/next06786-ux/aiagent.git
+
+git clone https://gh.llkk.cc/https://github.com/next06786-ux/aiagent.git
+
 ## 系统架构（更新版）
 
 ```

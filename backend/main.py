@@ -6032,62 +6032,6 @@ async def simulate_decision(request_data: Dict[str, Any]):
         "message": "平行宇宙模拟功能已下线，请使用增强决策副本接口。",
         "data": None
     }
-                    "title": opt.title,
-                    "description": opt.description,
-                    "final_score": opt.final_score,
-                    "risk_level": opt.risk_level,
-                    "risk_assessment": opt.risk_assessment if hasattr(opt, 'risk_assessment') else None,
-                    "timeline": [
-                        {
-                            "month": event.month,
-                            "event": event.event,
-                            "impact": event.impact,
-                            "probability": event.probability
-                        }
-                        for event in opt.timeline
-                    ]
-                }
-                for opt in result.options
-            ],
-            "recommendation": result.recommendation,
-            "created_at": result.created_at
-        }
-        
-        return {
-            "code": 200,
-            "message": "模拟完成",
-            "data": response_data
-        }
-    except ValueError as e:
-        message = str(e)
-        code = 404 if "还没有训练 LoRA 模型" in message else 400
-        return {
-            "code": code,
-            "message": message,
-            "data": None
-        }
-    except RuntimeError as e:
-        message = str(e)
-        if "正在训练中" in message:
-            code = 409
-        elif "SGLang 服务不可用" in message:
-            code = 503
-        else:
-            code = 500
-        return {
-            "code": code,
-            "message": message,
-            "data": None
-        }
-    except Exception as e:
-        print(f"决策模拟失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "code": 500,
-            "message": f"Error: {str(e)}",
-            "data": None
-        }
 
 @app.post("/api/decision/create-dungeon")
 async def create_dungeon(request_data: Dict[str, Any]):
