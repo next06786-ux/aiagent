@@ -200,24 +200,43 @@ class AutoLoRATrainer:
         print(f"{'='*60}\n")
 
         _training_progress[self.user_id] = {
-            "is_training": True, "progress": 0, "stage": "加载基础模型...", "error": None
+            "is_training": True, "progress": 0, "stage": "准备GPU资源...", "error": None
         }
 
         try:
-            print(f"📥 加载基础模型: {self.base_model_name}")
-            _training_progress[self.user_id]["stage"] = "加载基础模型..."
-            _training_progress[self.user_id]["progress"] = 2
-            base_model = AutoModelForCausalLM.from_pretrained(
-                self.base_model_name,
-                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto",
-                trust_remote_code=True,
-                local_files_only=True
-            )
+            # 训练前清理GPU缓存
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                import gc
+                gc.collect()
+                print(f"GPU缓存已清理，可用显存: {torch.cuda.mem_get_info()[0] / 1024**3:.1f} GB")
 
-            print("🔧 添加 LoRA 适配器...")
+            # 复用 lora_manager 已加载的基座模型，避免重复加载OOM
+            print(f"📥 获取已加载的基座模型...")
+            _training_progress[self.user_id]["stage"] = "获取基座模型..."
+            _training_progress[self.user_id]["progress"] = 2
+            
+            from backend.lora.lora_model_manager import lora_manager
+            lora_manager.load_base_model()  # 确保已加载
+            base_model = lora_manager.base_model
+            tokenizer = lora_manager.tokenizer
+            
+            if base_model is None:
+                raise RuntimeError("基座模型未加载，请检查模型路径")
+
+            # 卸载该用户已有的LoRA（如果有），避免冲突
+            if self.user_id in lora_manager.loaded_loras:
+                del lora_manager.loaded_loras[self.user_id]
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                print(f"已卸载用户 {self.user_id} 的旧LoRA")
+
+            print("添加 LoRA 适配器...")
             _training_progress[self.user_id]["stage"] = "初始化LoRA适配器..."
             _training_progress[self.user_id]["progress"] = 5
+            
+            # 启用gradient checkpointing
+            base_model.gradient_checkpointing_enable()
             model = get_peft_model(base_model, self.lora_config)
 
             trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -230,15 +249,19 @@ class AutoLoRATrainer:
             training_args = TrainingArguments(
                 output_dir=output_dir,
                 num_train_epochs=self.training_config["num_epochs"],
-                per_device_train_batch_size=self.training_config["batch_size"],
-                gradient_accumulation_steps=4,
+                per_device_train_batch_size=1,
+                gradient_accumulation_steps=2,
                 learning_rate=self.training_config["learning_rate"],
-                bf16=torch.cuda.is_available(),
-                logging_steps=5,
+                bf16=False,  # 8-bit量化时不用bf16
+                fp16=False,
+                logging_steps=1,
                 save_strategy="epoch",
                 save_total_limit=2,
                 report_to="none",
-                remove_unused_columns=False
+                remove_unused_columns=False,
+                gradient_checkpointing=True,
+                optim="adamw_torch",
+                max_grad_norm=0.3,
             )
 
             num_epochs = self.training_config["num_epochs"]
@@ -281,18 +304,38 @@ class AutoLoRATrainer:
             if missing_files:
                 raise RuntimeError(f"LoRA 保存不完整，缺少文件: {missing_files}")
 
-            print(f"\n✅ 训练完成!")
-            print(f"⏱️  耗时: {duration:.1f} 秒")
-            print(f"💾 模型已保存到: {final_path}\n")
+            print(f"\n训练完成!")
+            print(f"耗时: {duration:.1f} 秒")
+            print(f"模型已保存到: {final_path}\n")
+            
+            # 训练完成后恢复模型到推理状态
+            try:
+                base_model.gradient_checkpointing_disable()
+                # 移除PEFT包装，恢复原始base_model
+                model.merge_and_unload()  # 不改变lora_manager.base_model
+            except Exception:
+                pass
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             _training_progress[self.user_id] = {
                 "is_training": False, "progress": 100, "stage": "训练完成", "error": None
             }
             return final_path
 
         except Exception as e:
-            print(f"\n❌ 训练失败: {e}")
+            print(f"\n训练失败: {e}")
             import traceback
             traceback.print_exc()
+            # 恢复模型状态
+            try:
+                base_model = lora_manager.base_model
+                if base_model is not None:
+                    base_model.gradient_checkpointing_disable()
+            except Exception:
+                pass
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             _training_progress[self.user_id] = {
                 "is_training": False, "progress": 0, "stage": "训练失败", "error": str(e)
             }

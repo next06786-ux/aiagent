@@ -1206,17 +1206,46 @@ async def websocket_chat(websocket: WebSocket):
                     
                     await asyncio.sleep(0.3)
                 
-                # 第二步：生成正式回答
-                await websocket.send_json({"type": "progress", "content": "✍️ 生成回答..."})
+                # 第二步：生成正式回答（带上下文记忆）
+                await websocket.send_json({"type": "progress", "content": "生成回答..."})
                 await asyncio.sleep(0.2)
                 
                 try:
+                    # 构建带历史上下文的消息列表
                     messages = [
-                        {"role": "system", "content": "你是LifeSwarm智能助手，帮助用户分析问题和辅助决策。回复要简洁专业，使用纯文字，不要使用任何emoji表情符号。"},
-                        {"role": "user", "content": message}
+                        {"role": "system", "content": "你是LifeSwarm智能助手，帮助用户分析问题和辅助决策。回复要简洁专业，使用纯文字，不要使用任何emoji表情符号。请根据对话上下文连贯地回答。"},
                     ]
+                    
+                    # 加载当前会话的历史消息作为上下文（最近10轮）
+                    try:
+                        from backend.database.models import ConversationHistory, Database
+                        from backend.database.config import DatabaseConfig
+                        db = Database(DatabaseConfig.get_database_url())
+                        db_session = db.get_session()
+                        history_rows = db_session.query(ConversationHistory).filter(
+                            ConversationHistory.user_id == user_id,
+                            ConversationHistory.session_id == session_id
+                        ).order_by(ConversationHistory.timestamp.desc()).limit(20).all()
+                        db_session.close()
+                        
+                        # 倒序取出后反转为正序
+                        for row in reversed(history_rows):
+                            if row.role in ('user', 'assistant') and row.content:
+                                # 跳过当前这条用户消息（已经在最后加了）和错误回复
+                                if row.content == message:
+                                    continue
+                                if '无法回答' in (row.content or ''):
+                                    continue
+                                messages.append({"role": row.role, "content": row.content})
+                    except Exception as hist_err:
+                        print(f"⚠️ 加载历史上下文失败: {hist_err}")
+                    
+                    # 当前用户消息
+                    messages.append({"role": "user", "content": message})
+                    
+                    print(f"📝 发送 {len(messages)} 条消息给LLM（含 {len(messages)-2} 条历史）")
                     final_response = llm_service.chat(messages, temperature=0.7)
-                    print(f"💬 生成的回答: {final_response[:100]}...")
+                    print(f"回答: {final_response[:100]}...")
                 except Exception as e:
                     print(f"LLM调用失败: {e}")
                     final_response = f"抱歉，我现在无法回答。错误：{str(e)}"
