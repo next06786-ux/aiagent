@@ -190,20 +190,16 @@ class LoRADecisionAnalyzer:
         # 从训练状态文件读取版本和上次训练时间
         last_train_time = None
         try:
-            from backend.lora.auto_lora_trainer import AutoLoRATrainer
-            trainer = AutoLoRATrainer.__new__(AutoLoRATrainer)
-            trainer.user_lora_root = os.path.abspath(os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                '..', 'models', 'lora', user_id
-            ))
-            trainer.status_file = os.path.join(trainer.user_lora_root, "status.json")
-            train_status = trainer.load_status()
-            status["model_version"] = train_status.get("model_version", 0)
-            last_train_time = train_status.get("last_train_time")
-            if last_train_time and isinstance(last_train_time, str):
-                from datetime import datetime as dt
-                last_train_time = dt.fromisoformat(last_train_time)
-            status["last_train_time"] = last_train_time.isoformat() if last_train_time else None
+            status_file = os.path.join(self.lora_base_dir, user_id, "status.json")
+            if os.path.exists(status_file):
+                with open(status_file, 'r', encoding='utf-8') as f:
+                    train_status = json.load(f)
+                status["model_version"] = train_status.get("model_version", 0)
+                ltt = train_status.get("last_train_time")
+                if ltt:
+                    from datetime import datetime as dt
+                    last_train_time = dt.fromisoformat(ltt)
+                    status["last_train_time"] = ltt
         except Exception:
             pass
         
