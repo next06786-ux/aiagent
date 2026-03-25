@@ -194,17 +194,29 @@ class LoRADecisionAnalyzer:
         except Exception:
             pass
         
-        # 从数据库统计该用户的对话条数
+        # 从数据库统计有效对话对数（与训练时统计方式一致）
         try:
             from backend.database.models import ConversationHistory, Database
             from backend.database.config import DatabaseConfig
             db = Database(DatabaseConfig.get_database_url())
             session = db.get_session()
-            count = session.query(ConversationHistory).filter(
+            rows = session.query(ConversationHistory.role, ConversationHistory.content).filter(
                 ConversationHistory.user_id == user_id
-            ).count()
+            ).order_by(ConversationHistory.timestamp.asc()).all()
             session.close()
-            status["training_data_size"] = count
+            
+            # 配对计数，和训练时逻辑一致
+            pair_count = 0
+            i = 0
+            while i < len(rows) - 1:
+                if rows[i].role == 'user' and rows[i + 1].role == 'assistant':
+                    content = rows[i + 1].content or ""
+                    if rows[i].content and content.strip() and '无法回答' not in content:
+                        pair_count += 1
+                    i += 2
+                else:
+                    i += 1
+            status["training_data_size"] = pair_count
         except Exception:
             status["training_data_size"] = 0
         
