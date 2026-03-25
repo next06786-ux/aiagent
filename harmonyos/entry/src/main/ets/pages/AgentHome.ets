@@ -596,18 +596,17 @@ struct AgentHome {
 
           // 历史消息按钮
           Stack() {
-            Circle({ width: 34, height: 34 }).fill(Theme.Color.GlassMedium)
-            SimpleIcon({ iconName: 'history', iconSize: 16, color: Theme.Color.TextSecondary })
-          }.width(34).height(34)
+            Circle({ width: 36, height: 36 }).fill('rgba(10, 89, 247, 0.08)')
+            Text('H').fontSize(15).fontWeight(600).fontColor(Theme.Color.Primary)
+          }.width(36).height(36)
           .onClick(() => {
-            this.showAiCorePanel = false;
             this.showHistoryPanel = true;
           })
 
           Stack() {
-            Circle({ width: 34, height: 34 }).fill(Theme.Color.GlassMedium)
+            Circle({ width: 36, height: 36 }).fill(Theme.Color.GlassMedium)
             Text('✕').fontSize(16).fontColor(Theme.Color.TextSecondary)
-          }.width(34).height(34).margin({ left: 8 })
+          }.width(36).height(36).margin({ left: 8 })
           .onClick(() => { this.showAiCorePanel = false; })
         }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 14 })
 

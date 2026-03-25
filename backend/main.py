@@ -6756,13 +6756,7 @@ async def get_lora_status(user_id: str):
 
 @app.post("/api/lora/train/{user_id}")
 async def trigger_lora_training(user_id: str, priority: str = "normal"):
-    """
-    手动触发LoRA训练
-    
-    参数:
-    - user_id: 用户ID
-    - priority: 优先级 (normal/high)
-    """
+    """手动触发LoRA训练 - 直接在后台线程执行"""
     if not user_id or user_id == "default_user":
         return {
             "code": 403,
@@ -6770,18 +6764,42 @@ async def trigger_lora_training(user_id: str, priority: str = "normal"):
             "data": None
         }
     try:
-        scheduler = get_lora_scheduler()
-        scheduler.add_training_task(user_id, priority)
+        from backend.lora.auto_lora_trainer import get_training_progress
+        
+        # 检查是否已在训练
+        progress = get_training_progress(user_id)
+        if progress.get("is_training"):
+            return {
+                "code": 409,
+                "message": "该用户的模型正在训练中，请等待完成",
+                "data": progress
+            }
+        
+        # 在后台线程直接执行训练
+        import threading
+        def run_training():
+            try:
+                from backend.lora.auto_lora_trainer import AutoLoRATrainer
+                trainer = AutoLoRATrainer(user_id)
+                trainer.training_config["train_interval_days"] = 0  # 跳过间隔检查
+                trainer.auto_train_workflow()
+            except Exception as e:
+                from backend.lora.auto_lora_trainer import _training_progress
+                _training_progress[user_id] = {
+                    "is_training": False, "progress": 0, "stage": "训练失败", "error": str(e)
+                }
+                print(f"后台训练失败: {e}")
+        
+        thread = threading.Thread(target=run_training, daemon=True)
+        thread.start()
         
         return {
             "code": 200,
-            "message": "训练任务已添加到队列",
-            "data": {"user_id": user_id, "priority": priority}
+            "message": "训练已启动",
+            "data": {"user_id": user_id}
         }
     except Exception as e:
         print(f"触发训练失败: {e}")
-        import traceback
-        traceback.print_exc()
         return {
             "code": 500,
             "message": f"Error: {str(e)}",
