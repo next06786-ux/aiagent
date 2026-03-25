@@ -34,8 +34,8 @@ class DatabaseConfig:
     # MySQL 配置
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
     MYSQL_PORT = int(os.getenv('MYSQL_PORT', '3306'))
-    MYSQL_USER = os.getenv('MYSQL_USER', 'lifeswarm')
-    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'lifeswarm123')
+    MYSQL_USER = os.getenv('MYSQL_USER', 'root')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', '123456')
     MYSQL_DATABASE = os.getenv('MYSQL_DATABASE', 'lifeswarm')
     
     # PostgreSQL 配置
