@@ -59,8 +59,8 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            520,
-            0.35,
+            320,
+            0.25,
         )
         print(f"📝 LoRA原始响应长度: {len(response)}")
         print(f"📝 LoRA原始响应前500字符: {response[:500]}")
@@ -72,8 +72,8 @@ class LoRADecisionAnalyzer:
                 self.lora_manager.generate,
                 user_id,
                 retry_prompt,
-                520,
-                0.15,
+                320,
+                0.1,
             )
             print(f"📝 LoRA重试响应长度: {len(retry_response)}")
             print(f"📝 LoRA重试响应前500字符: {retry_response[:500]}")
@@ -104,8 +104,8 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            220,
-            0.5,
+            140,
+            0.35,
         )
         return self._clean_recommendation(response)
 
@@ -118,7 +118,7 @@ class LoRADecisionAnalyzer:
         num_events: int = 8
     ):
         prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=False)
-        for chunk in self.lora_manager.generate_stream(user_id, prompt, 520, 0.35):
+        for chunk in self.lora_manager.generate_stream(user_id, prompt, 320, 0.25):
             yield chunk
 
     async def stream_recommendation_generation(
@@ -129,7 +129,7 @@ class LoRADecisionAnalyzer:
         profile: Any
     ):
         prompt = self._build_recommendation_prompt(question, options, profile)
-        for chunk in self.lora_manager.generate_stream(user_id, prompt, 220, 0.5):
+        for chunk in self.lora_manager.generate_stream(user_id, prompt, 140, 0.35):
             yield chunk
 
     async def generate_branch_events_with_lora(
@@ -145,8 +145,8 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            220,
-            0.35,
+            120,
+            0.25,
         )
         branches = self._parse_timeline_json(response)
         if not branches:

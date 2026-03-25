@@ -136,16 +136,9 @@ class LoRAModelManager:
     
     def generate(self, user_id: str, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7) -> str:
         """使用用户的 LoRA 模型生成回复"""
-        
-        # 清理GPU缓存
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        # 尝试加载用户的 LoRA
         model = self.load_user_lora(user_id)
         
         if model is None:
-            # 降级到基础模型
             self.load_base_model()
             model = self.base_model
             print(f"ℹ️  使用基础模型（用户 {user_id} 的 LoRA 未找到）")
@@ -207,9 +200,6 @@ class LoRAModelManager:
 
     def generate_stream(self, user_id: str, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7):
         """使用用户的 LoRA 模型流式生成回复"""
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         model = self.load_user_lora(user_id)
         if model is None:
             self.load_base_model()

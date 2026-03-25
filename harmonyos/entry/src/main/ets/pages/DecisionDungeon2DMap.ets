@@ -81,6 +81,7 @@ interface OptionSummary {
   finalScore: number
   riskLevel: number
   status: string
+  progress: number
 }
 
 interface StreamRequestPayload {
@@ -220,7 +221,8 @@ struct DecisionDungeon2DMap {
         color: this.getOptionColor(i),
         finalScore: 0,
         riskLevel: 0,
-        status: '等待推演'
+        status: '等待推演',
+        progress: 0.05
       })
     }
     this.optionSummaries = summaries
@@ -249,7 +251,8 @@ struct DecisionDungeon2DMap {
         color: optionColor,
         finalScore: option.final_score,
         riskLevel: option.risk_level,
-        status: '推演完成'
+        status: '推演完成',
+        progress: 1
       })
 
       allNodes.push({
@@ -398,7 +401,7 @@ struct DecisionDungeon2DMap {
       this.streamStatus = '缺少会话信息'
       return
     }
-    this.streamStatus = '正在连接推演通道...'
+    this.streamStatus = '正在准备推演...'
     this.showRecommendation = false
 
     try {
@@ -498,6 +501,7 @@ struct DecisionDungeon2DMap {
       })
 
       await this.ws.connect('/api/decision/enhanced/ws/simulate')
+      this.streamStatus = '推演通道已建立，等待模型响应...'
       const streamOptions: StreamRequestOption[] = this.dungeonData
         ? this.dungeonData.options.map((item: DungeonOption): StreamRequestOption => {
           return { title: item.title, description: item.description }
@@ -526,16 +530,18 @@ struct DecisionDungeon2DMap {
     const optionNodes = this.nodes.filter((item: MapNode) => item.optionIndex === optionIndex && !item.id.startsWith('root_'))
     const nodeCount = optionNodes.length
     const isBranch = ((node.branch_group as string) || '').includes('fork')
+    const month = (node.month as number) || (nodeCount + 1)
 
     let x: number
     let y: number
     if (isBranch && parentNode) {
       const isPositive = (node.risk_tag as string) === 'low' || (node.opportunity_tag as string) === 'high'
-      x = parentNode.position.x + 220
-      y = parentNode.position.y + (isPositive ? -200 : 200)
+      const branchSiblings = this.nodes.filter((item: MapNode) => item.parentId === parentId && item.isBranch).length
+      x = parentNode.position.x + 260
+      y = parentNode.position.y + (isPositive ? -(180 + branchSiblings * 70) : (180 + branchSiblings * 70))
     } else {
-      x = 280 + (nodeCount + 1) * 300
-      y = laneY + (nodeCount % 2 === 0 ? -90 : 90)
+      x = 280 + month * 280
+      y = laneY + ((month % 3) - 1) * 110
     }
 
     const color = isBranch
@@ -631,7 +637,8 @@ struct DecisionDungeon2DMap {
         color: item.color,
         finalScore: item.finalScore,
         riskLevel: item.riskLevel,
-        status
+        status,
+        progress: status === '推演中...' ? Math.max(item.progress, 0.35) : item.progress
       }
     })
   }
@@ -645,7 +652,8 @@ struct DecisionDungeon2DMap {
         color: item.color,
         finalScore: score,
         riskLevel: risk,
-        status: item.status
+        status: item.status,
+        progress: 1
       }
     })
   }
@@ -924,13 +932,21 @@ struct DecisionDungeon2DMap {
           .maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width(node.id.startsWith('root_') ? 200 : 170)
-        if (!node.id.startsWith('root_') && this.getNodeImportance(node) === 3) {
-          Text('关键节点')
+        Row({ space: 6 }) {
+          Text(node.isBranch ? '分支' : '主链')
             .fontSize(9)
-            .fontColor('#FFD166')
+            .fontColor(node.isBranch ? '#FFB3A7' : '#7AC7FF')
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-            .backgroundColor('rgba(255,209,102,0.12)')
+            .backgroundColor(node.isBranch ? 'rgba(255,107,107,0.10)' : 'rgba(122,199,255,0.10)')
             .borderRadius(6)
+          if (!node.id.startsWith('root_') && this.getNodeImportance(node) === 3) {
+            Text('关键节点')
+              .fontSize(9)
+              .fontColor('#FFD166')
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+              .backgroundColor('rgba(255,209,102,0.12)')
+              .borderRadius(6)
+          }
         }
       }
       .alignItems(HorizontalAlign.Start)
@@ -976,6 +992,17 @@ struct DecisionDungeon2DMap {
                     .fontColor(item.color)
                 }
               }
+              Row() {
+                Column()
+                  .width(`${item.progress * 100}%`)
+                  .height(4)
+                  .borderRadius(2)
+                  .backgroundColor(item.color)
+              }
+              .width('100%')
+              .height(4)
+              .backgroundColor('rgba(255,255,255,0.08)')
+              .borderRadius(2)
             }
             .width(150)
             .padding(10)

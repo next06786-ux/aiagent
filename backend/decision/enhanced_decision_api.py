@@ -446,7 +446,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "stage": "option_start",
                     "option_id": f"option_{i+1}",
                     "option_title": option.get("title", f"选项{i+1}"),
-                    "content": f"开始推演 {option.get('title', f'选项{i+1}')} 的主时间线"
+                    "content": f"开始推演 {option.get('title', f'选项{i+1}')} 的主时间线（快速模式）"
                 })
 
                 stream_buffer = ""
@@ -461,7 +461,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     question=question,
                     option=option,
                     profile=profile,
-                    num_events=8
+                    num_events=4
                 ):
                     stream_buffer += chunk
                     await websocket.send_json({
@@ -509,7 +509,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         question=question,
                         option=option,
                         profile=profile,
-                        num_events=8
+                        num_events=4
                     )
                     timeline_data = retry_timeline
 
@@ -562,7 +562,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "content": f"正在扩展 {option['title']} 的风险与机遇分支"
                 })
                 branch_nodes = []
-                candidate_parents = timeline[:2]
+                candidate_parents = timeline[:1]
                 for parent in candidate_parents:
                     parent_payload = {
                         "month": parent.month,
@@ -608,7 +608,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "stage": "option_scoring",
                     "option_id": f"option_{i+1}",
                     "option_title": option['title'],
-                    "content": f"{option['title']} 主线与分支已生成，正在计算得分与风险"
+                    "content": f"{option['title']} 主链已完成，正在补充分支与评分细节"
                 })
                 await websocket.send_json({
                     "type": "option_complete",
@@ -646,7 +646,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             await websocket.send_json({
                 "type": "status",
                 "stage": "recommendation",
-                "content": "所有选项推演完成，正在生成个性化推荐结论"
+                "content": "主链推演已完成，正在汇总各选项并生成最终推荐"
             })
             recommendation_stream = ""
             async for chunk in simulator.lora_analyzer.stream_recommendation_generation(

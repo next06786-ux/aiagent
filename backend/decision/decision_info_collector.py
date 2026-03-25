@@ -130,11 +130,8 @@ class DecisionInfoCollector:
                     "is_complete": False
                 }
             else:
-                # 继续让用户自由表达，但提示可以直接开始
-                if session["current_round"] == 1:
-                    follow_up = '还有其他想补充的吗？（如果信息已经足够，可以直接说"开始决策"）'
-                else:
-                    follow_up = "还有其他考虑因素吗？或者可以直接开始决策模拟。"
+                # 继续让用户自由表达，使用更自然的跟进方式
+                follow_up = self._generate_free_talk_followup(session)
                 
                 session["conversation_history"].append({
                     "role": "assistant",
@@ -287,7 +284,6 @@ class DecisionInfoCollector:
             return self._get_first_targeted_question(session)
         
         try:
-            # 总结用户已经说的内容
             user_statements = [
                 msg["content"] for msg in session["conversation_history"] 
                 if msg["role"] == "user"
@@ -297,33 +293,49 @@ class DecisionInfoCollector:
             messages = [
                 {
                     "role": "system",
-                    "content": """你是一个专业的决策顾问。用户已经主动描述了他们的情况。
-现在你需要根据他们说的内容，提出第一个针对性的问题，深入了解他们的决策需求。
-
-问题要求：
-1. 基于用户已经提供的信息
-2. 询问他们没有提到但很重要的方面
-3. 开放式问题，鼓励详细回答
-4. 友好、专业的语气
-5. 只返回问题本身，不要有其他内容"""
+                    "content": """你是一个真正会聊天的决策顾问，不要像问卷调查，不要机械列点。用户已经主动说了一些背景，你现在只提一个最自然、最有帮助的追问。\n\n要求：\n1. 像真实顾问聊天，不要模板化。\n2. 优先问最影响决策方向的缺失信息。\n3. 问题要短、自然、具体。\n4. 不要一次问很多小问题。\n5. 只输出一句追问。"""
                 },
                 {
                     "role": "user",
-                    "content": f"""用户的决策问题：{session['initial_question']}
-
-用户已经说的内容：
-{user_content}
-
-请生成第一个针对性问题。"""
+                    "content": f"""用户的决策问题：{session['initial_question']}\n\n用户已经说的内容：\n{user_content}\n\n请生成一个自然的追问。"""
                 }
             ]
             
-            response = self.llm_service.chat(messages, temperature=0.7)
+            response = self.llm_service.chat(messages, temperature=0.8)
             return response.strip()
             
         except Exception as e:
             print(f"⚠️ 生成针对性问题失败: {e}")
             return self._get_first_targeted_question(session)
+
+    def _generate_free_talk_followup(self, session: Dict) -> str:
+        if not self.llm_service or not self.llm_service.enabled:
+            if session["current_round"] == 1:
+                return "你刚才提到的情况里，哪一点最让你纠结？"
+            return "如果继续往下想，你觉得真正卡住你的核心点是什么？"
+
+        try:
+            user_statements = [
+                msg["content"] for msg in session["conversation_history"]
+                if msg["role"] == "user"
+            ]
+            user_content = "\n".join(user_statements[-3:])
+            messages = [
+                {
+                    "role": "system",
+                    "content": "你是一个自然、灵活的决策顾问。用户还在自由表达阶段，你的任务不是按模板追问，而是顺着用户刚才的话接一句最自然的跟进。不要官话，不要 checklist。只输出一句话。"
+                },
+                {
+                    "role": "user",
+                    "content": f"决策问题：{session['initial_question']}\n\n用户最近表达：\n{user_content}\n\n请给一句自然跟进。"
+                }
+            ]
+            response = self.llm_service.chat(messages, temperature=0.85)
+            return response.strip()
+        except Exception:
+            if session["current_round"] == 1:
+                return "你刚才提到的情况里，哪一点最让你纠结？"
+            return "如果继续往下想，你觉得真正卡住你的核心点是什么？"
     
     def _get_first_targeted_question(self, session: Dict) -> str:
         """获取第一个备用针对性问题"""
@@ -369,14 +381,13 @@ class DecisionInfoCollector:
             return self._get_fallback_question(session)
         
         try:
-            # 构建对话历史
             conversation_summary = self._summarize_conversation(session)
             missing_info = self._identify_missing_info(session)
             
             messages = [
                 {
                     "role": "system",
-                    "content": "你是一个专业的决策顾问。你正在通过多轮对话收集用户的决策信息。根据已有的对话内容，提出下一个最重要的问题。"
+                    "content": "你是一个自然、有判断力的决策顾问。你已经听过用户前面的表达，现在只提一个最值得问的追问。不要像表单，不要复读用户说过的话，不要列很多点。语气要像真实聊天。只输出一句话。"
                 },
                 {
                     "role": "user",
@@ -385,14 +396,14 @@ class DecisionInfoCollector:
 对话摘要：
 {conversation_summary}
 
-还需要了解的信息：
+仍然缺的信息：
 {missing_info}
 
-请生成下一个问题，深入了解用户的需求。只返回问题本身，不要有其他内容。"""
+请给出一个自然追问。"""
                 }
             ]
             
-            response = self.llm_service.chat(messages, temperature=0.7)
+            response = self.llm_service.chat(messages, temperature=0.8)
             return response.strip()
             
         except Exception as e:
@@ -526,19 +537,16 @@ class DecisionInfoCollector:
     def _get_fallback_question(self, session: Dict) -> str:
         """获取备用问题（当LLM不可用时）"""
         round_num = session["current_round"]
-        
         fallback_questions = [
-            "你目前的主要顾虑是什么？",
-            "你最看重哪些方面（比如收入、发展、稳定性等）？",
-            "你有什么限制条件吗（时间、资金、能力等）？",
-            "你理想中的结果是什么样的？",
-            "还有其他需要考虑的因素吗？"
+            "如果现在必须做决定，你最怕承担的后果是什么？",
+            "你会优先保住什么，而不是追求什么？",
+            "现实里最可能卡住你的限制是什么？",
+            "如果半年后回头看，你希望自己最不后悔哪一点？",
+            "现在你最想再想清楚的，其实是哪一块？"
         ]
-        
         if round_num < len(fallback_questions):
             return fallback_questions[round_num]
-        else:
-            return "还有什么想补充的吗？"
+        return "如果再往深一层想，你觉得这个决定最难的地方到底是什么？"
     
     def _generate_summary(self, session: Dict) -> str:
         """生成信息收集总结"""
