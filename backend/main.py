@@ -4366,6 +4366,29 @@ async def export_information_knowledge_graph(user_id: str, session_id: str = Non
                 }
             }
         
+        # 只保留人物节点（entity_type == person 或 category 为人物关系类别）
+        person_categories = {'family', 'close_friends', 'colleagues', 'friends', 'weak_ties', '自己'}
+        all_info = graph_data.get('information', [])
+        person_nodes = [
+            node for node in all_info
+            if node.get('entity_type') == 'person' 
+            or node.get('category') in person_categories
+            or node.get('type') == 'entity' and node.get('entity_type') == 'person'
+        ]
+        person_ids = {node['id'] for node in person_nodes}
+        
+        # 只保留人物之间的关系
+        person_rels = [
+            rel for rel in graph_data.get('relationships', [])
+            if rel['source'] in person_ids and rel['target'] in person_ids
+        ]
+        
+        graph_data = {
+            'information': person_nodes,
+            'sources': graph_data.get('sources', []),
+            'relationships': person_rels
+        }
+        
         # 如果指定了session_id，筛选该会话的节点
         if session_id:
             print(f"🔍 筛选会话 {session_id} 的知识图谱节点")

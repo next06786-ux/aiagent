@@ -875,7 +875,7 @@ struct KnowledgeStarMapGL {
                   .fontColor(this.getNodeColor(this.nodes[this.selectedNodeIdx].category))
                   .padding({ left: 8, right: 8, top: 3, bottom: 3 })
                   .backgroundColor('rgba(255, 255, 255, 0.1)')
-                  .borderRadius(4)
+                  .borderRadius(8)
                 
                 Text(`${this.nodes[this.selectedNodeIdx].connections} 个关联`)
                   .fontSize(12)
@@ -901,10 +901,10 @@ struct KnowledgeStarMapGL {
           }
           .width('100%')
 
-          // 关系列表
+          // 关系列表 - 人物之间的关联与故事
           if (this.selectedNodeRelations.length > 0) {
             Column({ space: 4 }) {
-              Text('关联人物（点击可跳转）')
+              Text('人物关系')
                 .fontSize(13)
                 .fontColor('rgba(255, 255, 255, 0.6)')
                 .width('100%')
@@ -913,30 +913,33 @@ struct KnowledgeStarMapGL {
                 Column({ space: 6 }) {
                   ForEach(this.selectedNodeRelations, (rel: NodeRelation) => {
                     Row({ space: 10 }) {
-                      Circle({ width: 8, height: 8 })
-                        .fill(this.getNodeColor(rel.category))
+                      // 头像圆
+                      Stack() {
+                        Circle({ width: 32, height: 32 })
+                          .fill(this.getNodeColor(rel.category))
+                        Text(rel.name.substring(0, 1))
+                          .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+                      }.width(32).height(32)
                       
-                      Text(rel.name)
-                        .fontSize(14)
-                        .fontColor('#FFFFFF')
-                        .layoutWeight(1)
+                      Column({ space: 2 }) {
+                        Text(rel.name)
+                          .fontSize(14)
+                          .fontColor('#FFFFFF')
+                        Text(this.getCategoryDisplayName(rel.category))
+                          .fontSize(11)
+                          .fontColor(this.getNodeColor(rel.category))
+                      }
+                      .alignItems(HorizontalAlign.Start)
+                      .layoutWeight(1)
                       
-                      Text(this.getCategoryDisplayName(rel.category))
-                        .fontSize(11)
-                        .fontColor(this.getNodeColor(rel.category))
-                        .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                        .backgroundColor('rgba(255, 255, 255, 0.08)')
-                        .borderRadius(4)
-                      
-                      // 跳转箭头
                       Text('→')
                         .fontSize(14)
                         .fontColor('rgba(255, 255, 255, 0.4)')
                     }
                     .width('100%')
-                    .padding({ top: 8, bottom: 8, left: 8, right: 8 })
+                    .padding({ top: 8, bottom: 8, left: 10, right: 10 })
                     .backgroundColor('rgba(255, 255, 255, 0.05)')
-                    .borderRadius(8)
+                    .borderRadius(10)
                     .onClick(() => {
                       // 点击关联人物，丝滑滑动到该节点
                       if (this.nativeModule && rel.targetIdx >= 0) {

@@ -1,10 +1,13 @@
 """
 信息提取器
 从原始数据（照片、传感器、对话）中提取结构化信息
+支持 LLM 智能提取 + 正则兜底
 """
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import re
+import json
+import os
 
 
 class InformationExtractor:
@@ -170,7 +173,7 @@ class InformationExtractor:
         return extracted
     
     def extract_from_conversation(self, conversation_text: str, metadata: Dict = None) -> Dict[str, List[Dict]]:
-        """从对话文本中提取信息"""
+        """从对话文本中提取信息 - 只提取人物实体"""
         metadata = metadata or {}
         
         extracted = {
@@ -179,23 +182,183 @@ class InformationExtractor:
             "concepts": []
         }
         
-        # 使用文本提取
-        text_info = self._extract_from_text(conversation_text)
-        extracted["entities"].extend(text_info["entities"])
-        extracted["events"].extend(text_info["events"])
-        extracted["concepts"].extend(text_info["concepts"])
-        
-        # 从元数据提取
-        if metadata.get("intent"):
-            intent = metadata["intent"]
-            extracted["concepts"].append({
-                "name": intent.get("type", "未知意图"),
-                "type": "concept",
-                "category": self._infer_category(intent.get("type", "")),
-                "confidence": intent.get("confidence", 0.7)
-            })
+        # 优先用 LLM 智能提取
+        llm_persons = self._extract_persons_llm(conversation_text)
+        if llm_persons:
+            extracted["entities"].extend(llm_persons)
+        else:
+            # LLM 失败时降级到正则提取
+            persons = self._extract_persons(conversation_text)
+            extracted["entities"].extend(persons)
         
         return extracted
+    
+    def _extract_persons_llm(self, text: str) -> List[Dict]:
+        """用大模型智能提取人物"""
+        try:
+            from openai import OpenAI
+            api_key = os.getenv("DASHSCOPE_API_KEY")
+            if not api_key:
+                return []
+            
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            )
+            
+            prompt = f"""从以下对话中提取提到的所有人物。只提取人物，不要提取地点、事件等。
+
+对话内容：
+{text[:2000]}
+
+请以JSON数组格式返回，每个人物包含：
+- name: 人物称呼（如"爸爸"、"张伟"、"李老师"）
+- category: 关系类别，只能是以下之一：family（家人）、close_friends（好友）、colleagues（同事）、friends（朋友）、weak_ties（弱关系）
+- description: 一句话描述这个人物在对话中的角色或提到的事情
+
+如果对话中没有提到任何人物，返回空数组 []
+只返回JSON，不要其他文字。"""
+
+            response = client.chat.completions.create(
+                model="qwen-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=1000
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            # 清理可能的 markdown 包裹
+            if result_text.startswith("```"):
+                result_text = re.sub(r'^```\w*\n?', '', result_text)
+                result_text = re.sub(r'\n?```$', '', result_text)
+            
+            persons_data = json.loads(result_text)
+            
+            if not isinstance(persons_data, list):
+                return []
+            
+            persons = []
+            seen = set()
+            valid_categories = {'family', 'close_friends', 'colleagues', 'friends', 'weak_ties'}
+            
+            for p in persons_data:
+                name = p.get('name', '').strip()
+                if not name or name in seen or name in ('我', '用户', 'AI', '助手'):
+                    continue
+                seen.add(name)
+                category = p.get('category', 'friends')
+                if category not in valid_categories:
+                    category = 'friends'
+                
+                persons.append({
+                    "name": name,
+                    "type": "entity",
+                    "entity_type": "person",
+                    "category": category,
+                    "confidence": 0.9,
+                    "attributes": {
+                        "description": p.get('description', ''),
+                        "extracted_by": "llm"
+                    }
+                })
+            
+            if persons:
+                print(f"  [LLM提取] 识别到 {len(persons)} 个人物: {[p['name'] for p in persons]}")
+            return persons
+            
+        except Exception as e:
+            print(f"  [LLM提取] 失败，降级到正则: {e}")
+            return []
+    
+    def _extract_persons(self, text: str) -> List[Dict]:
+        """从文本中提取人物"""
+        persons = []
+        seen_names = set()
+        
+        if not text:
+            return persons
+        
+        # 1. 称谓模式匹配 - 提取带称谓的人物
+        relation_patterns = {
+            # 家人
+            'family': [
+                (r'(?:我|我的)(爸爸|爸|父亲|老爸)', 'family'),
+                (r'(?:我|我的)(妈妈|妈|母亲|老妈)', 'family'),
+                (r'(?:我|我的)(哥哥|哥|弟弟|弟|姐姐|姐|妹妹|妹)', 'family'),
+                (r'(?:我|我的)(爷爷|奶奶|外公|外婆|姥姥|姥爷)', 'family'),
+                (r'(?:我|我的)(老婆|老公|妻子|丈夫|媳妇|爱人)', 'family'),
+                (r'(?:我|我的)(儿子|女儿|孩子|宝宝|闺女)', 'family'),
+                (r'(?:我|我的)(叔叔|阿姨|舅舅|舅妈|姑姑|姑父|伯伯|婶婶)', 'family'),
+            ],
+            # 好友
+            'close_friends': [
+                (r'(?:我|我的)(?:好朋友|闺蜜|死党|铁哥们|发小|兄弟)(\S{2,4})', 'close_friends'),
+                (r'(?:好朋友|闺蜜|死党|铁哥们|发小)(\S{2,4})', 'close_friends'),
+            ],
+            # 同事
+            'colleagues': [
+                (r'(?:我|我们)(?:同事|领导|老板|上司|经理|主管|组长|总监)(\S{2,4})', 'colleagues'),
+                (r'(?:同事|领导|老板|上司|经理|主管|组长|总监)(\S{2,4})', 'colleagues'),
+            ],
+            # 朋友
+            'friends': [
+                (r'(?:我|我的)(?:朋友|同学|室友|舍友|同桌|学长|学姐|学弟|学妹)(\S{2,4})', 'friends'),
+                (r'(?:朋友|同学|室友|舍友|同桌)(\S{2,4})', 'friends'),
+            ],
+        }
+        
+        for category, patterns in relation_patterns.items():
+            for pattern, cat in patterns:
+                matches = re.findall(pattern, text)
+                for match in matches:
+                    name = match.strip()
+                    if name and len(name) >= 1 and name not in seen_names:
+                        # 称谓本身也可以作为名字（如"爸爸"）
+                        seen_names.add(name)
+                        persons.append({
+                            "name": name,
+                            "type": "entity",
+                            "entity_type": "person",
+                            "category": category,
+                            "confidence": 0.85
+                        })
+        
+        # 2. 直接姓名模式 - 中文姓名（姓+名，2-4字）
+        # 常见姓氏
+        common_surnames = '赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳酆鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉钮龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴鬱胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍郤璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾母沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公'
+        name_pattern = rf'([{common_surnames}]\S{{1,3}})(?:说|告诉|问|跟|和|与|给|找|约|见|叫|是|在)'
+        matches = re.findall(name_pattern, text)
+        for match in matches:
+            name = match.strip()
+            if name and 2 <= len(name) <= 4 and name not in seen_names:
+                # 过滤掉明显不是人名的
+                skip_words = {'我们', '他们', '她们', '你们', '大家', '自己', '别人', '对方', '这个', '那个', '什么', '怎么', '为什么', '可以', '不能', '应该', '已经'}
+                if name not in skip_words:
+                    seen_names.add(name)
+                    persons.append({
+                        "name": name,
+                        "type": "entity",
+                        "entity_type": "person",
+                        "category": "friends",
+                        "confidence": 0.7
+                    })
+        
+        # 3. "叫XX"模式
+        called_pattern = r'(?:叫|名叫|叫做|名字是)(\S{2,4})'
+        matches = re.findall(called_pattern, text)
+        for match in matches:
+            name = match.strip()
+            if name and len(name) >= 2 and name not in seen_names:
+                seen_names.add(name)
+                persons.append({
+                    "name": name,
+                    "type": "entity",
+                    "entity_type": "person",
+                    "category": "friends",
+                    "confidence": 0.75
+                })
+        
+        return persons
     
     def _extract_from_text(self, text: str) -> Dict[str, List[Dict]]:
         """从文本中提取信息（简化版NLP）"""
