@@ -191,9 +191,23 @@ class LoRADecisionAnalyzer:
             status["is_loaded"] = info.get("is_loaded", False)
             status["model_version"] = info.get("model_version", 0)
             status["last_train_time"] = info.get("last_train_time")
-            status["training_data_size"] = info.get("current_data_size", 0)
         except Exception:
             pass
+        
+        # 从数据库统计该用户的对话条数
+        try:
+            from backend.database.db_manager import db_manager
+            from backend.database.models import ConversationHistory
+            session = db_manager.get_session()
+            count = session.query(ConversationHistory).filter(
+                ConversationHistory.user_id == user_id
+            ).count()
+            session.close()
+            status["training_data_size"] = count
+        except Exception as e:
+            print(f"统计对话条数失败: {e}")
+            status["training_data_size"] = 0
+        
         return status
 
     def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any, num_events: int, strict: bool = False) -> str:

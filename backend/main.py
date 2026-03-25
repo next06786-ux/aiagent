@@ -1182,7 +1182,10 @@ async def websocket_chat(websocket: WebSocket):
 
                 thinking_text = ""
                 try:
-                    messages = [{"role": "user", "content": thinking_prompt}]
+                    messages = [
+                        {"role": "system", "content": "你是LifeSwarm智能助手，帮助用户分析问题和辅助决策。回复要简洁专业，使用纯文字，不要使用任何emoji表情符号。"},
+                        {"role": "user", "content": thinking_prompt}
+                    ]
                     thinking_text = llm_service.chat(messages, temperature=0.7)
                     print(f"💭 生成的思考过程: {thinking_text[:100]}...")
                 except Exception as e:
@@ -1208,7 +1211,10 @@ async def websocket_chat(websocket: WebSocket):
                 await asyncio.sleep(0.2)
                 
                 try:
-                    messages = [{"role": "user", "content": message}]
+                    messages = [
+                        {"role": "system", "content": "你是LifeSwarm智能助手，帮助用户分析问题和辅助决策。回复要简洁专业，使用纯文字，不要使用任何emoji表情符号。"},
+                        {"role": "user", "content": message}
+                    ]
                     final_response = llm_service.chat(messages, temperature=0.7)
                     print(f"💬 生成的回答: {final_response[:100]}...")
                 except Exception as e:
