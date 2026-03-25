@@ -196,16 +196,16 @@ class LoRADecisionAnalyzer:
         
         # 从数据库统计该用户的对话条数
         try:
-            from backend.database.db_manager import db_manager
-            from backend.database.models import ConversationHistory
-            session = db_manager.get_session()
+            from backend.database.models import ConversationHistory, Database
+            from backend.database.config import DatabaseConfig
+            db = Database(DatabaseConfig.get_database_url())
+            session = db.get_session()
             count = session.query(ConversationHistory).filter(
                 ConversationHistory.user_id == user_id
             ).count()
             session.close()
             status["training_data_size"] = count
-        except Exception as e:
-            print(f"统计对话条数失败: {e}")
+        except Exception:
             status["training_data_size"] = 0
         
         return status

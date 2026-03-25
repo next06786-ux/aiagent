@@ -353,7 +353,8 @@ struct AgentHome {
       this.buildAICore()
 
       if (this.isLoading && !this.showAiCorePanel) { this.buildLoadingIndicator() }
-      if (this.showAiCorePanel) { this.buildAICorePanel() }
+      // 始终渲染对话面板，关闭时只隐藏不销毁，避免中断WebSocket
+      this.buildAICorePanel()
       if (this.showHistoryPanel) { this.buildHistoryPanel() }
     }
     .width('100%').height('100%')
@@ -479,7 +480,14 @@ struct AgentHome {
         .border({ width: 0.5, color: Theme.Color.BorderLight })
         .shadow(Theme.Shadow.Soft)
 
-      Text('点击展开对话').fontSize(11).fontColor(Theme.Color.TextTertiary)
+      if (this.isLoading && !this.showAiCorePanel) {
+        Text('回复中...').fontSize(11).fontColor(Theme.Color.Primary)
+          .padding({ left: 10, right: 10, top: 3, bottom: 3 })
+          .backgroundColor('rgba(10, 89, 247, 0.08)')
+          .borderRadius(Theme.Radius.round)
+      } else {
+        Text('点击展开对话').fontSize(11).fontColor(Theme.Color.TextTertiary)
+      }
     }
     .position({ x: this.centerX - 70, y: this.centerY - 75 })
     .zIndex(90)
@@ -595,12 +603,6 @@ struct AgentHome {
             this.showHistoryPanel = true;
           })
 
-          Button('更新模型').fontSize(11).fontColor(Theme.Color.Accent)
-            .backgroundColor('rgba(0, 200, 83, 0.08)')
-            .borderRadius(Theme.Radius.round).padding({ left: 12, right: 12 }).height(30)
-            .border({ width: 1, color: 'rgba(0, 200, 83, 0.2)' })
-            .onClick(() => { this.triggerModelUpdate(); })
-
           Stack() {
             Circle({ width: 34, height: 34 }).fill(Theme.Color.GlassMedium)
             Text('✕').fontSize(16).fontColor(Theme.Color.TextSecondary)
@@ -666,6 +668,8 @@ struct AgentHome {
       .shadow(Theme.Shadow.Elevated)
       .position({ x: '5%', y: '12.5%' })
     }.width('100%').height('100%').zIndex(180)
+    .visibility(this.showAiCorePanel ? Visibility.Visible : Visibility.Hidden)
+    .hitTestBehavior(this.showAiCorePanel ? HitTestMode.Default : HitTestMode.None)
   }
 
   @Builder

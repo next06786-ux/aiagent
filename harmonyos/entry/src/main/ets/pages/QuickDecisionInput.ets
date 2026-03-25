@@ -62,12 +62,12 @@ struct QuickDecisionInput {
       const httpRequest = http.createHttp()
       const response = await httpRequest.request(
         `${ApiConfig.getBaseUrl()}/api/lora/status/${this.userId}`,
-        { method: http.RequestMethod.GET }
+        { method: http.RequestMethod.GET, connectTimeout: 5000, readTimeout: 5000 }
       )
       httpRequest.destroy()
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>
-        if ((result.code as number) === 200) {
+        if ((result.code as number) === 200 && result.data) {
           this.loraStatus = result.data as LoraStatusInfo
         }
       }
