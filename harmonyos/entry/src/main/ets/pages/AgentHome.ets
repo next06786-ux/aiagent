@@ -355,6 +355,7 @@ struct AgentHome {
       if (this.isLoading && !this.showAiCorePanel) { this.buildLoadingIndicator() }
       // 始终渲染对话面板，关闭时只隐藏不销毁，避免中断WebSocket
       this.buildAICorePanel()
+      // 历史面板在对话面板之上
       if (this.showHistoryPanel) { this.buildHistoryPanel() }
     }
     .width('100%').height('100%')
@@ -676,7 +677,7 @@ struct AgentHome {
   buildHistoryPanel() {
     Stack() {
       Column().width('100%').height('100%').backgroundColor(Theme.Color.OverlayMedium)
-        .onClick(() => { this.showHistoryPanel = false; })
+        .onClick(() => { this.showHistoryPanel = false; this.showAiCorePanel = true; })
       Column() {
         Row() {
           Text('历史对话').fontSize(17).fontWeight(600).fontColor(Theme.Color.TextPrimary)
@@ -689,7 +690,7 @@ struct AgentHome {
             Circle({ width: 32, height: 32 }).fill(Theme.Color.GlassMedium)
             Text('✕').fontSize(15).fontColor(Theme.Color.TextSecondary)
           }.width(32).height(32).margin({ left: 10 })
-          .onClick(() => { this.showHistoryPanel = false; })
+          .onClick(() => { this.showHistoryPanel = false; this.showAiCorePanel = true; })
         }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 14 })
         Divider().color(Theme.Color.BorderLight).margin({ left: 20, right: 20 })
         if (this.conversations.length === 0) {
@@ -722,6 +723,6 @@ struct AgentHome {
       .border({ width: 1, color: Theme.Color.BorderLight })
       .shadow(Theme.Shadow.Elevated)
       .position({ x: '7.5%', y: '20%' })
-    }.width('100%').height('100%').zIndex(150)
+    }.width('100%').height('100%').zIndex(200)
   }
 }
