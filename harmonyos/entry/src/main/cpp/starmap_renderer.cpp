@@ -341,7 +341,8 @@ void StarMapRenderer::destroy() {
         eglMakeCurrent(eglDisplay_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (eglSurface_ != EGL_NO_SURFACE) eglDestroySurface(eglDisplay_, eglSurface_);
         if (eglContext_ != EGL_NO_CONTEXT) eglDestroyContext(eglDisplay_, eglContext_);
-        eglTerminate(eglDisplay_);
+        // 不调用 eglTerminate —— EGL display 是进程全局共享的，
+        // terminate 会导致其他渲染器（nebulachat）的 EGL 状态被破坏
     }
     
     eglDisplay_ = EGL_NO_DISPLAY;

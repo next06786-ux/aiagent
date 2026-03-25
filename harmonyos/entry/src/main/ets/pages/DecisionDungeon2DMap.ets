@@ -987,17 +987,16 @@ struct DecisionDungeon2DMap {
       .height('100%')
     }
   }
-}
-
 
   private async triggerModelUpdate() {
     if (!this.dungeonData || this.isUpdatingModel) return
     this.isUpdatingModel = true
+    const userId = this.dungeonData.user_id
     this.pushActivityLog('system', '正在更新用户模型...', true)
     try {
       const httpRequest = http.createHttp()
       const response = await httpRequest.request(
-        ApiConfig.getApiUrl(`/api/lora/train/${this.dungeonData.user_id}`),
+        ApiConfig.getApiUrl(`/api/lora/train/${userId}`),
         {
           method: http.RequestMethod.POST,
           header: { 'Content-Type': 'application/json' },
@@ -1017,3 +1016,4 @@ struct DecisionDungeon2DMap {
     }
     this.isUpdatingModel = false
   }
+}

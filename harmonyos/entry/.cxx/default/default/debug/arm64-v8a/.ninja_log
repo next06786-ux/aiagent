@@ -79,3 +79,9 @@
 1905	2109	7958151693554737	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e
 28	1044	7958153619819161	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
 1045	1191	7958153629990717	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e
+23	3753	7961230792230577	CMakeFiles/nebulachat.dir/nebula_chat_renderer.cpp.o	66b04b4d588703a6
+3754	4812	7961230829534737	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+174	2602	7961443471833343	CMakeFiles/nebulachat.dir/nebula_chat_renderer.cpp.o	66b04b4d588703a6
+22	3137	7961443470312401	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
+2603	3466	7961443496121377	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+3137	3474	7961443501465392	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e

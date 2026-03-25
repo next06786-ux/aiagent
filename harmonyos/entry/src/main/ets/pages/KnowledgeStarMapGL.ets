@@ -197,6 +197,11 @@ struct KnowledgeStarMapGL {
       }
       this.nativeModule = null
     }
+    // 清空节点数据，防止残留状态
+    this.nodes = []
+    this.nodeScreenPositions = []
+    this.selectedNodeRelations = []
+    this.selectedNodeIdx = -1
   }
 
   // 加载Native模块

@@ -1602,7 +1602,8 @@ void NebulaChatRenderer::destroy() {
         if (eglContext_ != EGL_NO_CONTEXT) {
             eglDestroyContext(eglDisplay_, eglContext_);
         }
-        eglTerminate(eglDisplay_);
+        // 不调用 eglTerminate —— EGL display 是进程全局共享的，
+        // terminate 会导致其他渲染器（starmap_render）的 EGL 状态被破坏
     }
     
     eglDisplay_ = EGL_NO_DISPLAY;

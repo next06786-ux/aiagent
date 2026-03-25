@@ -1,49 +1,32 @@
 /**
  * 智能体主界面 - LifeSwarm Agent
- * 🌌 星云对话流 - 真正的3D空间
- * 
- * 设计：
- * - 全屏3D星空，中心是AI核心
- * - 消息星云围绕AI核心漂浮
- * - 点击星云显示消息内容
- * - 输入框在底部
+ * HarmonyOS 6 流体设计 · 功能球体环绕AI核心
  */
-import { curves } from '@kit.ArkUI';
 import { Theme } from '../common/Theme';
 import { getAIConversationService, ChatMessage } from '../service/AIConversationService';
-import { MarkdownParser, MarkdownBlock, InlinePart } from '../utils/MarkdownParser';
 import { SimpleIcon } from '../components/IconRenderer';
 import http from '@ohos.net.http';
 import { ApiConfig } from '../config/ApiConfig';
 import { getAuthService, UserInfo } from '../service/AuthService';
-import display from '@ohos.display';
 
-// Native模块接口
-interface NebulaChatNative {
-  nebulaRender(): boolean;
-  nebulaAddMessage(id: string, isUser: boolean): boolean;
-  nebulaClearMessages(): boolean;
-  nebulaScroll(deltaY: number): void;
-  nebulaRotateCamera(deltaX: number, deltaY: number): void;
-  nebulaZoom(delta: number): void;
-  nebulaDestroy(): boolean;
-  nebulaHitTest(screenX: number, screenY: number): number;
-  nebulaAddFeatureOrb(id: string, r: number, g: number, b: number): boolean;
-  nebulaClearFeatureOrbs(): boolean;
-  nebulaHitTestFeature(screenX: number, screenY: number): number;
-}
-
-// 功能卡片接口
 interface FeatureCard {
   id: string;
   title: string;
   subtitle: string;
   route: string;
-  gradient: string[];
+  color: string;
   iconName: string;
 }
 
-// 对话会话接口
+interface OrbPos {
+  x: number;
+  y: number;
+  title: string;
+  icon: string;
+  color: string;
+  route: string;
+}
+
 interface ConversationItem {
   id: string;
   title: string;
@@ -52,337 +35,177 @@ interface ConversationItem {
   last_message_time: string;
 }
 
-interface ConversationsResponse {
-  success: boolean;
-  data: ConversationItem[];
-}
-
-interface MessagesResponse {
-  success: boolean;
-  data: MessageData[];
-}
-
-interface MessageData {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  thinking?: string;
-}
-
-interface CreateConversationData {
-  conversation_id: string;
-}
-
-interface CreateConversationResponse {
-  success: boolean;
-  data: CreateConversationData;
-}
-
-// 功能球体位置信息（伪3D）
-interface FeatureOrbPosition {
-  id: string;
-  x: number;
-  y: number;
-  z: number;  // 深度，用于3D效果
-  scale: number;
-  opacity: number;
-  angle: number;
-  rotateX: number;
-  rotateY: number;
-  title: string;
-  icon: string;
-  gradient: string[];
-  route: string;
-}
-
 @Entry
 @Component
 struct AgentHome {
   @State messages: ChatMessage[] = [];
   @State inputText: string = '';
   @State isLoading: boolean = false;
-  @State inputFocused: boolean = false;
   @State showContent: boolean = false;
   @State processingProgress: string = '';
   @State dotAnimation1: number = 1;
   @State dotAnimation2: number = 1;
   @State dotAnimation3: number = 1;
   private animationTimer: number = -1;
-  
-  @State showFunctionPanel: boolean = false;
+
   @State showHistoryPanel: boolean = false;
   @State showAiCorePanel: boolean = false;
   @State conversations: ConversationItem[] = [];
   @State currentSessionId: string = '';
   @State isLoadingHistory: boolean = false;
   @State userInfo: UserInfo | null = null;
-  
-  // 选中的消息（点击气泡后显示完整内容）
-  @State selectedMessageId: string = '';
-  @State showMessageDetail: boolean = false;
-  
-  // 功能球体位置状态（伪3D）
-  @State featureOrbPositions: FeatureOrbPosition[] = [];
+
+  // 布局
   @State screenWidth: number = 360;
   @State screenHeight: number = 780;
   @State centerX: number = 180;
-  @State centerY: number = 340;
-  
-  // 3D渲染相关
-  private xComponentId: string = 'nebulaChatXComponent';
-  private renderAnimId: number = -1;
-  @State isRendererReady: boolean = false;
-  @State rendererStatus: string = '等待加载...';
-  private nativeModule: NebulaChatNative | null = null;
-  
-  // 触摸交互
-  private lastTouchX: number = 0;
-  private lastTouchY: number = 0;
-  private isTouching: boolean = false;
-  
-  // 像素密度 (vp to px conversion)
-  private pixelDensity: number = 3.0;
-  
-  // 功能球体动画定时器
+  @State centerY: number = 360;
+
+  // 功能球体漂浮位置
+  @State orbPositions: OrbPos[] = [];
   private orbAnimTimer: number = -1;
-  
+
+  // AI核心球体动画
+  @State aiCoreBreath: number = 1.0;
+  @State aiCoreRing1: number = 0;
+  @State aiCoreRing2: number = 0;
+  @State aiCoreInnerRotate: number = 0;
+  private aiCoreAnimTimer: number = -1;
+
   private aiService = getAIConversationService();
   private authService = getAuthService();
-  
-  // 功能定义 - 每个功能一个球体
+
   private features: FeatureCard[] = [
-    { id: 'starmap', title: '知识星图', subtitle: '3D人脉', route: 'pages/KnowledgeStarMapGL', gradient: ['#00D4FF', '#0099CC'], iconName: 'network' },
-    { id: 'decision', title: '决策副本', subtitle: '探索未来', route: 'pages/QuickDecisionInput', gradient: ['#FF6B9D', '#C44569'], iconName: 'comparison' },
-    { id: 'dashboard', title: '智能洞察', subtitle: '涌现发现', route: 'pages/SmartInsights', gradient: ['#F59E0B', '#D97706'], iconName: 'analytics' },
-    { id: 'profile', title: '我的账号', subtitle: '个人中心', route: 'pages/UserProfile', gradient: ['#10B981', '#059669'], iconName: 'user' },
+    { id: 'starmap', title: '知识星图', subtitle: '3D知识图谱', route: 'pages/KnowledgeStarMapGL', color: '#0A59F7', iconName: 'network' },
+    { id: 'decision', title: '决策副本', subtitle: '探索未来', route: 'pages/QuickDecisionInput', color: '#6B48FF', iconName: 'comparison' },
+    { id: 'dashboard', title: '智能洞察', subtitle: '涌现发现', route: 'pages/SmartInsights', color: '#FF9500', iconName: 'analytics' },
+    { id: 'profile', title: '我的账号', subtitle: '个人中心', route: 'pages/UserProfile', color: '#00C853', iconName: 'user' },
   ];
-  
+
   aboutToAppear() {
-    this.initPixelDensity();
     this.messages = this.aiService.getConversationHistory();
     if (this.messages.length === 0) this.addWelcomeMessage();
     this.loadUserInfo();
     this.loadConversations().catch(() => {});
-    this.initFeatureOrbPositions();
+    this.initOrbPositions();
     this.startOrbAnimation();
-  }
-  
-  private initPixelDensity() {
-    try {
-      const displayInfo = display.getDefaultDisplaySync();
-      this.pixelDensity = displayInfo.densityPixels;
-      console.info(`Nebula: pixelDensity = ${this.pixelDensity}`);
-    } catch (e) {
-      this.pixelDensity = 3.0;
-      console.info('Nebula: using default pixelDensity = 3.0');
-    }
-  }
-  
-  // 初始化功能球体位置 - 固定在AI核心周围
-  private initFeatureOrbPositions() {
-    const positions: FeatureOrbPosition[] = [];
-    const count = this.features.length;
-    const radius = 125;  // 稍微增大半径，给更大的球体留空间
-    
-    for (let i = 0; i < count; i++) {
-      const feature = this.features[i];
-      // 从顶部开始，顺时针均匀分布，稍微偏移让布局更自然
-      const angle = (i / count) * Math.PI * 2 - Math.PI / 2 + 0.1;
-      
-      // 固定的基础位置
-      const baseX = this.centerX + Math.cos(angle) * radius;
-      const baseY = this.centerY + Math.sin(angle) * radius;
-      
-      positions.push({
-        id: feature.id,
-        x: baseX,
-        y: baseY,
-        z: 0,
-        scale: 1,
-        opacity: 1,
-        angle: angle,
-        rotateX: 0,
-        rotateY: 0,
-        title: feature.title,
-        icon: feature.iconName,
-        gradient: feature.gradient,
-        route: feature.route
-      });
-    }
-    
-    this.featureOrbPositions = positions;
-  }
-  
-  // 启动功能球体动画
-  private startOrbAnimation() {
-    if (this.orbAnimTimer !== -1) return;
-    
-    this.orbAnimTimer = setInterval(() => {
-      this.updateOrbPositions();
-    }, 50);  // 20fps
-  }
-  
-  private stopOrbAnimation() {
-    if (this.orbAnimTimer !== -1) {
-      clearInterval(this.orbAnimTimer);
-      this.orbAnimTimer = -1;
-    }
-  }
-  
-  // 更新功能球体位置 - 原地小幅漂浮
-  private updateOrbPositions() {
-    const time = Date.now() / 1000;
-    const newPositions: FeatureOrbPosition[] = [];
-    const count = this.features.length;
-    const radius = 125;
-    
-    for (let i = 0; i < count; i++) {
-      const feature = this.features[i];
-      const angle = (i / count) * Math.PI * 2 - Math.PI / 2 + 0.1;
-      
-      // 固定的基础位置
-      const baseX = this.centerX + Math.cos(angle) * radius;
-      const baseY = this.centerY + Math.sin(angle) * radius;
-      
-      // 小幅上下漂浮 + 轻微左右摆动，每个球体相位不同
-      const floatY = Math.sin(time * 1.0 + i * 1.3) * 5;
-      const floatX = Math.cos(time * 0.8 + i * 1.5) * 2;
-      
-      newPositions.push({
-        id: feature.id,
-        x: baseX + floatX,
-        y: baseY + floatY,
-        z: 0,
-        scale: 1,
-        opacity: 1,
-        angle: angle,
-        rotateX: 0,
-        rotateY: 0,
-        title: feature.title,
-        icon: feature.iconName,
-        gradient: feature.gradient,
-        route: feature.route
-      });
-    }
-    
-    this.featureOrbPositions = newPositions;
-  }
-  
-  onPageShow() {
+    this.startAiCoreAnimation();
     setTimeout(() => { this.showContent = true; }, 50);
-    if (this.isRendererReady && this.renderAnimId === -1) {
-      this.startRenderLoop();
-    }
-  }
-  
-  aboutToDisappear() {
-    this.stopLoadingAnimation();
-    this.stopRenderLoop();
-    this.destroyRenderer();
-    this.stopOrbAnimation();
-  }
-  
-  // 添加新消息
-  private addMessageWithAnimation(msg: ChatMessage) {
-    this.messages.push(msg);
-  }
-  
-  private initRenderer(context: object) {
-    try {
-      console.info('Nebula: initRenderer called, context type:', typeof context);
-      this.rendererStatus = '正在初始化...';
-      this.nativeModule = context as NebulaChatNative;
-      
-      const hasRender = this.nativeModule && typeof this.nativeModule.nebulaRender === 'function';
-      
-      if (hasRender) {
-        console.info('Nebula: Native module loaded successfully');
-        this.isRendererReady = true;
-        this.rendererStatus = '3D渲染已启动';
-        this.startRenderLoop();
-      } else {
-        console.error('Nebula: Native module methods not available');
-        this.rendererStatus = '渲染器方法不可用';
-      }
-    } catch (err) {
-      console.error('Nebula: Init error:', (err as Error).message);
-      this.rendererStatus = '初始化错误: ' + (err as Error).message;
-    }
-  }
-  
-  private startRenderLoop() {
-    if (this.renderAnimId !== -1) return;
-    
-    console.info('Nebula: Starting render loop...');
-    let frameCount = 0;
-    
-    this.renderAnimId = setInterval(() => {
-      if (this.isRendererReady && this.nativeModule) {
-        this.nativeModule.nebulaRender();
-        frameCount++;
-        if (frameCount % 90 === 0) {
-          console.info(`Nebula: Render loop running, frame ${frameCount}`);
-        }
-      }
-    }, 33);
-    
-    console.info('Nebula: Render loop started, timer id:', this.renderAnimId);
-  }
-  
-  private stopRenderLoop() {
-    if (this.renderAnimId !== -1) {
-      clearInterval(this.renderAnimId);
-      this.renderAnimId = -1;
-    }
-  }
-  
-  private destroyRenderer() {
-    if (this.isRendererReady && this.nativeModule) {
-      this.nativeModule.nebulaDestroy();
-      this.isRendererReady = false;
-      this.nativeModule = null;
-    }
   }
 
+  aboutToDisappear() {
+    this.stopLoadingAnimation();
+    this.stopOrbAnimation();
+    this.stopAiCoreAnimation();
+  }
+
+  onPageShow() {
+    this.showContent = true;
+    this.initOrbPositions();
+    this.startOrbAnimation();
+    this.startAiCoreAnimation();
+  }
+
+  onPageHide() {
+    this.stopOrbAnimation();
+    this.stopAiCoreAnimation();
+  }
+
+  // ===== 球体位置与动画 =====
+  private initOrbPositions() {
+    const count = this.features.length;
+    const radius = 145;
+    const cy = this.centerY + 10;
+    const positions: OrbPos[] = [];
+    for (let i = 0; i < count; i++) {
+      const f = this.features[i];
+      const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+      positions.push({
+        x: this.centerX + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius,
+        title: f.title, icon: f.iconName, color: f.color, route: f.route
+      });
+    }
+    this.orbPositions = positions;
+  }
+
+  private startOrbAnimation() {
+    if (this.orbAnimTimer !== -1) return;
+    this.orbAnimTimer = setInterval(() => {
+      const time = Date.now() / 1000;
+      const count = this.features.length;
+      const radius = 145;
+      const cy = this.centerY + 10;
+      const newPos: OrbPos[] = [];
+      for (let i = 0; i < count; i++) {
+        const f = this.features[i];
+        const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+        const baseX = this.centerX + Math.cos(angle) * radius;
+        const baseY = cy + Math.sin(angle) * radius;
+        newPos.push({
+          x: baseX + Math.cos(time * 0.7 + i * 1.6) * 3,
+          y: baseY + Math.sin(time * 0.9 + i * 1.2) * 4,
+          title: f.title, icon: f.iconName, color: f.color, route: f.route
+        });
+      }
+      this.orbPositions = newPos;
+    }, 50);
+  }
+
+  private stopOrbAnimation() {
+    if (this.orbAnimTimer !== -1) { clearInterval(this.orbAnimTimer); this.orbAnimTimer = -1; }
+  }
+
+  private startAiCoreAnimation() {
+    if (this.aiCoreAnimTimer !== -1) return;
+    let t = 0;
+    this.aiCoreAnimTimer = setInterval(() => {
+      t += 0.05;
+      animateTo({ duration: 50, curve: Curve.Linear }, () => {
+        this.aiCoreBreath = 1.0 + Math.sin(t * 1.2) * 0.05;
+        this.aiCoreRing1 = (t * 18) % 360;
+        this.aiCoreRing2 = (t * -12 + 120) % 360;
+        this.aiCoreInnerRotate = (t * 25) % 360;
+      });
+    }, 50);
+  }
+
+  private stopAiCoreAnimation() {
+    if (this.aiCoreAnimTimer !== -1) { clearInterval(this.aiCoreAnimTimer); this.aiCoreAnimTimer = -1; }
+  }
+
+  // ===== 业务方法 =====
   private async loadUserInfo() {
     try { this.userInfo = await this.authService.getCurrentUserAsync(); }
     catch (err) { console.error('加载用户信息失败:', err); }
   }
-  
+
   private async loadConversations() {
     try {
       const userId = this.authService.getCurrentUserId();
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/chat/sessions/${userId}`;
-      const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/chat/sessions/${userId}`, { method: http.RequestMethod.GET });
       httpRequest.destroy();
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>;
         const data = result.data as Record<string, Object>;
         const sessions = (data.sessions as Array<Record<string, Object>>) || [];
-        this.conversations = sessions.map((item: Record<string, Object>): ConversationItem => {
-          return {
-            id: item.session_id as string,
-            title: item.title as string || '新对话',
-            preview: item.preview as string || '',
-            message_count: item.message_count as number || 0,
-            last_message_time: item.last_time as string || ''
-          }
-        });
+        this.conversations = sessions.map((item: Record<string, Object>): ConversationItem => ({
+          id: item.session_id as string, title: item.title as string || '新对话',
+          preview: item.preview as string || '', message_count: item.message_count as number || 0,
+          last_message_time: item.last_time as string || ''
+        }));
       }
     } catch (err) { console.error('加载历史对话失败:', err); }
   }
-  
+
   private addWelcomeMessage() {
-    const welcomeMsg = new ChatMessage(
-      Date.now().toString(), 'assistant',
-      `✨ 欢迎来到 LifeSwarm 星云空间\n\n我是漂浮在中心的AI核心\n\n🌌 你的每句话都会化作蓝色星云\n🔮 我的回应凝聚成紫色光芒\n✦ 点击星云查看消息内容\n\n向星空诉说你的想法吧`,
-      Date.now()
-    );
-    this.messages.push(welcomeMsg);
+    this.messages.push(new ChatMessage(Date.now().toString(), 'assistant',
+      '欢迎来到 LifeSwarm\n\n我是你的AI助手，可以帮你分析问题、辅助决策。\n\n点击中心AI核心开始对话，或选择周围的功能球体探索更多。',
+      Date.now()));
   }
-  
+
   private startLoadingAnimation() {
     let step = 0;
     this.animationTimer = setInterval(() => {
@@ -394,7 +217,7 @@ struct AgentHome {
       });
     }, 300);
   }
-  
+
   private stopLoadingAnimation() {
     if (this.animationTimer !== -1) { clearInterval(this.animationTimer); this.animationTimer = -1; }
     this.dotAnimation1 = 1; this.dotAnimation2 = 1; this.dotAnimation3 = 1;
@@ -407,25 +230,11 @@ struct AgentHome {
     this.isLoading = true;
     this.startLoadingAnimation();
     this.showAiCorePanel = true;
-    
-    const userMsg = new ChatMessage(Date.now().toString(), 'user', userMessage, Date.now());
-    this.addMessageWithAnimation(userMsg);
-    
-    if (this.isRendererReady && this.nativeModule) {
-      this.nativeModule.nebulaAddMessage(userMsg.id, true);
-    }
-    
+    this.messages.push(new ChatMessage(Date.now().toString(), 'user', userMessage, Date.now()));
     const aiMsgId = (Date.now() + 1).toString();
-    const aiMsg = new ChatMessage(aiMsgId, 'assistant', '', Date.now(), '');
-    this.addMessageWithAnimation(aiMsg);
-    
-    if (this.isRendererReady && this.nativeModule) {
-      this.nativeModule.nebulaAddMessage(aiMsgId, false);
-    }
-    
+    this.messages.push(new ChatMessage(aiMsgId, 'assistant', '', Date.now(), ''));
     try {
-      await this.aiService.chatStreamWebSocket(
-        userMessage,
+      await this.aiService.chatStreamWebSocket(userMessage,
         (progress: string) => { this.processingProgress = progress; },
         (thinking: string) => { this.processingProgress = ''; this.updateMessage(aiMsgId, 'thinking', thinking); },
         (answer: string) => { this.updateMessage(aiMsgId, 'content', answer); },
@@ -439,7 +248,6 @@ struct AgentHome {
         (sessionId: string) => { this.currentSessionId = sessionId; }
       );
     } catch (err) {
-      console.error('发送消息失败:', (err as Error).message);
       const idx = this.messages.findIndex(m => m.id === aiMsgId);
       if (idx >= 0) this.messages.splice(idx, 1);
       this.isLoading = false; this.stopLoadingAnimation();
@@ -450,17 +258,13 @@ struct AgentHome {
     if (!this.userInfo) return;
     try {
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/lora/train/${this.userInfo.user_id}`;
-      const response = await httpRequest.request(url, { method: http.RequestMethod.POST });
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/lora/train/${this.userInfo.user_id}`, { method: http.RequestMethod.POST });
       httpRequest.destroy();
-      if (response.responseCode === 200) {
-        this.processingProgress = '用户模型训练已触发';
-      }
-    } catch (err) {
-      console.error('触发用户模型训练失败:', err);
-    }
+      if (response.responseCode === 200) { this.processingProgress = '模型训练已触发'; }
+    } catch (err) { console.error('触发模型训练失败:', err); }
   }
-  
+
   private updateMessage(messageId: string, field: 'thinking' | 'content', value: string): void {
     const idx = this.messages.findIndex(m => m.id === messageId);
     if (idx >= 0) {
@@ -473,562 +277,437 @@ struct AgentHome {
       this.messages = newMsgs;
     }
   }
-  
+
   async loadConversationMessages(sessionId: string) {
     this.isLoadingHistory = true;
     try {
       const userId = this.authService.getCurrentUserId();
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/chat/session/${userId}/${sessionId}`;
-      const response = await httpRequest.request(url, { method: http.RequestMethod.GET });
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/chat/session/${userId}/${sessionId}`, { method: http.RequestMethod.GET });
       httpRequest.destroy();
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>;
         const data = result.data as Record<string, Object>;
         const history = (data.history as Array<Record<string, string>>) || [];
         this.messages = history.map((m: Record<string, string>) => new ChatMessage(
-          m.id || Date.now().toString(),
-          m.role as 'user' | 'assistant',
-          m.content || '',
-          m.timestamp ? new Date(m.timestamp).getTime() : Date.now(),
-          m.thinking
-        ));
+          m.id || Date.now().toString(), m.role as 'user' | 'assistant',
+          m.content || '', m.timestamp ? new Date(m.timestamp).getTime() : Date.now(), m.thinking));
         this.currentSessionId = sessionId;
-        this.showHistoryPanel = false;
-        this.showAiCorePanel = true;
+        this.showHistoryPanel = false; this.showAiCorePanel = true;
       }
     } catch (err) { console.error('加载对话消息失败:', err); }
     finally { this.isLoadingHistory = false; }
   }
-  
+
   async createNewConversation() {
     try {
       const userId = this.authService.getCurrentUserId();
       const httpRequest = http.createHttp();
-      const url = `${ApiConfig.getBaseUrl()}/api/chat/session/new/${userId}`;
-      const response = await httpRequest.request(url, { method: http.RequestMethod.POST });
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/chat/session/new/${userId}`, { method: http.RequestMethod.POST });
       httpRequest.destroy();
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>;
         const data = result.data as Record<string, string>;
-        if (data && data.session_id) {
+        if (data?.session_id) {
           this.currentSessionId = data.session_id;
-          this.messages = [];
-          this.addWelcomeMessage();
-          this.showHistoryPanel = false;
-          this.showAiCorePanel = true;
+          this.messages = []; this.addWelcomeMessage();
+          this.showHistoryPanel = false; this.showAiCorePanel = true;
           this.loadConversations();
         }
       }
     } catch (err) { console.error('创建新对话失败:', err); }
   }
-  
+
   private navigateTo(route: string): void {
     try { this.getUIContext().getRouter().pushUrl({ url: route }); }
     catch (e) { console.error('导航失败:', e); }
   }
-  
+
   formatTime(ts: number): string {
     const d = new Date(ts);
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
   }
-  
-  private parseMarkdownBlocks(content: string): MarkdownBlock[] { return MarkdownParser.parse(content); }
-  private parseInlineParts(text: string): InlinePart[] { return MarkdownParser.parseInline(text); }
-  
-  // 获取选中的消息
-  private getSelectedMessage(): ChatMessage | null {
-    return this.messages.find(m => m.id === this.selectedMessageId) || null;
-  }
 
-
+  // ===== UI 构建 =====
   build() {
     Stack() {
-      // 1. 全屏3D星云空间 - OpenGL ES (最底层)
-      XComponent({
-        id: this.xComponentId,
-        type: XComponentType.SURFACE,
-        libraryname: 'nebulachat'
-      })
-        .width('100%')
-        .height('100%')
-        .zIndex(0)
-        .onLoad((context?: object) => {
-          console.info('Nebula: XComponent onLoad triggered, context exists:', context !== undefined && context !== null);
-          if (context) {
-            console.info('Nebula: Context received, initializing renderer...');
-            this.rendererStatus = 'Context已接收';
-            this.initRenderer(context);
-          } else {
-            console.error('Nebula: XComponent onLoad - context is null/undefined!');
-            this.rendererStatus = 'Native库加载失败';
-          }
-        })
-        .onDestroy(() => {
-          console.info('Nebula: XComponent onDestroy');
-          this.stopRenderLoop();
-          this.destroyRenderer();
-        })
-      
-      // 2. 功能球体层 - 直接渲染在Stack中
-      this.FeatureOrbsLayer()
-      
-      // 调试信息
-      Text(this.rendererStatus)
-        .fontSize(12)
-        .fontColor(this.isRendererReady ? '#00FF00' : '#FF6600')
-        .padding(8)
-        .backgroundColor('rgba(0, 0, 0, 0.4)')
-        .borderRadius(8)
-        .position({ x: 10, y: 70 })
-        .zIndex(10)
-      
-      // 3. 顶部栏
-      this.TopBar()
-      
-      // 4. 加载指示器
-      if (this.isLoading) {
-        this.LoadingIndicator()
-      }
-      
-      // 5. 中心AI核心交互入口
-      this.AICoreEntry()
+      // 浅色背景
+      Column().width('100%').height('100%').backgroundColor(Theme.Color.BackgroundPrimary)
 
-      // 6. AI对话面板
-      if (this.showAiCorePanel) {
-        this.AICorePanel()
-      }
+      // 装饰光晕 - 跟随AI核心呼吸
+      Circle({ width: 320, height: 320 }).fill('#667eea').opacity(0.035).blur(80)
+        .position({ x: this.centerX - 160, y: this.centerY - 140 })
+        .scale({ x: this.aiCoreBreath, y: this.aiCoreBreath })
+      Circle({ width: 200, height: 200 }).fill('#764ba2').opacity(0.025).blur(60)
+        .position({ x: this.centerX + 30, y: this.centerY + 60 })
 
-      // 7. 历史面板
-      if (this.showHistoryPanel) { this.HistoryPanel() }
+      // 功能球体层
+      this.buildOrbsLayer()
+
+      // 顶部栏
+      this.buildTopBar()
+
+      // 中心AI核心
+      this.buildAICore()
+
+      if (this.isLoading && !this.showAiCorePanel) { this.buildLoadingIndicator() }
+      if (this.showAiCorePanel) { this.buildAICorePanel() }
+      if (this.showHistoryPanel) { this.buildHistoryPanel() }
     }
-    .width('100%')
-    .height('100%')
+    .width('100%').height('100%')
     .onAreaChange((oldArea: Area, newArea: Area) => {
       this.screenWidth = newArea.width as number;
       this.screenHeight = newArea.height as number;
       this.centerX = this.screenWidth / 2;
-      this.centerY = this.screenHeight / 2;  // 屏幕正中心，与OpenGL AI核心对齐
-      this.initFeatureOrbPositions();
-    })
-    .onTouch((event: TouchEvent) => {
-      if (event.type === TouchType.Down) {
-        if (event.touches.length === 1) {
-          this.isTouching = true;
-          this.lastTouchX = event.touches[0].x;
-          this.lastTouchY = event.touches[0].y;
-        }
-      } else if (event.type === TouchType.Move) {
-        if (this.isTouching && this.isRendererReady && this.nativeModule && event.touches.length === 1) {
-          const deltaX = event.touches[0].x - this.lastTouchX;
-          const deltaY = event.touches[0].y - this.lastTouchY;
-          // 只有移动距离大于阈值才旋转
-          if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
-            this.nativeModule.nebulaRotateCamera(deltaX, deltaY);
-          }
-          this.lastTouchX = event.touches[0].x;
-          this.lastTouchY = event.touches[0].y;
-        }
-      } else if (event.type === TouchType.Up) {
-        this.isTouching = false;
-      }
+      this.centerY = this.screenHeight / 2;
+      this.initOrbPositions();
     })
   }
-  
+
   @Builder
-  FeatureOrbsLayer() {
-    // 功能球体 - 精致的玻璃质感设计
-    ForEach(this.featureOrbPositions, (orb: FeatureOrbPosition) => {
-      Column({ space: 6 }) {
-        // 发光球体容器
+  buildTopBar() {
+    Row() {
+      Row({ space: 10 }) {
         Stack() {
-          // 最外层 - 柔和光晕
-          Circle({ width: 76, height: 76 })
-            .fill(orb.gradient[0])
-            .opacity(0.15)
-            .blur(20)
-          
-          // 外环 - 呼吸光环
-          Circle({ width: 66, height: 66 })
-            .fill('transparent')
-            .border({ width: 1.5, color: orb.gradient[0] })
-            .opacity(0.4)
-          
-          // 球体主体 - 玻璃质感渐变
-          Circle({ width: 54, height: 54 })
-            .linearGradient({
-              angle: 145,
-              colors: [
-                [orb.gradient[0], 0],
-                [orb.gradient[1], 0.6],
-                ['rgba(0, 0, 0, 0.3)', 1]
-              ]
-            })
-            .shadow({ radius: 16, color: orb.gradient[0], offsetX: 0, offsetY: 6 })
-          
-          // 内部深色层 - 增加立体感
-          Circle({ width: 46, height: 46 })
-            .linearGradient({
-              angle: 145,
-              colors: [
-                ['rgba(255, 255, 255, 0.1)', 0],
-                ['rgba(0, 0, 0, 0.2)', 1]
-              ]
-            })
-          
-          // 顶部高光 - 玻璃反射
-          Ellipse({ width: 24, height: 12 })
-            .fill('rgba(255, 255, 255, 0.45)')
-            .position({ x: 12, y: 8 })
-            .blur(4)
-          
-          // 底部反光
-          Ellipse({ width: 16, height: 6 })
-            .fill('rgba(255, 255, 255, 0.15)')
-            .position({ x: 28, y: 52 })
-            .blur(3)
-          
-          // 图标 - 带阴影
-          Column() {
-            SimpleIcon({
-              iconName: orb.icon,
-              iconSize: 24,
-              color: '#FFFFFF'
-            })
-          }
-          .shadow({ radius: 8, color: 'rgba(0, 0, 0, 0.3)', offsetX: 0, offsetY: 2 })
-        }
-        .width(76)
-        .height(76)
-        
-        // 标题 - 带背景模糊
-        Text(orb.title)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#FFFFFF')
-          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-          .backgroundColor('rgba(0, 0, 0, 0.35)')
-          .borderRadius(10)
-          .shadow({ radius: 6, color: 'rgba(0, 0, 0, 0.4)', offsetX: 0, offsetY: 2 })
+          Circle({ width: 40, height: 40 }).fill(Theme.Color.Primary).opacity(0.12)
+          Circle({ width: 32, height: 32 })
+            .linearGradient({ angle: 135, colors: [['#667eea', 0], ['#764ba2', 1]] })
+          Text('LS').fontSize(13).fontWeight(700).fontColor('#FFFFFF')
+        }.width(40).height(40)
+
+        Column({ space: 2 }) {
+          Text('LifeSwarm').fontSize(17).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+          Text(this.userInfo ? `${this.userInfo.nickname}，你好` : '智能生活助手')
+            .fontSize(11).fontColor(Theme.Color.TextTertiary)
+        }.alignItems(HorizontalAlign.Start)
       }
-      .width(100)
-      .height(115)
+      Blank()
+      Stack() {
+        Circle({ width: 40, height: 40 }).fill(Theme.Color.GlassMedium)
+        SimpleIcon({ iconName: 'history', iconSize: 20, color: Theme.Color.TextSecondary })
+      }.width(40).height(40)
+      .onClick(() => { this.showHistoryPanel = true; })
+    }
+    .width('100%').height(60)
+    .padding({ left: 16, right: 16 })
+    .backgroundColor(Theme.Color.GlassHeavy)
+    .backdropBlur(Theme.Blur.Medium)
+    .border({ width: 0.5, color: Theme.Color.BorderLight })
+    .position({ x: 0, y: 0 }).zIndex(10)
+  }
+
+  @Builder
+  buildAICore() {
+    Column({ space: 8 }) {
+      Stack() {
+        // 最外层脉冲光晕
+        Circle({ width: 140, height: 140 })
+          .fill(Theme.Color.Primary).opacity(0.04).blur(30)
+          .scale({ x: this.aiCoreBreath * 1.15, y: this.aiCoreBreath * 1.15 })
+
+        // 外层呼吸环
+        Circle({ width: 118, height: 118 }).fill('transparent')
+          .border({ width: 0.8, color: 'rgba(102, 126, 234, 0.12)' })
+          .scale({ x: this.aiCoreBreath, y: this.aiCoreBreath })
+
+        // 轨道环1 - 水平椭圆
+        Circle({ width: 104, height: 104 }).fill('transparent')
+          .border({ width: 1.2, color: 'rgba(10, 89, 247, 0.16)' })
+          .rotate({ angle: this.aiCoreRing1 }).scale({ x: 1, y: 0.35 })
+
+        // 轨道环2 - 垂直椭圆
+        Circle({ width: 96, height: 96 }).fill('transparent')
+          .border({ width: 1, color: 'rgba(107, 72, 255, 0.13)' })
+          .rotate({ angle: this.aiCoreRing2 }).scale({ x: 0.35, y: 1 })
+
+        // 轨道环3 - 倾斜
+        Circle({ width: 88, height: 88 }).fill('transparent')
+          .border({ width: 0.8, color: 'rgba(100, 180, 255, 0.1)' })
+          .rotate({ angle: this.aiCoreRing1 * 0.6 + 60 })
+          .scale({ x: 0.65, y: 0.45 })
+
+        // 核心发光底 - 加大加深
+        Circle({ width: 76, height: 76 })
+          .fill(Theme.Color.Primary).opacity(0.1).blur(18)
+          .scale({ x: this.aiCoreBreath, y: this.aiCoreBreath })
+
+        // 核心球体 - 用多层线性渐变模拟径向光照，避免方形边界
+        Circle({ width: 66, height: 66 })
+          .linearGradient({ angle: 150 + this.aiCoreInnerRotate * 0.2,
+            colors: [['#8B7CF6', 0], ['#6B5BD4', 0.35], ['#4A3BB0', 0.7], ['#2E1F8A', 1]] })
+          .shadow({ radius: 24, color: 'rgba(91, 78, 212, 0.45)', offsetX: 0, offsetY: 8 })
+
+        // 球体上半高光层 - 模拟顶部光照
+        Circle({ width: 66, height: 66 })
+          .linearGradient({ angle: 170,
+            colors: [['rgba(255,255,255,0.25)', 0], ['rgba(255,255,255,0.05)', 0.3], ['rgba(0,0,0,0)', 0.5], ['rgba(0,0,0,0.1)', 1]] })
+
+        // 边缘菲涅尔高光环
+        Circle({ width: 64, height: 64 }).fill('transparent')
+          .border({ width: 1.5, color: 'rgba(255, 255, 255, 0.12)' })
+
+        // 顶部高光弧 - 更柔和
+        Ellipse({ width: 28, height: 11 })
+          .fill('rgba(255, 255, 255, 0.25)')
+          .blur(4)
+          .position({ x: 50, y: 46 })
+
+        // 底部反光
+        Ellipse({ width: 18, height: 6 })
+          .fill('rgba(180, 170, 255, 0.1)')
+          .blur(3)
+          .position({ x: 60, y: 92 })
+
+        // AI文字 - 圆形容器融入球体
+        Stack() {
+          Circle({ width: 36, height: 36 })
+            .fill('rgba(255, 255, 255, 0.08)')
+          Text('AI').fontSize(16).fontWeight(700)
+            .fontColor('rgba(255, 255, 255, 0.75)')
+        }
+        .width(36)
+        .height(36)
+        .clip(new Circle({ width: 36, height: 36 }))
+      }.width(140).height(140)
+
+      Text('AI核心').fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+        .padding({ left: 14, right: 14, top: 5, bottom: 5 })
+        .backgroundColor(Theme.Color.GlassHeavy)
+        .borderRadius(Theme.Radius.round)
+        .border({ width: 0.5, color: Theme.Color.BorderLight })
+        .shadow(Theme.Shadow.Soft)
+
+      Text('点击展开对话').fontSize(11).fontColor(Theme.Color.TextTertiary)
+    }
+    .position({ x: this.centerX - 70, y: this.centerY - 75 })
+    .zIndex(90)
+    .onClick(() => { this.showAiCorePanel = true; this.showHistoryPanel = false; })
+    .opacity(this.showContent ? 1 : 0)
+    .scale({ x: this.showContent ? 1 : 0.85, y: this.showContent ? 1 : 0.85 })
+    .animation({ duration: 800, curve: Curve.Smooth, delay: 0 })
+  }
+
+  @Builder
+  buildOrbsLayer() {
+    ForEach(this.orbPositions, (orb: OrbPos, index: number) => {
+      Column({ space: 8 }) {
+        Stack() {
+          // 柔和光晕
+          Circle({ width: 74, height: 74 }).fill(orb.color).opacity(0.06).blur(18)
+          // 外环
+          Circle({ width: 64, height: 64 }).fill('transparent')
+            .border({ width: 0.8, color: orb.color }).opacity(0.18)
+          // 球体底色
+          Circle({ width: 54, height: 54 }).fill(orb.color).opacity(0.12)
+          // 球体主体渐变
+          Circle({ width: 54, height: 54 })
+            .linearGradient({ angle: 145, colors: [[orb.color, 0], ['rgba(0,0,0,0.08)', 1]] })
+            .shadow({ radius: 14, color: orb.color, offsetX: 0, offsetY: 5 })
+          // 高光
+          Circle({ width: 46, height: 46 })
+            .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
+          // 图标
+          SimpleIcon({ iconName: orb.icon, iconSize: 22, color: '#FFFFFF' })
+        }.width(74).height(74)
+
+        Text(orb.title)
+          .fontSize(12).fontWeight(500).fontColor(Theme.Color.TextPrimary)
+          .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+          .backgroundColor(Theme.Color.GlassHeavy)
+          .borderRadius(Theme.Radius.round)
+          .border({ width: 0.5, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+      }
+      .width(92).height(110)
       .justifyContent(FlexAlign.Center)
-      .position({
-        x: orb.x - 50,
-        y: orb.y - 57
-      })
+      .position({ x: orb.x - 46, y: orb.y - 55 })
       .zIndex(100)
       .hitTestBehavior(HitTestMode.Block)
       .onTouch((event: TouchEvent) => {
         if (event.type === TouchType.Up) {
-          console.info(`Orb touched: ${orb.id} -> ${orb.route}`);
           this.navigateTo(orb.route);
           event.stopPropagation();
+        }
+      })
+      .opacity(this.showContent ? 1 : 0)
+      .scale({ x: this.showContent ? 1 : 0.7, y: this.showContent ? 1 : 0.7 })
+      .animation({ duration: 700, curve: Curve.Smooth, delay: 150 + index * 100 })
+      .stateStyles({
+        pressed: {
+          .scale({ x: 0.9, y: 0.9 })
+          .opacity(0.85)
+        },
+        normal: {
+          .scale({ x: 1, y: 1 })
+          .opacity(1)
         }
       })
     })
   }
 
   @Builder
-  TopBar() {
-    Row() {
-      Row({ space: 10 }) {
-        Stack() {
-          Circle({ width: 44, height: 44 }).fill('rgba(140, 100, 255, 0.2)').blur(12)
-          Circle({ width: 36, height: 36 }).fill('rgba(102, 126, 234, 0.8)')
-          Text('✦').fontSize(18).fontColor('#FFFFFF')
-        }.width(44).height(44)
-        
-        Column({ space: 1 }) {
-          Text('LifeSwarm').fontSize(18).fontWeight(700).fontColor('#FFFFFF')
-          Text('3D星云空间').fontSize(11).fontColor('rgba(180, 160, 255, 0.7)')
-        }.alignItems(HorizontalAlign.Start)
-      }
-      
-      Blank()
-      
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Circle }) { Text('📜').fontSize(16) }
-          .width(38).height(38).backgroundColor('rgba(100, 80, 180, 0.3)')
-          .onClick(() => { this.showHistoryPanel = true; })
-      }
-    }
-    .width('100%')
-    .height(64)
-    .padding({ left: 16, right: 16 })
-    .backgroundColor('rgba(5, 0, 20, 0.5)')  // 更透明
-    .position({ x: 0, y: 0 })
-    .zIndex(10)
-  }
-  
-  @Builder
-  CenterHint() {
-    Column({ space: 12 }) {
-      Text('✦').fontSize(40).fontColor('rgba(150, 120, 255, 0.6)')
-      Text('AI核心在中心').fontSize(14).fontColor('rgba(180, 160, 220, 0.6)')
-      Text('拖动旋转 · 双指缩放').fontSize(12).fontColor('rgba(150, 130, 200, 0.5)')
-    }
-    .position({ x: '50%', y: '45%' })
-    .translate({ x: '-50%', y: '-50%' })
-  }
-  
-  @Builder
-  LoadingIndicator() {
-    Column({ space: 12 }) {
+  buildLoadingIndicator() {
+    Column({ space: 10 }) {
       if (this.processingProgress) {
-        Text(this.processingProgress)
-          .fontSize(12)
-          .fontColor('rgba(180, 140, 255, 0.9)')
+        Text(this.processingProgress).fontSize(12).fontColor(Theme.Color.Primary)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-          .backgroundColor('rgba(100, 60, 180, 0.3)')
-          .borderRadius(14)
+          .backgroundColor('rgba(10, 89, 247, 0.06)').borderRadius(Theme.Radius.round)
       }
-      
-      Row({ space: 12 }) {
-        Circle({ width: 10, height: 10 }).fill('rgba(100, 180, 255, 0.8)').scale({ x: this.dotAnimation1, y: this.dotAnimation1 })
-        Circle({ width: 10, height: 10 }).fill('rgba(150, 130, 255, 0.8)').scale({ x: this.dotAnimation2, y: this.dotAnimation2 })
-        Circle({ width: 10, height: 10 }).fill('rgba(200, 100, 255, 0.8)').scale({ x: this.dotAnimation3, y: this.dotAnimation3 })
+      Row({ space: 10 }) {
+        Circle({ width: 8, height: 8 }).fill(Theme.Color.Primary).scale({ x: this.dotAnimation1, y: this.dotAnimation1 })
+        Circle({ width: 8, height: 8 }).fill(Theme.Color.Secondary).scale({ x: this.dotAnimation2, y: this.dotAnimation2 })
+        Circle({ width: 8, height: 8 }).fill(Theme.Color.Accent).scale({ x: this.dotAnimation3, y: this.dotAnimation3 })
       }
-    }
-    .position({ x: '50%', y: '55%' })
-    .translate({ x: '-50%' })
-    .zIndex(15)
-  }
-  
-  @Builder
-  InputArea() {
-    Row({ space: 10 }) {
-      TextInput({ placeholder: '向星云诉说...', text: this.inputText })
-        .layoutWeight(1)
-        .height(50)
-        .fontSize(15)
-        .fontColor('#FFFFFF')
-        .placeholderColor('rgba(180, 160, 220, 0.5)')
-        .backgroundColor('rgba(30, 15, 60, 0.6)')
-        .borderRadius(25)
-        .padding({ left: 20, right: 20 })
-        .border({ width: 1, color: this.inputFocused ? 'rgba(150, 120, 255, 0.6)' : 'rgba(120, 80, 200, 0.3)' })
-        .onChange((v: string) => { this.inputText = v; })
-        .onFocus(() => { this.inputFocused = true; })
-        .onBlur(() => { this.inputFocused = false; })
-        .onSubmit(() => { this.sendMessage(); })
-      
-      Button({ type: ButtonType.Circle }) {
-        Text('✦').fontSize(20).fontColor('#FFFFFF')
-      }
-      .width(50)
-      .height(50)
-      .backgroundColor(this.inputText.trim() && !this.isLoading 
-        ? 'rgba(124, 58, 237, 0.9)' 
-        : 'rgba(60, 40, 100, 0.5)')
-      .enabled(this.inputText.trim().length > 0 && !this.isLoading)
-      .onClick(() => { this.sendMessage(); })
-    }
-    .width('100%')
-    .padding({ left: 16, right: 16, bottom: 20, top: 12 })
-    .backgroundColor('rgba(5, 0, 20, 0.6)')  // 更透明
-    .position({ x: 0, y: '100%' })
-    .translate({ y: '-100%' })
-    .zIndex(10)
-  }
-  
-  @Builder
-  FloatingButtons() {
-    Column() {}
-      .position({ x: '85%', y: '75%' })
-      .zIndex(10)
-  }
-  
-  @Builder
-  MessageDetailPanel() {
-    Column() {}
-  }
-  
-  @Builder
-  SingleMessageDetail() {
-    Column() {}
-  }
-  
-  @Builder
-  AllMessagesPanel() {
-    Column() {}
+    }.position({ x: '50%', y: '60%' }).translate({ x: '-50%' }).zIndex(15)
   }
 
   @Builder
-  HistoryPanel() {
+  buildAICorePanel() {
     Stack() {
-      Column().width('100%').height('100%').backgroundColor('rgba(5, 0, 20, 0.8)')
-        .onClick(() => { this.showHistoryPanel = false; })
-      
-      Column() {
-        Row() {
-          Text('📜 历史对话').fontSize(16).fontWeight(600).fontColor('#FFFFFF')
-          Blank()
-          Button('新对话').fontSize(11).fontColor('rgba(180, 140, 255, 0.9)')
-            .backgroundColor('rgba(100, 60, 180, 0.3)').height(30).borderRadius(15)
-            .onClick(() => { this.createNewConversation(); })
-          Button({ type: ButtonType.Circle }) { Text('✕').fontSize(16).fontColor('rgba(200, 180, 255, 0.7)') }
-            .width(30).height(30).backgroundColor('transparent').margin({ left: 10 })
-            .onClick(() => { this.showHistoryPanel = false; })
-        }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 10 })
-        
-        if (this.conversations.length === 0) {
-          Column() { Text('暂无历史').fontSize(13).fontColor('rgba(150, 130, 200, 0.5)') }
-            .width('100%').height(150).justifyContent(FlexAlign.Center)
-        } else {
-          List({ space: 10 }) {
-            ForEach(this.conversations, (c: ConversationItem) => {
-              ListItem() {
-                Column({ space: 6 }) {
-                  Text(c.title).fontSize(13).fontWeight(600).fontColor('rgba(220, 210, 250, 0.95)')
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(c.preview).fontSize(11).fontColor('rgba(180, 170, 220, 0.7)')
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                }
-                .width('100%')
-                .padding(12)
-                .backgroundColor(this.currentSessionId === c.id ? 'rgba(100, 60, 180, 0.3)' : 'rgba(40, 25, 80, 0.4)')
-                .borderRadius(12)
-                .onClick(() => { this.loadConversationMessages(c.id); })
-              }
-            })
-          }.width('100%').layoutWeight(1).padding({ left: 12, right: 12 })
-        }
-      }
-      .width('85%')
-      .height('65%')
-      .backgroundColor('rgba(15, 8, 40, 0.95)')
-      .borderRadius(20)
-      .border({ width: 1, color: 'rgba(150, 100, 255, 0.25)' })
-      .position({ x: '7.5%', y: '17.5%' })
-    }.width('100%').height('100%').zIndex(150)
-  }
-}
-
-
-  @Builder
-  AICoreEntry() {
-    Column({ space: 8 }) {
-      Stack() {
-        Circle({ width: 110, height: 110 }).fill('rgba(120, 100, 255, 0.18)').blur(24)
-        Circle({ width: 84, height: 84 }).fill('rgba(102, 126, 234, 0.85)')
-        Text('AI').fontSize(20).fontWeight(700).fontColor('#FFFFFF')
-      }
-      Text('AI核心').fontSize(13).fontWeight(600).fontColor('#FFFFFF')
-      Text('点击展开对话').fontSize(10).fontColor('rgba(200, 190, 255, 0.7)')
-    }
-    .position({ x: this.centerX - 55, y: this.centerY - 70 })
-    .zIndex(120)
-    .onClick(() => {
-      this.showAiCorePanel = true;
-      this.showHistoryPanel = false;
-    })
-  }
-
-  @Builder
-  AICorePanel() {
-    Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('rgba(5, 0, 20, 0.78)')
+      Column().width('100%').height('100%')
+        .backgroundColor(Theme.Color.OverlayMedium)
         .onClick(() => { this.showAiCorePanel = false; })
 
-      Column({ space: 12 }) {
+      Column({ space: 0 }) {
         Row() {
-          Column({ space: 2 }) {
-            Text('AI核心').fontSize(18).fontWeight(700).fontColor('#FFFFFF')
-            Text('对话会沉淀为用户信息，并可触发用户模型更新').fontSize(11).fontColor('rgba(200, 190, 255, 0.7)')
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
+          Column({ space: 3 }) {
+            Row({ space: 8 }) {
+              Stack() {
+                Circle({ width: 32, height: 32 })
+                  .linearGradient({ angle: 135, colors: [['#667eea', 0], ['#764ba2', 1]] })
+                Text('AI').fontSize(12).fontWeight(700).fontColor('#FFFFFF')
+              }.width(32).height(32)
+              Text('AI核心').fontSize(18).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+            }
+            Text('对话会沉淀为用户信息，并可触发模型更新')
+              .fontSize(11).fontColor(Theme.Color.TextTertiary)
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
 
-          Button('更新用户模型')
-            .fontSize(11)
-            .fontColor('#10B981')
-            .backgroundColor('rgba(255,255,255,0.08)')
-            .borderRadius(14)
+          Button('更新模型').fontSize(11).fontColor(Theme.Color.Accent)
+            .backgroundColor('rgba(0, 200, 83, 0.08)')
+            .borderRadius(Theme.Radius.round).padding({ left: 12, right: 12 }).height(30)
+            .border({ width: 1, color: 'rgba(0, 200, 83, 0.2)' })
             .onClick(() => { this.triggerModelUpdate(); })
 
-          Button({ type: ButtonType.Circle }) { Text('✕').fontSize(18).fontColor('rgba(200, 180, 255, 0.8)') }
-            .width(34)
-            .height(34)
-            .backgroundColor('transparent')
-            .onClick(() => { this.showAiCorePanel = false; })
-        }
-        .width('100%')
+          Stack() {
+            Circle({ width: 34, height: 34 }).fill(Theme.Color.GlassMedium)
+            Text('✕').fontSize(16).fontColor(Theme.Color.TextSecondary)
+          }.width(34).height(34).margin({ left: 8 })
+          .onClick(() => { this.showAiCorePanel = false; })
+        }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 14 })
+
+        Divider().color(Theme.Color.BorderLight).margin({ left: 20, right: 20 })
 
         Scroll() {
           Column({ space: 10 }) {
             ForEach(this.messages, (msg: ChatMessage) => {
               Column({ space: 6 }) {
                 Row() {
-                  Text(msg.role === 'user' ? '你' : 'AI').fontSize(11).fontColor(msg.role === 'user' ? 'rgba(150, 200, 255, 0.8)' : 'rgba(200, 150, 255, 0.8)')
+                  Row({ space: 6 }) {
+                    Circle({ width: 6, height: 6 })
+                      .fill(msg.role === 'user' ? Theme.Color.Primary : Theme.Color.Secondary)
+                    Text(msg.role === 'user' ? '你' : 'AI').fontSize(12).fontWeight(500)
+                      .fontColor(msg.role === 'user' ? Theme.Color.Primary : Theme.Color.Secondary)
+                  }
                   Blank()
-                  Text(this.formatTime(msg.timestamp)).fontSize(10).fontColor('rgba(150, 130, 200, 0.5)')
-                }
-                .width('100%')
+                  Text(this.formatTime(msg.timestamp)).fontSize(10).fontColor(Theme.Color.TextTertiary)
+                }.width('100%')
                 if (msg.thinking) {
-                  Text(msg.thinking)
-                    .fontSize(11)
-                    .fontColor('rgba(255, 210, 160, 0.85)')
-                    .padding(10)
-                    .backgroundColor('rgba(255, 180, 100, 0.08)')
-                    .borderRadius(8)
-                    .width('100%')
+                  Text(msg.thinking).fontSize(12).fontColor(Theme.Color.Warning)
+                    .padding(10).backgroundColor('rgba(255, 149, 0, 0.06)')
+                    .borderRadius(Theme.Radius.m)
+                    .border({ width: 1, color: 'rgba(255, 149, 0, 0.1)' }).width('100%')
                 }
-                Text(msg.content)
-                  .fontSize(13)
-                  .fontColor('#F3F4F6')
-                  .lineHeight(20)
-                  .width('100%')
-              }
-              .width('100%')
-              .padding(12)
-              .backgroundColor(msg.role === 'user' ? 'rgba(60, 100, 180, 0.22)' : 'rgba(100, 60, 160, 0.22)')
-              .borderRadius(12)
+                Text(msg.content).fontSize(14).fontColor(Theme.Color.TextPrimary).lineHeight(22).width('100%')
+              }.width('100%').padding(14)
+              .backgroundColor(msg.role === 'user' ? 'rgba(10, 89, 247, 0.05)' : Theme.Color.BackgroundTertiary)
+              .borderRadius(Theme.Radius.l)
+              .border({ width: 1, color: msg.role === 'user' ? 'rgba(10, 89, 247, 0.1)' : Theme.Color.BorderLight })
             })
-          }
-          .width('100%')
-          .padding({ bottom: 8 })
-        }
-        .layoutWeight(1)
-        .scrollBar(BarState.Auto)
+          }.width('100%').padding({ left: 16, right: 16, top: 12, bottom: 8 })
+        }.layoutWeight(1).scrollBar(BarState.Auto)
 
         Row({ space: 10 }) {
-          TextInput({ placeholder: '和AI核心对话，系统会据此持续理解你...', text: this.inputText })
-            .layoutWeight(1)
-            .height(48)
-            .fontSize(14)
-            .fontColor('#FFFFFF')
-            .placeholderColor('rgba(180, 160, 220, 0.5)')
-            .backgroundColor('rgba(30, 15, 60, 0.6)')
-            .borderRadius(24)
+          TextInput({ placeholder: '和AI核心对话...', text: this.inputText })
+            .layoutWeight(1).height(48).fontSize(14)
+            .fontColor(Theme.Color.TextPrimary).placeholderColor(Theme.Color.TextTertiary)
+            .backgroundColor(Theme.Color.BackgroundTertiary)
+            .borderRadius(Theme.Radius.round)
+            .border({ width: 1, color: Theme.Color.BorderLight })
             .padding({ left: 18, right: 18 })
             .onChange((v: string) => { this.inputText = v; })
             .onSubmit(() => { this.sendMessage(); })
-
           Button({ type: ButtonType.Circle }) {
-            Text('✦').fontSize(18).fontColor('#FFFFFF')
-          }
-          .width(48)
-          .height(48)
-          .backgroundColor(this.inputText.trim() && !this.isLoading ? 'rgba(124, 58, 237, 0.9)' : 'rgba(60, 40, 100, 0.5)')
+            SimpleIcon({ iconName: 'send', iconSize: 20, color: '#FFFFFF' })
+          }.width(48).height(48)
+          .backgroundColor(this.inputText.trim() && !this.isLoading ? Theme.Color.Primary : '#CCCCCC')
+          .shadow(this.inputText.trim() && !this.isLoading ? Theme.Shadow.GlowPrimary : Theme.Shadow.Soft)
           .enabled(this.inputText.trim().length > 0 && !this.isLoading)
           .onClick(() => { this.sendMessage(); })
-        }
-        .width('100%')
+        }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 16 })
+        .border({ width: { top: 0.5 }, color: Theme.Color.BorderLight })
       }
-      .width('88%')
-      .height('72%')
-      .padding(16)
-      .backgroundColor('rgba(15, 8, 40, 0.96)')
-      .borderRadius(24)
-      .border({ width: 1, color: 'rgba(150, 100, 255, 0.25)' })
-      .position({ x: '6%', y: '14%' })
-    }
-    .width('100%')
-    .height('100%')
-    .zIndex(180)
+      .width('90%').height('75%')
+      .backgroundColor(Theme.Color.BackgroundSecondary)
+      .borderRadius(Theme.Radius.xl)
+      .border({ width: 1, color: Theme.Color.BorderLight })
+      .shadow(Theme.Shadow.Elevated)
+      .position({ x: '5%', y: '12.5%' })
+    }.width('100%').height('100%').zIndex(180)
   }
+
+  @Builder
+  buildHistoryPanel() {
+    Stack() {
+      Column().width('100%').height('100%').backgroundColor(Theme.Color.OverlayMedium)
+        .onClick(() => { this.showHistoryPanel = false; })
+      Column() {
+        Row() {
+          Text('历史对话').fontSize(17).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+          Blank()
+          Button('新对话').fontSize(12).fontColor(Theme.Color.Primary)
+            .backgroundColor(Theme.Color.GlassMedium).height(32).borderRadius(Theme.Radius.round)
+            .padding({ left: 14, right: 14 })
+            .onClick(() => { this.createNewConversation(); })
+          Stack() {
+            Circle({ width: 32, height: 32 }).fill(Theme.Color.GlassMedium)
+            Text('✕').fontSize(15).fontColor(Theme.Color.TextSecondary)
+          }.width(32).height(32).margin({ left: 10 })
+          .onClick(() => { this.showHistoryPanel = false; })
+        }.width('100%').padding({ left: 20, right: 20, top: 18, bottom: 14 })
+        Divider().color(Theme.Color.BorderLight).margin({ left: 20, right: 20 })
+        if (this.conversations.length === 0) {
+          Column({ space: 8 }) {
+            SimpleIcon({ iconName: 'chat', iconSize: 36, color: Theme.Color.TextTertiary })
+            Text('暂无历史对话').fontSize(14).fontColor(Theme.Color.TextTertiary)
+          }.width('100%').height(150).justifyContent(FlexAlign.Center)
+        } else {
+          List({ space: 8 }) {
+            ForEach(this.conversations, (c: ConversationItem) => {
+              ListItem() {
+                Column({ space: 6 }) {
+                  Text(c.title).fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text(c.preview).fontSize(12).fontColor(Theme.Color.TextTertiary)
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                }.width('100%').padding(14)
+                .backgroundColor(this.currentSessionId === c.id ? 'rgba(10, 89, 247, 0.08)' : Theme.Color.BackgroundTertiary)
+                .borderRadius(Theme.Radius.m)
+                .border({ width: 1, color: this.currentSessionId === c.id ? 'rgba(10, 89, 247, 0.2)' : Theme.Color.BorderLight })
+                .onClick(() => { this.loadConversationMessages(c.id); })
+              }
+            })
+          }.width('100%').layoutWeight(1).padding({ left: 16, right: 16, top: 8 })
+        }
+      }
+      .width('85%').height('60%')
+      .backgroundColor(Theme.Color.BackgroundSecondary)
+      .borderRadius(Theme.Radius.xl)
+      .border({ width: 1, color: Theme.Color.BorderLight })
+      .shadow(Theme.Shadow.Elevated)
+      .position({ x: '7.5%', y: '20%' })
+    }.width('100%').height('100%').zIndex(150)
+  }
+}
