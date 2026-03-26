@@ -4,7 +4,7 @@
  */
 import router from '@ohos.router'
 import http from '@ohos.net.http'
-import { API_CONFIG } from '../config/ApiConfig'
+import { ApiConfig } from '../config/ApiConfig'
 import { Theme } from '../common/Theme'
 import { SimpleIcon } from '../components/IconRenderer'
 import promptAction from '@ohos.promptAction'
@@ -252,7 +252,7 @@ struct LoRATraining {
     try {
       const httpRequest = http.createHttp()
       const response = await httpRequest.request(
-        `${API_CONFIG.BASE_URL}/api/lora/status/${this.userId}`,
+        `${ApiConfig.getBaseUrl()}/api/lora/status/${this.userId}`,
         { method: http.RequestMethod.GET, header: { 'Content-Type': 'application/json' } }
       )
       if (response.responseCode === 200) {
@@ -272,7 +272,7 @@ struct LoRATraining {
     try {
       const httpRequest = http.createHttp()
       const response = await httpRequest.request(
-        `${API_CONFIG.BASE_URL}/api/lora/train/${this.userId}`,
+        `${ApiConfig.getBaseUrl()}/api/lora/train/${this.userId}`,
         { method: http.RequestMethod.POST, header: { 'Content-Type': 'application/json' } }
       )
       if (response.responseCode === 200) {

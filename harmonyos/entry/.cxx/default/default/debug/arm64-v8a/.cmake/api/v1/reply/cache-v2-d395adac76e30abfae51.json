@@ -166,6 +166,22 @@
 			"value" : "E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/openharmony/native/build-tools/cmake/bin/ctest.exe"
 		},
 		{
+			"name" : "CMAKE_CXX_COMPILER",
+			"properties" : 
+			[
+				{
+					"name" : "ADVANCED",
+					"value" : "1"
+				},
+				{
+					"name" : "HELPSTRING",
+					"value" : ""
+				}
+			],
+			"type" : "UNINITIALIZED",
+			"value" : ""
+		},
+		{
 			"name" : "CMAKE_CXX_COMPILER_AR",
 			"properties" : 
 			[
@@ -308,6 +324,22 @@
 			],
 			"type" : "STRING",
 			"value" : "-lm"
+		},
+		{
+			"name" : "CMAKE_C_COMPILER",
+			"properties" : 
+			[
+				{
+					"name" : "ADVANCED",
+					"value" : "1"
+				},
+				{
+					"name" : "HELPSTRING",
+					"value" : ""
+				}
+			],
+			"type" : "UNINITIALIZED",
+			"value" : ""
 		},
 		{
 			"name" : "CMAKE_C_COMPILER_AR",
@@ -691,7 +723,7 @@
 				}
 			],
 			"type" : "PATH",
-			"value" : "C:/Program Files (x86)/starmap_render"
+			"value" : "C:/Program Files (x86)/native_renderers"
 		},
 		{
 			"name" : "CMAKE_INSTALL_SO_NO_EXE",
@@ -1231,11 +1263,11 @@
 			[
 				{
 					"name" : "HELPSTRING",
-					"value" : "No help, variable specified on the command line."
+					"value" : "The CMake toolchain file"
 				}
 			],
-			"type" : "UNINITIALIZED",
-			"value" : "E:\\devecostudio-windows-6.0.2.640\\DevEco Studio\\sdk\\default\\hms\\native\\build\\cmake\\hmos.toolchain.cmake"
+			"type" : "FILEPATH",
+			"value" : "E:/devecostudio-windows-6.0.2.640/DevEco Studio/sdk/default/hms/native/build/cmake/hmos.toolchain.cmake"
 		},
 		{
 			"name" : "CMAKE_VERBOSE_MAKEFILE",
@@ -1374,30 +1406,6 @@
 			"value" : "general;libace_napi.z.so;general;libace_ndk.z.so;general;libhilog_ndk.z.so;general;libEGL.so;general;libGLESv3.so;general;libnative_window.so;general;libnative_drawing.so;"
 		},
 		{
-			"name" : "starmap_render_BINARY_DIR",
-			"properties" : 
-			[
-				{
-					"name" : "HELPSTRING",
-					"value" : "Value Computed by CMake"
-				}
-			],
-			"type" : "STATIC",
-			"value" : "E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a"
-		},
-		{
-			"name" : "starmap_render_IS_TOP_LEVEL",
-			"properties" : 
-			[
-				{
-					"name" : "HELPSTRING",
-					"value" : "Value Computed by CMake"
-				}
-			],
-			"type" : "STATIC",
-			"value" : "ON"
-		},
-		{
 			"name" : "starmap_render_LIB_DEPENDS",
 			"properties" : 
 			[
@@ -1408,18 +1416,6 @@
 			],
 			"type" : "STATIC",
 			"value" : "general;libace_napi.z.so;general;libace_ndk.z.so;general;libhilog_ndk.z.so;general;libEGL.so;general;libGLESv3.so;general;libnative_window.so;general;libnative_drawing.so;"
-		},
-		{
-			"name" : "starmap_render_SOURCE_DIR",
-			"properties" : 
-			[
-				{
-					"name" : "HELPSTRING",
-					"value" : "Value Computed by CMake"
-				}
-			],
-			"type" : "STATIC",
-			"value" : "E:/ai/harmonyos/entry/src/main/cpp"
 		}
 	],
 	"kind" : "cache",

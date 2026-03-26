@@ -41,14 +41,14 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "nebulachat::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-nebulachat-Debug-e1ebe6e850efab782773.json",
+					"jsonFile" : "target-nebulachat-Debug-21edc15445a93f17e3dc.json",
 					"name" : "nebulachat",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "starmap_render::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-starmap_render-Debug-f5aa9bed2e0a7fd4be68.json",
+					"jsonFile" : "target-starmap_render-Debug-3c44c4881bc2128d15e2.json",
 					"name" : "starmap_render",
 					"projectIndex" : 0
 				}
