@@ -14,7 +14,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from backend.lora.lora_model_manager import lora_manager
 
-LORA_BASE_DIR = os.environ.get("LORA_MODELS_DIR", "./models/lora")
+LORA_BASE_DIR = os.path.abspath(
+    os.environ.get("LORA_MODELS_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'models', 'lora'))
+)
 
 
 class LoRADecisionAnalyzer:
