@@ -56,7 +56,7 @@ class LLMService:
                     api_key=self.api_key,
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
                 )
-                self.model = "qwen-plus"  # qwen-plus, qwen-turbo, qwen-max, qwen3.5-plus
+                self.model = "qwen3.5-plus"  # 通义千问3.5-Plus
                 self.enable_thinking = True  # 启用深度思考模式
                 self.enabled = True  # 初始化成功
             except ImportError:
@@ -499,10 +499,11 @@ def get_llm_service() -> Optional[LLMService]:
     if llm_service is None:
         # 确保加载环境变量
         from dotenv import load_dotenv
-        load_dotenv()
+        _env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+        load_dotenv(_env)
         
         # 从环境变量读取配置
-        provider = os.getenv('LLM_PROVIDER', 'openai')
+        provider = os.getenv('LLM_PROVIDER', 'qwen')
         
         # 根据provider获取对应的API key
         if provider == 'qwen':

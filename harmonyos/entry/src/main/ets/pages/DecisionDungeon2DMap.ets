@@ -45,10 +45,12 @@ interface DungeonData {
 
 interface MapNode {
   id: string
+  parentId: string
   title: string
   description: string
   month: number
   probability: number
+  position: NodePosition
   color: string
   riskTag: string
   eventType: string
@@ -56,6 +58,22 @@ interface MapNode {
   isBranch: boolean
   optionIndex: number
   optionTitle: string
+}
+
+interface NodePosition {
+  x: number
+  y: number
+}
+
+interface EdgeLine {
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  color: string
+  fromId: string
+  toId: string
+  isBranch: boolean
 }
 
 interface OptionSummary {
@@ -93,6 +111,7 @@ struct DecisionDungeon2DMap {
   @State isLoading: boolean = false
   @State optionSummaries: OptionSummary[] = []
   @State nodes: MapNode[] = []
+  @State edges: EdgeLine[] = []
   @State activeOptionIndex: number = 0
   @State selectedNodeId: string = ''
   @State processingNodeId: string = ''
@@ -102,10 +121,14 @@ struct DecisionDungeon2DMap {
   @State liveThinkingText: string = ''
   @State isUpdatingModel: boolean = false
   @State showContent: boolean = false
+  @State zoomScale: number = 1
 
   private dungeonId: string = ''
   private userId: string = ''
   private ws: WebSocketUtil | null = null
+  private canvasWidth: number = 3600
+  private canvasHeight: number = 1600
+  private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
   aboutToAppear() {
     const params = router.getParams() as Record<string, string>
@@ -165,25 +188,41 @@ struct DecisionDungeon2DMap {
   private buildFromExisting() {
     if (!this.dungeonData) return
     const allNodes: MapNode[] = []
+    const allEdges: EdgeLine[] = []
     const summaries: OptionSummary[] = []
     this.dungeonData.options.forEach((opt: DungeonOption, oi: number) => {
       summaries.push({ index: oi, title: opt.title, color: this.optColor(oi),
         finalScore: opt.final_score, riskLevel: opt.risk_level, status: '推演完成', progress: 1 })
+      const rootId = `root_${oi}`
+      allNodes.push({ id: rootId, parentId: '', title: opt.title, description: '起点',
+        month: 0, probability: 1, position: { x: 120, y: 400 },
+        color: this.optColor(oi), riskTag: 'medium', eventType: 'origin',
+        impact: {}, isBranch: false, optionIndex: oi, optionTitle: opt.title })
+      let prevId = rootId
       opt.timeline.forEach((ev: TimelineEvent, ei: number) => {
-        allNodes.push({
-          id: ev.event_id || `opt${oi}_${ei}`, title: this.shortTitle(ev.event),
+        const nodeId = ev.event_id || `opt${oi}_${ei}`
+        const isBranch = !!(ev.branch_group && ev.branch_group.includes('fork'))
+        const x = 360 + ei * 340
+        const y = isBranch ? (400 + (ei % 2 === 0 ? -220 : 220)) : (400 + (ei % 2 === 0 ? -120 : 120))
+        const color = isBranch ? (ev.risk_tag === 'low' ? '#10B981' : '#EF4444') : this.optColor(oi)
+        allNodes.push({ id: nodeId, parentId: prevId, title: this.shortTitle(ev.event),
           description: ev.event, month: ev.month, probability: ev.probability,
-          color: (ev.branch_group && ev.branch_group.includes('fork'))
-            ? (ev.risk_tag === 'low' ? '#10B981' : '#EF4444') : this.optColor(oi),
-          riskTag: ev.risk_tag || 'medium', eventType: ev.event_type || 'general',
-          impact: ev.impact, isBranch: !!(ev.branch_group && ev.branch_group.includes('fork')),
-          optionIndex: oi, optionTitle: opt.title
-        })
+          position: { x, y }, color, riskTag: ev.risk_tag || 'medium',
+          eventType: ev.event_type || 'general', impact: ev.impact,
+          isBranch, optionIndex: oi, optionTitle: opt.title })
+        const parentNode = allNodes.find((n: MapNode) => n.id === prevId)
+        if (parentNode) {
+          allEdges.push({ fromX: parentNode.position.x, fromY: parentNode.position.y,
+            toX: x, toY: y, color, fromId: prevId, toId: nodeId, isBranch })
+        }
+        if (!isBranch) prevId = nodeId
       })
     })
     this.optionSummaries = summaries
     this.nodes = allNodes
+    this.edges = allEdges
     this.showContent = true
+    this.drawCanvas()
   }
 
   private initSummaries(options: DungeonOption[]) {
@@ -213,7 +252,12 @@ struct DecisionDungeon2DMap {
             else if (type === 'option_start') {
               const title = ev.title as string
               const idx = this.findOptIdx(title)
-              if (idx >= 0) { this.activeOptionIndex = idx; this.updateStatus(idx, '推演中...') }
+              if (idx >= 0) {
+                this.activeOptionIndex = idx
+                this.updateStatus(idx, '推演中...')
+                this.addRootNode(idx, title)
+                this.processingNodeId = `root_${idx}`
+              }
             }
             else if (type === 'node') { this.handleNode(ev) }
             else if (type === 'option_complete') {
@@ -257,21 +301,47 @@ struct DecisionDungeon2DMap {
     const oi = this.findOptIdx(optTitle)
     if (oi < 0) return
     const isBranch = ((node.branch_group as string) || '').includes('fork')
+    const parentId = (node.parent_event_id as string) || `root_${oi}`
+    const parentNode = this.nodes.find((n: MapNode) => n.id === parentId)
+    const optNodes = this.nodes.filter((n: MapNode) => n.optionIndex === oi && !n.id.startsWith('root_'))
+    const count = optNodes.length
+    const month = (node.month as number) || (count + 1)
+
+    let x: number
+    let y: number
+    if (isBranch && parentNode) {
+      x = parentNode.position.x + 300
+      y = parentNode.position.y + (((node.risk_tag as string) === 'low') ? -(200 + count * 60) : (200 + count * 60))
+    } else {
+      x = 360 + month * 320
+      y = 400 + ((month % 2 === 0) ? -130 : 130)
+    }
+
+    const color = isBranch ? (((node.risk_tag as string) === 'low') ? '#10B981' : '#EF4444') : this.optColor(oi)
     const mapNode: MapNode = {
       id: (node.event_id as string) || `s_${oi}_${this.nodes.length}`,
+      parentId,
       title: this.shortTitle((node.event as string) || ''),
       description: (node.event as string) || '',
-      month: (node.month as number) || 0,
-      probability: (node.probability as number) || 0,
-      color: isBranch ? ((node.risk_tag as string) === 'low' ? '#10B981' : '#EF4444') : this.optColor(oi),
+      month, probability: (node.probability as number) || 0,
+      position: { x, y }, color,
       riskTag: (node.risk_tag as string) || 'medium',
       eventType: (node.event_type as string) || 'general',
       impact: (node.impact as Record<string, number>) || {},
       isBranch, optionIndex: oi, optionTitle: optTitle
     }
+
+    const newEdges: EdgeLine[] = [...this.edges]
+    if (parentNode) {
+      newEdges.push({ fromX: parentNode.position.x, fromY: parentNode.position.y,
+        toX: x, toY: y, color, fromId: parentNode.id, toId: mapNode.id, isBranch })
+    }
+
     this.nodes = this.nodes.concat([mapNode])
+    this.edges = newEdges
     this.processingNodeId = mapNode.id
     this.activeOptionIndex = oi
+    this.drawCanvas()
   }
 
   private findOptIdx(title: string): number {
@@ -305,6 +375,47 @@ struct DecisionDungeon2DMap {
 
   private getSelectedNode(): MapNode | null {
     return this.nodes.find((n: MapNode) => n.id === this.selectedNodeId) || null
+  }
+
+  private addRootNode(optionIndex: number, title: string) {
+    const rootId = `root_${optionIndex}`
+    if (this.nodes.some((n: MapNode) => n.id === rootId)) return
+    this.nodes = this.nodes.concat([{
+      id: rootId, parentId: '', title, description: '推演起点',
+      month: 0, probability: 1, position: { x: 120, y: 400 },
+      color: this.optColor(optionIndex), riskTag: 'medium', eventType: 'origin',
+      impact: {}, isBranch: false, optionIndex, optionTitle: title
+    }])
+    this.drawCanvas()
+  }
+
+  private drawCanvas() {
+    this.canvasCtx.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
+    const visibleEdges = this.edges.filter((e: EdgeLine) => {
+      const from = this.nodes.find((n: MapNode) => n.id === e.fromId)
+      return !!from && from.optionIndex === this.activeOptionIndex
+    })
+    visibleEdges.forEach((e: EdgeLine) => {
+      const z = this.zoomScale
+      this.canvasCtx.beginPath()
+      this.canvasCtx.strokeStyle = e.color
+      this.canvasCtx.lineWidth = e.isBranch ? 2 : 3
+      this.canvasCtx.globalAlpha = e.isBranch ? 0.5 : 0.8
+      const midX = (e.fromX + e.toX) / 2
+      this.canvasCtx.moveTo(e.fromX * z, e.fromY * z)
+      this.canvasCtx.bezierCurveTo(midX * z, e.fromY * z, midX * z, e.toY * z, e.toX * z, e.toY * z)
+      this.canvasCtx.stroke()
+      this.canvasCtx.globalAlpha = 1
+      // 箭头
+      const angle = Math.atan2(e.toY - e.fromY, e.toX - e.fromX)
+      this.canvasCtx.beginPath()
+      this.canvasCtx.fillStyle = e.color
+      this.canvasCtx.moveTo(e.toX * z, e.toY * z)
+      this.canvasCtx.lineTo(e.toX * z - 12 * Math.cos(angle - 0.5), e.toY * z - 12 * Math.sin(angle - 0.5))
+      this.canvasCtx.lineTo(e.toX * z - 12 * Math.cos(angle + 0.5), e.toY * z - 12 * Math.sin(angle + 0.5))
+      this.canvasCtx.closePath()
+      this.canvasCtx.fill()
+    })
   }
 
   private getImpactText(node: MapNode): string {
@@ -473,59 +584,63 @@ struct DecisionDungeon2DMap {
 
   @Builder
   buildNodeCards() {
-    // 中间主节点卡片区 - 可上下滚动
+    // 2D可视化画布 - 可拖拽缩放
     Scroll() {
-      Column({ space: 12 }) {
-        ForEach(this.nodes.filter((n: MapNode) => n.optionIndex === this.activeOptionIndex), (node: MapNode, index: number) => {
-          Row({ space: 14 }) {
-            // 左侧月份圆
-            Stack() {
-              Circle({ width: 40, height: 40 }).fill(node.color).opacity(0.12)
-              Text(`${node.month}`).fontSize(14).fontWeight(600).fontColor(node.color)
-            }.width(40).height(40)
-
-            // 右侧内容
-            Column({ space: 4 }) {
-              Row({ space: 6 }) {
-                Text(node.title).fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary).layoutWeight(1)
-                Text(node.isBranch ? '分支' : '主链').fontSize(9)
-                  .fontColor(node.isBranch ? '#B45309' : '#2563EB')
-                  .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                  .backgroundColor(node.isBranch ? '#FEF3C7' : '#DBEAFE')
-                  .borderRadius(Theme.Radius.round)
+      Scroll() {
+        Stack() {
+          // 画布背景
+          Column().width(this.canvasWidth * this.zoomScale).height(this.canvasHeight * this.zoomScale)
+            .backgroundColor(Theme.Color.BackgroundSecondary)
+          // Canvas绘制连线和箭头
+          Canvas(this.canvasCtx)
+            .width(this.canvasWidth * this.zoomScale)
+            .height(this.canvasHeight * this.zoomScale)
+            .backgroundColor('transparent')
+            .onReady(() => { this.drawCanvas() })
+          // 节点
+          ForEach(this.nodes.filter((n: MapNode) => n.optionIndex === this.activeOptionIndex), (node: MapNode) => {
+            Row({ space: 8 }) {
+              // 月份圆
+              Stack() {
+                Column().width(node.id.startsWith('root_') ? 48 : 32)
+                  .height(node.id.startsWith('root_') ? 48 : 32)
+                  .backgroundColor(node.color)
+                  .borderRadius(node.id.startsWith('root_') ? 14 : 16)
+                  .border({ width: this.selectedNodeId === node.id ? 2.5 : 1,
+                    color: this.selectedNodeId === node.id ? Theme.Color.TextPrimary : Theme.Color.BorderMedium })
+                if (this.processingNodeId === node.id) {
+                  Column().width(node.id.startsWith('root_') ? 58 : 42)
+                    .height(node.id.startsWith('root_') ? 58 : 42)
+                    .border({ width: 2, color: Theme.Color.Primary }).borderRadius(20).opacity(0.7)
+                }
+                Text(node.id.startsWith('root_') ? '起' : `${node.month}`)
+                  .fontSize(11).fontWeight(700).fontColor('#FFFFFF')
               }
-              Text(node.description).fontSize(12).fontColor(Theme.Color.TextTertiary)
-                .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-            }.layoutWeight(1)
-          }
-          .width('100%').padding(14)
-          .backgroundColor(this.selectedNodeId === node.id ? 'rgba(10, 89, 247, 0.05)' : Theme.Color.BackgroundSecondary)
-          .borderRadius(Theme.Radius.l)
-          .border({ width: 1, color: this.selectedNodeId === node.id ? 'rgba(10, 89, 247, 0.15)' : Theme.Color.BorderLight })
-          .shadow(Theme.Shadow.Soft)
-          .onClick(() => { this.selectedNodeId = node.id; this.showDetail = true })
-          .stateStyles({
-            pressed: { .scale({ x: 0.98, y: 0.98 }) },
-            normal: { .scale({ x: 1, y: 1 }) }
+              // 标题
+              Column({ space: 2 }) {
+                Text(node.title).fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                  .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: 140 })
+                Text(node.isBranch ? '分支' : '主链').fontSize(8)
+                  .fontColor(node.isBranch ? '#B45309' : '#2563EB')
+                  .padding({ left: 4, right: 4, top: 1, bottom: 1 })
+                  .backgroundColor(node.isBranch ? '#FEF3C7' : '#DBEAFE').borderRadius(4)
+              }.alignItems(HorizontalAlign.Start)
+            }
+            .padding({ left: 8, right: 10, top: 6, bottom: 6 })
+            .backgroundColor(this.selectedNodeId === node.id ? 'rgba(10, 89, 247, 0.08)' : Theme.Color.BackgroundSecondary)
+            .borderRadius(Theme.Radius.m)
+            .border({ width: 1, color: this.selectedNodeId === node.id ? 'rgba(10, 89, 247, 0.2)' : Theme.Color.BorderLight })
+            .shadow(Theme.Shadow.Soft)
+            .position({ x: node.position.x * this.zoomScale - 20, y: node.position.y * this.zoomScale - 20 })
+            .onClick(() => { this.selectedNodeId = node.id; this.showDetail = true })
           })
-        })
-
-        // 正在生成的节点占位
-        if (this.processingNodeId) {
-          Row({ space: 14 }) {
-            LoadingProgress().width(28).height(28).color(Theme.Color.Primary)
-            Text('正在推演下一个节点...').fontSize(13).fontColor(Theme.Color.Primary)
-          }
-          .width('100%').padding(14)
-          .backgroundColor('rgba(10, 89, 247, 0.03)')
-          .borderRadius(Theme.Radius.l)
-          .border({ width: 1, color: 'rgba(10, 89, 247, 0.1)' })
         }
+        .width(this.canvasWidth * this.zoomScale)
+        .height(this.canvasHeight * this.zoomScale)
       }
-      .padding({ left: 16, right: 16, top: 8, bottom: 20 })
+      .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
     }
-    .scrollBar(BarState.Auto)
-    .edgeEffect(EdgeEffect.Spring)
+    .scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
     .layoutWeight(1)
   }
 
