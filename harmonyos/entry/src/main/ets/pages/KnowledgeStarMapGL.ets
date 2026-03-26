@@ -691,12 +691,19 @@ struct KnowledgeStarMapGL {
       // 顶部导航栏
       Row() {
         Button({ type: ButtonType.Circle }) {
-          SimpleIcon({ iconName: 'back', iconSize: 20, color: '#FFFFFF' })
+          Text('←').fontSize(22).fontWeight(700).fontColor('#FFFFFF')
         }
         .width(40)
         .height(40)
-        .backgroundColor('rgba(255, 255, 255, 0.1)')
-        .onClick(() => router.back())
+        .backgroundColor('rgba(255, 255, 255, 0.15)')
+        .onClick(() => {
+          this.stopAnimation()
+          if (this.nativeModule) {
+            try { this.nativeModule.destroyRenderer() } catch (e) {}
+            this.nativeModule = null
+          }
+          router.back()
+        })
 
         Column({ space: 2 }) {
           Text('知识星图')

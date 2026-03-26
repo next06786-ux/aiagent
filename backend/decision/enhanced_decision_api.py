@@ -85,6 +85,27 @@ class SimulateWithCollectedInfoRequest(BaseModel):
     use_lora: bool = True
 
 
+@router.get("/history/{user_id}")
+async def get_decision_history(user_id: str):
+    """获取用户的决策历史记录"""
+    try:
+        sessions = info_collector.get_user_sessions(user_id) if hasattr(info_collector, 'get_user_sessions') else []
+        # 从内存中的sessions获取历史
+        records = []
+        for sid, session in info_collector.sessions.items():
+            if session.get("user_id") == user_id and session.get("is_complete"):
+                records.append({
+                    "session_id": sid,
+                    "question": session.get("initial_question", ""),
+                    "options_count": len(session.get("options", [])),
+                    "created_at": session.get("created_at", "")
+                })
+        records.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return {"code": 200, "data": records}
+    except Exception as e:
+        return {"code": 200, "data": []}
+
+
 @router.post("/collect/start")
 async def start_info_collection(request: StartCollectionRequest) -> Dict[str, Any]:
     """

@@ -28,6 +28,13 @@ interface LoraStatusInfo {
   is_loaded: boolean
 }
 
+interface DecisionRecord {
+  session_id: string
+  question: string
+  options_count: number
+  created_at: string
+}
+
 @Entry
 @Component
 struct QuickDecisionInput {
@@ -42,6 +49,7 @@ struct QuickDecisionInput {
   @State isTrainingLora: boolean = false
   @State trainingProgress: number = 0
   @State trainingStage: string = ''
+  @State decisionHistory: DecisionRecord[] = []
   private trainingPollTimer: number = -1
   @State selectedMenuIdx: number = -1
   private userId: string = ''
@@ -56,6 +64,7 @@ struct QuickDecisionInput {
     const params = router.getParams() as Record<string, string>
     if (params?.userId) { this.userId = params.userId }
     this.loadLoraStatus()
+    this.loadDecisionHistory()
     setTimeout(() => { this.showContent = true }, 50)
   }
 
@@ -171,6 +180,25 @@ struct QuickDecisionInput {
     }
   }
 
+  private async loadDecisionHistory() {
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/decision/enhanced/history/${this.userId}`,
+        { method: http.RequestMethod.GET, connectTimeout: 5000, readTimeout: 5000 }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if ((result.code as number) === 200 && result.data) {
+          this.decisionHistory = (result.data as DecisionRecord[]) || []
+        }
+      }
+    } catch (err) {
+      console.error('加载决策历史失败:', err)
+    }
+  }
+
   private templates: QuickTemplate[] = [
     { id: 'career', icon: 'briefcase', title: '职业选择', description: '工作、跳槽、转行', prompt: '我在考虑职业发展的问题', color: '#0A59F7' },
     { id: 'study', icon: 'learning', title: '学习深造', description: '考研、留学、培训', prompt: '我在考虑是否继续学习深造', color: '#6B48FF' },
@@ -224,6 +252,8 @@ struct QuickDecisionInput {
           this.buildTextInput()
           // 快速模板
           this.buildTemplateSection()
+          // 决策历史记录
+          if (this.decisionHistory.length > 0) { this.buildDecisionHistory() }
         }
         .width('100%')
         .padding({ left: 16, right: 16, bottom: 60 })
@@ -496,5 +526,46 @@ struct QuickDecisionInput {
         .backgroundColor(Theme.Color.BackgroundSecondary)
       }
     })
+  }
+
+  @Builder
+  buildDecisionHistory() {
+    Column({ space: 12 }) {
+      Text('决策记录')
+        .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+        .padding({ left: 4 })
+
+      ForEach(this.decisionHistory, (record: DecisionRecord, index: number) => {
+        Row({ space: 12 }) {
+          Stack() {
+            Circle({ width: 40, height: 40 }).fill(Theme.Color.Secondary).opacity(0.12)
+            Text(`${index + 1}`).fontSize(14).fontWeight(600).fontColor(Theme.Color.Secondary)
+          }.width(40).height(40)
+
+          Column({ space: 4 }) {
+            Text(record.question).fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(`${record.options_count} 个选项 · ${record.created_at.slice(0, 10)}`)
+              .fontSize(12).fontColor(Theme.Color.TextTertiary)
+          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+
+          Text('查看').fontSize(12).fontColor(Theme.Color.Primary)
+        }
+        .width('100%').padding(14)
+        .backgroundColor(Theme.Color.BackgroundSecondary)
+        .borderRadius(Theme.Radius.l)
+        .border({ width: 1, color: Theme.Color.BorderLight })
+        .shadow(Theme.Shadow.Soft)
+        .onClick(() => {
+          router.pushUrl({
+            url: 'pages/DecisionDungeon2DMap',
+            params: { dungeonId: record.session_id, userId: this.userId }
+          })
+        })
+        .opacity(this.showContent ? 1 : 0)
+        .translate({ y: this.showContent ? 0 : 20 })
+        .animation({ duration: 600, curve: Curve.Smooth, delay: 500 + index * 60 })
+      })
+    }.width('100%')
   }
 }

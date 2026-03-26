@@ -637,6 +637,14 @@ struct DecisionDungeon2DMap {
         }
         .width(this.canvasWidth * this.zoomScale)
         .height(this.canvasHeight * this.zoomScale)
+        .gesture(
+          PinchGesture({ fingers: 2 })
+            .onActionUpdate((event: GestureEvent) => {
+              const newScale = Math.max(0.3, Math.min(2.5, this.zoomScale * event.scale))
+              this.zoomScale = newScale
+              this.drawCanvas()
+            })
+        )
       }
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
     }
