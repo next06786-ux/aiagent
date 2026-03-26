@@ -56,7 +56,7 @@ class LLMService:
                     api_key=self.api_key,
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
                 )
-                self.model = "qwen3.5-plus"  # 通义千问3.5-Plus
+                self.model = "qwen-plus"  # 通义千问Plus
                 self.enable_thinking = True  # 启用深度思考模式
                 self.enabled = True  # 初始化成功
             except ImportError:
