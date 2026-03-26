@@ -176,6 +176,10 @@ struct DecisionDungeon2DMap {
     if (params?.dungeonId) {
       this.dungeonId = params.dungeonId
       this.userId = params.userId || ''
+      // 历史记录查看模式：从后端加载已保存的推演数据
+      if (params.isHistory === 'true') {
+        this.loadHistoryRecord(params.dungeonId, params.question || '', params.recommendation || '')
+      }
     }
     setTimeout(() => { this.showContent = true }, 50)
   }
@@ -422,6 +426,55 @@ struct DecisionDungeon2DMap {
     const items = Object.keys(node.impact).filter((k: string) => Math.abs(node.impact[k]) > 0.05)
       .map((k: string) => `${k}${node.impact[k] > 0 ? '+' : '-'}`)
     return items.length > 0 ? items.join(' ') : '影响平稳'
+  }
+
+  private async loadHistoryRecord(simulationId: string, question: string, recommendation: string) {
+    this.streamStatus = '加载历史推演数据...'
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/decision/enhanced/record/${simulationId}`,
+        { method: http.RequestMethod.GET, connectTimeout: 10000, readTimeout: 10000 }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if ((result.code as number) === 200 && result.data) {
+          const data = result.data as Record<string, Object>
+          const simData = data as Record<string, Object>
+          simData.simulation_id = simulationId
+          simData.user_id = this.userId
+          this.dungeonData = {
+            dungeon_id: simulationId, user_id: this.userId,
+            title: question, description: '',
+            options: (simData.options as DungeonOption[]) || [],
+            recommendation: recommendation,
+            created_at: (simData.created_at as string) || ''
+          }
+          if (this.dungeonData.options.length > 0) {
+            this.buildFromExisting()
+          }
+          if (recommendation) {
+            try {
+              this.structuredRecommendation = JSON.parse(recommendation) as RecommendationData
+            } catch (_) {
+              this.structuredRecommendation = null
+            }
+          }
+          this.streamStatus = '历史推演已加载'
+          return
+        }
+      }
+    } catch (err) {
+      console.error('加载历史记录失败:', err)
+    }
+    // 加载失败时显示基本信息
+    this.dungeonData = {
+      dungeon_id: simulationId, user_id: this.userId,
+      title: question, description: '历史推演记录',
+      options: [], recommendation: recommendation, created_at: ''
+    }
+    this.streamStatus = '历史数据加载失败'
   }
 
   private async triggerModelUpdate() {

@@ -1,0 +1,542 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeSwarm · 星群智伴 — 需求规格说明书</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", "SimSun", Arial, sans-serif; font-size: 14px; line-height: 1.8; color: #222; background: #fff; padding: 40px 60px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; text-align: center; margin-bottom: 6px; font-weight: bold; }
+  h2 { font-size: 18px; margin: 32px 0 12px; border-bottom: 2px solid #1a56db; padding-bottom: 4px; color: #1a3a6e; }
+  h3 { font-size: 15px; margin: 20px 0 8px; color: #1a3a6e; }
+  h4 { font-size: 14px; margin: 14px 0 6px; color: #333; }
+  p { margin-bottom: 10px; text-indent: 2em; }
+  .subtitle { text-align: center; color: #555; font-size: 13px; margin-bottom: 30px; }
+  .cover-info { text-align: center; margin-bottom: 40px; }
+  .cover-info p { text-indent: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+  th { background: #1a56db; color: #fff; padding: 8px 10px; text-align: center; }
+  td { border: 1px solid #ccc; padding: 7px 10px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f5f8ff; }
+  .toc { background: #f0f4ff; border: 1px solid #c5d5f5; border-radius: 6px; padding: 18px 28px; margin-bottom: 36px; }
+  .toc h3 { margin-top: 0; color: #1a3a6e; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 4px 0; }
+  .toc a { color: #1a56db; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .usecase-box { border: 1px solid #b0c4de; border-radius: 6px; padding: 14px 18px; margin: 12px 0; background: #fafcff; }
+  .usecase-box h4 { margin-top: 0; color: #1a3a6e; }
+  .usecase-box table { margin: 6px 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin: 2px; }
+  .tag-high { background: #fee2e2; color: #b91c1c; }
+  .tag-mid  { background: #fef3c7; color: #92400e; }
+  .tag-low  { background: #d1fae5; color: #065f46; }
+  .note { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 10px 14px; margin: 10px 0; font-size: 13px; }
+  .diagram { background: #f8faff; border: 1px dashed #93c5fd; border-radius: 6px; padding: 16px; margin: 12px 0; font-family: monospace; font-size: 12px; white-space: pre; overflow-x: auto; line-height: 1.5; }
+  .section-num { color: #1a56db; }
+  ul, ol { padding-left: 2em; margin-bottom: 10px; }
+  li { margin: 3px 0; }
+  .page-break { page-break-before: always; }
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<h1>需求规格说明书</h1>
+<div class="subtitle">Software Requirements Specification</div>
+<div class="cover-info">
+  <p><strong>项目名称：</strong>LifeSwarm · 星群智伴 —— 基于个性化 LoRA 的多模态 AI 生活决策助手</p>
+  <p><strong>参赛赛道：</strong>第十八届中国大学生计算机设计大赛 · 人工智能应用</p>
+  <p><strong>版本：</strong>V1.0 &nbsp;&nbsp; <strong>日期：</strong>2026年3月</p>
+</div>
+
+<div class="toc">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#ch1">项目概述与迭代规划</a>
+      <ol>
+        <li><a href="#s1-1">项目背景与目标</a></li>
+        <li><a href="#s1-2">迭代规划</a></li>
+      </ol>
+    </li>
+    <li><a href="#ch2">系统用例分析</a>
+      <ol>
+        <li><a href="#s2-1">角色分析</a></li>
+        <li><a href="#s2-2">用例分析</a></li>
+        <li><a href="#s2-3">用例建模</a></li>
+        <li><a href="#s2-4">数据建模</a></li>
+      </ol>
+    </li>
+    <li><a href="#ch3">非功能需求</a></li>
+  </ol>
+</div>
+
+<!-- ==================== 第一章 ==================== -->
+<h2 id="ch1"><span class="section-num">一、</span>项目概述与迭代规划（Project Overview and Iteration Planning）</h2>
+
+<h3 id="s1-1">1.1 项目背景与目标（Project Background and Objectives）</h3>
+
+<p>在信息爆炸与生活节奏加快的当代，个人在面临职业选择、学业规划、生活决策等重大问题时，往往缺乏系统性的辅助工具。现有 AI 助手（如通用聊天机器人）虽能提供通用建议，但无法深度理解用户的个人背景、价值观与历史行为，导致建议缺乏针对性。</p>
+
+<p><strong>LifeSwarm · 星群智伴</strong>是一款运行于鸿蒙操作系统（HarmonyOS 6）的原生 AI 生活决策助手。系统以"个性化"为核心，通过多轮对话持续积累用户画像，利用 LoRA（Low-Rank Adaptation）技术在本地 Qwen3.5-9B 大模型上为每位用户微调专属模型，并结合知识图谱、RAG 检索增强生成等技术，为用户提供深度个性化的决策推演与生活洞察服务。</p>
+
+<p><strong>目标用户：</strong>18–35 岁面临人生重要决策的青年群体，包括在校大学生、职场新人及有自我管理需求的个人用户。</p>
+
+<p><strong>核心价值：</strong></p>
+<ul>
+  <li><strong>个性化：</strong>通过 LoRA 微调，AI 真正"认识"用户，而非提供千篇一律的建议；</li>
+  <li><strong>可视化：</strong>3D 知识星图直观呈现用户的人际关系网络与知识结构；</li>
+  <li><strong>决策辅助：</strong>决策副本系统对多个选项进行 12 个月时间线推演，量化风险与收益；</li>
+  <li><strong>多模态交互：</strong>支持文字、语音、图片多种输入方式，降低使用门槛。</li>
+</ul>
+
+<h3 id="s1-2">1.2 迭代规划（Iteration Planning）</h3>
+
+<p>本项目采用 Scrum 敏捷开发方法，共规划 4 个迭代（Sprint），每个 Sprint 周期为 2 周。</p>
+
+<table>
+  <tr>
+    <th>Sprint</th><th>周期</th><th>核心目标</th><th>主要交付物</th>
+  </tr>
+  <tr>
+    <td><strong>Sprint 1</strong><br>基础架构</td>
+    <td>第1–2周</td>
+    <td>搭建前后端基础框架，实现用户认证与基础 AI 对话</td>
+    <td>HarmonyOS 工程骨架、FastAPI 后端、MySQL/Neo4j 数据库初始化、登录注册、基础 WebSocket 聊天</td>
+  </tr>
+  <tr>
+    <td><strong>Sprint 2</strong><br>核心功能</td>
+    <td>第3–4周</td>
+    <td>实现知识星图、RAG 记忆、信息提取与知识图谱构建</td>
+    <td>3D 知识星图（OpenGL ES）、对话历史持久化、人物实体提取、Neo4j 知识图谱写入</td>
+  </tr>
+  <tr>
+    <td><strong>Sprint 3</strong><br>决策系统</td>
+    <td>第5–6周</td>
+    <td>实现决策副本推演、LoRA 个性化训练、多模态输入</td>
+    <td>决策信息收集（多轮对话）、WebSocket 流式推演、2D 节点地图、LoRA 训练流程、语音/图片输入</td>
+  </tr>
+  <tr>
+    <td><strong>Sprint 4</strong><br>体验优化</td>
+    <td>第7–8周</td>
+    <td>UI 全面升级为 HarmonyOS 6 流体设计，性能优化，决策记录持久化</td>
+    <td>HarmonyOS 6 设计系统、AI 核心动效、决策历史记录、智能洞察页面、系统稳定性优化</td>
+  </tr>
+</table>
+
+<p><strong>产品 Backlog（核心用户故事）：</strong></p>
+<table>
+  <tr><th>优先级</th><th>用户故事</th><th>所属 Sprint</th></tr>
+  <tr><td><span class="tag tag-high">高</span></td><td>作为用户，我希望通过账号登录，使我的数据跟随账号持久保存</td><td>Sprint 1</td></tr>
+  <tr><td><span class="tag tag-high">高</span></td><td>作为用户，我希望与 AI 进行多轮对话，AI 能记住上下文</td><td>Sprint 1</td></tr>
+  <tr><td><span class="tag tag-high">高</span></td><td>作为用户，我希望查看我的人际关系知识星图，了解人物间的关联</td><td>Sprint 2</td></tr>
+  <tr><td><span class="tag tag-high">高</span></td><td>作为用户，我希望 AI 从对话中自动提取人物信息并更新知识图谱</td><td>Sprint 2</td></tr>
+  <tr><td><span class="tag tag-high">高</span></td><td>作为用户，我希望输入决策问题后，AI 为我推演多个选项的未来路径</td><td>Sprint 3</td></tr>
+  <tr><td><span class="tag tag-mid">中</span></td><td>作为用户，我希望训练专属于我的 LoRA 模型，让 AI 更懂我的决策风格</td><td>Sprint 3</td></tr>
+  <tr><td><span class="tag tag-mid">中</span></td><td>作为用户，我希望通过语音输入与 AI 对话，无需打字</td><td>Sprint 3</td></tr>
+  <tr><td><span class="tag tag-mid">中</span></td><td>作为用户，我希望查看历史决策记录，回顾之前的推演结果</td><td>Sprint 4</td></tr>
+  <tr><td><span class="tag tag-low">低</span></td><td>作为用户，我希望查看智能洞察，了解 AI 对我情绪和行为的分析</td><td>Sprint 4</td></tr>
+</table>
+
+<!-- ==================== 第二章 ==================== -->
+<h2 id="ch2"><span class="section-num">二、</span>系统用例分析（System Use Case Analysis）</h2>
+
+<h3 id="s2-1">2.1 角色分析（Actor Analysis）</h3>
+
+<p>系统共涉及以下角色：</p>
+
+<p><strong>表1-1 角色列表</strong></p>
+<table>
+  <tr><th>编号</th><th>角色名</th><th>所属部门/类型</th><th>简要描述</th></tr>
+  <tr>
+    <td>1</td><td><strong>普通用户</strong></td><td>终端用户</td>
+    <td>系统的核心使用者。通过鸿蒙 App 进行 AI 对话、查看知识星图、发起决策推演、训练个性化模型、上传图片/语音等操作。</td>
+  </tr>
+  <tr>
+    <td>2</td><td><strong>AI 对话服务</strong></td><td>外部系统（通义千问 API）</td>
+    <td>提供自然语言理解与生成能力，响应用户的文字/图片/语音输入，生成智能回复。由阿里云 DashScope 平台提供。</td>
+  </tr>
+  <tr>
+    <td>3</td><td><strong>LoRA 训练调度器</strong></td><td>后端系统</td>
+    <td>负责接收用户触发的模型训练请求，在服务器 GPU 上执行 LoRA 微调任务，更新用户专属模型权重，并向前端推送训练进度。</td>
+  </tr>
+  <tr>
+    <td>4</td><td><strong>知识图谱服务</strong></td><td>后端系统（Neo4j）</td>
+    <td>存储和管理用户的人物关系知识图谱，支持节点查询、关系查询、图谱导出等操作，为知识星图可视化提供数据。</td>
+  </tr>
+  <tr>
+    <td>5</td><td><strong>系统管理员</strong></td><td>运维人员</td>
+    <td>负责服务器部署、数据库维护、模型文件管理、系统监控等后台运维工作，不直接使用 App 功能。</td>
+  </tr>
+</table>
+
+<h3 id="s2-2">2.2 用例分析（Use Case Analysis）</h3>
+
+<p><strong>表1-2 用例列表</strong></p>
+<table>
+  <tr><th>编号</th><th>用例名称</th><th>角色</th><th>优先级</th><th>描述</th></tr>
+  <tr>
+    <td>UC01</td><td>用户注册</td><td>普通用户</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户填写用户名、邮箱、密码完成账号注册，系统验证格式并创建账号。</td>
+  </tr>
+  <tr>
+    <td>UC02</td><td>用户登录</td><td>普通用户</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户输入账号密码登录，系统验证身份并返回 Token，跳转主界面。</td>
+  </tr>
+  <tr>
+    <td>UC03</td><td>AI 文字对话</td><td>普通用户、AI 对话服务</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户在 AI 核心对话框输入文字，系统通过 WebSocket 流式返回 AI 回复，支持上下文记忆。</td>
+  </tr>
+  <tr>
+    <td>UC04</td><td>语音输入对话</td><td>普通用户、AI 对话服务</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户按住麦克风按钮录音，松手后系统将音频上传至后端，经 paraformer 语音识别转为文字后发送给 AI。</td>
+  </tr>
+  <tr>
+    <td>UC05</td><td>图片上传分析</td><td>普通用户、AI 对话服务</td>
+    <td><span class="tag tag-mid">中</span></td>
+    <td>用户从相册选择图片，系统上传至后端，调用 qwen-vl-plus 视觉模型分析图片内容，将描述作为对话上下文。</td>
+  </tr>
+  <tr>
+    <td>UC06</td><td>查看对话历史</td><td>普通用户</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户点击历史按钮，查看历史会话列表，选择某会话后加载该会话的完整消息记录。</td>
+  </tr>
+  <tr>
+    <td>UC07</td><td>新建对话会话</td><td>普通用户</td>
+    <td><span class="tag tag-mid">中</span></td>
+    <td>用户在历史面板点击"新对话"，系统创建新会话 ID，清空当前消息列表。</td>
+  </tr>
+  <tr>
+    <td>UC08</td><td>查看知识星图</td><td>普通用户、知识图谱服务</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户进入知识星图页面，系统从 Neo4j 加载人物节点与关系，通过 OpenGL ES 渲染 3D 星图，支持旋转、缩放、节点点击。</td>
+  </tr>
+  <tr>
+    <td>UC09</td><td>查看人物详情与故事</td><td>普通用户、知识图谱服务</td>
+    <td><span class="tag tag-mid">中</span></td>
+    <td>用户点击星图中的人物节点，查看该人物的关系列表；点击"故事"按钮，查看与该人物相关的对话记录摘要。</td>
+  </tr>
+  <tr>
+    <td>UC10</td><td>发起决策推演</td><td>普通用户、AI 对话服务、LoRA 训练调度器</td>
+    <td><span class="tag tag-high">高</span></td>
+    <td>用户描述决策问题，经多轮信息收集后，系统调用本地 Qwen3.5-9B + 用户 LoRA 模型，通过 WebSocket 流式推演多个选项的 12 个月时间线，实时渲染节点地图。</td>
+  </tr>
+  <tr>
+    <td>UC11</td><td>查看决策历史记录</td><td>普通用户</td>
+    <td><span class="tag tag-mid">中</span></td>
+    <td>用户在决策副本入口页查看历史决策列表，点击某条记录跳转查看该次推演的推荐结论。</td>
+  </tr>
+  <tr>
+    <td>UC12</td><td>训练个性化 LoRA 模型</td><td>普通用户、LoRA 训练调度器</td>
+    <td><span class="tag tag-mid">中</span></td>
+    <td>用户在决策副本入口点击"更新模型"，系统在后台启动 LoRA 微调任务，前端实时显示训练进度（步数、阶段、百分比）。</td>
+  </tr>
+  <tr>
+    <td>UC13</td><td>查看智能洞察</td><td>普通用户</td>
+    <td><span class="tag tag-low">低</span></td>
+    <td>用户进入智能洞察页面，查看系统从对话中提取的情绪趋势、行为模式、涌现洞察等分析结果。</td>
+  </tr>
+  <tr>
+    <td>UC14</td><td>管理个人账号</td><td>普通用户</td>
+    <td><span class="tag tag-low">低</span></td>
+    <td>用户查看个人信息、修改密码、退出登录等账号管理操作。</td>
+  </tr>
+</table>
+
+<h3 id="s2-3">2.3 用例建模（Use Case Modeling）</h3>
+
+<h4>2.3.1 AI 对话模块用例图</h4>
+<div class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                      AI 对话模块                             │
+│                                                             │
+│   ┌──────────┐    ──── UC03 文字对话 ────                   │
+│   │          │    ──── UC04 语音输入 ────                   │
+│   │ 普通用户 │    ──── UC05 图片分析 ────   ┌─────────────┐ │
+│   │          │    ──── UC06 查看历史 ────   │ 通义千问API │ │
+│   │          │    ──── UC07 新建会话 ────   └─────────────┘ │
+│   └──────────┘                                              │
+└─────────────────────────────────────────────────────────────┘
+</div>
+
+<div class="usecase-box">
+  <h4>UC03 AI 文字对话 — 用例表</h4>
+  <table>
+    <tr><td width="120"><strong>用例名称</strong></td><td>AI 文字对话</td></tr>
+    <tr><td><strong>参与者</strong></td><td>普通用户、通义千问 API</td></tr>
+    <tr><td><strong>前置条件</strong></td><td>用户已登录，WebSocket 连接已建立</td></tr>
+    <tr><td><strong>后置条件</strong></td><td>消息保存至 MySQL conversation_history 表，知识图谱更新</td></tr>
+    <tr><td><strong>基本事件流</strong></td><td>
+      1. 用户在输入框输入文字并点击发送<br>
+      2. 系统通过 WebSocket 发送消息至后端<br>
+      3. 后端加载当前会话历史（最近20条）构建上下文<br>
+      4. 调用通义千问 qwen-plus API 流式生成回复<br>
+      5. 后端逐字推送思考过程和回复内容至前端<br>
+      6. 前端实时渲染流式文字<br>
+      7. 后端异步提取对话中的人物实体，更新知识图谱
+    </td></tr>
+    <tr><td><strong>异常事件流</strong></td><td>
+      A1. API 调用失败：返回错误提示，消息标记为失败<br>
+      A2. WebSocket 断开：前端自动重连，消息从数据库恢复
+    </td></tr>
+  </table>
+</div>
+
+<div class="usecase-box">
+  <h4>UC04 语音输入对话 — 活动图（文字描述）</h4>
+  <table>
+    <tr><td width="120"><strong>触发条件</strong></td><td>用户按住语音按钮</td></tr>
+    <tr><td><strong>活动流程</strong></td><td>
+      [用户按下] → 申请麦克风权限 → [权限拒绝] → 提示"需要麦克风权限" → 结束<br>
+      [权限通过] → 创建 AVRecorder → 开始录音 → 显示"录音中，松手发送"<br>
+      [用户松手] → 停止录音 → 上传 m4a 文件至 /api/chat/speech-to-text<br>
+      → 后端调用 paraformer-realtime-v2 识别 → 返回文字 → 填入输入框<br>
+      → 用户确认后发送（触发 UC03）
+    </td></tr>
+  </table>
+</div>
+
+<h4>2.3.2 知识星图模块用例图</h4>
+<div class="diagram">
+┌──────────────────────────────────────────────────────────┐
+│                    知识星图模块                            │
+│                                                          │
+│   ┌──────────┐    ──── UC08 查看知识星图 ────             │
+│   │ 普通用户 │    ──── UC09 查看人物详情与故事 ────        │
+│   └──────────┘                                          │
+│                              ┌──────────────────────┐   │
+│                              │  Neo4j 知识图谱服务   │   │
+│                              └──────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<div class="usecase-box">
+  <h4>UC08 查看知识星图 — 用例表</h4>
+  <table>
+    <tr><td width="120"><strong>用例名称</strong></td><td>查看知识星图</td></tr>
+    <tr><td><strong>参与者</strong></td><td>普通用户、Neo4j 知识图谱服务</td></tr>
+    <tr><td><strong>前置条件</strong></td><td>用户已登录，Neo4j 服务正常运行</td></tr>
+    <tr><td><strong>基本事件流</strong></td><td>
+      1. 用户点击"知识星图"功能球体<br>
+      2. 系统调用 /api/v4/knowledge-graph/{user_id}/export<br>
+      3. 后端从 Neo4j 查询用户的人物节点（仅 person 类型）和关系<br>
+      4. 前端 OpenGL ES 渲染器加载节点数据，执行力导向布局（100帧）<br>
+      5. 3D 星图渲染完成，用户可旋转、缩放、点击节点<br>
+      6. 点击节点显示人物详情和关联人物列表
+    </td></tr>
+    <tr><td><strong>异常事件流</strong></td><td>
+      A1. 知识图谱为空：显示"暂无数据，继续对话以构建知识网络"<br>
+      A2. Neo4j 连接失败：显示错误提示，提供重试按钮
+    </td></tr>
+  </table>
+</div>
+
+<h4>2.3.3 决策副本模块用例图</h4>
+<div class="diagram">
+┌──────────────────────────────────────────────────────────────────┐
+│                       决策副本模块                                │
+│                                                                  │
+│   ┌──────────┐    ──── UC10 发起决策推演 ────                    │
+│   │          │    ──── UC11 查看决策历史 ────                    │
+│   │ 普通用户 │    ──── UC12 训练LoRA模型 ────  ┌──────────────┐  │
+│   │          │                                │LoRA调度器    │  │
+│   └──────────┘                                │Qwen3.5-9B   │  │
+│                                               └──────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
+</div>
+
+<div class="usecase-box">
+  <h4>UC10 发起决策推演 — 活动图（文字描述）</h4>
+  <table>
+    <tr><td width="120"><strong>活动流程</strong></td><td>
+      [用户输入决策问题] → 系统创建收集会话<br>
+      → [多轮对话阶段] 用户自由表达 → AI 追问关键信息（最多6轮）<br>
+      → [选项确认阶段] 用户提供/确认决策选项<br>
+      → [推演阶段] 系统建立 WebSocket 连接<br>
+      → 后端加载用户 LoRA 模型（若存在）<br>
+      → 逐选项流式生成时间线节点（每个节点实时推送）<br>
+      → 前端 Canvas 实时绘制节点和连线<br>
+      → 所有选项推演完成 → 生成推荐结论<br>
+      → 保存记录至 decision_records 表<br>
+      → 发送 done 事件，推演结束
+    </td></tr>
+  </table>
+</div>
+
+<div class="usecase-box">
+  <h4>UC12 训练个性化 LoRA 模型 — 用例表</h4>
+  <table>
+    <tr><td width="120"><strong>用例名称</strong></td><td>训练个性化 LoRA 模型</td></tr>
+    <tr><td><strong>参与者</strong></td><td>普通用户、LoRA 训练调度器</td></tr>
+    <tr><td><strong>前置条件</strong></td><td>用户上次训练后累计有效对话对数 ≥ 20</td></tr>
+    <tr><td><strong>基本事件流</strong></td><td>
+      1. 用户点击"更新模型"按钮<br>
+      2. 后端检查是否已在训练中（防重复）<br>
+      3. 在后台线程启动训练：复用已加载的 Qwen3.5-9B 基座模型<br>
+      4. 从 MySQL 读取上次训练后的新对话数据<br>
+      5. 执行 LoRA 微调（gradient checkpointing 节省显存）<br>
+      6. ProgressCallback 实时更新训练进度至全局字典<br>
+      7. 前端每2秒轮询 /api/lora/progress/{user_id}<br>
+      8. 训练完成，保存 LoRA 权重，更新 status.json（版本号+1）<br>
+      9. 前端显示"训练完成"，进度条归零，版本号更新
+    </td></tr>
+    <tr><td><strong>异常事件流</strong></td><td>
+      A1. GPU 显存不足：训练失败，前端显示错误信息<br>
+      A2. 数据不足：按钮禁用，显示"还需 N 条对话数据"
+    </td></tr>
+  </table>
+</div>
+
+<h3 id="s2-4">2.4 数据建模（Data Modeling）</h3>
+
+<h4>2.4.1 分析类模型（域模型）</h4>
+<p>采用名词短语法结合 CRC 分析，识别系统中的核心分析类：</p>
+
+<table>
+  <tr><th>类名</th><th>职责（Responsibility）</th><th>协作者（Collaborator）</th></tr>
+  <tr>
+    <td><strong>User（用户）</strong></td>
+    <td>存储用户身份信息（user_id, username, email, password_hash, nickname）；维护登录状态</td>
+    <td>ConversationSession, PersonNode, LoRAModel, DecisionRecord</td>
+  </tr>
+  <tr>
+    <td><strong>ConversationSession（对话会话）</strong></td>
+    <td>管理一次完整的对话会话，包含会话 ID、标题、消息列表；支持历史加载</td>
+    <td>User, ChatMessage, KnowledgeGraph</td>
+  </tr>
+  <tr>
+    <td><strong>ChatMessage（聊天消息）</strong></td>
+    <td>存储单条消息（role, content, thinking, timestamp, session_id）；区分用户消息和 AI 回复</td>
+    <td>ConversationSession</td>
+  </tr>
+  <tr>
+    <td><strong>PersonNode（人物节点）</strong></td>
+    <td>表示知识图谱中的人物实体（name, category, connections）；存储于 Neo4j</td>
+    <td>User, PersonRelation, StoryRecord</td>
+  </tr>
+  <tr>
+    <td><strong>PersonRelation（人物关系）</strong></td>
+    <td>表示两个人物节点之间的关系（type, description, confidence）；包含故事描述</td>
+    <td>PersonNode</td>
+  </tr>
+  <tr>
+    <td><strong>DecisionSession（决策会话）</strong></td>
+    <td>管理一次决策信息收集过程（session_id, question, collected_info, options, is_complete）</td>
+    <td>User, DecisionOption, DecisionRecord</td>
+  </tr>
+  <tr>
+    <td><strong>DecisionOption（决策选项）</strong></td>
+    <td>表示一个决策选项（title, description, timeline, final_score, risk_level）</td>
+    <td>DecisionSession, TimelineNode</td>
+  </tr>
+  <tr>
+    <td><strong>TimelineNode（时间线节点）</strong></td>
+    <td>表示推演时间线上的一个事件节点（month, event, impact, probability, risk_tag）</td>
+    <td>DecisionOption</td>
+  </tr>
+  <tr>
+    <td><strong>DecisionRecord（决策记录）</strong></td>
+    <td>持久化存储决策推演结果（simulation_id, question, recommendation, created_at）；存于 MySQL</td>
+    <td>User, DecisionSession</td>
+  </tr>
+  <tr>
+    <td><strong>LoRAModel（个性化模型）</strong></td>
+    <td>管理用户专属 LoRA 权重（user_id, model_version, last_train_time, training_data_size）</td>
+    <td>User, TrainingTask</td>
+  </tr>
+  <tr>
+    <td><strong>TrainingTask（训练任务）</strong></td>
+    <td>跟踪 LoRA 训练进度（is_training, progress, stage, error）；通过全局字典维护</td>
+    <td>LoRAModel</td>
+  </tr>
+  <tr>
+    <td><strong>SmartInsight（智能洞察）</strong></td>
+    <td>存储从对话中提取的洞察（category, level, title, description, confidence, impact_score）</td>
+    <td>User, ConversationSession</td>
+  </tr>
+</table>
+
+<h4>2.4.2 数据库 ER 关系概述</h4>
+<div class="diagram">
+User ──1:N──> ConversationSession ──1:N──> ChatMessage
+User ──1:N──> DecisionRecord
+User ──1:1──> LoRAModel
+User ──1:N──> SmartInsight
+
+[Neo4j]
+User ──1:N──> PersonNode ──N:M──> PersonNode (via PersonRelation)
+
+[MySQL 主要表]
+users | conversation_history | decision_records
+user_insights | emergence_insights | lora_status(file)
+</div>
+
+<!-- ==================== 第三章 ==================== -->
+<h2 id="ch3"><span class="section-num">三、</span>非功能需求（Non-Functional Requirements）</h2>
+
+<h3>3.1 性能需求</h3>
+<table>
+  <tr><th>编号</th><th>需求项</th><th>指标</th></tr>
+  <tr><td>NF01</td><td>AI 对话首字响应时间</td><td>WebSocket 建立后，首个 token 推送延迟  3 秒（通义千问 API 正常情况下）</td></tr>
+  <tr><td>NF02</td><td>知识星图加载时间</td><td>节点数  200 时，从请求到 3D 渲染完成  5 秒</td></tr>
+  <tr><td>NF03</td><td>语音识别响应时间</td><td>30 秒以内录音，上传至识别结果返回  8 秒</td></tr>
+  <tr><td>NF04</td><td>决策推演启动时间</td><td>WebSocket 连接建立后，首个节点推送  10 秒</td></tr>
+  <tr><td>NF05</td><td>LoRA 训练时间</td><td>2050 条对话数据，单 GPU（RTX 3050 及以上）训练完成  10 分钟</td></tr>
+  <tr><td>NF06</td><td>页面切换动画帧率</td><td>HarmonyOS 6 流体动效保持 60fps，无明显卡顿</td></tr>
+</table>
+
+<h3>3.2 可靠性需求</h3>
+<table>
+  <tr><th>编号</th><th>需求项</th><th>说明</th></tr>
+  <tr><td>NF07</td><td>对话数据持久化</td><td>所有对话消息实时写入 MySQL，后端重启或前端重新编译后历史消息不丢失</td></tr>
+  <tr><td>NF08</td><td>LoRA 模型版本管理</td><td>每次训练完成后版本号递增，status.json 持久化存储，服务重启后版本信息不丢失</td></tr>
+  <tr><td>NF09</td><td>WebSocket 断线处理</td><td>决策推演 WebSocket 断开时，前端显示错误提示；对话 WebSocket 断开时，消息已保存至数据库</td></tr>
+  <tr><td>NF10</td><td>EGL 渲染稳定性</td><td>知识星图与主界面共用 GPU 渲染，页面切换时正确销毁/重建 EGL 上下文，避免显存泄漏</td></tr>
+</table>
+
+<h3>3.3 安全性需求</h3>
+<table>
+  <tr><th>编号</th><th>需求项</th><th>说明</th></tr>
+  <tr><td>NF11</td><td>用户认证</td><td>密码使用 bcrypt 哈希存储，登录接口返回 JWT Token，所有用户数据按 user_id 隔离</td></tr>
+  <tr><td>NF12</td><td>API 密钥保护</td><td>DASHSCOPE_API_KEY 等敏感配置存储于服务器 .env 文件，不提交至代码仓库</td></tr>
+  <tr><td>NF13</td><td>数据隔离</td><td>每个用户的 LoRA 模型、知识图谱、对话历史严格按 user_id 隔离，不同用户间数据不可互访</td></tr>
+</table>
+
+<h3>3.4 可用性需求</h3>
+<table>
+  <tr><th>编号</th><th>需求项</th><th>说明</th></tr>
+  <tr><td>NF14</td><td>多模态输入</td><td>支持文字、语音（按住说话）、图片三种输入方式，降低使用门槛</td></tr>
+  <tr><td>NF15</td><td>流体动效</td><td>遵循 HarmonyOS 6 设计规范，所有页面切换、卡片出现采用 Curve.Smooth + 递增 delay 的丝滑动效</td></tr>
+  <tr><td>NF16</td><td>离线降级</td><td>网络不可用时，已缓存的对话历史和知识星图数据仍可查看；AI 功能提示"网络不可用"</td></tr>
+  <tr><td>NF17</td><td>权限最小化</td><td>仅在用户主动使用语音功能时申请麦克风权限，使用图片功能时申请相册权限</td></tr>
+</table>
+
+<h3>3.5 可维护性需求</h3>
+<table>
+  <tr><th>编号</th><th>需求项</th><th>说明</th></tr>
+  <tr><td>NF18</td><td>模块化架构</td><td>后端按功能模块划分（auth/conversation/decision/knowledge/lora/analysis），各模块独立可测试</td></tr>
+  <tr><td>NF19</td><td>配置化</td><td>模型路径、数据库连接、API 密钥等均通过 .env 配置，无需修改代码即可切换环境</td></tr>
+  <tr><td>NF20</td><td>日志记录</td><td>关键操作（对话保存、知识图谱更新、LoRA 训练进度）均有日志输出，便于问题排查</td></tr>
+</table>
+
+<h3>3.6 兼容性需求</h3>
+<table>
+  <tr><th>编号</th><th>需求项</th><th>说明</th></tr>
+  <tr><td>NF21</td><td>操作系统</td><td>前端仅支持 HarmonyOS 4.0 及以上版本（鸿蒙原生 App）</td></tr>
+  <tr><td>NF22</td><td>设备类型</td><td>支持手机、平板、2in1 设备，UI 自适应不同屏幕尺寸</td></tr>
+  <tr><td>NF23</td><td>后端环境</td><td>Python 3.10+，CUDA 11.8+（LoRA 训练需要 GPU），MySQL 8.0+，Neo4j 5.x</td></tr>
+</table>
+
+<hr>
+<p style="text-align:center; color:#888; font-size:12px; margin-top:30px;">
+  LifeSwarm  星群智伴 需求规格说明书 V1.0 &nbsp;|&nbsp; 2026年3月
+</p>
+
+</body>
+</html>

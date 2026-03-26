@@ -32,6 +32,7 @@ interface DecisionRecord {
   session_id: string
   question: string
   options_count: number
+  recommendation: string
   created_at: string
 }
 
@@ -559,7 +560,13 @@ struct QuickDecisionInput {
         .onClick(() => {
           router.pushUrl({
             url: 'pages/DecisionDungeon2DMap',
-            params: { dungeonId: record.session_id, userId: this.userId }
+            params: {
+              dungeonId: record.session_id,
+              userId: this.userId,
+              question: record.question,
+              recommendation: record.recommendation,
+              isHistory: 'true'
+            }
           })
         })
         .opacity(this.showContent ? 1 : 0)

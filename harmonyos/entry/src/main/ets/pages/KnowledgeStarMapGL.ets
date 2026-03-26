@@ -735,6 +735,7 @@ struct KnowledgeStarMapGL {
       .padding({ left: 16, right: 16 })
       .backgroundColor('rgba(10, 10, 26, 0.8)')
       .position({ x: 0, y: 0 })
+      .zIndex(999)
       .hitTestBehavior(HitTestMode.Block)
 
 

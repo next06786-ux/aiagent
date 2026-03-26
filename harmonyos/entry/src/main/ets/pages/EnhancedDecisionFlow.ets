@@ -11,6 +11,10 @@ import promptAction from '@ohos.promptAction'
 import { ApiConfig } from '../config/ApiConfig'
 import { getUserId } from '../service/UserSessionManager'
 import picker from '@ohos.file.picker'
+import media from '@ohos.multimedia.media'
+import common from '@ohos.app.ability.common'
+import fs from '@ohos.file.fs'
+import abilityAccessCtrl from '@ohos.abilityAccessCtrl'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -73,6 +77,8 @@ struct EnhancedDecisionFlow {
   @State allOptions: OptionInput[] = []  // 所有选项（用户+AI）
   @State isRecording: boolean = false
   @State selectedImageUri: string = ''
+  private audioRecorder: media.AVRecorder | null = null
+  private recordFilePath: string = ''
 
   async aboutToAppear() {
     // 获取真实用户ID
@@ -589,13 +595,26 @@ struct EnhancedDecisionFlow {
           }.width(36).height(36).backgroundColor('#F0F0F0')
           .onClick(() => { this.pickImage() })
 
-          // 语音按钮
-          Button({ type: ButtonType.Circle }) {
-            Text(this.isRecording ? '...' : 'M').fontSize(this.isRecording ? 14 : 13)
+          // 语音按钮 - 按住说话，松手发送
+          Column() {
+            Text(this.isRecording ? '●' : '○').fontSize(16)
               .fontColor(this.isRecording ? '#FF3B30' : '#666')
-          }.width(36).height(36)
+            Text(this.isRecording ? '松手发送' : '按住说话')
+              .fontSize(8)
+              .fontColor(this.isRecording ? '#FF3B30' : '#999')
+          }
+          .width(52).height(36)
+          .justifyContent(FlexAlign.Center)
           .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.08)' : '#F0F0F0')
-          .onClick(() => { this.toggleVoice() })
+          .borderRadius(8)
+          .border({ width: this.isRecording ? 1 : 0, color: '#FF3B30' })
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down) {
+              this.startRecording()
+            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+              if (this.isRecording) { this.stopRecording() }
+            }
+          })
 
           TextInput({
             placeholder: this.getInputPlaceholder(),
@@ -915,49 +934,80 @@ struct EnhancedDecisionFlow {
 
   toggleVoice() {
     if (this.isRecording) {
-      this.isRecording = false
+      this.stopRecording()
     } else {
-      // 使用音频文件选择器选择语音文件上传
-      this.pickAudioFile()
+      this.startRecording()
     }
   }
 
-  async pickAudioFile() {
+  async startRecording() {
     try {
-      const audioPicker = new picker.DocumentViewPicker()
-      const result = await audioPicker.select({
-        maxSelectNumber: 1
-      })
-      if (result && result.length > 0) {
-        this.isRecording = true
-        this.userInput = '语音识别中...'
-        try {
-          const httpRequest = http.createHttp()
-          const response = await httpRequest.request(
-            `${ApiConfig.getApiUrl('/api/chat/speech-to-text')}`,
-            {
-              method: http.RequestMethod.POST,
-              header: { 'Content-Type': 'multipart/form-data' },
-              multiFormDataList: [{
-                name: 'file', contentType: 'audio/wav',
-                remoteFileName: 'audio.wav', filePath: result[0]
-              }],
-              connectTimeout: 30000, readTimeout: 30000
-            }
-          )
-          httpRequest.destroy()
-          if (response.responseCode === 200) {
-            const res = JSON.parse(response.result as string) as Record<string, Object>
-            const data = res.data as Record<string, string>
-            this.userInput = data?.text || '(识别结果为空)'
-          }
-        } catch (e) {
-          this.userInput = '(语音识别失败)'
+      const atManager = abilityAccessCtrl.createAtManager()
+      const context = getContext(this) as common.UIAbilityContext
+      const result = await atManager.requestPermissionsFromUser(context, ['ohos.permission.MICROPHONE'])
+      if (result.authResults[0] !== 0) {
+        this.userInput = '(需要麦克风权限)'
+        return
+      }
+      this.recordFilePath = `${context.cacheDir}/voice_${Date.now()}.m4a`
+      const file = await fs.open(this.recordFilePath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE)
+      const fd = file.fd
+      this.audioRecorder = await media.createAVRecorder()
+      const config: media.AVRecorderConfig = {
+        audioSourceType: media.AudioSourceType.AUDIO_SOURCE_TYPE_MIC,
+        profile: {
+          audioBitrate: 48000,
+          audioChannels: 1,
+          audioCodec: media.CodecMimeType.AUDIO_AAC,
+          audioSampleRate: 16000,
+          fileFormat: media.ContainerFormatType.CFT_MPEG_4A,
+        },
+        url: `fd://${fd}`,
+      }
+      await this.audioRecorder.prepare(config)
+      await this.audioRecorder.start()
+      this.isRecording = true
+      this.userInput = '录音中，再次点击停止...'
+    } catch (err) {
+      console.error('录音启动失败:', err)
+      this.userInput = '(录音启动失败)'
+      this.isRecording = false
+    }
+  }
+
+  async stopRecording() {
+    try {
+      if (this.audioRecorder) {
+        await this.audioRecorder.stop()
+        await this.audioRecorder.release()
+        this.audioRecorder = null
+      }
+      this.isRecording = false
+      this.userInput = '识别中...'
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getApiUrl('/api/chat/speech-to-text')}`,
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'multipart/form-data' },
+          multiFormDataList: [{
+            name: 'file', contentType: 'audio/mp4',
+            remoteFileName: 'voice.m4a', filePath: this.recordFilePath
+          }],
+          connectTimeout: 30000, readTimeout: 30000
         }
-        this.isRecording = false
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const res = JSON.parse(response.result as string) as Record<string, Object>
+        const data = res.data as Record<string, string>
+        this.userInput = data?.text || '(识别结果为空)'
+      } else {
+        this.userInput = '(语音识别失败)'
       }
     } catch (err) {
-      console.error('选择音频失败:', err)
+      console.error('停止录音失败:', err)
+      this.userInput = '(录音处理失败)'
       this.isRecording = false
     }
   }

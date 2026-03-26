@@ -1132,7 +1132,6 @@ async def speech_to_text(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         
-        # 尝试用 dashscope 语音识别
         api_key = os.getenv("DASHSCOPE_API_KEY")
         if not api_key:
             return {"code": 500, "message": "语音识别未配置", "data": {"text": ""}}
@@ -1141,30 +1140,48 @@ async def speech_to_text(file: UploadFile = File(...)):
         from dashscope.audio.asr import Recognition
         dashscope.api_key = api_key
         
+        # 根据文件类型确定格式
+        filename = file.filename or "audio.m4a"
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'm4a'
+        fmt_map = {'m4a': 'mp4', 'mp4': 'mp4', 'wav': 'wav', 'mp3': 'mp3', 'aac': 'aac', 'ogg': 'ogg'}
+        audio_format = fmt_map.get(ext, 'mp4')
+        
         # 保存临时文件
         import tempfile
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+        suffix = f'.{ext}'
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(contents)
             tmp_path = tmp.name
         
-        recognition = Recognition(model='paraformer-realtime-v2',
-                                  format='wav',
-                                  sample_rate=16000)
-        result = recognition.call(tmp_path)
-        
-        os.unlink(tmp_path)
-        
-        text = ""
-        if result.status_code == 200:
-            sentences = result.get_sentence()
-            if sentences:
-                text = "".join([s.get("text", "") for s in sentences])
+        try:
+            recognition = Recognition(
+                model='paraformer-realtime-v2',
+                format=audio_format,
+                sample_rate=16000,
+                language_hints=['zh', 'en']
+            )
+            result = recognition.call(tmp_path)
+            
+            text = ""
+            if result.status_code == 200:
+                sentences = result.get_sentence()
+                if sentences:
+                    text = "".join([s.get("text", "") for s in sentences])
+            else:
+                print(f"语音识别返回错误: {result.status_code} {result.message}")
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
         
         return {"code": 200, "data": {"text": text}}
     except ImportError:
-        return {"code": 200, "data": {"text": "(语音识别需要安装dashscope: pip install dashscope)"}}
+        return {"code": 200, "data": {"text": "(语音识别需要安装: pip install dashscope)"}}
     except Exception as e:
         print(f"语音识别失败: {e}")
+        import traceback
+        traceback.print_exc()
         return {"code": 500, "message": str(e), "data": {"text": ""}}
 
 

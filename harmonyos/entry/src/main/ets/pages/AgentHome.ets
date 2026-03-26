@@ -9,6 +9,10 @@ import http from '@ohos.net.http';
 import { ApiConfig } from '../config/ApiConfig';
 import { getAuthService, UserInfo } from '../service/AuthService';
 import picker from '@ohos.file.picker';
+import media from '@ohos.multimedia.media';
+import common from '@ohos.app.ability.common';
+import fs from '@ohos.file.fs';
+import abilityAccessCtrl from '@ohos.abilityAccessCtrl';
 
 interface FeatureCard {
   id: string;
@@ -57,6 +61,8 @@ struct AgentHome {
   @State userInfo: UserInfo | null = null;
   @State isRecording: boolean = false;
   @State selectedImageUri: string = '';
+  private audioRecorder: media.AVRecorder | null = null;
+  private recordFilePath: string = '';
 
   // 布局
   @State screenWidth: number = 360;
@@ -341,9 +347,23 @@ struct AgentHome {
         maxSelectNumber: 1
       });
       if (result.photoUris && result.photoUris.length > 0) {
-        this.selectedImageUri = result.photoUris[0];
-        // 上传图片到后端分析
+        const uri = result.photoUris[0];
+        this.selectedImageUri = uri;
+        this.inputText = '图片分析中...';
         try {
+          // 读取图片文件内容
+          import fs from '@ohos.file.fs';
+          import common from '@ohos.app.ability.common';
+          const context = getContext(this) as common.UIAbilityContext;
+          const sandboxPath = `${context.cacheDir}/upload_img.jpg`;
+          
+          // 打开源文件
+          const srcFile = await fs.open(uri, fs.OpenMode.READ_ONLY);
+          const destFile = await fs.open(sandboxPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+          await fs.copyFile(srcFile.fd, destFile.fd);
+          await fs.close(srcFile.fd);
+          await fs.close(destFile.fd);
+          
           const httpRequest = http.createHttp();
           const userId = this.authService.getCurrentUserId();
           const response = await httpRequest.request(
@@ -355,7 +375,7 @@ struct AgentHome {
                 name: 'file',
                 contentType: 'image/jpeg',
                 remoteFileName: 'image.jpg',
-                filePath: this.selectedImageUri
+                filePath: sandboxPath
               }],
               connectTimeout: 30000,
               readTimeout: 30000
@@ -365,13 +385,13 @@ struct AgentHome {
           if (response.responseCode === 200) {
             const res = JSON.parse(response.result as string) as Record<string, Object>;
             const data = res.data as Record<string, string>;
-            if (data?.description) {
-              this.inputText = `[图片内容: ${data.description}]`;
-            }
+            this.inputText = data?.description ? `[图片: ${data.description}]` : '[图片已添加]';
+          } else {
+            this.inputText = '[图片已添加]';
           }
         } catch (uploadErr) {
           console.error('图片上传失败:', uploadErr);
-          this.inputText = '[已选择图片，上传失败]';
+          this.inputText = '[图片已添加]';
         }
       }
     } catch (err) {
@@ -381,46 +401,87 @@ struct AgentHome {
 
   toggleVoice() {
     if (this.isRecording) {
-      this.isRecording = false;
+      this.stopRecording();
     } else {
-      this.pickAudioFile();
+      this.startRecording();
     }
   }
 
-  async pickAudioFile() {
+  async startRecording() {
     try {
-      const audioPicker = new picker.DocumentViewPicker();
-      const result = await audioPicker.select({ maxSelectNumber: 1 });
-      if (result && result.length > 0) {
-        this.isRecording = true;
-        this.inputText = '语音识别中...';
-        try {
-          const httpRequest = http.createHttp();
-          const response = await httpRequest.request(
-            `${ApiConfig.getBaseUrl()}/api/chat/speech-to-text`,
-            {
-              method: http.RequestMethod.POST,
-              header: { 'Content-Type': 'multipart/form-data' },
-              multiFormDataList: [{
-                name: 'file', contentType: 'audio/wav',
-                remoteFileName: 'audio.wav', filePath: result[0]
-              }],
-              connectTimeout: 30000, readTimeout: 30000
-            }
-          );
-          httpRequest.destroy();
-          if (response.responseCode === 200) {
-            const res = JSON.parse(response.result as string) as Record<string, Object>;
-            const data = res.data as Record<string, string>;
-            this.inputText = data?.text || '(识别结果为空)';
-          }
-        } catch (e) {
-          this.inputText = '(语音识别失败)';
+      // 申请麦克风权限
+      const atManager = abilityAccessCtrl.createAtManager();
+      const context = getContext(this) as common.UIAbilityContext;
+      const result = await atManager.requestPermissionsFromUser(context, ['ohos.permission.MICROPHONE']);
+      if (result.authResults[0] !== 0) {
+        this.inputText = '(需要麦克风权限)';
+        return;
+      }
+
+      // 准备录音文件路径
+      this.recordFilePath = `${context.cacheDir}/voice_${Date.now()}.m4a`;
+      const file = await fs.open(this.recordFilePath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+      await fs.close(file.fd);
+
+      // 创建录音器
+      this.audioRecorder = await media.createAVRecorder();
+      const config: media.AVRecorderConfig = {
+        audioSourceType: media.AudioSourceType.AUDIO_SOURCE_TYPE_MIC,
+        profile: {
+          audioBitrate: 48000,
+          audioChannels: 1,
+          audioCodec: media.CodecMimeType.AUDIO_AAC,
+          audioSampleRate: 16000,
+          fileFormat: media.ContainerFormatType.CFT_MPEG_4A,
+        },
+        url: `fd://${(await fs.open(this.recordFilePath, fs.OpenMode.READ_WRITE)).fd}`,
+      };
+      await this.audioRecorder.prepare(config);
+      await this.audioRecorder.start();
+      this.isRecording = true;
+      this.inputText = '录音中，再次点击停止...';
+    } catch (err) {
+      console.error('录音启动失败:', err);
+      this.inputText = '(录音启动失败)';
+      this.isRecording = false;
+    }
+  }
+
+  async stopRecording() {
+    try {
+      if (this.audioRecorder) {
+        await this.audioRecorder.stop();
+        await this.audioRecorder.release();
+        this.audioRecorder = null;
+      }
+      this.isRecording = false;
+      this.inputText = '识别中...';
+
+      // 上传音频到后端转文字
+      const httpRequest = http.createHttp();
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/chat/speech-to-text`,
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'multipart/form-data' },
+          multiFormDataList: [{
+            name: 'file', contentType: 'audio/mp4',
+            remoteFileName: 'voice.m4a', filePath: this.recordFilePath
+          }],
+          connectTimeout: 30000, readTimeout: 30000
         }
-        this.isRecording = false;
+      );
+      httpRequest.destroy();
+      if (response.responseCode === 200) {
+        const res = JSON.parse(response.result as string) as Record<string, Object>;
+        const data = res.data as Record<string, string>;
+        this.inputText = data?.text || '(识别结果为空)';
+      } else {
+        this.inputText = '(语音识别失败)';
       }
     } catch (err) {
-      console.error('选择音频失败:', err);
+      console.error('停止录音失败:', err);
+      this.inputText = '(录音处理失败)';
       this.isRecording = false;
     }
   }
@@ -753,13 +814,26 @@ struct AgentHome {
           .backgroundColor(Theme.Color.BackgroundTertiary)
           .onClick(() => { this.pickImage() })
 
-          // 语音按钮
-          Button({ type: ButtonType.Circle }) {
-            Text(this.isRecording ? '...' : 'M').fontSize(this.isRecording ? 16 : 14)
-              .fontColor(this.isRecording ? Theme.Color.Destructive : Theme.Color.TextSecondary)
-          }.width(36).height(36)
-          .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.08)' : Theme.Color.BackgroundTertiary)
-          .onClick(() => { this.toggleVoice() })
+          // 语音按钮 - 按住说话，松手发送
+          Column() {
+            SimpleIcon({ iconName: 'mic', iconSize: 16,
+              color: this.isRecording ? Theme.Color.Destructive : Theme.Color.TextSecondary })
+            Text(this.isRecording ? '松手发送' : '按住说话')
+              .fontSize(8)
+              .fontColor(this.isRecording ? Theme.Color.Destructive : Theme.Color.TextTertiary)
+          }
+          .width(52).height(36)
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.12)' : Theme.Color.BackgroundTertiary)
+          .borderRadius(Theme.Radius.m)
+          .border({ width: this.isRecording ? 1.5 : 0.5, color: this.isRecording ? Theme.Color.Destructive : Theme.Color.BorderLight })
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down) {
+              this.startRecording();
+            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+              if (this.isRecording) { this.stopRecording(); }
+            }
+          })
 
           TextInput({ placeholder: '输入消息...', text: this.inputText })
             .layoutWeight(1).height(40).fontSize(14)

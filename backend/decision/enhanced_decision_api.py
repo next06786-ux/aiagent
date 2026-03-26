@@ -85,24 +85,94 @@ class SimulateWithCollectedInfoRequest(BaseModel):
     use_lora: bool = True
 
 
+@router.get("/record/{simulation_id}")
+async def get_decision_record(simulation_id: str):
+    """获取单条决策推演记录详情"""
+    try:
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        import sqlalchemy
+        db = Database(DatabaseConfig.get_database_url())
+        db_session = db.get_session()
+        row = db_session.execute(
+            sqlalchemy.text("""
+                SELECT simulation_id, user_id, question, options_count, recommendation, created_at
+                FROM decision_records WHERE simulation_id = :sid
+            """),
+            {"sid": simulation_id}
+        ).fetchone()
+        db_session.close()
+        if not row:
+            return {"code": 404, "message": "记录不存在", "data": None}
+        return {
+            "code": 200,
+            "data": {
+                "simulation_id": row[0],
+                "user_id": row[1],
+                "question": row[2] or "",
+                "options_count": row[3] or 0,
+                "recommendation": row[4] or "",
+                "created_at": row[5] or "",
+                "options": []  # 历史推演节点数据暂不存储，只显示推荐结论
+            }
+        }
+    except Exception as e:
+        return {"code": 500, "message": str(e), "data": None}
+
+
 @router.get("/history/{user_id}")
 async def get_decision_history(user_id: str):
-    """获取用户的决策历史记录"""
+    """获取用户的决策历史记录（从数据库读取，持久化）"""
     try:
-        sessions = info_collector.get_user_sessions(user_id) if hasattr(info_collector, 'get_user_sessions') else []
-        # 从内存中的sessions获取历史
-        records = []
-        for sid, session in info_collector.sessions.items():
-            if session.get("user_id") == user_id and session.get("is_complete"):
-                records.append({
-                    "session_id": sid,
-                    "question": session.get("initial_question", ""),
-                    "options_count": len(session.get("options", [])),
-                    "created_at": session.get("created_at", "")
-                })
-        records.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        import sqlalchemy
+        db = Database(DatabaseConfig.get_database_url())
+        
+        # 确保表存在
+        engine = db.engine
+        with engine.connect() as conn:
+            conn.execute(sqlalchemy.text("""
+                CREATE TABLE IF NOT EXISTS decision_records (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    simulation_id VARCHAR(100) UNIQUE NOT NULL,
+                    user_id VARCHAR(100) NOT NULL,
+                    question TEXT,
+                    options_count INT DEFAULT 0,
+                    recommendation TEXT,
+                    created_at VARCHAR(50),
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_created_at (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """))
+            conn.commit()
+        
+        db_session = db.get_session()
+        rows = db_session.execute(
+            sqlalchemy.text("""
+                SELECT simulation_id, question, options_count, recommendation, created_at
+                FROM decision_records
+                WHERE user_id = :uid
+                ORDER BY created_at DESC
+                LIMIT 50
+            """),
+            {"uid": user_id}
+        ).fetchall()
+        db_session.close()
+        
+        records = [
+            {
+                "session_id": row[0],
+                "question": row[1] or "",
+                "options_count": row[2] or 0,
+                "recommendation": row[3] or "",
+                "created_at": row[4] or ""
+            }
+            for row in rows
+        ]
         return {"code": 200, "data": records}
     except Exception as e:
+        logger.warning(f"获取决策历史失败: {e}")
         return {"code": 200, "data": []}
 
 
@@ -763,6 +833,38 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             })
 
             simulation_id = f"sim_{user_id}_{int(__import__('time').time())}"
+            
+            # 保存决策记录到数据库
+            try:
+                from backend.database.models import Database
+                from backend.database.config import DatabaseConfig
+                from sqlalchemy import Column, String, Integer, Text, DateTime
+                from sqlalchemy.ext.declarative import declarative_base
+                from datetime import datetime
+                db = Database(DatabaseConfig.get_database_url())
+                db_session = db.get_session()
+                # 用原生SQL插入，避免模型定义问题
+                db_session.execute(
+                    __import__('sqlalchemy').text("""
+                        INSERT IGNORE INTO decision_records 
+                        (simulation_id, user_id, question, options_count, recommendation, created_at)
+                        VALUES (:sid, :uid, :q, :oc, :rec, :ca)
+                    """),
+                    {
+                        "sid": simulation_id,
+                        "uid": user_id,
+                        "q": question[:500],
+                        "oc": len(options),
+                        "rec": recommendation[:1000] if recommendation else "",
+                        "ca": datetime.now().isoformat()
+                    }
+                )
+                db_session.commit()
+                db_session.close()
+                logger.info(f"决策记录已保存: {simulation_id}")
+            except Exception as save_err:
+                logger.warning(f"保存决策记录失败: {save_err}")
+            
             await websocket.send_json({
                 "type": "status",
                 "stage": "completed",
