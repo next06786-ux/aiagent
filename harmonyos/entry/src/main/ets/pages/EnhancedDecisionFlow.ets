@@ -10,6 +10,7 @@ import http from '@ohos.net.http'
 import promptAction from '@ohos.promptAction'
 import { ApiConfig } from '../config/ApiConfig'
 import { getUserId } from '../service/UserSessionManager'
+import picker from '@ohos.file.picker'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -70,6 +71,8 @@ struct EnhancedDecisionFlow {
   @State userOptions: string[] = []  // 用户提供的选项
   @State aiSuggestedOptions: OptionInput[] = []  // AI建议的选项
   @State allOptions: OptionInput[] = []  // 所有选项（用户+AI）
+  @State isRecording: boolean = false
+  @State selectedImageUri: string = ''
 
   async aboutToAppear() {
     // 获取真实用户ID
@@ -579,17 +582,31 @@ struct EnhancedDecisionFlow {
 
       // 输入框
       if (this.currentPhase !== 'simulation' && this.currentPhase !== 'result') {
-        Row({ space: 12 }) {
-          TextInput({ 
+        Row({ space: 8 }) {
+          // 图片按钮
+          Button({ type: ButtonType.Circle }) {
+            Text('+').fontSize(18).fontColor('#666')
+          }.width(36).height(36).backgroundColor('#F0F0F0')
+          .onClick(() => { this.pickImage() })
+
+          // 语音按钮
+          Button({ type: ButtonType.Circle }) {
+            Text(this.isRecording ? '...' : 'M').fontSize(this.isRecording ? 14 : 13)
+              .fontColor(this.isRecording ? '#FF3B30' : '#666')
+          }.width(36).height(36)
+          .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.08)' : '#F0F0F0')
+          .onClick(() => { this.toggleVoice() })
+
+          TextInput({
             placeholder: this.getInputPlaceholder(),
-            text: this.userInput  // 绑定text属性，这样清空userInput时输入框也会清空
+            text: this.userInput
           })
             .layoutWeight(1)
-            .height(44)
-            .fontSize(16)
+            .height(40)
+            .fontSize(15)
             .backgroundColor(Color.White)
-            .borderRadius(22)
-            .padding({ left: 16, right: 16 })
+            .borderRadius(20)
+            .padding({ left: 14, right: 14 })
             .onChange((value: string) => {
               this.userInput = value
             })
@@ -854,6 +871,95 @@ struct EnhancedDecisionFlow {
     if (risk < 0.3) return '低风险'
     if (risk < 0.6) return '中风险'
     return '高风险'
+  }
+
+  async pickImage() {
+    try {
+      const photoPicker = new picker.PhotoViewPicker()
+      const result = await photoPicker.select({
+        MIMEType: picker.PhotoViewMIMETypes.IMAGE_TYPE,
+        maxSelectNumber: 1
+      })
+      if (result.photoUris && result.photoUris.length > 0) {
+        this.selectedImageUri = result.photoUris[0]
+        try {
+          const httpRequest = http.createHttp()
+          const response = await httpRequest.request(
+            `${ApiConfig.getApiUrl('/api/chat/upload-image')}?user_id=${this.userId}`,
+            {
+              method: http.RequestMethod.POST,
+              header: { 'Content-Type': 'multipart/form-data' },
+              multiFormDataList: [{
+                name: 'file', contentType: 'image/jpeg',
+                remoteFileName: 'image.jpg', filePath: this.selectedImageUri
+              }],
+              connectTimeout: 30000, readTimeout: 30000
+            }
+          )
+          httpRequest.destroy()
+          if (response.responseCode === 200) {
+            const res = JSON.parse(response.result as string) as Record<string, Object>
+            const data = res.data as Record<string, string>
+            if (data?.description) {
+              this.userInput = `[图片内容: ${data.description}]`
+            }
+          }
+        } catch (e) {
+          this.userInput = '[已选择图片，分析失败]'
+        }
+      }
+    } catch (err) {
+      console.error('选择图片失败:', err)
+    }
+  }
+
+  toggleVoice() {
+    if (this.isRecording) {
+      this.isRecording = false
+    } else {
+      // 使用音频文件选择器选择语音文件上传
+      this.pickAudioFile()
+    }
+  }
+
+  async pickAudioFile() {
+    try {
+      const audioPicker = new picker.DocumentViewPicker()
+      const result = await audioPicker.select({
+        maxSelectNumber: 1
+      })
+      if (result && result.length > 0) {
+        this.isRecording = true
+        this.userInput = '语音识别中...'
+        try {
+          const httpRequest = http.createHttp()
+          const response = await httpRequest.request(
+            `${ApiConfig.getApiUrl('/api/chat/speech-to-text')}`,
+            {
+              method: http.RequestMethod.POST,
+              header: { 'Content-Type': 'multipart/form-data' },
+              multiFormDataList: [{
+                name: 'file', contentType: 'audio/wav',
+                remoteFileName: 'audio.wav', filePath: result[0]
+              }],
+              connectTimeout: 30000, readTimeout: 30000
+            }
+          )
+          httpRequest.destroy()
+          if (response.responseCode === 200) {
+            const res = JSON.parse(response.result as string) as Record<string, Object>
+            const data = res.data as Record<string, string>
+            this.userInput = data?.text || '(识别结果为空)'
+          }
+        } catch (e) {
+          this.userInput = '(语音识别失败)'
+        }
+        this.isRecording = false
+      }
+    } catch (err) {
+      console.error('选择音频失败:', err)
+      this.isRecording = false
+    }
   }
 
   private resetFlow() {

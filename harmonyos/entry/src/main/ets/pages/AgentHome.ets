@@ -8,6 +8,7 @@ import { SimpleIcon } from '../components/IconRenderer';
 import http from '@ohos.net.http';
 import { ApiConfig } from '../config/ApiConfig';
 import { getAuthService, UserInfo } from '../service/AuthService';
+import picker from '@ohos.file.picker';
 
 interface FeatureCard {
   id: string;
@@ -54,6 +55,8 @@ struct AgentHome {
   @State currentSessionId: string = '';
   @State isLoadingHistory: boolean = false;
   @State userInfo: UserInfo | null = null;
+  @State isRecording: boolean = false;
+  @State selectedImageUri: string = '';
 
   // 布局
   @State screenWidth: number = 360;
@@ -328,6 +331,98 @@ struct AgentHome {
   formatTime(ts: number): string {
     const d = new Date(ts);
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  }
+
+  async pickImage() {
+    try {
+      const photoPicker = new picker.PhotoViewPicker();
+      const result = await photoPicker.select({
+        MIMEType: picker.PhotoViewMIMETypes.IMAGE_TYPE,
+        maxSelectNumber: 1
+      });
+      if (result.photoUris && result.photoUris.length > 0) {
+        this.selectedImageUri = result.photoUris[0];
+        // 上传图片到后端分析
+        try {
+          const httpRequest = http.createHttp();
+          const userId = this.authService.getCurrentUserId();
+          const response = await httpRequest.request(
+            `${ApiConfig.getBaseUrl()}/api/chat/upload-image?user_id=${userId}`,
+            {
+              method: http.RequestMethod.POST,
+              header: { 'Content-Type': 'multipart/form-data' },
+              multiFormDataList: [{
+                name: 'file',
+                contentType: 'image/jpeg',
+                remoteFileName: 'image.jpg',
+                filePath: this.selectedImageUri
+              }],
+              connectTimeout: 30000,
+              readTimeout: 30000
+            }
+          );
+          httpRequest.destroy();
+          if (response.responseCode === 200) {
+            const res = JSON.parse(response.result as string) as Record<string, Object>;
+            const data = res.data as Record<string, string>;
+            if (data?.description) {
+              this.inputText = `[图片内容: ${data.description}]`;
+            }
+          }
+        } catch (uploadErr) {
+          console.error('图片上传失败:', uploadErr);
+          this.inputText = '[已选择图片，上传失败]';
+        }
+      }
+    } catch (err) {
+      console.error('选择图片失败:', err);
+    }
+  }
+
+  toggleVoice() {
+    if (this.isRecording) {
+      this.isRecording = false;
+    } else {
+      this.pickAudioFile();
+    }
+  }
+
+  async pickAudioFile() {
+    try {
+      const audioPicker = new picker.DocumentViewPicker();
+      const result = await audioPicker.select({ maxSelectNumber: 1 });
+      if (result && result.length > 0) {
+        this.isRecording = true;
+        this.inputText = '语音识别中...';
+        try {
+          const httpRequest = http.createHttp();
+          const response = await httpRequest.request(
+            `${ApiConfig.getBaseUrl()}/api/chat/speech-to-text`,
+            {
+              method: http.RequestMethod.POST,
+              header: { 'Content-Type': 'multipart/form-data' },
+              multiFormDataList: [{
+                name: 'file', contentType: 'audio/wav',
+                remoteFileName: 'audio.wav', filePath: result[0]
+              }],
+              connectTimeout: 30000, readTimeout: 30000
+            }
+          );
+          httpRequest.destroy();
+          if (response.responseCode === 200) {
+            const res = JSON.parse(response.result as string) as Record<string, Object>;
+            const data = res.data as Record<string, string>;
+            this.inputText = data?.text || '(识别结果为空)';
+          }
+        } catch (e) {
+          this.inputText = '(语音识别失败)';
+        }
+        this.isRecording = false;
+      }
+    } catch (err) {
+      console.error('选择音频失败:', err);
+      this.isRecording = false;
+    }
   }
 
   // ===== UI 构建 =====
@@ -641,24 +736,49 @@ struct AgentHome {
           }.width('100%').padding({ left: 16, right: 16, top: 12, bottom: 8 })
         }.layoutWeight(1).scrollBar(BarState.Auto)
 
-        Row({ space: 10 }) {
-          TextInput({ placeholder: '和AI核心对话...', text: this.inputText })
-            .layoutWeight(1).height(48).fontSize(14)
+        // 图片预览
+        if (this.selectedImageUri) {
+          Row() {
+            Image(this.selectedImageUri).width(60).height(60).borderRadius(8).objectFit(ImageFit.Cover)
+            Text('取消').fontSize(11).fontColor(Theme.Color.Destructive).margin({ left: 8 })
+              .onClick(() => { this.selectedImageUri = '' })
+          }.width('100%').padding({ left: 16, right: 16, top: 8 })
+        }
+
+        Row({ space: 6 }) {
+          // 图片按钮
+          Button({ type: ButtonType.Circle }) {
+            Text('+').fontSize(20).fontColor(Theme.Color.TextSecondary)
+          }.width(36).height(36)
+          .backgroundColor(Theme.Color.BackgroundTertiary)
+          .onClick(() => { this.pickImage() })
+
+          // 语音按钮
+          Button({ type: ButtonType.Circle }) {
+            Text(this.isRecording ? '...' : 'M').fontSize(this.isRecording ? 16 : 14)
+              .fontColor(this.isRecording ? Theme.Color.Destructive : Theme.Color.TextSecondary)
+          }.width(36).height(36)
+          .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.08)' : Theme.Color.BackgroundTertiary)
+          .onClick(() => { this.toggleVoice() })
+
+          TextInput({ placeholder: '输入消息...', text: this.inputText })
+            .layoutWeight(1).height(40).fontSize(14)
             .fontColor(Theme.Color.TextPrimary).placeholderColor(Theme.Color.TextTertiary)
             .backgroundColor(Theme.Color.BackgroundTertiary)
             .borderRadius(Theme.Radius.round)
             .border({ width: 1, color: Theme.Color.BorderLight })
-            .padding({ left: 18, right: 18 })
+            .padding({ left: 14, right: 14 })
             .onChange((v: string) => { this.inputText = v; })
             .onSubmit(() => { this.sendMessage(); })
+
           Button({ type: ButtonType.Circle }) {
-            SimpleIcon({ iconName: 'send', iconSize: 20, color: '#FFFFFF' })
-          }.width(48).height(48)
+            SimpleIcon({ iconName: 'send', iconSize: 18, color: '#FFFFFF' })
+          }.width(40).height(40)
           .backgroundColor(this.inputText.trim() && !this.isLoading ? Theme.Color.Primary : '#CCCCCC')
           .shadow(this.inputText.trim() && !this.isLoading ? Theme.Shadow.GlowPrimary : Theme.Shadow.Soft)
-          .enabled(this.inputText.trim().length > 0 && !this.isLoading)
+          .enabled((this.inputText.trim().length > 0 || this.selectedImageUri.length > 0) && !this.isLoading)
           .onClick(() => { this.sendMessage(); })
-        }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 16 })
+        }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 14 })
         .border({ width: { top: 0.5 }, color: Theme.Color.BorderLight })
       }
       .width('90%').height('75%')

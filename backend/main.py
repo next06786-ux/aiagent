@@ -1082,6 +1082,92 @@ async def verify_token(request_data: Dict[str, Any]):
         }
 
 
+# ==================== 图片上传与分析 ====================
+
+@app.post("/api/chat/upload-image")
+async def upload_and_analyze_image(file: UploadFile = File(...), user_id: str = "default_user"):
+    """上传图片并用通义千问视觉模型分析"""
+    try:
+        import base64
+        contents = await file.read()
+        b64_image = base64.b64encode(contents).decode('utf-8')
+        mime_type = file.content_type or 'image/jpeg'
+        
+        # 用通义千问视觉模型分析图片
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            return {"code": 500, "message": "视觉模型未配置", "data": {"description": "图片已接收但无法分析"}}
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+        
+        response = client.chat.completions.create(
+            model="qwen-vl-plus",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}},
+                    {"type": "text", "text": "请用中文简洁描述这张图片的内容，包括场景、人物、物体等关键信息。不要使用emoji。"}
+                ]
+            }],
+            max_tokens=300
+        )
+        
+        description = response.choices[0].message.content.strip()
+        print(f"图片分析结果: {description[:100]}")
+        
+        return {
+            "code": 200,
+            "message": "Success",
+            "data": {"description": description, "filename": file.filename}
+        }
+    except Exception as e:
+        print(f"图片分析失败: {e}")
+        return {"code": 500, "message": str(e), "data": {"description": "图片分析失败"}}
+
+
+@app.post("/api/chat/speech-to-text")
+async def speech_to_text(file: UploadFile = File(...)):
+    """语音转文字 - 使用通义千问语音模型"""
+    try:
+        contents = await file.read()
+        
+        # 尝试用 dashscope 语音识别
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            return {"code": 500, "message": "语音识别未配置", "data": {"text": ""}}
+        
+        import dashscope
+        from dashscope.audio.asr import Recognition
+        dashscope.api_key = api_key
+        
+        # 保存临时文件
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        
+        recognition = Recognition(model='paraformer-realtime-v2',
+                                  format='wav',
+                                  sample_rate=16000)
+        result = recognition.call(tmp_path)
+        
+        os.unlink(tmp_path)
+        
+        text = ""
+        if result.status_code == 200:
+            sentences = result.get_sentence()
+            if sentences:
+                text = "".join([s.get("text", "") for s in sentences])
+        
+        return {"code": 200, "data": {"text": text}}
+    except ImportError:
+        return {"code": 200, "data": {"text": "(语音识别需要安装dashscope: pip install dashscope)"}}
+    except Exception as e:
+        print(f"语音识别失败: {e}")
+        return {"code": 500, "message": str(e), "data": {"text": ""}}
+
+
 # ==================== WebSocket 流式聊天API ====================
 
 @app.websocket("/ws/chat")
