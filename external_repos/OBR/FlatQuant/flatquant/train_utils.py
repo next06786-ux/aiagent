@@ -118,13 +118,16 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                     if "position_embeddings" in str(e):
                         # Qwen3.5 需要 position_embeddings
                         if hasattr(model.model, 'rotary_emb'):
-                            # 确保 rotary_emb 在正确设备上
                             model.model.rotary_emb = model.model.rotary_emb.to(dev)
                             pos_ids = position_ids.to(dev) if position_ids is not None else None
-                            position_embeddings = model.model.rotary_emb(fp_inps[j].unsqueeze(0), pos_ids)
+                            # 确保输入 dtype 与层权重一致（层已被 float() 转换）
+                            inp = fp_inps[j].unsqueeze(0).float()
+                            position_embeddings = model.model.rotary_emb(inp, pos_ids)
+                            # position_embeddings 也转 float
+                            position_embeddings = tuple(p.float() for p in position_embeddings) if isinstance(position_embeddings, tuple) else position_embeddings.float()
                         else:
                             position_embeddings = None
-                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0).float(), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                     else:
                         raise
         attn_module._ori_mode = False
