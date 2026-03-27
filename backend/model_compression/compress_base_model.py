@@ -4,7 +4,7 @@
 
 执行方式:
 python backend/model_compression/compress_base_model.py \
-  --model /path/to/Qwen3.5-9B \
+  --model /root/autodl-tmp/models/base/Qwen3.5-9B \
   --output models/qwen-obr \
   --w-bits 4 \
   --sparsity 0.5 \

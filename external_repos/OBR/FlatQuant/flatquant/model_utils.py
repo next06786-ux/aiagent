@@ -117,10 +117,15 @@ def get_qwen2(model_name, hf_token):
         raise ImportError("Qwen2 model is not available. Ensure you're using a compatible version of the 'transformers' library.")
 
     config = transformers.Qwen2Config.from_pretrained(model_name)
-    config._attn_implementation_internal = "eager"
+    # 兼容新版 transformers
+    if hasattr(config, '_attn_implementation_internal'):
+        config._attn_implementation_internal = "eager"
+    elif hasattr(config, '_attn_implementation'):
+        config._attn_implementation = "eager"
+    
     model = Qwen2ForCausalLM.from_pretrained(model_name,
                                                           torch_dtype='auto',
-                                                          config=config,
+                                                          device_map='auto',
                                                           low_cpu_mem_usage=True,
                                                           trust_remote_code=True)
     model.seqlen = 2048
