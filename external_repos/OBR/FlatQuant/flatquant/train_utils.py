@@ -118,16 +118,13 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                     if "position_embeddings" in str(e):
                         # Qwen3.5 需要 position_embeddings
                         if hasattr(model.model, 'rotary_emb'):
-                            # 确保所有张量在正确设备上
-                            inp = fp_inps[j].unsqueeze(0).to(dev)
+                            # 确保 rotary_emb 在正确设备上
+                            model.model.rotary_emb = model.model.rotary_emb.to(dev)
                             pos_ids = position_ids.to(dev) if position_ids is not None else None
-                            rotary_emb_device = next(model.model.rotary_emb.parameters()).device
-                            inp = inp.to(rotary_emb_device)
-                            pos_ids = pos_ids.to(rotary_emb_device) if pos_ids is not None else None
-                            position_embeddings = model.model.rotary_emb(inp, pos_ids)
+                            position_embeddings = model.model.rotary_emb(fp_inps[j].unsqueeze(0), pos_ids)
                         else:
                             position_embeddings = None
-                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0).to(dev), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                     else:
                         raise
         attn_module._ori_mode = False
@@ -181,16 +178,12 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                         if "position_embeddings" in str(e):
                             # Qwen3.5 需要 position_embeddings
                             if hasattr(model.model, 'rotary_emb'):
-                                # 确保张量在正确设备上
-                                inp = fp_inps[index:index+args.cali_bsz,].to(dev)
+                                model.model.rotary_emb = model.model.rotary_emb.to(dev)
                                 pos_ids = position_ids.to(dev) if position_ids is not None else None
-                                rotary_emb_device = next(model.model.rotary_emb.parameters()).device
-                                inp = inp.to(rotary_emb_device)
-                                pos_ids = pos_ids.to(rotary_emb_device) if pos_ids is not None else None
-                                position_embeddings = model.model.rotary_emb(inp, pos_ids)
+                                position_embeddings = model.model.rotary_emb(fp_inps[index:index+args.cali_bsz,], pos_ids)
                             else:
                                 position_embeddings = None
-                            quant_out = layer(fp_inps[index:index+args.cali_bsz,].to(dev), attention_mask=attention_mask_batch, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                            quant_out = layer(fp_inps[index:index+args.cali_bsz,], attention_mask=attention_mask_batch, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                         else:
                             raise
                     
