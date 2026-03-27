@@ -121,8 +121,8 @@ def get_qwen2(model_name, hf_token):
     model = Qwen2ForCausalLM.from_pretrained(model_name,
                                                           torch_dtype='auto',
                                                           config=config,
-                                                          use_auth_token=hf_token,
-                                                          low_cpu_mem_usage=True)
+                                                          low_cpu_mem_usage=True,
+                                                          trust_remote_code=True)
     model.seqlen = 2048
     logging.info(f'---> Loading {model_name} Model with seq_len: {model.seqlen}')
 
