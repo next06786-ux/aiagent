@@ -98,16 +98,27 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
         with torch.no_grad():
             layer.float()
 
-        layer.self_attn._ori_mode = True
-        layer.mlp._ori_mode = True
+        # 兼容 Qwen2 (self_attn) 和 Qwen3.5 (linear_attn)
+        attn_module = getattr(layer, 'self_attn', None) or getattr(layer, 'linear_attn', None)
+        mlp_module = getattr(layer, 'mlp', None) or getattr(layer, 'feed_forward', None)
+        
+        if attn_module is None or mlp_module is None:
+            logger.warning(f"Layer {i}: 找不到 attention 或 MLP 模块，跳过")
+            continue
+        
+        attn_module._ori_mode = True
+        mlp_module._ori_mode = True
         with torch.no_grad():
             for j in range(args.nsamples):
                 fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
-        layer.self_attn._ori_mode = False
-        layer.mlp._ori_mode = False
+        attn_module._ori_mode = False
+        mlp_module._ori_mode = False
+        
         if args.diag_init == "sq_style":
-            layer.self_attn.init_diag_scale(alpha=args.diag_alpha)
-            layer.mlp.init_diag_scale(alpha=args.diag_alpha)
+            if hasattr(attn_module, 'init_diag_scale'):
+                attn_module.init_diag_scale(alpha=args.diag_alpha)
+            if hasattr(mlp_module, 'init_diag_scale'):
+                mlp_module.init_diag_scale(alpha=args.diag_alpha)
         elif args.diag_init == "one_style":
             pass
         else:
