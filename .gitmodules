@@ -1,6 +1,0 @@
-[submodule "external_repos/llmquant"]
-	path = external_repos/llmquant
-	url = https://github.com/Tai-Jing/llmquant.git
-[submodule "external_repos/OBR"]
-	path = external_repos/OBR
-	url = https://github.com/csguoh/OBR.git
