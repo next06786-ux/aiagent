@@ -1,5 +1,6 @@
 import torch
 import transformers
+from transformers import AutoModelForCausalLM
 import logging
 from flatquant.utils import skip
 from flatquant.model_tools.llama_utils import apply_flatquant_to_llama
@@ -119,23 +120,30 @@ def get_llama_31(model_name, hf_token):
 def get_qwen2(model_name, hf_token):
     skip_initialization()
     try:
-        from transformers import Qwen2ForCausalLM
+        from transformers import Qwen2ForCausalLM, AutoConfig
     except ImportError:
         logging.error("Qwen2 model is not available in this version of 'transformers'. Please update the library.")
         raise ImportError("Qwen2 model is not available. Ensure you're using a compatible version of the 'transformers' library.")
 
-    config = transformers.Qwen2Config.from_pretrained(model_name)
-    # 兼容新版 transformers
+    # 用 AutoConfig 而不是 Qwen2Config，这样能处理 Qwen3.5
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    
+    # 设置注意力实现
     if hasattr(config, '_attn_implementation_internal'):
         config._attn_implementation_internal = "eager"
     elif hasattr(config, '_attn_implementation'):
         config._attn_implementation = "eager"
     
-    model = Qwen2ForCausalLM.from_pretrained(model_name,
-                                                          torch_dtype='auto',
-                                                          device_map='auto',
-                                                          low_cpu_mem_usage=True,
-                                                          trust_remote_code=True)
+    # 先加载模型来获取正确的类
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        config=config,
+        torch_dtype='auto',
+        device_map='auto',
+        low_cpu_mem_usage=True,
+        trust_remote_code=True
+    )
+    
     model.seqlen = 2048
     logging.info(f'---> Loading {model_name} Model with seq_len: {model.seqlen}')
 
