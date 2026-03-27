@@ -324,8 +324,33 @@ def apply_flatquant_to_qwen(args, model):
     skip_initialization()
     # Replace module with FlatQuant version
     for layer in range(model.config.num_hidden_layers):
+        layer_obj = model.model.layers[layer]
+        
+        # 兼容 Qwen2 和 Qwen3.5
+        if hasattr(layer_obj, 'self_attn'):
+            attn_module = layer_obj.self_attn
+        elif hasattr(layer_obj, 'attention'):
+            attn_module = layer_obj.attention
+        else:
+            raise AttributeError(f"层 {layer} 没有找到 attention 模块")
+        
+        if hasattr(layer_obj, 'mlp'):
+            mlp_module = layer_obj.mlp
+        elif hasattr(layer_obj, 'feed_forward'):
+            mlp_module = layer_obj.feed_forward
+        else:
+            raise AttributeError(f"层 {layer} 没有找到 MLP 模块")
+        
         # attn
-        model.model.layers[layer].self_attn = FlatQuantQwen2Attention(args, model.model.layers[layer].self_attn)
+        if hasattr(layer_obj, 'self_attn'):
+            model.model.layers[layer].self_attn = FlatQuantQwen2Attention(args, attn_module)
+        else:
+            model.model.layers[layer].attention = FlatQuantQwen2Attention(args, attn_module)
+        
         # mlp
-        model.model.layers[layer].mlp = FlatQuantQwen2MLP(args, model.model.layers[layer].mlp)
+        if hasattr(layer_obj, 'mlp'):
+            model.model.layers[layer].mlp = FlatQuantQwen2MLP(args, mlp_module)
+        else:
+            model.model.layers[layer].feed_forward = FlatQuantQwen2MLP(args, mlp_module)
+    
     return model

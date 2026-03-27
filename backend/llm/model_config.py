@@ -4,16 +4,29 @@
 """
 
 MODEL_CONFIG = {
-    "current_model": "qwen3.5-9b",
+    "current_model": "qwen3.5-9b-obr",  # 改成压缩模型
     "available_models": {
         "qwen3.5-9b": {
             "hf_model_name": "Qwen/Qwen3.5-9B",
-            "display_name": "Qwen 3.5 (9B)",
+            "display_name": "Qwen 3.5 (9B) - 原始模型",
             "vram_required": 20.0,
             "inference_speed": 50,
             "context_length": 32768,
-            "description": "Qwen 3.5 主力模型，Transformers 原生推理",
-            "dtype": "float16",  # 支持: float16, float32, int8, int4
+            "description": "Qwen 3.5 原始模型 (FP16)",
+            "dtype": "float16",
+            "device_map": "auto"
+        },
+        "qwen3.5-9b-obr": {
+            "local_path": "models/qwen-obr",  # 本地压缩模型路径
+            "display_name": "Qwen 3.5 (9B) - OBR 压缩",
+            "vram_required": 5.0,
+            "inference_speed": 200,  # 4-8x 加速
+            "context_length": 32768,
+            "description": "OBR FlatQuant 压缩 (W4A16 + 50% 稀疏)",
+            "compression_method": "OBR_FlatQuant",
+            "quantization_bits": 4,
+            "sparsity": 0.5,
+            "dtype": "int4",
             "device_map": "auto"
         }
     },
@@ -62,7 +75,11 @@ def get_current_model_config():
 
 
 def get_model_hf_name():
-    return get_current_model_config()["hf_model_name"]
+    """获取模型名称或本地路径"""
+    config = get_current_model_config()
+    if "local_path" in config:
+        return config["local_path"]  # 返回本地路径
+    return config["hf_model_name"]
 
 
 def get_model_display_name():
