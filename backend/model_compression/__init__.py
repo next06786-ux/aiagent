@@ -13,14 +13,14 @@
 from .quantizer import ModelQuantizer
 from .quality_monitor import CompressionQualityMonitor
 from .lora_quantizer import LoRAQuantizer
-from .compress_base_model import BaseModelCompressor
+from .obr_wrapper import OBRCompressor
 from .inference_integration import QuantizedModelLoader, get_or_create_inference_pipeline
 
 __all__ = [
     "ModelQuantizer",
     "CompressionQualityMonitor",
     "LoRAQuantizer",
-    "BaseModelCompressor",
+    "OBRCompressor",
     "QuantizedModelLoader",
     "get_or_create_inference_pipeline",
 ]
