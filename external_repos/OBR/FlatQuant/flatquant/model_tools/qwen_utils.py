@@ -326,23 +326,17 @@ def apply_flatquant_to_qwen(args, model):
     for layer in range(model.config.num_hidden_layers):
         layer_obj = model.model.layers[layer]
         
-        # 探测第一层的实际属性
-        if layer == 0:
-            print(f"探测 Qwen3.5 层结构...")
-            print(f"  层类型: {type(layer_obj)}")
-            print(f"  子模块: {[name for name, _ in layer_obj.named_children()]}")
-        
-        # 兼容 Qwen2 和 Qwen3.5 (尝试多种属性名)
+        # 兼容 Qwen2 和 Qwen3.5
         attn_module = None
         attn_attr_name = None
-        for attr_name in ['self_attn', 'attention', 'attn']:
+        for attr_name in ['self_attn', 'attention', 'attn', 'linear_attn']:
             if hasattr(layer_obj, attr_name):
                 attn_module = getattr(layer_obj, attr_name)
                 attn_attr_name = attr_name
                 break
         
         if attn_module is None:
-            raise AttributeError(f"层 {layer} 没有找到 attention 模块。尝试的属性: self_attn, attention, attn")
+            raise AttributeError(f"层 {layer} 没有找到 attention 模块")
         
         mlp_module = None
         mlp_attr_name = None
@@ -353,7 +347,7 @@ def apply_flatquant_to_qwen(args, model):
                 break
         
         if mlp_module is None:
-            raise AttributeError(f"层 {layer} 没有找到 MLP 模块。尝试的属性: mlp, feed_forward, mlp_act")
+            raise AttributeError(f"层 {layer} 没有找到 MLP 模块")
         
         # 替换为 FlatQuant 版本
         setattr(layer_obj, attn_attr_name, FlatQuantQwen2Attention(args, attn_module))
