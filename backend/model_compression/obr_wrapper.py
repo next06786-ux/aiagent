@@ -89,10 +89,10 @@ class OBRCompressor:
         
         # FlatQuant 参数
         args.flat_lr = 1e-5
-        args.cali_trans = True
-        args.add_diag = True
-        args.lwc = False
-        args.lac = False
+        args.cali_trans = True      # ✅ 启用校准变换学习
+        args.add_diag = True         # ✅ 启用 per-channel 缩放
+        args.lwc = False             # 可选：learnable weight clipping
+        args.lac = False             # 可选：learnable activation clipping
         args.resume = False
         args.save_matrix = False
         args.reload_matrix = False
@@ -103,6 +103,19 @@ class OBRCompressor:
         args.deactive_amp = False
         args.direct_inv = False
         args.separate_vtrans = False
+        
+        # ✅ 激活量化参数
+        if args.a_bits < 16:
+            args.a_asym = False     # 激活量化为对称量化
+            args.a_groupsize = -1   # 全局量化
+        
+        # ✅ KV cache 量化参数  
+        args.q_asym = False         # Query 对称量化
+        args.q_groupsize = -1
+        args.k_asym = True          # Key 非对称量化
+        args.k_groupsize = 128      # Key per-group 量化
+        args.v_asym = True          # Value 非对称量化
+        args.v_groupsize = 128      # Value per-group 量化
         
         # 输出参数
         args.output_dir = self.output_dir
@@ -189,17 +202,35 @@ class OBRCompressor:
             if args.quantize:
                 logger.info(f"\n应用 FlatQuant 量化...")
                 model = apply_flatquant_to_model(args, model)
-                
-                if args.cali_trans or args.add_diag or args.lwc or args.lac:
-                    logger.info(f"执行校准训练...")
-                    train_utils.cali_flat_quant(args, model, trainloader, utils.DEV, logger=logger)
-                
-                flat_utils.reparameterize_model(model)
                 logger.info(f"FlatQuant 应用完成")
             
-            # OBR 量化
+            # 校准训练 - 学习最优变换矩阵
+            if args.cali_trans or args.add_diag or args.lwc or args.lac:
+                logger.info(f"\n执行 FlatQuant 校准训练...")
+                logger.info(f"  - 在 {args.nsamples} 个校准样本上微调变换矩阵")
+                logger.info(f"  - cali_trans: {args.cali_trans}")
+                logger.info(f"  - add_diag: {args.add_diag}")
+                logger.info(f"  - lwc: {args.lwc} (learnable weight clipping)")
+                logger.info(f"  - lac: {args.lac} (learnable activation clipping)")
+                
+                train_utils.cali_flat_quant(args, model, trainloader, utils.DEV, logger=logger)
+                logger.info(f"校准训练完成")
+            
+            # 重参数化模型 - 应用学到的变换
+            if args.quantize:
+                logger.info(f"\n执行模型重参数化...")
+                flat_utils.reparameterize_model(model)
+                logger.info(f"重参数化完成")
+            
+            # OBR 量化 - 执行核心算法：GPTQ + WANDA 稀疏化 + Hessian 补偿
             if args.w_bits < 16 and not args.load_qmodel_path:
                 logger.info(f"\n执行 OBR 联合量化+稀疏化...")
+                logger.info(f"  - 权重量化: {args.w_bits}-bit")
+                logger.info(f"  - 激活量化: {args.a_bits}-bit")
+                logger.info(f"  - KV cache 量化: K{args.k_bits}V{args.v_bits}")
+                logger.info(f"  - 稀疏度: {args.sparsity_ratio*100:.0f}%")
+                logger.info(f"  - 方法: GPTQ + WANDA + Hessian 补偿")
+                
                 quantizers = obr_utils.obr_fwrd(model, trainloader, utils.DEV, args)
                 logger.info(f"OBR 压缩完成")
             

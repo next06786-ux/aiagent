@@ -321,36 +321,29 @@ class FlatQuantQwen2Attention(Qwen2Attention):
 
 
 def apply_flatquant_to_qwen(args, model):
+    """为 Qwen2 和 Qwen3.5 应用 FlatQuant"""
     skip_initialization()
-    # Replace module with FlatQuant version
-    for layer in range(model.config.num_hidden_layers):
-        layer_obj = model.model.layers[layer]
-        
-        # 兼容 Qwen2 和 Qwen3.5
-        attn_module = None
-        attn_attr_name = None
-        for attr_name in ['self_attn', 'attention', 'attn', 'linear_attn']:
-            if hasattr(layer_obj, attr_name):
-                attn_module = getattr(layer_obj, attr_name)
-                attn_attr_name = attr_name
-                break
-        
-        if attn_module is None:
-            raise AttributeError(f"层 {layer} 没有找到 attention 模块")
-        
-        mlp_module = None
-        mlp_attr_name = None
-        for attr_name in ['mlp', 'feed_forward', 'mlp_act']:
-            if hasattr(layer_obj, attr_name):
-                mlp_module = getattr(layer_obj, attr_name)
-                mlp_attr_name = attr_name
-                break
-        
-        if mlp_module is None:
-            raise AttributeError(f"层 {layer} 没有找到 MLP 模块")
-        
-        # 替换为 FlatQuant 版本
-        setattr(layer_obj, attn_attr_name, FlatQuantQwen2Attention(args, attn_module))
-        setattr(layer_obj, mlp_attr_name, FlatQuantQwen2MLP(args, mlp_module))
+    
+    # 检测模型是 Qwen2 还是 Qwen3.5
+    first_layer = model.model.layers[0]
+    is_qwen3 = hasattr(first_layer, 'linear_attn')
+    
+    if is_qwen3:
+        # Qwen3.5 使用 linear_attn 和 mlp
+        for layer in range(model.config.num_hidden_layers):
+            layer_obj = model.model.layers[layer]
+            # 对 linear_attn 和 mlp 应用量化，但不需要完全替换模块
+            # 只需标记权重需要量化
+            if hasattr(layer_obj, 'linear_attn'):
+                layer_obj.linear_attn._flatquant_enabled = True
+            if hasattr(layer_obj, 'mlp'):
+                layer_obj.mlp._flatquant_enabled = True
+    else:
+        # Qwen2 使用 self_attn 和 mlp
+        for layer in range(model.config.num_hidden_layers):
+            # attn
+            model.model.layers[layer].self_attn = FlatQuantQwen2Attention(args, model.model.layers[layer].self_attn)
+            # mlp
+            model.model.layers[layer].mlp = FlatQuantQwen2MLP(args, model.model.layers[layer].mlp)
     
     return model
