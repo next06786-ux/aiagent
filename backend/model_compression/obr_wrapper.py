@@ -169,10 +169,10 @@ class OBRCompressor:
             utils.seed_everything(seed=args.seed)
             logger.info(f"\n加载模型: {self.model_name}")
             
-            model, apply_flatquant_to_model = model_utils.get_model(args.model, args.hf_token)
+            model, apply_flatquant_to_model = model_utils.get_model(args.model, None)  # 传 None 而不是 hf_token
             model.eval()
             tokenizer = transformers.AutoTokenizer.from_pretrained(
-                args.model, use_fast=False, use_auth_token=args.hf_token
+                args.model, use_fast=False, trust_remote_code=True
             )
             
             # 加载校准数据
