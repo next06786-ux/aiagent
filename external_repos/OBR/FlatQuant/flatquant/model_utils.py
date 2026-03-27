@@ -83,12 +83,16 @@ def skip_initialization():
 def get_llama(model_name, hf_token):
     skip_initialization()
     config = transformers.LlamaConfig.from_pretrained(model_name)
-    config._attn_implementation_internal = "eager"
+    if hasattr(config, '_attn_implementation_internal'):
+        config._attn_implementation_internal = "eager"
+    elif hasattr(config, '_attn_implementation'):
+        config._attn_implementation = "eager"
+    
     model = transformers.LlamaForCausalLM.from_pretrained(model_name,
                                                           torch_dtype='auto',
-                                                          config=config,
-                                                          use_auth_token=hf_token,
-                                                          low_cpu_mem_usage=True)
+                                                          device_map='auto',
+                                                          low_cpu_mem_usage=True,
+                                                          trust_remote_code=True)
     model.seqlen = 2048
     logging.info(f'---> Loading {model_name} Model with seq_len: {model.seqlen}')
     return model, apply_flatquant_to_llama
@@ -97,12 +101,16 @@ def get_llama(model_name, hf_token):
 def get_llama_31(model_name, hf_token):
     skip_initialization()
     config = transformers.LlamaConfig.from_pretrained(model_name)
-    config._attn_implementation_internal = "eager"
+    if hasattr(config, '_attn_implementation_internal'):
+        config._attn_implementation_internal = "eager"
+    elif hasattr(config, '_attn_implementation'):
+        config._attn_implementation = "eager"
+    
     model = transformers.LlamaForCausalLM.from_pretrained(model_name,
                                                           torch_dtype='auto',
-                                                          config=config,
-                                                          use_auth_token=hf_token,
-                                                          low_cpu_mem_usage=True)
+                                                          device_map='auto',
+                                                          low_cpu_mem_usage=True,
+                                                          trust_remote_code=True)
     model.seqlen = 2048
     logging.info(f'---> Loading {model_name} Model with seq_len: {model.seqlen}')
     return model, apply_flatquant_to_llama_31
@@ -151,6 +159,9 @@ def get_model(model_name, hf_token=None):
         return get_llama_31(model_name, hf_token)
     elif 'llama' in model_name:
         return get_llama(model_name, hf_token)
+    elif 'qwen3' in model_name.lower() or 'qwen-3' in model_name.lower():
+        # Qwen3 使用 Qwen2 的架构和工具
+        return get_qwen2(model_name, hf_token)
     elif 'qwen' in model_name or 'Qwen' in model_name:
         return get_qwen2(model_name, hf_token)
     else:
