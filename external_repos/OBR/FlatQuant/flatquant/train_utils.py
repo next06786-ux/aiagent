@@ -118,11 +118,13 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                     if "position_embeddings" in str(e):
                         # Qwen3.5 需要 position_embeddings
                         if hasattr(model.model, 'rotary_emb'):
+                            # 确保 position_ids 在正确设备上
+                            pos_ids = position_ids.to(dev) if position_ids is not None else None
                             # Qwen3.5 rotary_emb 需要 (input_tensor, position_ids) 两个参数
-                            position_embeddings = model.model.rotary_emb(fp_inps[j].unsqueeze(0), position_ids)
+                            position_embeddings = model.model.rotary_emb(fp_inps[j].unsqueeze(0).to(dev), pos_ids)
                         else:
                             position_embeddings = None
-                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0).to(dev), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                     else:
                         raise
         attn_module._ori_mode = False
@@ -176,10 +178,12 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                         if "position_embeddings" in str(e):
                             # Qwen3.5 需要 position_embeddings
                             if hasattr(model.model, 'rotary_emb'):
-                                position_embeddings = model.model.rotary_emb(fp_inps[index:index+args.cali_bsz,], position_ids)
+                                # 确保张量在正确设备上
+                                pos_ids = position_ids.to(dev) if position_ids is not None else None
+                                position_embeddings = model.model.rotary_emb(fp_inps[index:index+args.cali_bsz,].to(dev), pos_ids)
                             else:
                                 position_embeddings = None
-                            quant_out = layer(fp_inps[index:index+args.cali_bsz,], attention_mask=attention_mask_batch, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                            quant_out = layer(fp_inps[index:index+args.cali_bsz,].to(dev), attention_mask=attention_mask_batch, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                         else:
                             raise
                     
