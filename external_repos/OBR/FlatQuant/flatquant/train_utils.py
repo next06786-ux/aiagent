@@ -44,12 +44,15 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
         def __init__(self, module):
             super().__init__()
             self.module = module
+            # 兼容 Qwen3.5：保留原模块的属性
+            if hasattr(module, 'layer_type'):
+                self.layer_type = module.layer_type
 
         def forward(self, inp, **kwargs):
             inps[cache["i"]] = inp
             cache["i"] += 1
-            cache["attention_mask"] = kwargs["attention_mask"]
-            cache["position_ids"] = kwargs["position_ids"]
+            cache["attention_mask"] = kwargs.get("attention_mask", None)
+            cache["position_ids"] = kwargs.get("position_ids", None)
             raise ValueError
     layers[0] = Catcher(layers[0])
     with torch.no_grad():
