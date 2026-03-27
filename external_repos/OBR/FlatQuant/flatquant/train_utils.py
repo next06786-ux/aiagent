@@ -114,14 +114,17 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                 try:
                     # 尝试 Qwen2 的签名
                     fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
-                except TypeError:
-                    # Qwen3.5 需要 position_embeddings，从 position_ids 生成
-                    if hasattr(model.model, 'rotary_emb'):
-                        # Qwen3.5 的 rotary_emb 需要 position_ids 参数
-                        position_embeddings = model.model.rotary_emb(position_ids)
+                except TypeError as e:
+                    if "position_embeddings" in str(e):
+                        # Qwen3.5 需要 position_embeddings
+                        if hasattr(model.model, 'rotary_emb'):
+                            # Qwen3.5 rotary_emb 需要 (input_tensor, position_ids) 两个参数
+                            position_embeddings = model.model.rotary_emb(fp_inps[j].unsqueeze(0), position_ids)
+                        else:
+                            position_embeddings = None
+                        fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                     else:
-                        position_embeddings = None
-                    fp_outs[j] = layer(fp_inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                        raise
         attn_module._ori_mode = False
         mlp_module._ori_mode = False
         
@@ -169,13 +172,16 @@ def cali_flat_quant(args, model, dataloader, dev, logger):
                     try:
                         # 尝试 Qwen2 的签名
                         quant_out = layer(fp_inps[index:index+args.cali_bsz,], attention_mask=attention_mask_batch, position_ids=position_ids)[0]
-                    except TypeError:
-                        # Qwen3.5 需要 position_embeddings
-                        if hasattr(model.model, 'rotary_emb'):
-                            position_embeddings = model.model.rotary_emb(position_ids)
+                    except TypeError as e:
+                        if "position_embeddings" in str(e):
+                            # Qwen3.5 需要 position_embeddings
+                            if hasattr(model.model, 'rotary_emb'):
+                                position_embeddings = model.model.rotary_emb(fp_inps[index:index+args.cali_bsz,], position_ids)
+                            else:
+                                position_embeddings = None
+                            quant_out = layer(fp_inps[index:index+args.cali_bsz,], attention_mask=attention_mask_batch, position_ids=position_ids, position_embeddings=position_embeddings)[0]
                         else:
-                            position_embeddings = None
-                        quant_out = layer(fp_inps[index:index+args.cali_bsz,], attention_mask=attention_mask_batch, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+                            raise
                     
                     loss = loss_func(fp_outs[index:index+args.cali_bsz,], quant_out)
                     mse += loss.detach().cpu()
