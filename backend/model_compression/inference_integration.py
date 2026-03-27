@@ -35,17 +35,25 @@ class QuantizedModelLoader:
         }
     
     def find_quantized_model(self, base_model_name: str) -> Optional[str]:
-        """查找已量化的模型"""
+        """查找已量化的模型（支持 OBR 压缩格式和标准格式）"""
         quantized_candidates = [
             f"models/{base_model_name}-w4a4kv4-s50",
             f"models/{base_model_name}-q4",
             f"models/{base_model_name}-quantized",
+            f"models/qwen-obr",  # OBR 默认输出路径
         ]
         
         for path in quantized_candidates:
             if os.path.exists(path):
-                config_file = os.path.join(path, "compression_config.json")
-                if os.path.exists(config_file):
+                # 检查是否有 OBR 压缩的 state_dict
+                obr_model_pt = os.path.join(path, "quantized_model.pt")
+                if os.path.exists(obr_model_pt):
+                    logger.info(f"找到 OBR 压缩模型: {path}")
+                    return path
+                # 检查标准 HuggingFace 格式
+                config_file = os.path.join(path, "config.json")
+                compression_config = os.path.join(path, "compression_config.json")
+                if os.path.exists(config_file) or os.path.exists(compression_config):
                     logger.info(f"找到量化模型: {path}")
                     return path
         
@@ -99,6 +107,69 @@ class QuantizedModelLoader:
         
         self.last_loaded_model = model
         self.last_loaded_path = model_name_or_path
+        
+        return model, tokenizer
+    
+    def load_obr_compressed_model(
+        self,
+        model_dir: str,
+        original_model_name: str,
+        device_map: str = "auto"
+    ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
+        """
+        加载 OBR FlatQuant 压缩后的模型
+        
+        OBR 压缩输出的是 state_dict（quantized_model.pt），
+        需要先加载原始模型结构，再替换权重。
+        
+        Args:
+            model_dir: OBR 压缩输出目录（包含 quantized_model.pt）
+            original_model_name: 原始模型名称（用于加载模型结构和 tokenizer）
+            device_map: 设备映射
+        
+        Returns:
+            (model, tokenizer)
+        """
+        import torch as _torch
+        
+        obr_weights_path = os.path.join(model_dir, "quantized_model.pt")
+        if not os.path.exists(obr_weights_path):
+            raise FileNotFoundError(f"OBR 压缩模型不存在: {obr_weights_path}")
+        
+        logger.info(f"加载 OBR 压缩模型: {model_dir}")
+        logger.info(f"  原始模型结构: {original_model_name}")
+        
+        # 1. 加载原始模型结构（低精度以节省内存）
+        model = AutoModelForCausalLM.from_pretrained(
+            original_model_name,
+            torch_dtype=_torch.float16,
+            device_map=device_map,
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+        )
+        
+        # 2. 加载 OBR 压缩后的 state_dict
+        logger.info(f"加载 OBR 权重: {obr_weights_path}")
+        compressed_state_dict = _torch.load(obr_weights_path, map_location="cpu")
+        
+        # 3. 替换权重
+        missing, unexpected = model.load_state_dict(compressed_state_dict, strict=False)
+        if missing:
+            logger.warning(f"缺失的权重 ({len(missing)}): {missing[:5]}...")
+        if unexpected:
+            logger.warning(f"多余的权重 ({len(unexpected)}): {unexpected[:5]}...")
+        
+        # 4. 加载 tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            original_model_name,
+            trust_remote_code=True
+        )
+        
+        vram_gb = _torch.cuda.memory_allocated() / 1024**3 if _torch.cuda.is_available() else 0
+        logger.info(f"✓ OBR 压缩模型加载完成 (VRAM: {vram_gb:.2f} GB)")
+        
+        self.last_loaded_model = model
+        self.last_loaded_path = model_dir
         
         return model, tokenizer
     
@@ -177,19 +248,34 @@ class QuantizedModelLoader:
             )
             
             if quantized_path:
+                # 检查是否是 OBR 压缩格式
+                obr_model_pt = os.path.join(quantized_path, "quantized_model.pt")
+                if os.path.exists(obr_model_pt):
+                    model, tokenizer = self.load_obr_compressed_model(
+                        model_dir=quantized_path,
+                        original_model_name=model_name,
+                        device_map=device_map
+                    )
+                    metadata["quantized"] = True
+                    metadata["quantization_type"] = "obr_flatquant"
+                    metadata["quantized_path"] = quantized_path
+                else:
+                    model, tokenizer = self.load_with_quantization(
+                        quantized_path,
+                        quantization_type="int4",
+                        device_map=device_map
+                    )
+                    metadata["quantized"] = True
+                    metadata["quantization_type"] = "int4"
+            else:
+                logger.info("未找到量化模型，使用 bitsandbytes 动态量化加载")
                 model, tokenizer = self.load_with_quantization(
-                    quantized_path,
+                    model_name,
                     quantization_type="int4",
                     device_map=device_map
                 )
                 metadata["quantized"] = True
-                metadata["quantization_type"] = "int4"
-            else:
-                logger.info("未找到量化模型，使用原始模型加载")
-                model, tokenizer = self.load_without_quantization(
-                    model_name,
-                    device_map=device_map
-                )
+                metadata["quantization_type"] = "int4_dynamic"
         else:
             model, tokenizer = self.load_without_quantization(
                 model_name,

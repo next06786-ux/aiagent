@@ -14,6 +14,166 @@ from transformers.models.qwen2.modeling_qwen2 import Qwen2MLP, Qwen2Attention, \
                                                      apply_rotary_pos_emb, repeat_kv
 
 
+# ============================================================
+# Qwen3.5 专用 FlatQuant 包装类
+# Qwen3.5 使用 GatedDeltaNet 线性注意力机制
+# ============================================================
+
+class FlatQuantQwen3MLP(torch.nn.Module):
+    """Qwen3.5 MLP FlatQuant 包装（结构与 Qwen2 相同）"""
+    def __init__(self, args, module):
+        super().__init__()
+        self.args = args
+        self.hidden_size = module.hidden_size
+        self.intermediate_size = module.intermediate_size
+        self.act_fn = module.act_fn
+        self.up_proj = FlatQuantizedLinear(args, module.up_proj)
+        self.gate_proj = FlatQuantizedLinear(args, module.gate_proj)
+        self.down_proj = FlatQuantizedLinear(args, module.down_proj)
+        self.add_fq_trans()
+        self._ori_mode = False
+        self._eval_mode = False
+        self.diag_init = args.diag_init
+        if self.diag_init == "sq_style":
+            self.up_smax = torch.ones_like(self.up_proj.linear.weight.abs().max(dim=0)[0]).cuda() * 1e-5
+            self.down_smax = torch.ones_like(self.down_proj.linear.weight.abs().max(dim=0)[0]).cuda() * 1e-5
+
+    def add_fq_trans(self):
+        if self.args.direct_inv:
+            SingleTransMatrix, DecomposeTransMatrix = InvSingleTransMatrix, InvDecomposeTransMatrix
+        else:
+            SingleTransMatrix, DecomposeTransMatrix = SVDSingleTransMatrix, SVDDecomposeTransMatrix
+        if self.args.w_bits < 16 or self.args.a_bits < 16:
+            up_dim_left, up_dim_right = get_decompose_dim(self.up_proj.linear.weight.shape[1])
+            self.up_gate_trans = DecomposeTransMatrix(up_dim_left, up_dim_right, add_diag=self.args.add_diag)
+            self.down_trans = SingleTransMatrix(self.intermediate_size)
+        else:
+            self.up_gate_trans, self.down_trans = None, None
+
+    def forward(self, x):
+        if self._ori_mode:
+            return self._ori_forward(x)
+        if self.up_gate_trans is not None:
+            x = self.up_gate_trans(x)
+        gate = self.gate_proj(x, qa_trans=self.up_gate_trans)
+        up = self.up_proj(x, qa_trans=self.up_gate_trans, out_trans=self.down_trans)
+        gate = self.act_fn(gate)
+        down_input = gate * up
+        if self.down_trans is not None:
+            down_input = self.down_trans(down_input, inv_t=True)
+        down = self.down_proj(down_input)
+        return down
+
+    def _ori_forward(self, x):
+        if self.diag_init == "sq_style" and hasattr(self, "up_smax"):
+            self.up_smax = torch.maximum(self.up_smax,
+                x.reshape(-1, x.shape[-1]).abs().max(0)[0].clone().detach())
+        return self.down_proj._ori_forward(
+            self.act_fn(self.gate_proj._ori_forward(x)) * self.up_proj._ori_forward(x))
+
+    def reparameterize(self):
+        if self.up_gate_trans is not None:
+            self.up_gate_trans.to_eval_mode()
+        if self.down_trans is not None:
+            self.down_trans.to_eval_mode()
+        self._eval_mode = True
+
+    def init_diag_scale(self, alpha=0.5):
+        if not hasattr(self, "up_smax"):
+            return
+        upw_smax = torch.cat([self.up_proj.linear.weight, self.gate_proj.linear.weight], dim=0).abs().max(dim=0)[0]
+        downw_smax = self.down_proj.linear.weight.abs().max(dim=0)[0]
+        if self.up_gate_trans is not None:
+            self.up_gate_trans.diag_scale.data = get_init_scale(upw_smax, self.up_smax, alpha)
+        if self.down_trans is not None:
+            self.down_trans.diag_scale.data = get_init_scale(downw_smax, self.down_smax, alpha)
+        del self.up_smax, self.down_smax
+        self.diag_init = None
+
+    def rep_matrix_only(self):
+        if self.up_gate_trans is not None:
+            self.up_gate_trans.to_eval_mode()
+            self.down_trans.to_eval_mode()
+
+
+class FlatQuantQwen3Attention(torch.nn.Module):
+    """Qwen3.5 GatedDeltaNet 线性注意力 FlatQuant 包装"""
+    def __init__(self, args, module):
+        super().__init__()
+        self.args = args
+        self._module = module  # 保留原模块用于 forward
+        
+        # Qwen3.5 用 in_proj_qkv (合并的 QKV 投影) 和 out_proj
+        if hasattr(module, 'in_proj_qkv'):
+            self.in_proj_qkv = FlatQuantizedLinear(args, module.in_proj_qkv)
+        if hasattr(module, 'out_proj'):
+            self.out_proj = FlatQuantizedLinear(args, module.out_proj)
+        # 其他投影层也量化
+        for name in ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'k_gate', 'q_gate',
+                     'in_proj', 'gate_proj', 'a_proj', 'b_proj', 'g_proj']:
+            if hasattr(module, name):
+                setattr(self, name, FlatQuantizedLinear(args, getattr(module, name)))
+        
+        # 添加 FlatQuant 变换矩阵
+        self.add_fq_trans()
+        self._ori_mode = False
+        self._eval_mode = False
+        self.diag_init = args.diag_init
+        hidden_size = module.hidden_size if hasattr(module, 'hidden_size') else \
+                      module.in_proj_qkv.weight.shape[1] if hasattr(module, 'in_proj_qkv') else 4096
+        if self.diag_init == "sq_style":
+            self.ln_smax = torch.ones(hidden_size).cuda() * 1e-5
+
+    def add_fq_trans(self):
+        if self.args.direct_inv:
+            SingleTransMatrix, DecomposeTransMatrix = InvSingleTransMatrix, InvDecomposeTransMatrix
+        else:
+            SingleTransMatrix, DecomposeTransMatrix = SVDSingleTransMatrix, SVDDecomposeTransMatrix
+        
+        # 获取 hidden_size
+        if hasattr(self._module, 'in_proj_qkv'):
+            hidden_size = self._module.in_proj_qkv.weight.shape[1]
+        elif hasattr(self._module, 'hidden_size'):
+            hidden_size = self._module.hidden_size
+        else:
+            hidden_size = 4096
+        
+        if self.args.w_bits < 16 or self.args.a_bits < 16:
+            ln_dim_left, ln_dim_right = get_decompose_dim(hidden_size)
+            self.ln_trans = DecomposeTransMatrix(ln_dim_left, ln_dim_right, add_diag=self.args.add_diag)
+        else:
+            self.ln_trans = None
+
+    def forward(self, *args, **kwargs):
+        # 如果是原始模式，直接调用原模块
+        if self._ori_mode:
+            return self._module(*args, **kwargs)
+        # 正常模式：应用变换后调用原模块
+        # 注意：FlatQuant 的量化已通过 FlatQuantizedLinear 应用
+        return self._module(*args, **kwargs)
+
+    def init_diag_scale(self, alpha=0.5):
+        if not hasattr(self, "ln_smax"):
+            return
+        if self.ln_trans is not None and hasattr(self, 'ln_smax'):
+            if hasattr(self, 'in_proj_qkv'):
+                w_smax = self.in_proj_qkv.linear.weight.abs().max(dim=0)[0]
+            else:
+                w_smax = torch.ones_like(self.ln_smax)
+            self.ln_trans.diag_scale.data = get_init_scale(w_smax, self.ln_smax, alpha)
+        del self.ln_smax
+        self.diag_init = None
+
+    def reparameterize(self):
+        if self.ln_trans is not None:
+            self.ln_trans.to_eval_mode()
+        self._eval_mode = True
+
+    def rep_matrix_only(self):
+        if self.ln_trans is not None:
+            self.ln_trans.to_eval_mode()
+
+
 
 class FlatQuantQwen2MLP(torch.nn.Module):
     def __init__(self, args, module: Qwen2MLP):
@@ -329,21 +489,15 @@ def apply_flatquant_to_qwen(args, model):
     is_qwen3 = hasattr(first_layer, 'linear_attn')
     
     if is_qwen3:
-        # Qwen3.5 使用 linear_attn 和 mlp
+        # Qwen3.5 使用 linear_attn (GatedDeltaNet) 和 mlp
         for layer in range(model.config.num_hidden_layers):
             layer_obj = model.model.layers[layer]
-            # 对 linear_attn 和 mlp 应用量化，但不需要完全替换模块
-            # 只需标记权重需要量化
-            if hasattr(layer_obj, 'linear_attn'):
-                layer_obj.linear_attn._flatquant_enabled = True
-            if hasattr(layer_obj, 'mlp'):
-                layer_obj.mlp._flatquant_enabled = True
+            layer_obj.linear_attn = FlatQuantQwen3Attention(args, layer_obj.linear_attn)
+            layer_obj.mlp = FlatQuantQwen3MLP(args, layer_obj.mlp)
     else:
         # Qwen2 使用 self_attn 和 mlp
         for layer in range(model.config.num_hidden_layers):
-            # attn
             model.model.layers[layer].self_attn = FlatQuantQwen2Attention(args, model.model.layers[layer].self_attn)
-            # mlp
             model.model.layers[layer].mlp = FlatQuantQwen2MLP(args, model.model.layers[layer].mlp)
     
     return model

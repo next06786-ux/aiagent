@@ -113,6 +113,18 @@ struct EnhancedDecisionFlow {
     }
   }
 
+  aboutToDisappear() {
+    // 清理通话计时器
+    if (this.callTimer !== -1) {
+      clearInterval(this.callTimer)
+      this.callTimer = -1
+    }
+    // 停止录音
+    if (this.isRecording) {
+      this.stopRecording()
+    }
+  }
+
   // 开始信息收集
   private async startCollection() {
     if (!this.initialQuestion.trim()) {
@@ -594,63 +606,133 @@ struct EnhancedDecisionFlow {
 
       // 输入框
       if (this.currentPhase !== 'simulation' && this.currentPhase !== 'result') {
-        Row({ space: 8 }) {
-          // 图片按钮
-          Button({ type: ButtonType.Circle }) {
-            Text('+').fontSize(18).fontColor('#666')
-          }.width(36).height(36).backgroundColor('#F0F0F0')
-          .onClick(() => { this.pickImage() })
-
-          // 语音按钮 - 按住说话，松手发送
-          Column() {
-            Text(this.isRecording ? '●' : '○').fontSize(16)
-              .fontColor(this.isRecording ? '#FF3B30' : '#666')
-            Text(this.isRecording ? '松手发送' : '按住说话')
-              .fontSize(8)
-              .fontColor(this.isRecording ? '#FF3B30' : '#999')
-          }
-          .width(52).height(36)
-          .justifyContent(FlexAlign.Center)
-          .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.08)' : '#F0F0F0')
-          .borderRadius(8)
-          .border({ width: this.isRecording ? 1 : 0, color: '#FF3B30' })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.startRecording()
-            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-              if (this.isRecording) { this.stopRecording() }
+        Column() {
+          // 主输入栏
+          Row({ space: 8 }) {
+            // 左：拍照
+            Button({ type: ButtonType.Circle }) {
+              SimpleIcon({ iconName: 'camera', iconSize: 20, color: '#666' })
             }
-          })
-
-          TextInput({
-            placeholder: this.getInputPlaceholder(),
-            text: this.userInput
-          })
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(15)
-            .backgroundColor(Color.White)
-            .borderRadius(20)
-            .padding({ left: 14, right: 14 })
-            .onChange((value: string) => {
-              this.userInput = value
-            })
-
-          Button('发送')
-            .width(70)
-            .height(44)
-            .fontSize(16)
-            .fontWeight(600)
-            .fontColor(Color.White)
-            .backgroundColor('#007AFF')
-            .borderRadius(22)
-            .enabled(!this.isLoading && this.userInput.trim().length > 0)
+            .width(38).height(38)
+            .backgroundColor('#F2F2F7')
+            .border({ width: 0.5, color: '#E0E0E0' })
             .onClick(() => {
-              this.continueCollection()
+              this.showPlusMenu = false
+              this.getUIContext().getRouter().pushUrl({ url: 'pages/Camera' })
             })
+
+            // 中：输入框 或 按住说话
+            if (this.isVoiceMode) {
+              Column() {
+                SimpleIcon({ iconName: 'mic', iconSize: 16,
+                  color: this.isRecording ? '#FF3B30' : '#666' })
+                Text(this.isRecording ? '松开发送' : '按住说话')
+                  .fontSize(13).fontWeight(600)
+                  .fontColor(this.isRecording ? '#FF3B30' : '#666')
+              }
+              .layoutWeight(1).height(40)
+              .justifyContent(FlexAlign.Center)
+              .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.08)' : '#F2F2F7')
+              .borderRadius(20)
+              .border({ width: this.isRecording ? 1.5 : 0.5,
+                color: this.isRecording ? '#FF3B30' : '#E0E0E0' })
+              .onTouch((event: TouchEvent) => {
+                if (event.type === TouchType.Down) { this.startRecording() }
+                else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                  if (this.isRecording) { this.stopRecording() }
+                }
+              })
+            } else {
+              TextInput({ placeholder: this.getInputPlaceholder(), text: this.userInput })
+                .layoutWeight(1).height(40).fontSize(15)
+                .fontColor('#1A1A1A').placeholderColor('#999')
+                .backgroundColor('#F2F2F7')
+                .borderRadius(20)
+                .border({ width: 0.5, color: '#E0E0E0' })
+                .padding({ left: 14, right: 14 })
+                .onChange((value: string) => { this.userInput = value; this.showPlusMenu = false })
+            }
+
+            // 右1：语音/文本切换
+            Button({ type: ButtonType.Circle }) {
+              SimpleIcon({ iconName: this.isVoiceMode ? 'keyboard' : 'mic', iconSize: 20,
+                color: this.isVoiceMode ? '#007AFF' : '#666' })
+            }
+            .width(38).height(38)
+            .backgroundColor(this.isVoiceMode ? 'rgba(0,122,255,0.08)' : '#F2F2F7')
+            .border({ width: 0.5, color: this.isVoiceMode ? '#007AFF' : '#E0E0E0' })
+            .onClick(() => {
+              this.isVoiceMode = !this.isVoiceMode
+              this.showPlusMenu = false
+              if (!this.isVoiceMode) { this.userInput = '' }
+            })
+
+            // 右2：加号按钮 或 发送按钮（文本模式有内容时变发送）
+            if (!this.isVoiceMode && this.userInput.trim().length > 0) {
+              Button({ type: ButtonType.Circle }) {
+                SimpleIcon({ iconName: 'send', iconSize: 18, color: '#FFFFFF' })
+              }
+              .width(38).height(38)
+              .backgroundColor(this.isLoading ? '#CCCCCC' : '#007AFF')
+              .enabled(!this.isLoading)
+              .onClick(() => { this.continueCollection() })
+            } else {
+              Button({ type: ButtonType.Circle }) {
+                Text(this.showPlusMenu ? '×' : '+')
+                  .fontSize(22).fontWeight(300)
+                  .fontColor(this.showPlusMenu ? '#FF3B30' : '#666')
+              }
+              .width(38).height(38)
+              .backgroundColor(this.showPlusMenu ? 'rgba(255,59,48,0.08)' : '#F2F2F7')
+              .border({ width: 0.5, color: this.showPlusMenu ? '#FF3B30' : '#E0E0E0' })
+              .onClick(() => { this.showPlusMenu = !this.showPlusMenu })
+            }
+          }
+          .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 14 })
+          .border({ width: { top: 0.5 }, color: '#E0E0E0' })
+
+          // 加号展开菜单
+          if (this.showPlusMenu) {
+            Row({ space: 24 }) {
+              // 相册
+              Column({ space: 6 }) {
+                Button({ type: ButtonType.Circle }) {
+                  SimpleIcon({ iconName: 'image', iconSize: 24, color: '#007AFF' })
+                }
+                .width(52).height(52)
+                .backgroundColor('rgba(0,122,255,0.08)')
+                .border({ width: 1, color: 'rgba(0,122,255,0.15)' })
+                .onClick(() => { this.showPlusMenu = false; this.pickImage() })
+                Text('相册').fontSize(12).fontColor('#666')
+              }.alignItems(HorizontalAlign.Center)
+
+              // 通话
+              Column({ space: 6 }) {
+                Button({ type: ButtonType.Circle }) {
+                  SimpleIcon({ iconName: this.isInCall ? 'end_call' : 'phone', iconSize: 24,
+                    color: this.isInCall ? '#FFFFFF' : '#00C853' })
+                }
+                .width(52).height(52)
+                .backgroundColor(this.isInCall ? '#FF3B30' : 'rgba(0,200,83,0.10)')
+                .border({ width: 1, color: this.isInCall ? '#FF3B30' : 'rgba(0,200,83,0.2)' })
+                .onClick(() => {
+                  this.showPlusMenu = false
+                  if (this.isInCall) { this.endCall() } else { this.startCall() }
+                })
+                Text(this.isInCall ? this.callDurationText : '通话')
+                  .fontSize(12)
+                  .fontColor(this.isInCall ? '#FF3B30' : '#666')
+              }.alignItems(HorizontalAlign.Center)
+            }
+            .width('100%')
+            .padding({ left: 24, right: 24, top: 12, bottom: 16 })
+            .backgroundColor('#F8F8F8')
+            .border({ width: { top: 0.5 }, color: '#E0E0E0' })
+            .justifyContent(FlexAlign.Start)
+            .animation({ duration: 200, curve: Curve.EaseOut })
+          }
         }
         .width('100%')
-        .padding(16)
         .backgroundColor(Color.White)
       } else if (this.currentPhase === 'simulation') {
         // 显示开始模拟按钮
@@ -911,42 +993,89 @@ struct EnhancedDecisionFlow {
           const httpRequest = http.createHttp()
           const response = await httpRequest.request(
             `${ApiConfig.getApiUrl('/api/chat/upload-image')}?user_id=${this.userId}`,
-            {
-              method: http.RequestMethod.POST,
-              header: { 'Content-Type': 'multipart/form-data' },
-              multiFormDataList: [{
-                name: 'file', contentType: 'image/jpeg',
-                remoteFileName: 'image.jpg', filePath: this.selectedImageUri
-              }],
-              connectTimeout: 30000, readTimeout: 30000
-            }
-          )
-          httpRequest.destroy()
-          if (response.responseCode === 200) {
-            const res = JSON.parse(response.result as string) as Record<string, Object>
-            const data = res.data as Record<string, string>
-            if (data?.description) {
-              this.userInput = `[图片内容: ${data.description}]`
-            }
-          }
-        } catch (e) {
-          this.userInput = '[已选择图片，分析失败]'
+  async stopRecording() {
+    try {
+      if (this.audioRecorder) {
+        await this.audioRecorder.stop()
+        await this.audioRecorder.release()
+        this.audioRecorder = null
+      }
+      this.isRecording = false
+      this.userInput = '识别中...'
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getApiUrl('/api/chat/speech-to-text')}`,
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'multipart/form-data' },
+          multiFormDataList: [{
+            name: 'file', contentType: 'audio/mp4',
+            remoteFileName: 'voice.m4a', filePath: this.recordFilePath
+          }],
+          connectTimeout: 30000, readTimeout: 30000
         }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const res = JSON.parse(response.result as string) as Record<string, Object>
+        const data = res.data as Record<string, string>
+        this.userInput = data?.text || '(识别结果为空)'
+        if (!this.userInput || this.userInput.trim() === '' || this.userInput === '(识别结果为空)') {
+          promptAction.showToast({ message: '语音识别为空，请重试' })
+          this.userInput = ''
+        }
+      } else {
+        this.userInput = '(语音识别失败)'
       }
     } catch (err) {
-      console.error('选择图片失败:', err)
+      console.error('停止录音失败:', err)
+      this.userInput = '(录音处理失败)'
+      this.isRecording = false
     }
   }
 
-  toggleVoice() {
-    if (this.isRecording) {
-      this.stopRecording()
-    } else {
-      this.startRecording()
+  // ===== 通话功能 =====
+  async startCall() {
+    try {
+      const atManager = abilityAccessCtrl.createAtManager()
+      const context = getContext(this) as common.UIAbilityContext
+      const result = await atManager.requestPermissionsFromUser(context, ['ohos.permission.MICROPHONE'])
+      if (result.authResults[0] !== 0) {
+        promptAction.showToast({ message: '需要麦克风权限才能通话' })
+        return
+      }
+      this.isInCall = true
+      this.callDuration = 0
+      this.callDurationText = '00:00'
+      // 开始录音（持续录制，每10秒发送一次）
+      await this.startRecording()
+      // 计时器
+      this.callTimer = setInterval(() => {
+        this.callDuration++
+        const m = Math.floor(this.callDuration / 60).toString().padStart(2, '0')
+        const s = (this.callDuration % 60).toString().padStart(2, '0')
+        this.callDurationText = `${m}:${s}`
+        // 每10秒自动发送一次语音
+        if (this.callDuration % 10 === 0 && this.isRecording) {
+          this.stopRecording()
+          setTimeout(() => { if (this.isInCall) { this.startRecording() } }, 500)
+        }
+      }, 1000)
+      promptAction.showToast({ message: '通话已开始，AI正在聆听' })
+    } catch (err) {
+      this.isInCall = false
+      promptAction.showToast({ message: '通话启动失败' })
     }
   }
 
-  async startRecording() {
+  endCall() {
+    if (this.callTimer !== -1) { clearInterval(this.callTimer); this.callTimer = -1 }
+    if (this.isRecording) { this.stopRecording() }
+    this.isInCall = false
+    this.callDuration = 0
+    this.callDurationText = '00:00'
+    promptAction.showToast({ message: '通话已结束' })
+  }sync startRecording() {
     try {
       const atManager = abilityAccessCtrl.createAtManager()
       const context = getContext(this) as common.UIAbilityContext

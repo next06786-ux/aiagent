@@ -7191,3 +7191,141 @@ async def get_lora_training_status(user_id: str):
         "message": "success",
         "data": lora_training_tasks.get(user_id, {"user_id": user_id, "status": "idle"})
     }
+
+
+# ==================== 模型压缩管理 API ====================
+
+@app.get("/api/compression/status")
+async def get_compression_status():
+    """获取模型压缩模块状态"""
+    try:
+        from backend.model_compression.quantizer import ModelQuantizer
+        quantizer = ModelQuantizer()
+        
+        return {
+            "code": 200,
+            "message": "success",
+            "data": {
+                "backends": {
+                    "bitsandbytes": quantizer.bitsandbytes_available,
+                    "llmquant": quantizer.llmquant_available,
+                    "obr": quantizer.obr_available,
+                },
+                "residual_analyzer": _residual_analyzer_status(),
+            }
+        }
+    except Exception as e:
+        return {"code": 500, "message": str(e), "data": None}
+
+
+@app.post("/api/compression/compress-base-model")
+async def api_compress_base_model(request_data: Dict[str, Any]):
+    """
+    触发基座模型 OBR 压缩（后台执行）
+    
+    Body:
+        model: 模型路径
+        output: 输出目录
+        w_bits: 权重量化位数 (默认 4)
+        sparsity: 稀疏度 (默认 0.5)
+    """
+    try:
+        model = request_data.get("model")
+        if not model:
+            return {"code": 400, "message": "缺少 model 参数", "data": None}
+        
+        output = request_data.get("output", "models/qwen-obr")
+        w_bits = request_data.get("w_bits", 4)
+        a_bits = request_data.get("a_bits", 16)
+        k_bits = request_data.get("k_bits", 4)
+        v_bits = request_data.get("v_bits", 4)
+        sparsity = request_data.get("sparsity", 0.5)
+        nsamples = request_data.get("nsamples", 128)
+        
+        # 后台执行压缩
+        import threading
+        
+        compression_tasks = getattr(app.state, '_compression_tasks', {})
+        task_id = f"obr_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        compression_tasks[task_id] = {"status": "running", "started_at": datetime.now().isoformat()}
+        app.state._compression_tasks = compression_tasks
+        
+        def _run_compression():
+            try:
+                from backend.model_compression.obr_wrapper import OBRCompressor
+                compressor = OBRCompressor(
+                    model_name=model, output_dir=output,
+                    w_bits=w_bits, a_bits=a_bits, k_bits=k_bits, v_bits=v_bits,
+                    sparsity_ratio=sparsity, nsamples=nsamples,
+                )
+                result = compressor.compress()
+                compression_tasks[task_id] = {
+                    "status": result["status"],
+                    "result": result,
+                    "finished_at": datetime.now().isoformat()
+                }
+            except Exception as e:
+                compression_tasks[task_id] = {
+                    "status": "failed", "error": str(e),
+                    "finished_at": datetime.now().isoformat()
+                }
+        
+        threading.Thread(target=_run_compression, daemon=True).start()
+        
+        return {
+            "code": 200,
+            "message": "基座模型压缩已启动",
+            "data": {"task_id": task_id, "status": "running"}
+        }
+    except Exception as e:
+        return {"code": 500, "message": str(e), "data": None}
+
+
+@app.get("/api/compression/task/{task_id}")
+async def get_compression_task_status(task_id: str):
+    """查询压缩任务状态"""
+    compression_tasks = getattr(app.state, '_compression_tasks', {})
+    task = compression_tasks.get(task_id)
+    if not task:
+        return {"code": 404, "message": "任务不存在", "data": None}
+    return {"code": 200, "message": "success", "data": task}
+
+
+@app.post("/api/compression/quality-report")
+async def api_generate_quality_report(request_data: Dict[str, Any]):
+    """
+    生成压缩质量报告
+    
+    Body:
+        model_name: 模型名称
+        baseline: {ppl, latency_ms, vram_gb, tokens_per_sec}
+        compressed: {ppl, latency_ms, vram_gb, tokens_per_sec, quantization_method}
+    """
+    try:
+        from backend.model_compression.quality_monitor import CompressionQualityMonitor
+        
+        model_name = request_data.get("model_name", "unknown")
+        monitor = CompressionQualityMonitor(model_name)
+        
+        baseline = request_data.get("baseline", {})
+        compressed = request_data.get("compressed", {})
+        
+        if baseline:
+            monitor.record_baseline(**baseline)
+        if compressed:
+            monitor.record_compressed(**compressed)
+        
+        report = monitor.generate_report()
+        
+        return {"code": 200, "message": "success", "data": report}
+    except Exception as e:
+        return {"code": 500, "message": str(e), "data": None}
+
+
+def _residual_analyzer_status() -> Dict[str, Any]:
+    """获取残差分析器状态"""
+    try:
+        from backend.model_compression.quality_monitor import _residual_analyzer
+        return {"available": _residual_analyzer.get("available", False)}
+    except Exception:
+        return {"available": False}

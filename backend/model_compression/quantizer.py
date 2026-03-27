@@ -159,76 +159,58 @@ class ModelQuantizer:
         model_name: str,
         output_dir: str,
         w_bits: int = 4,
-        a_bits: int = 4,
+        a_bits: int = 16,
         k_bits: int = 4,
         v_bits: int = 4,
         sparsity_ratio: float = 0.5,
-        method: str = "flatquant"
+        nsamples: int = 128,
+        cali_dataset: str = "wikitext2"
     ) -> Dict[str, Any]:
         """
-        使用 OBR 离线压缩模型
+        使用 OBR 离线压缩模型（真正执行压缩）
         
         Args:
-            model_name: 模型名称
+            model_name: 模型名称或路径
             output_dir: 输出目录
             w_bits: 权重量化位数
             a_bits: 激活量化位数
             k_bits: Key 量化位数
             v_bits: Value 量化位数
             sparsity_ratio: 稀疏度
-            method: 压缩方法 ('flatquant', 'quarot', 'spinquant')
+            nsamples: 校准样本数
+            cali_dataset: 校准数据集
         
         Returns:
             压缩结果
         """
         if not self.obr_available:
-            raise RuntimeError("OBR 库不可用")
+            raise RuntimeError("OBR 库不可用，请确认 external_repos/OBR 存在")
         
-        logger.info(f"使用 OBR {method} 离线压缩: {model_name}")
-        logger.info(f"  W{w_bits}A{a_bits}KV{k_bits}V{v_bits}+{sparsity_ratio*100:.0f}% sparsity")
+        from backend.model_compression.obr_wrapper import OBRCompressor
         
-        obr_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), '../../external_repos/OBR')
+        logger.info(f"使用 OBR FlatQuant 离线压缩: {model_name}")
+        logger.info(f"  W{w_bits}A{a_bits}K{k_bits}V{v_bits}+{sparsity_ratio*100:.0f}% sparsity")
+        
+        compressor = OBRCompressor(
+            model_name=model_name,
+            output_dir=output_dir,
+            w_bits=w_bits,
+            a_bits=a_bits,
+            k_bits=k_bits,
+            v_bits=v_bits,
+            sparsity_ratio=sparsity_ratio,
+            nsamples=nsamples,
+            cali_dataset=cali_dataset,
         )
         
-        method_upper = method.upper() if method != "flatquant" else "FlatQuant"
-        method_path = os.path.join(obr_path, method_upper)
+        result = compressor.compress()
         
-        if not os.path.exists(method_path):
-            raise FileNotFoundError(f"OBR 方法不存在: {method_path}")
+        if result["status"] == "success":
+            logger.info(f"✓ OBR 压缩成功: {output_dir}")
+        else:
+            logger.error(f"✗ OBR 压缩失败: {result.get('error', 'unknown')}")
         
-        # 这里只是封装，实际调用交给具体的压缩脚本
-        logger.info(f"准备调用 OBR 的 {method} 方法")
-        logger.info(f"  脚本位置: {os.path.join(method_path, 'main.py')}")
-        logger.info(f"  输出目录: {output_dir}")
-        
-        return {
-            "status": "prepared",
-            "method": method,
-            "script_path": os.path.join(method_path, "main.py"),
-            "config": {
-                "model": model_name,
-                "w_bits": w_bits,
-                "a_bits": a_bits,
-                "k_bits": k_bits,
-                "v_bits": v_bits,
-                "sparsity_ratio": sparsity_ratio,
-                "output_dir": output_dir
-            },
-            "note": "请运行: cd {path} && python main.py {args}".format(
-                path=method_path,
-                args=" ".join([
-                    f"--model {model_name}",
-                    f"--w_bits {w_bits}",
-                    f"--a_bits {a_bits}",
-                    f"--k_bits {k_bits}",
-                    f"--v_bits {v_bits}",
-                    f"--sparsity_ratio {sparsity_ratio}",
-                    f"--output_dir {output_dir}",
-                    "--ppl_eval"
-                ])
-            )
-        }
+        return result
     
     def quantize_tensor_llmquant(
         self,

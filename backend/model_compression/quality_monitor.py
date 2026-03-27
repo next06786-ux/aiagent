@@ -6,17 +6,52 @@
 - PPL 变化监控
 - KL divergence 计算
 - 推理性能基准测试
+- 逐层残差能量分析（集成 llmquant residual_analyzer）
 - 自动告警
 """
 
+import os
+import sys
 import json
 import time
 import torch
 import logging
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _init_residual_analyzer():
+    """初始化 llmquant 残差分析器"""
+    try:
+        llmquant_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../../external_repos/llmquant')
+        )
+        if llmquant_path not in sys.path:
+            sys.path.insert(0, llmquant_path)
+        
+        from residual_analyzer import (
+            analyze_distribution,
+            save_residual,
+            analyze_all,
+            clear_data,
+            residual_data,
+        )
+        return {
+            "available": True,
+            "analyze_distribution": analyze_distribution,
+            "save_residual": save_residual,
+            "analyze_all": analyze_all,
+            "clear_data": clear_data,
+            "residual_data": residual_data,
+        }
+    except Exception as e:
+        logger.warning(f"llmquant residual_analyzer 不可用: {e}")
+        return {"available": False}
+
+
+_residual_analyzer = _init_residual_analyzer()
 
 
 class CompressionQualityMonitor:
@@ -33,6 +68,7 @@ class CompressionQualityMonitor:
         self.baseline_metrics = {}
         self.current_metrics = {}
         self.alerts = []
+        self.residual_analyzer_available = _residual_analyzer["available"]
     
     def record_baseline(
         self,
@@ -275,6 +311,156 @@ class CompressionQualityMonitor:
                 }
             }
         }
+    
+    def analyze_residual_energy(
+        self,
+        model_fp16,
+        model_quantized,
+        eval_dataset,
+        target_layers: Optional[List[int]] = None,
+        save_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        使用 llmquant 的 residual_analyzer 进行逐层残差能量分析
+        
+        对比 FP16 和量化模型在各层的权重残差分布，
+        识别量化损失集中的层，为混合精度策略提供依据。
+        
+        Args:
+            model_fp16: FP16 原始模型
+            model_quantized: 量化后的模型
+            eval_dataset: 评估数据（list of input_ids tensors）
+            target_layers: 要分析的层索引，None 则自动选取首/中/尾层
+            save_dir: 可视化图表保存目录，None 则不生成图表
+        
+        Returns:
+            逐层残差统计和质量评估
+        """
+        if not self.residual_analyzer_available:
+            logger.warning("llmquant residual_analyzer 不可用，跳过残差分析")
+            return {"status": "skipped", "reason": "residual_analyzer not available"}
+        
+        analyze_distribution = _residual_analyzer["analyze_distribution"]
+        
+        logger.info("开始逐层残差能量分析...")
+        
+        # 自动选取目标层
+        num_layers = model_fp16.config.num_hidden_layers
+        if target_layers is None:
+            target_layers = [0, num_layers // 4, num_layers // 2, 
+                           3 * num_layers // 4, num_layers - 1]
+            target_layers = sorted(set(target_layers))
+        
+        layer_results = {}
+        
+        fp16_params = dict(model_fp16.named_parameters())
+        quant_params = dict(model_quantized.named_parameters())
+        
+        for layer_idx in target_layers:
+            layer_prefix = f"model.layers.{layer_idx}"
+            layer_stats = {}
+            
+            for param_name, fp16_weight in fp16_params.items():
+                if not param_name.startswith(layer_prefix):
+                    continue
+                if fp16_weight.ndim < 2:
+                    continue
+                
+                short_name = param_name.replace(layer_prefix + ".", "")
+                
+                # 获取量化模型对应权重
+                if param_name not in quant_params:
+                    continue
+                quant_weight = quant_params[param_name]
+                
+                # 确保形状一致
+                if fp16_weight.shape != quant_weight.shape:
+                    continue
+                
+                # 计算残差 R = W_fp16 - W_quantized
+                residual = (fp16_weight.float() - quant_weight.float()).detach()
+                
+                # 使用 llmquant 的分布分析
+                stats = analyze_distribution(residual)
+                
+                # 计算残差能量（Frobenius 范数比）
+                residual_energy = torch.norm(residual).item()
+                original_energy = torch.norm(fp16_weight.float()).item()
+                energy_ratio = residual_energy / (original_energy + 1e-8)
+                
+                stats["residual_energy"] = residual_energy
+                stats["original_energy"] = original_energy
+                stats["energy_ratio"] = energy_ratio
+                
+                # 使用 llmquant 的 save_residual 记录数据（用于后续可视化）
+                if save_dir:
+                    H = torch.eye(fp16_weight.shape[1], device='cpu')
+                    _residual_analyzer["save_residual"](
+                        layer_idx, short_name, fp16_weight.cpu().float(), H, False
+                    )
+                    _residual_analyzer["save_residual"](
+                        layer_idx, short_name, residual.cpu(), H, True
+                    )
+                
+                layer_stats[short_name] = stats
+            
+            layer_results[f"layer_{layer_idx}"] = layer_stats
+        
+        # 生成可视化
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+            try:
+                _residual_analyzer["analyze_all"](
+                    save_dir, salient_metric=50, target_layers=target_layers
+                )
+                logger.info(f"✓ 残差可视化已保存: {save_dir}")
+            except Exception as e:
+                logger.warning(f"残差可视化生成失败: {e}")
+            finally:
+                _residual_analyzer["clear_data"]()
+        
+        # 汇总分析
+        all_energy_ratios = []
+        problematic_layers = []
+        for layer_key, layer_stats in layer_results.items():
+            for param_name, stats in layer_stats.items():
+                ratio = stats.get("energy_ratio", 0)
+                all_energy_ratios.append(ratio)
+                if ratio > 0.1:  # 残差能量超过原始 10%
+                    problematic_layers.append({
+                        "layer": layer_key,
+                        "param": param_name,
+                        "energy_ratio": ratio
+                    })
+        
+        avg_energy_ratio = sum(all_energy_ratios) / len(all_energy_ratios) if all_energy_ratios else 0
+        
+        summary = {
+            "status": "success",
+            "num_layers_analyzed": len(target_layers),
+            "avg_energy_ratio": avg_energy_ratio,
+            "max_energy_ratio": max(all_energy_ratios) if all_energy_ratios else 0,
+            "problematic_layers": problematic_layers,
+            "layer_details": layer_results,
+        }
+        
+        if avg_energy_ratio < 0.05:
+            summary["assessment"] = "✓ 残差能量极低，量化质量优秀"
+        elif avg_energy_ratio < 0.1:
+            summary["assessment"] = "⚠ 残差能量可接受，建议关注高损失层"
+        else:
+            summary["assessment"] = "✗ 残差能量偏高，建议对高损失层使用更高精度"
+        
+        if problematic_layers:
+            summary["recommendation"] = (
+                f"建议对以下层保持 FP16 或使用 8-bit 量化: "
+                + ", ".join(p["layer"] for p in problematic_layers[:5])
+            )
+        
+        logger.info(f"残差分析完成: avg_energy_ratio={avg_energy_ratio:.6f}, "
+                    f"problematic_layers={len(problematic_layers)}")
+        
+        return summary
     
     def generate_report(self, output_path: Optional[str] = None) -> Dict[str, Any]:
         """生成完整质量报告"""
