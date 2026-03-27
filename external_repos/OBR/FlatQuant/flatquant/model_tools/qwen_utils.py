@@ -326,31 +326,37 @@ def apply_flatquant_to_qwen(args, model):
     for layer in range(model.config.num_hidden_layers):
         layer_obj = model.model.layers[layer]
         
-        # 兼容 Qwen2 和 Qwen3.5
-        if hasattr(layer_obj, 'self_attn'):
-            attn_module = layer_obj.self_attn
-        elif hasattr(layer_obj, 'attention'):
-            attn_module = layer_obj.attention
-        else:
-            raise AttributeError(f"层 {layer} 没有找到 attention 模块")
+        # 探测第一层的实际属性
+        if layer == 0:
+            print(f"探测 Qwen3.5 层结构...")
+            print(f"  层类型: {type(layer_obj)}")
+            print(f"  子模块: {[name for name, _ in layer_obj.named_children()]}")
         
-        if hasattr(layer_obj, 'mlp'):
-            mlp_module = layer_obj.mlp
-        elif hasattr(layer_obj, 'feed_forward'):
-            mlp_module = layer_obj.feed_forward
-        else:
-            raise AttributeError(f"层 {layer} 没有找到 MLP 模块")
+        # 兼容 Qwen2 和 Qwen3.5 (尝试多种属性名)
+        attn_module = None
+        attn_attr_name = None
+        for attr_name in ['self_attn', 'attention', 'attn']:
+            if hasattr(layer_obj, attr_name):
+                attn_module = getattr(layer_obj, attr_name)
+                attn_attr_name = attr_name
+                break
         
-        # attn
-        if hasattr(layer_obj, 'self_attn'):
-            model.model.layers[layer].self_attn = FlatQuantQwen2Attention(args, attn_module)
-        else:
-            model.model.layers[layer].attention = FlatQuantQwen2Attention(args, attn_module)
+        if attn_module is None:
+            raise AttributeError(f"层 {layer} 没有找到 attention 模块。尝试的属性: self_attn, attention, attn")
         
-        # mlp
-        if hasattr(layer_obj, 'mlp'):
-            model.model.layers[layer].mlp = FlatQuantQwen2MLP(args, mlp_module)
-        else:
-            model.model.layers[layer].feed_forward = FlatQuantQwen2MLP(args, mlp_module)
+        mlp_module = None
+        mlp_attr_name = None
+        for attr_name in ['mlp', 'feed_forward', 'mlp_act']:
+            if hasattr(layer_obj, attr_name):
+                mlp_module = getattr(layer_obj, attr_name)
+                mlp_attr_name = attr_name
+                break
+        
+        if mlp_module is None:
+            raise AttributeError(f"层 {layer} 没有找到 MLP 模块。尝试的属性: mlp, feed_forward, mlp_act")
+        
+        # 替换为 FlatQuant 版本
+        setattr(layer_obj, attn_attr_name, FlatQuantQwen2Attention(args, attn_module))
+        setattr(layer_obj, mlp_attr_name, FlatQuantQwen2MLP(args, mlp_module))
     
     return model
