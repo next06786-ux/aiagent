@@ -1,42 +1,34 @@
 #!/bin/bash
-# SGLang 快速部署脚本
+# Transformers 推理服务快速部署脚本
 
 set -e
 
 echo "=========================================="
-echo "  LifeSwarm SGLang 快速部署"
+echo "  LifeSwarm Transformers 快速部署"
 echo "=========================================="
 
-# 设置环境变量
-export HF_HOME=/root/autodl-tmp/huggingface
-export HF_ENDPOINT=https://hf-mirror.com
-export HF_HUB_ENABLE_HF_TRANSFER=0
+# 检测 GPU
+if ! command -v nvidia-smi &> /dev/null; then
+    echo "⚠️  未检测到 nvidia-smi，请确保已安装 NVIDIA 驱动"
+fi
 
-echo "✓ 环境变量已设置"
-
-# 创建目录
-mkdir -p /root/autodl-tmp/huggingface
-mkdir -p /root/autodl-tmp/models/lora
-mkdir -p /root/autodl-tmp/logs
-
-echo "✓ 目录已创建"
+echo ""
+echo "GPU 信息:"
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "  无法获取 GPU 信息"
+echo ""
 
 # 安装依赖
-echo "正在安装 SGLang..."
-pip install sglang[all] -i https://pypi.tuna.tsinghua.edu.cn/simple
+echo "正在安装依赖..."
+pip install torch transformers accelerate bitsandbytes peft -i https://pypi.tuna.tsinghua.edu.cn/simple
+pip install fastapi uvicorn -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-echo "✓ SGLang 已安装"
+echo "✓ 依赖已安装"
 
 # 启动服务器
 echo ""
-echo "启动 SGLang 服务器..."
+echo "启动推理服务器..."
 echo ""
 
-python -m sglang.launch_server \
-  --model-path Qwen/Qwen3.5-9B \
+python gpu_server/start_server.py \
   --port 8000 \
-  --tensor-parallel-size 1 \
-  --mem-fraction-static 0.8 \
-  --context-length 32768 \
-  --reasoning-parser qwen3 \
-  --download-dir /root/autodl-tmp/huggingface
+  --quantize

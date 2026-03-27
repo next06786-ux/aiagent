@@ -245,6 +245,8 @@ struct QuickDecisionInput {
         Column({ space: 20 }) {
           // Hero 区域
           this.buildHeroCard()
+          // 决策历史记录（始终显示区域，有数据才展示内容）
+          this.buildDecisionHistory()
           // LoRA 模型卡片
           this.buildLoraCard()
           // 语音输入
@@ -253,8 +255,6 @@ struct QuickDecisionInput {
           this.buildTextInput()
           // 快速模板
           this.buildTemplateSection()
-          // 决策历史记录
-          if (this.decisionHistory.length > 0) { this.buildDecisionHistory() }
         }
         .width('100%')
         .padding({ left: 16, right: 16, bottom: 60 })
@@ -532,47 +532,74 @@ struct QuickDecisionInput {
   @Builder
   buildDecisionHistory() {
     Column({ space: 12 }) {
-      Text('决策记录')
-        .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-        .padding({ left: 4 })
+      Row({ space: 8 }) {
+        Text('历史决策')
+          .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+          .layoutWeight(1)
+          .padding({ left: 4 })
+        if (this.decisionHistory.length > 0) {
+          Text(`${this.decisionHistory.length} 条`)
+            .fontSize(12).fontColor(Theme.Color.TextTertiary)
+        }
+      }
+      .opacity(this.showContent ? 1 : 0)
+      .translate({ x: this.showContent ? 0 : -20 })
+      .animation({ duration: 600, curve: Curve.Smooth, delay: 80 })
 
-      ForEach(this.decisionHistory, (record: DecisionRecord, index: number) => {
+      if (this.decisionHistory.length === 0) {
         Row({ space: 12 }) {
           Stack() {
-            Circle({ width: 40, height: 40 }).fill(Theme.Color.Secondary).opacity(0.12)
-            Text(`${index + 1}`).fontSize(14).fontWeight(600).fontColor(Theme.Color.Secondary)
+            Circle({ width: 40, height: 40 }).fill(Theme.Color.Primary).opacity(0.08)
+            Text('?').fontSize(18).fontColor(Theme.Color.TextTertiary)
           }.width(40).height(40)
-
-          Column({ space: 4 }) {
-            Text(record.question).fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(`${record.options_count} 个选项 · ${record.created_at.slice(0, 10)}`)
-              .fontSize(12).fontColor(Theme.Color.TextTertiary)
-          }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-
-          Text('查看').fontSize(12).fontColor(Theme.Color.Primary)
+          Text('暂无历史决策，开始你的第一次推演吧')
+            .fontSize(13).fontColor(Theme.Color.TextTertiary).layoutWeight(1)
         }
-        .width('100%').padding(14)
+        .width('100%').padding(16)
         .backgroundColor(Theme.Color.BackgroundSecondary)
         .borderRadius(Theme.Radius.l)
         .border({ width: 1, color: Theme.Color.BorderLight })
-        .shadow(Theme.Shadow.Soft)
-        .onClick(() => {
-          router.pushUrl({
-            url: 'pages/DecisionDungeon2DMap',
-            params: {
-              dungeonId: record.session_id,
-              userId: this.userId,
-              question: record.question,
-              recommendation: record.recommendation,
-              isHistory: 'true'
-            }
-          })
-        })
         .opacity(this.showContent ? 1 : 0)
-        .translate({ y: this.showContent ? 0 : 20 })
-        .animation({ duration: 600, curve: Curve.Smooth, delay: 500 + index * 60 })
-      })
+        .animation({ duration: 600, curve: Curve.Smooth, delay: 120 })
+      } else {
+        ForEach(this.decisionHistory, (record: DecisionRecord, index: number) => {
+          Row({ space: 12 }) {
+            Stack() {
+              Circle({ width: 40, height: 40 }).fill(Theme.Color.Secondary).opacity(0.12)
+              Text(`${index + 1}`).fontSize(14).fontWeight(600).fontColor(Theme.Color.Secondary)
+            }.width(40).height(40)
+
+            Column({ space: 4 }) {
+              Text(record.question).fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              Text(`${record.options_count} 个选项 · ${record.created_at.slice(0, 10)}`)
+                .fontSize(12).fontColor(Theme.Color.TextTertiary)
+            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+
+            Text('查看').fontSize(12).fontColor(Theme.Color.Primary)
+          }
+          .width('100%').padding(14)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+          .onClick(() => {
+            router.pushUrl({
+              url: 'pages/DecisionDungeon2DMap',
+              params: {
+                dungeonId: record.session_id,
+                userId: this.userId,
+                question: record.question,
+                recommendation: record.recommendation,
+                isHistory: 'true'
+              }
+            })
+          })
+          .opacity(this.showContent ? 1 : 0)
+          .translate({ y: this.showContent ? 0 : 20 })
+          .animation({ duration: 600, curve: Curve.Smooth, delay: 120 + index * 60 })
+        })
+      }
     }.width('100%')
   }
 }

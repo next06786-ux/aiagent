@@ -1,6 +1,6 @@
 """
 模型配置
-统一管理 SGLang 使用的 Qwen3.5-9B 参数
+统一管理 Qwen3.5-9B 使用 Transformers 原生推理的参数
 """
 
 MODEL_CONFIG = {
@@ -12,15 +12,17 @@ MODEL_CONFIG = {
             "vram_required": 20.0,
             "inference_speed": 50,
             "context_length": 32768,
-            "description": "Qwen 3.5 主力模型，SGLang 生产推理模型"
+            "description": "Qwen 3.5 主力模型，Transformers 原生推理",
+            "dtype": "float16",  # 支持: float16, float32, int8, int4
+            "device_map": "auto"
         }
     },
-    "sglang_config": {
-        "default_port": 8001,
-        "tensor_parallel_size": 1,
-        "mem_fraction_static": 0.8,
-        "context_length": 32768,
-        "reasoning_parser": "qwen3"
+    "inference_config": {
+        "max_new_tokens": 2048,
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "do_sample": True,
+        "num_beams": 1
     },
     "lora_config": {
         "r": 64,
@@ -36,6 +38,21 @@ MODEL_CONFIG = {
         "batch_size": 4,
         "learning_rate": 2e-4,
         "max_length": 2048
+    },
+    "quantization_config": {
+        "enable_quantization": True,            # 是否启用量化
+        "quantization_type": "int4",            # 支持: int4, int8, fp8
+        "load_in_8bit": False,
+        "load_in_4bit": True,
+        "bnb_4bit_use_double_quant": True,      # 双量化
+        "bnb_4bit_quant_type": "nf4",           # NormalFloat4
+        "bnb_4bit_compute_dtype": "bfloat16"
+    },
+    "lora_config_quantization": {
+        "quantize_after_training": True,        # 训练后自动量化
+        "lora_quantization_bits": 4,            # LoRA 4-bit 量化
+        "lora_quantization_per_channel": True,  # per-channel 量化
+        "adaptive_rank": True                   # 自适应 rank 分配
     }
 }
 
@@ -52,12 +69,25 @@ def get_model_display_name():
     return get_current_model_config()["display_name"]
 
 
-def get_sglang_config():
-    return MODEL_CONFIG["sglang_config"]
+def get_inference_config():
+    return MODEL_CONFIG["inference_config"]
 
 
 def get_lora_config():
     return MODEL_CONFIG["lora_config"]
+
+
+def get_quantization_config():
+    return MODEL_CONFIG["quantization_config"]
+
+
+def get_lora_quantization_config():
+    """获取 LoRA 量化配置"""
+    return MODEL_CONFIG["lora_config_quantization"]
+
+
+def get_training_config():
+    return MODEL_CONFIG["training_config"]
 
 
 def list_available_models():
@@ -71,16 +101,39 @@ def switch_model(model_key: str):
     return get_current_model_config()
 
 
+def set_quantization(enable: bool, quantization_type: str = "int4"):
+    """启用或禁用量化"""
+    MODEL_CONFIG["quantization_config"]["enable_quantization"] = bool(enable)
+    MODEL_CONFIG["quantization_config"]["quantization_type"] = str(quantization_type)
+    
+    if quantization_type == "int4":
+        MODEL_CONFIG["quantization_config"]["load_in_4bit"] = enable
+        MODEL_CONFIG["quantization_config"]["load_in_8bit"] = False
+    elif quantization_type == "int8":
+        MODEL_CONFIG["quantization_config"]["load_in_8bit"] = enable
+        MODEL_CONFIG["quantization_config"]["load_in_4bit"] = False
+    else:
+        raise ValueError(f"不支持的量化类型: {quantization_type}")
+
+
 if __name__ == "__main__":
     print("当前模型配置:")
-    print(f"  模型: {get_model_display_name()}")
-    print(f"  HF名称: {get_model_hf_name()}")
-    print(f"  显存需求: {get_current_model_config()['vram_required']} GB")
+    model_cfg = get_current_model_config()
+    print(f"  模型: {model_cfg['display_name']}")
+    print(f"  HF名称: {model_cfg['hf_model_name']}")
+    print(f"  显存需求: {model_cfg['vram_required']} GB (FP16)")
+    print(f"  推理精度: {model_cfg['dtype']}")
     print()
     
-    print("SGLang 配置:")
-    sglang = get_sglang_config()
-    for k, v in sglang.items():
+    print("推理配置:")
+    inference = get_inference_config()
+    for k, v in inference.items():
+        print(f"  {k}: {v}")
+    print()
+    
+    print("量化配置:")
+    quant = get_quantization_config()
+    for k, v in quant.items():
         print(f"  {k}: {v}")
     print()
     

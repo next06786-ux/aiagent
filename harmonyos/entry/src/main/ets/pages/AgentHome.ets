@@ -13,6 +13,7 @@ import media from '@ohos.multimedia.media';
 import common from '@ohos.app.ability.common';
 import fs from '@ohos.file.fs';
 import abilityAccessCtrl from '@ohos.abilityAccessCtrl';
+import promptAction from '@ohos.promptAction';
 
 interface FeatureCard {
   id: string;
@@ -60,9 +61,15 @@ struct AgentHome {
   @State isLoadingHistory: boolean = false;
   @State userInfo: UserInfo | null = null;
   @State isRecording: boolean = false;
+  @State isVoiceMode: boolean = false;   // true=按住说话模式，false=文本输入模式
+  @State showPlusMenu: boolean = false;  // 加号展开菜单
+  @State isInCall: boolean = false;      // 通话中
   @State selectedImageUri: string = '';
   private audioRecorder: media.AVRecorder | null = null;
   private recordFilePath: string = '';
+  private callTimer: number = -1;
+  private callDuration: number = 0;
+  @State callDurationText: string = '00:00';
 
   // 布局
   @State screenWidth: number = 360;
@@ -106,6 +113,15 @@ struct AgentHome {
     this.stopLoadingAnimation();
     this.stopOrbAnimation();
     this.stopAiCoreAnimation();
+    // 清理通话计时器
+    if (this.callTimer !== -1) {
+      clearInterval(this.callTimer);
+      this.callTimer = -1;
+    }
+    // 停止录音
+    if (this.isRecording) {
+      this.stopRecording();
+    }
   }
 
   onPageShow() {
@@ -352,8 +368,6 @@ struct AgentHome {
         this.inputText = '图片分析中...';
         try {
           // 读取图片文件内容
-          import fs from '@ohos.file.fs';
-          import common from '@ohos.app.ability.common';
           const context = getContext(this) as common.UIAbilityContext;
           const sandboxPath = `${context.cacheDir}/upload_img.jpg`;
           
@@ -475,15 +489,66 @@ struct AgentHome {
       if (response.responseCode === 200) {
         const res = JSON.parse(response.result as string) as Record<string, Object>;
         const data = res.data as Record<string, string>;
-        this.inputText = data?.text || '(识别结果为空)';
+        const recognizedText = data?.text || '';
+        if (recognizedText.trim().length > 0) {
+          this.inputText = recognizedText;
+        } else {
+          // 识别结果为空，可能是录音太短或环境噪音，给出提示并清空输入框
+          this.inputText = '';
+          promptAction.showToast({ message: '未识别到语音，请重新录音' });
+        }
       } else {
-        this.inputText = '(语音识别失败)';
+        this.inputText = '';
+        promptAction.showToast({ message: '语音识别失败，请重试' });
       }
     } catch (err) {
       console.error('停止录音失败:', err);
       this.inputText = '(录音处理失败)';
       this.isRecording = false;
     }
+  }
+
+  // ===== 通话功能 =====
+  async startCall() {
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const context = getContext(this) as common.UIAbilityContext;
+      const result = await atManager.requestPermissionsFromUser(context, ['ohos.permission.MICROPHONE']);
+      if (result.authResults[0] !== 0) {
+        promptAction.showToast({ message: '需要麦克风权限才能通话' });
+        return;
+      }
+      this.isInCall = true;
+      this.callDuration = 0;
+      this.callDurationText = '00:00';
+      // 开始录音（持续录制，每10秒发送一次）
+      await this.startRecording();
+      // 计时器
+      this.callTimer = setInterval(() => {
+        this.callDuration++;
+        const m = Math.floor(this.callDuration / 60).toString().padStart(2, '0');
+        const s = (this.callDuration % 60).toString().padStart(2, '0');
+        this.callDurationText = `${m}:${s}`;
+        // 每10秒自动发送一次语音
+        if (this.callDuration % 10 === 0 && this.isRecording) {
+          this.stopRecording();
+          setTimeout(() => { if (this.isInCall) { this.startRecording(); } }, 500);
+        }
+      }, 1000);
+      promptAction.showToast({ message: '通话已开始，AI正在聆听' });
+    } catch (err) {
+      this.isInCall = false;
+      promptAction.showToast({ message: '通话启动失败' });
+    }
+  }
+
+  endCall() {
+    if (this.callTimer !== -1) { clearInterval(this.callTimer); this.callTimer = -1; }
+    if (this.isRecording) { this.stopRecording(); }
+    this.isInCall = false;
+    this.callDuration = 0;
+    this.callDurationText = '00:00';
+    promptAction.showToast({ message: '通话已结束' });
   }
 
   // ===== UI 构建 =====
@@ -806,54 +871,131 @@ struct AgentHome {
           }.width('100%').padding({ left: 16, right: 16, top: 8 })
         }
 
-        Row({ space: 6 }) {
-          // 图片按钮
+        Row({ space: 8 }) {
+          // 左：拍照按钮
           Button({ type: ButtonType.Circle }) {
-            Text('+').fontSize(20).fontColor(Theme.Color.TextSecondary)
-          }.width(36).height(36)
-          .backgroundColor(Theme.Color.BackgroundTertiary)
-          .onClick(() => { this.pickImage() })
-
-          // 语音按钮 - 按住说话，松手发送
-          Column() {
-            SimpleIcon({ iconName: 'mic', iconSize: 16,
-              color: this.isRecording ? Theme.Color.Destructive : Theme.Color.TextSecondary })
-            Text(this.isRecording ? '松手发送' : '按住说话')
-              .fontSize(8)
-              .fontColor(this.isRecording ? Theme.Color.Destructive : Theme.Color.TextTertiary)
+            SimpleIcon({ iconName: 'camera', iconSize: 20, color: Theme.Color.TextSecondary })
           }
-          .width(52).height(36)
-          .justifyContent(FlexAlign.Center)
-          .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.12)' : Theme.Color.BackgroundTertiary)
-          .borderRadius(Theme.Radius.m)
-          .border({ width: this.isRecording ? 1.5 : 0.5, color: this.isRecording ? Theme.Color.Destructive : Theme.Color.BorderLight })
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.startRecording();
-            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-              if (this.isRecording) { this.stopRecording(); }
-            }
+          .width(38).height(38)
+          .backgroundColor(Theme.Color.BackgroundTertiary)
+          .border({ width: 0.5, color: Theme.Color.BorderLight })
+          .onClick(() => {
+            this.showPlusMenu = false;
+            this.getUIContext().getRouter().pushUrl({ url: 'pages/Camera' });
           })
 
-          TextInput({ placeholder: '输入消息...', text: this.inputText })
-            .layoutWeight(1).height(40).fontSize(14)
-            .fontColor(Theme.Color.TextPrimary).placeholderColor(Theme.Color.TextTertiary)
-            .backgroundColor(Theme.Color.BackgroundTertiary)
+          // 中：输入框 或 按住说话
+          if (this.isVoiceMode) {
+            Column() {
+              SimpleIcon({ iconName: 'mic', iconSize: 16,
+                color: this.isRecording ? Theme.Color.Destructive : Theme.Color.TextSecondary })
+              Text(this.isRecording ? '松开发送' : '按住说话')
+                .fontSize(13).fontWeight(600)
+                .fontColor(this.isRecording ? Theme.Color.Destructive : Theme.Color.TextSecondary)
+            }
+            .layoutWeight(1).height(40)
+            .justifyContent(FlexAlign.Center)
+            .backgroundColor(this.isRecording ? 'rgba(255,59,48,0.10)' : Theme.Color.BackgroundTertiary)
             .borderRadius(Theme.Radius.round)
-            .border({ width: 1, color: Theme.Color.BorderLight })
-            .padding({ left: 14, right: 14 })
-            .onChange((v: string) => { this.inputText = v; })
-            .onSubmit(() => { this.sendMessage(); })
+            .border({ width: this.isRecording ? 1.5 : 0.5,
+              color: this.isRecording ? Theme.Color.Destructive : Theme.Color.BorderLight })
+            .onTouch((event: TouchEvent) => {
+              if (event.type === TouchType.Down) { this.startRecording(); }
+              else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+                if (this.isRecording) { this.stopRecording(); }
+              }
+            })
+          } else {
+            TextInput({ placeholder: '输入消息...', text: this.inputText })
+              .layoutWeight(1).height(40).fontSize(14)
+              .fontColor(Theme.Color.TextPrimary).placeholderColor(Theme.Color.TextTertiary)
+              .backgroundColor(Theme.Color.BackgroundTertiary)
+              .borderRadius(Theme.Radius.round)
+              .border({ width: 0.5, color: Theme.Color.BorderLight })
+              .padding({ left: 14, right: 14 })
+              .onChange((v: string) => { this.inputText = v; this.showPlusMenu = false; })
+              .onSubmit(() => { this.sendMessage(); })
+          }
 
+          // 右1：语音/文本切换按钮
           Button({ type: ButtonType.Circle }) {
-            SimpleIcon({ iconName: 'send', iconSize: 18, color: '#FFFFFF' })
-          }.width(40).height(40)
-          .backgroundColor(this.inputText.trim() && !this.isLoading ? Theme.Color.Primary : '#CCCCCC')
-          .shadow(this.inputText.trim() && !this.isLoading ? Theme.Shadow.GlowPrimary : Theme.Shadow.Soft)
-          .enabled((this.inputText.trim().length > 0 || this.selectedImageUri.length > 0) && !this.isLoading)
-          .onClick(() => { this.sendMessage(); })
-        }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 14 })
+            SimpleIcon({ iconName: this.isVoiceMode ? 'keyboard' : 'mic', iconSize: 20,
+              color: this.isVoiceMode ? Theme.Color.Primary : Theme.Color.TextSecondary })
+          }
+          .width(38).height(38)
+          .backgroundColor(this.isVoiceMode ? 'rgba(10,89,247,0.08)' : Theme.Color.BackgroundTertiary)
+          .border({ width: 0.5, color: this.isVoiceMode ? Theme.Color.Primary : Theme.Color.BorderLight })
+          .onClick(() => {
+            this.isVoiceMode = !this.isVoiceMode;
+            this.showPlusMenu = false;
+            if (!this.isVoiceMode) { this.inputText = ''; }
+          })
+
+          // 右2：加号按钮 或 发送按钮（文本模式有内容时变发送）
+          if (!this.isVoiceMode && this.inputText.trim().length > 0) {
+            Button({ type: ButtonType.Circle }) {
+              SimpleIcon({ iconName: 'send', iconSize: 18, color: '#FFFFFF' })
+            }
+            .width(38).height(38)
+            .backgroundColor(this.isLoading ? '#CCCCCC' : Theme.Color.Primary)
+            .shadow(this.isLoading ? Theme.Shadow.Soft : Theme.Shadow.GlowPrimary)
+            .enabled(!this.isLoading)
+            .onClick(() => { this.sendMessage(); })
+          } else {
+            Button({ type: ButtonType.Circle }) {
+              Text(this.showPlusMenu ? '×' : '+')
+                .fontSize(22).fontWeight(300)
+                .fontColor(this.showPlusMenu ? Theme.Color.Destructive : Theme.Color.TextSecondary)
+            }
+            .width(38).height(38)
+            .backgroundColor(this.showPlusMenu ? 'rgba(255,59,48,0.08)' : Theme.Color.BackgroundTertiary)
+            .border({ width: 0.5, color: this.showPlusMenu ? Theme.Color.Destructive : Theme.Color.BorderLight })
+            .onClick(() => { this.showPlusMenu = !this.showPlusMenu; })
+          }
+        }
+        .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 14 })
         .border({ width: { top: 0.5 }, color: Theme.Color.BorderLight })
+
+        // 加号展开菜单
+        if (this.showPlusMenu) {
+          Row({ space: 24 }) {
+            // 相册
+            Column({ space: 6 }) {
+              Button({ type: ButtonType.Circle }) {
+                SimpleIcon({ iconName: 'image', iconSize: 24, color: Theme.Color.Primary })
+              }
+              .width(52).height(52)
+              .backgroundColor('rgba(10,89,247,0.08)')
+              .border({ width: 1, color: 'rgba(10,89,247,0.15)' })
+              .onClick(() => { this.showPlusMenu = false; this.pickImage(); })
+              Text('相册').fontSize(12).fontColor(Theme.Color.TextSecondary)
+            }.alignItems(HorizontalAlign.Center)
+
+            // 通话
+            Column({ space: 6 }) {
+              Button({ type: ButtonType.Circle }) {
+                SimpleIcon({ iconName: this.isInCall ? 'end_call' : 'phone', iconSize: 24,
+                  color: this.isInCall ? '#FFFFFF' : '#00C853' })
+              }
+              .width(52).height(52)
+              .backgroundColor(this.isInCall ? '#FF3B30' : 'rgba(0,200,83,0.10)')
+              .border({ width: 1, color: this.isInCall ? '#FF3B30' : 'rgba(0,200,83,0.2)' })
+              .onClick(() => {
+                this.showPlusMenu = false;
+                if (this.isInCall) { this.endCall(); } else { this.startCall(); }
+              })
+              Text(this.isInCall ? this.callDurationText : '通话')
+                .fontSize(12)
+                .fontColor(this.isInCall ? Theme.Color.Destructive : Theme.Color.TextSecondary)
+            }.alignItems(HorizontalAlign.Center)
+          }
+          .width('100%')
+          .padding({ left: 24, right: 24, top: 12, bottom: 16 })
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .border({ width: { top: 0.5 }, color: Theme.Color.BorderLight })
+          .justifyContent(FlexAlign.Start)
+          .animation({ duration: 200, curve: Curve.EaseOut })
+        }
       }
       .width('90%').height('75%')
       .backgroundColor(Theme.Color.BackgroundSecondary)

@@ -76,6 +76,12 @@ struct EnhancedDecisionFlow {
   @State aiSuggestedOptions: OptionInput[] = []  // AI建议的选项
   @State allOptions: OptionInput[] = []  // 所有选项（用户+AI）
   @State isRecording: boolean = false
+  @State isVoiceMode: boolean = false
+  @State showPlusMenu: boolean = false
+  @State isInCall: boolean = false
+  @State callDurationText: string = '00:00'
+  private callTimer: number = -1
+  private callDuration: number = 0
   @State selectedImageUri: string = ''
   private audioRecorder: media.AVRecorder | null = null
   private recordFilePath: string = ''

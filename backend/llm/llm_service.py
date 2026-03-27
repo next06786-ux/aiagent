@@ -17,18 +17,18 @@ class LLMProvider(Enum):
     """大模型提供商"""
     OPENAI = "openai"
     QWEN = "qwen"  # 通义千问
-    SGLANG = "sglang"  # SGLang 推理服务器（本地 GPU）
+    TRANSFORMERS = "transformers"  # Transformers 原生推理（本地 GPU）
 
 
 class LLMService:
     """大模型服务"""
     
-    def __init__(self, provider: str = "sglang", api_key: Optional[str] = None):
+    def __init__(self, provider: str = "qwen", api_key: Optional[str] = None):
         self.provider = LLMProvider(provider)
         # 特殊处理 Qwen，使用 DASHSCOPE_API_KEY
         if provider == "qwen":
             self.api_key = api_key or os.getenv("DASHSCOPE_API_KEY")
-        elif provider == "sglang":
+        elif provider == "transformers":
             self.api_key = "local"  # 本地模型不需要API key
         else:
             self.api_key = api_key or os.getenv(f"{provider.upper()}_API_KEY")
@@ -63,18 +63,49 @@ class LLMService:
                 print("⚠️ OpenAI 未安装，请运行: pip install openai")
                 self.enabled = False
         
-        elif self.provider == LLMProvider.SGLANG:
+        elif self.provider == LLMProvider.TRANSFORMERS:
             try:
-                from backend.llm.sglang_client import SGLangClientSync, SGLangConfig
-                server_url = os.getenv("SGLANG_SERVER_URL", "http://localhost:8000")
-                model_name = os.getenv("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B")
-                config = SGLangConfig(server_url=server_url, model_name=model_name)
-                self.client = SGLangClientSync(config)
+                from transformers import AutoModelForCausalLM, AutoTokenizer
+                from backend.llm.model_config import get_model_hf_name, get_quantization_config
+                
+                model_name = get_model_hf_name()
+                quant_config = get_quantization_config()
+                
+                load_kwargs = {
+                    "trust_remote_code": True,
+                    "device_map": "auto",
+                }
+                
+                # 根据量化配置加载
+                if quant_config.get("enable_quantization") and quant_config.get("load_in_4bit"):
+                    from transformers import BitsAndBytesConfig
+                    import torch
+                    load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_use_double_quant=quant_config.get("bnb_4bit_use_double_quant", True),
+                        bnb_4bit_quant_type=quant_config.get("bnb_4bit_quant_type", "nf4"),
+                        bnb_4bit_compute_dtype=torch.bfloat16
+                    )
+                    print(f"🔧 启用 4-bit 量化加载...")
+                elif quant_config.get("enable_quantization") and quant_config.get("load_in_8bit"):
+                    from transformers import BitsAndBytesConfig
+                    load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+                    print(f"🔧 启用 8-bit 量化加载...")
+                else:
+                    import torch
+                    load_kwargs["torch_dtype"] = torch.float16
+                
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+                self.client = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
                 self.model = model_name
                 self.enabled = True
-                print(f"✓ SGLang 客户端已初始化: {server_url}")
+                
+                import torch
+                vram_gb = torch.cuda.memory_allocated() / 1024**3 if torch.cuda.is_available() else 0
+                quant_label = " (4-bit量化)" if quant_config.get("load_in_4bit") else ""
+                print(f"✓ Transformers 模型已加载: {model_name}{quant_label} (VRAM: {vram_gb:.2f}GB)")
             except Exception as e:
-                print(f"⚠️ SGLang 初始化失败: {e}")
+                print(f"⚠️ Transformers 模型加载失败: {e}")
                 self.enabled = False
     
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, response_format: Optional[str] = None) -> str:
@@ -94,8 +125,8 @@ class LLMService:
                 return self._chat_openai(messages, temperature, response_format)
             elif self.provider == LLMProvider.QWEN:
                 return self._chat_qwen(messages, temperature, response_format)
-            elif self.provider == LLMProvider.SGLANG:
-                return self._chat_sglang(messages, temperature)
+            elif self.provider == LLMProvider.TRANSFORMERS:
+                return self._chat_transformers(messages, temperature)
             else:
                 return "大模型未配置"
         except Exception as e:
@@ -158,8 +189,8 @@ class LLMService:
         try:
             if self.provider == LLMProvider.QWEN:
                 yield from self._chat_qwen_stream(messages, temperature)
-            elif self.provider == LLMProvider.SGLANG:
-                yield from self._chat_sglang_stream(messages, temperature)
+            elif self.provider == LLMProvider.TRANSFORMERS:
+                yield from self._chat_transformers_stream(messages, temperature)
             else:
                 # 其他提供商暂不支持流式
                 content = self.chat(messages, temperature)
@@ -221,52 +252,75 @@ class LLMService:
                 print(f"Qwen普通模式也失败: {e2}")
                 yield {"type": "error", "content": str(e2)}
     
-    def _chat_sglang(self, messages: List[Dict[str, str]], temperature: float) -> str:
-        """SGLang 对话"""
+    def _chat_transformers(self, messages: List[Dict[str, str]], temperature: float) -> str:
+        """Transformers 原生对话"""
         try:
-            return self.client.chat(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=2048
+            from backend.llm.model_config import get_inference_config
+            
+            inference_cfg = get_inference_config()
+            
+            # 使用 tokenizer 的 chat template
+            text = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
             )
+            inputs = self.tokenizer(text, return_tensors="pt").to(self.client.device)
+            
+            import torch
+            with torch.no_grad():
+                outputs = self.client.generate(
+                    **inputs,
+                    max_new_tokens=inference_cfg.get("max_new_tokens", 2048),
+                    temperature=max(temperature, 0.01),
+                    top_p=inference_cfg.get("top_p", 0.9),
+                    do_sample=inference_cfg.get("do_sample", True),
+                )
+            
+            # 只取生成的部分
+            generated_ids = outputs[0][inputs["input_ids"].shape[-1]:]
+            response = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+            
+            return response
         except Exception as e:
-            print(f"SGLang 调用失败: {e}")
-            return f"SGLang 调用失败: {str(e)}"
+            print(f"Transformers 推理失败: {e}")
+            return f"本地模型推理失败: {str(e)}"
     
-    def _chat_sglang_stream(self, messages: List[Dict[str, str]], temperature: float):
-        """SGLang 流式对话"""
+    def _chat_transformers_stream(self, messages: List[Dict[str, str]], temperature: float):
+        """Transformers 流式对话"""
         try:
-            import httpx
-            import json as json_module
+            from transformers import TextIteratorStreamer
+            from threading import Thread
+            from backend.llm.model_config import get_inference_config
             
-            server_url = os.getenv("SGLANG_SERVER_URL", "http://localhost:8000")
-            model_name = os.getenv("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B")
+            inference_cfg = get_inference_config()
             
-            payload = {
-                "model": model_name,
-                "messages": messages,
-                "temperature": temperature,
-                "max_tokens": 2048,
-                "stream": True
+            text = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            inputs = self.tokenizer(text, return_tensors="pt").to(self.client.device)
+            
+            streamer = TextIteratorStreamer(
+                self.tokenizer, skip_prompt=True, skip_special_tokens=True
+            )
+            
+            generation_kwargs = {
+                **inputs,
+                "max_new_tokens": inference_cfg.get("max_new_tokens", 2048),
+                "temperature": max(temperature, 0.01),
+                "top_p": inference_cfg.get("top_p", 0.9),
+                "do_sample": inference_cfg.get("do_sample", True),
+                "streamer": streamer,
             }
             
-            with httpx.Client(timeout=120.0) as client:
-                with client.stream("POST", f"{server_url}/v1/chat/completions", json=payload) as resp:
-                    for line in resp.iter_lines():
-                        if line.startswith("data: "):
-                            data = line[6:]
-                            if data == "[DONE]":
-                                break
-                            try:
-                                chunk = json_module.loads(data)
-                                delta = chunk["choices"][0].get("delta", {})
-                                content = delta.get("content", "")
-                                if content:
-                                    yield {"type": "answer", "content": content}
-                            except:
-                                pass
+            thread = Thread(target=self.client.generate, kwargs=generation_kwargs)
+            thread.start()
+            
+            for new_text in streamer:
+                if new_text:
+                    yield {"type": "answer", "content": new_text}
+            
+            thread.join()
         except Exception as e:
-            print(f"SGLang 流式调用失败: {e}")
+            print(f"Transformers 流式推理失败: {e}")
             yield {"type": "error", "content": str(e)}
     
     def analyze_health(self, health_data: Dict[str, Any], prediction: Dict[str, Any]) -> str:
@@ -512,10 +566,10 @@ def get_llm_service() -> Optional[LLMService]:
         elif provider == 'openai':
             api_key = os.getenv('OPENAI_API_KEY')
             key_name = 'OPENAI_API_KEY'
-        elif provider == 'sglang':
-            # SGLang 不需要 API key，只需要服务器地址
+        elif provider == 'transformers':
+            # Transformers 本地推理不需要 API key
             api_key = 'local'
-            key_name = 'SGLANG_SERVER_URL'
+            key_name = 'LOCAL_MODEL'
         else:
             api_key = os.getenv(f'{provider.upper()}_API_KEY')
             key_name = f'{provider.upper()}_API_KEY'

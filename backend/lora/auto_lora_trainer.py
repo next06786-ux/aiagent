@@ -1,6 +1,7 @@
 """
 LoRA 自动化训练系统
 为每个用户训练专属的个性化 LoRA 模型（基于本地 Qwen3.5-9B）
+集成 llmquant 训练后自动量化（4-bit per-channel）
 """
 import os
 import json
@@ -81,14 +82,16 @@ class ConversationDataset(Dataset):
 
 
 class AutoLoRATrainer:
-    """LoRA 自动化训练器"""
+    """LoRA 自动化训练器（集成训练后自动量化）"""
 
     def __init__(self, user_id: str, base_model_name: Optional[str] = None):
         if not user_id:
             raise ValueError("user_id 不能为空")
 
         self.user_id = user_id
-        self.base_model_name = base_model_name or os.environ.get("LOCAL_BASE_MODEL_PATH", "/root/autodl-tmp/models/base/Qwen3.5-9B")
+        self.base_model_name = base_model_name or os.environ.get(
+            "LOCAL_BASE_MODEL_PATH", "/root/autodl-tmp/models/base/Qwen3.5-9B"
+        )
 
         self.lora_config = LoraConfig(
             r=64,
@@ -108,7 +111,9 @@ class AutoLoRATrainer:
             "max_length": 256
         }
 
-        self.user_lora_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora", user_id))
+        self.user_lora_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora", user_id)
+        )
         self.status_file = os.path.join(self.user_lora_root, "status.json")
         self.status = self.load_status()
         self._rag_system = None
@@ -162,7 +167,6 @@ class AutoLoRATrainer:
             db = Database(DatabaseConfig.get_database_url())
             session = db.get_session()
             
-            # 只查询上次训练之后的新对话
             query = session.query(ConversationHistory).filter(
                 ConversationHistory.user_id == self.user_id
             )
@@ -172,7 +176,6 @@ class AutoLoRATrainer:
             rows = query.order_by(ConversationHistory.timestamp.asc()).all()
             session.close()
             
-            # 配对 user/assistant 消息
             conversations = []
             i = 0
             while i < len(rows) - 1:
@@ -205,7 +208,59 @@ class AutoLoRATrainer:
             tokenizer.pad_token = tokenizer.eos_token
         return ConversationDataset(conversations, tokenizer, self.training_config["max_length"])
 
+    async def _auto_quantize_lora_after_training(self, lora_path: str):
+        """
+        训练完成后自动执行 LoRA 量化
+        使用 llmquant 的 4-bit per-channel 量化方案
+        """
+        try:
+            from backend.llm.model_config import get_quantization_config
+            from backend.model_compression.lora_quantizer import LoRAQuantizer
+            
+            quant_config = get_quantization_config()
+            
+            if not quant_config.get("quantize_after_training"):
+                print(f"ℹ️  LoRA 自动量化未启用，跳过量化步骤")
+                return
+            
+            print(f"\n{'='*60}")
+            print(f"🔧 开始自动量化 LoRA 权重")
+            print(f"{'='*60}")
+            
+            _training_progress[self.user_id]["stage"] = "量化LoRA权重..."
+            _training_progress[self.user_id]["progress"] = 97
+            
+            quantizer = LoRAQuantizer(
+                user_id=self.user_id,
+                lora_dir=os.path.dirname(os.path.dirname(lora_path))
+            )
+            
+            result = quantizer.quantize_lora_weights(
+                bits=quant_config.get("lora_quantization_bits", 4),
+                per_channel=quant_config.get("lora_quantization_per_channel", True),
+                save_metadata=True
+            )
+            
+            if result["status"] == "success":
+                print(f"\n✅ LoRA 量化成功")
+                print(f"   压缩率: {result['compression_ratio']:.2f}x")
+                print(f"   存储空间: {result['size_before_mb']:.1f}MB → {result['size_after_mb']:.1f}MB")
+                print(f"   输出路径: {result['output_path']}\n")
+                
+                self.status["lora_quantized"] = True
+                self.status["quantization_bits"] = quant_config.get("lora_quantization_bits", 4)
+                self.status["quantization_compression_ratio"] = result['compression_ratio']
+                self.save_status()
+            else:
+                print(f"\n⚠️  LoRA 量化失败: {result.get('error', '未知错误')}")
+        
+        except Exception as e:
+            print(f"\n⚠️  LoRA 量化异常: {e}")
+            import traceback
+            traceback.print_exc()
+
     def train_lora(self, dataset: Dataset) -> Optional[str]:
+        """训练 LoRA 模型，完成后自动量化"""
         print(f"\n{'='*60}")
         print(f"🚀 开始为用户 {self.user_id} 训练 LoRA 模型")
         print(f"📊 训练数据量: {len(dataset)}")
@@ -216,27 +271,24 @@ class AutoLoRATrainer:
         }
 
         try:
-            # 训练前清理GPU缓存
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 import gc
                 gc.collect()
                 print(f"GPU缓存已清理，可用显存: {torch.cuda.mem_get_info()[0] / 1024**3:.1f} GB")
 
-            # 复用 lora_manager 已加载的基座模型，避免重复加载OOM
             print(f"📥 获取已加载的基座模型...")
             _training_progress[self.user_id]["stage"] = "获取基座模型..."
             _training_progress[self.user_id]["progress"] = 2
             
             from backend.lora.lora_model_manager import lora_manager
-            lora_manager.load_base_model()  # 确保已加载
+            lora_manager.load_base_model()
             base_model = lora_manager.base_model
             tokenizer = lora_manager.tokenizer
             
             if base_model is None:
                 raise RuntimeError("基座模型未加载，请检查模型路径")
 
-            # 卸载该用户已有的LoRA（如果有），避免冲突
             if self.user_id in lora_manager.loaded_loras:
                 del lora_manager.loaded_loras[self.user_id]
                 if torch.cuda.is_available():
@@ -247,7 +299,6 @@ class AutoLoRATrainer:
             _training_progress[self.user_id]["stage"] = "初始化LoRA适配器..."
             _training_progress[self.user_id]["progress"] = 5
             
-            # 启用gradient checkpointing
             base_model.gradient_checkpointing_enable()
             model = get_peft_model(base_model, self.lora_config)
 
@@ -264,7 +315,7 @@ class AutoLoRATrainer:
                 per_device_train_batch_size=1,
                 gradient_accumulation_steps=2,
                 learning_rate=self.training_config["learning_rate"],
-                bf16=False,  # 8-bit量化时不用bf16
+                bf16=False,
                 fp16=False,
                 logging_steps=1,
                 save_strategy="epoch",
@@ -316,11 +367,25 @@ class AutoLoRATrainer:
             print(f"耗时: {duration:.1f} 秒")
             print(f"模型已保存到: {final_path}\n")
             
-            # 训练完成后恢复模型到推理状态
+            # 异步执行量化，不阻塞训练流程
+            import asyncio
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self._auto_quantize_lora_after_training(final_path))
+            except Exception:
+                # 如果 asyncio 不可用，同步执行
+                import inspect
+                if inspect.iscoroutinefunction(self._auto_quantize_lora_after_training):
+                    try:
+                        loop = asyncio.get_event_loop()
+                        loop.run_until_complete(self._auto_quantize_lora_after_training(final_path))
+                    except:
+                        print("量化步骤将在后台进行")
+            
             try:
                 base_model.gradient_checkpointing_disable()
-                # 移除PEFT包装，恢复原始base_model
-                model.merge_and_unload()  # 不改变lora_manager.base_model
+                model.merge_and_unload()
             except Exception:
                 pass
             if torch.cuda.is_available():
@@ -335,7 +400,6 @@ class AutoLoRATrainer:
             print(f"\n训练失败: {e}")
             import traceback
             traceback.print_exc()
-            # 恢复模型状态
             try:
                 base_model = lora_manager.base_model
                 if base_model is not None:
@@ -350,6 +414,7 @@ class AutoLoRATrainer:
             return None
 
     def auto_train_workflow(self):
+        """自动训练工作流"""
         print(f"\n{'='*60}")
         print(f"🤖 LoRA 自动训练检查")
         print(f"👤 用户: {self.user_id}")

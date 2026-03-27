@@ -145,7 +145,8 @@ struct KnowledgeStarMapGL {
   @State isLoading: boolean = false
   @State loadError: string = ''
   @State selectedNodeIdx: number = -1
-  @State showPersonList: boolean = true
+  @State showPersonList: boolean = false
+  @State showCategoryList: boolean = false
   @State zoomScale: number = 1.0
   @State nodeScreenPositions: NodeScreenPos[] = []
   @State selectedNodeRelations: NodeRelation[] = []
@@ -739,97 +740,136 @@ struct KnowledgeStarMapGL {
       .hitTestBehavior(HitTestMode.Block)
 
 
-      // 左侧人物列表
+      // 右上角：类型筛选 + 人物列表（紧贴顶部栏）
       if (this.nodes.length > 0) {
-        Column() {
-          Row({ space: 8 }) {
-            Text(this.showPersonList ? '◀' : '▶')
-              .fontSize(12)
-              .fontColor('rgba(255, 255, 255, 0.6)')
-            
-            if (this.showPersonList) {
-              Text('人物列表')
-                .fontSize(13)
-                .fontWeight(FontWeight.Medium)
-                .fontColor('#FFFFFF')
-              
-              Blank()
-              
-              Text(`${this.nodes.length}人`)
-                .fontSize(11)
-                .fontColor('rgba(255, 255, 255, 0.5)')
+        Row({ space: 6 }) {
+          // 类型列表按钮（在人物列表左侧）
+          Column() {
+            // 触发按钮
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 4 }) {
+                Text('分类').fontSize(12).fontColor('#FFFFFF').fontWeight(600)
+                Text(this.showCategoryList ? '▲' : '▼').fontSize(10).fontColor('rgba(255,255,255,0.6)')
+              }.padding({ left: 10, right: 10 })
             }
-          }
-          .width('100%')
-          .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-          .onClick(() => {
-            this.showPersonList = !this.showPersonList
-          })
+            .height(32)
+            .backgroundColor('rgba(10, 10, 30, 0.85)')
+            .borderRadius(16)
+            .border({ width: 1, color: 'rgba(255,255,255,0.15)' })
+            .onClick(() => {
+              this.showCategoryList = !this.showCategoryList
+              if (this.showCategoryList) this.showPersonList = false
+            })
 
-          if (this.showPersonList) {
-            Scroll() {
-              Column({ space: 4 }) {
+            // 下拉面板
+            if (this.showCategoryList) {
+              Column({ space: 2 }) {
                 ForEach(this.getGroupedNodes(), (group: CategoryGroup) => {
-                  Row({ space: 6 }) {
-                    Circle({ width: 8, height: 8 })
-                      .fill(this.getNodeColor(group.category))
+                  Row({ space: 8 }) {
+                    Circle({ width: 8, height: 8 }).fill(this.getNodeColor(group.category))
                     Text(this.getCategoryDisplayName(group.category))
-                      .fontSize(11)
-                      .fontColor(this.getNodeColor(group.category))
-                    Text(`(${group.nodes.length})`)
-                      .fontSize(10)
-                      .fontColor('rgba(255, 255, 255, 0.4)')
+                      .fontSize(12).fontColor('#FFFFFF')
+                    Text(`${group.nodes.length}`)
+                      .fontSize(10).fontColor('rgba(255,255,255,0.5)')
                   }
                   .width('100%')
-                  .padding({ left: 12, right: 12, top: 8, bottom: 4 })
-
-                  ForEach(group.nodes, (node: GraphNode, nodeIdx: number) => {
-                    Row({ space: 8 }) {
-                      Circle({ width: 6, height: 6 })
-                        .fill(this.getNodeColor(node.category))
-                      
-                      Text(node.name)
-                        .fontSize(12)
-                        .fontColor('rgba(255, 255, 255, 0.8)')
-                        .maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .layoutWeight(1)
-                      
-                      Text(`${node.connections}`)
-                        .fontSize(10)
-                        .fontColor('rgba(255, 255, 255, 0.4)')
-                    }
-                    .width('100%')
-                    .padding({ left: 20, right: 12, top: 6, bottom: 6 })
-                    .backgroundColor(this.selectedNodeIdx === nodeIdx ? 'rgba(255, 255, 255, 0.15)' : 'transparent')
-                    .borderRadius(4)
-                    .onClick(() => {
-                      // 找到节点在全局数组中的索引
-                      const globalIdx = this.nodes.findIndex(n => n.id === node.id)
-                      if (globalIdx >= 0 && this.nativeModule) {
-                        console.info(`StarMap: Focusing on node ${globalIdx} '${node.name}' from list`)
-                        // 使用 focusOnNode 实现丝滑滑动
-                        this.nativeModule.focusOnNode(globalIdx)
-                        this.selectedNodeIdx = globalIdx
-                        // 获取节点关系
-                        this.selectedNodeRelations = this.nativeModule.getNodeRelations(globalIdx)
-                      }
-                    })
-                  })
+                  .padding({ left: 12, right: 12, top: 6, bottom: 6 })
                 })
               }
-              .padding({ bottom: 20 })
+              .width(110)
+              .padding({ top: 6, bottom: 6 })
+              .backgroundColor('rgba(10, 10, 30, 0.92)')
+              .borderRadius(10)
+              .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
+              .margin({ top: 4 })
             }
-            .scrollBar(BarState.Off)
-            .layoutWeight(1)
           }
+          .alignItems(HorizontalAlign.End)
+
+          // 人物列表按钮
+          Column() {
+            // 触发按钮
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 4 }) {
+                Text('人物').fontSize(12).fontColor('#FFFFFF').fontWeight(600)
+                Text(this.showPersonList ? '▲' : '▼').fontSize(10).fontColor('rgba(255,255,255,0.6)')
+                if (!this.showPersonList) {
+                  Text(`${this.nodes.length}`).fontSize(10).fontColor('rgba(255,255,255,0.5)')
+                }
+              }.padding({ left: 10, right: 10 })
+            }
+            .height(32)
+            .backgroundColor('rgba(10, 10, 30, 0.85)')
+            .borderRadius(16)
+            .border({ width: 1, color: 'rgba(255,255,255,0.15)' })
+            .onClick(() => {
+              this.showPersonList = !this.showPersonList
+              if (this.showPersonList) this.showCategoryList = false
+            })
+
+            // 下拉面板
+            if (this.showPersonList) {
+              Scroll() {
+                Column({ space: 0 }) {
+                  ForEach(this.getGroupedNodes(), (group: CategoryGroup) => {
+                    // 分组标题
+                    Row({ space: 6 }) {
+                      Circle({ width: 7, height: 7 }).fill(this.getNodeColor(group.category))
+                      Text(this.getCategoryDisplayName(group.category))
+                        .fontSize(11).fontColor(this.getNodeColor(group.category)).fontWeight(600)
+                      Text(`(${group.nodes.length})`).fontSize(10).fontColor('rgba(255,255,255,0.4)')
+                    }
+                    .width('100%')
+                    .padding({ left: 12, right: 12, top: 8, bottom: 4 })
+
+                    // 节点列表
+                    ForEach(group.nodes, (node: GraphNode) => {
+                      Row({ space: 8 }) {
+                        Circle({ width: 5, height: 5 }).fill(this.getNodeColor(node.category))
+                        Text(node.name)
+                          .fontSize(12).fontColor('rgba(255,255,255,0.85)')
+                          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .layoutWeight(1)
+                        Text(`${node.connections}`)
+                          .fontSize(10).fontColor('rgba(255,255,255,0.4)')
+                      }
+                      .width('100%')
+                      .padding({ left: 20, right: 12, top: 5, bottom: 5 })
+                      .backgroundColor(
+                        this.selectedNodeIdx === this.nodes.findIndex(n => n.id === node.id)
+                          ? 'rgba(255,255,255,0.12)' : 'transparent'
+                      )
+                      .borderRadius(4)
+                      .onClick(() => {
+                        const globalIdx = this.nodes.findIndex(n => n.id === node.id)
+                        if (globalIdx >= 0 && this.nativeModule) {
+                          this.nativeModule.focusOnNode(globalIdx)
+                          this.selectedNodeIdx = globalIdx
+                          this.selectedNodeRelations = this.nativeModule.getNodeRelations(globalIdx)
+                          this.showPersonList = false
+                        }
+                      })
+                    })
+                  })
+                }
+                .padding({ bottom: 8 })
+              }
+              .scrollBar(BarState.Off)
+              .constraintSize({ maxHeight: 320 })
+              .width(150)
+              .backgroundColor('rgba(10, 10, 30, 0.92)')
+              .borderRadius(10)
+              .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
+              .margin({ top: 4 })
+            }
+          }
+          .alignItems(HorizontalAlign.End)
         }
-        .width(this.showPersonList ? 140 : 36)
-        .height(this.showPersonList ? '60%' : 40)
-        .backgroundColor('rgba(10, 10, 30, 0.85)')
-        .borderRadius(12)
-        .position({ x: 12, y: 130 })
-        .animation({ duration: 200, curve: Curve.EaseOut })
+        .position({ x: '100%', y: 8 })
+        .translate({ x: -16 })
+        .alignItems(VerticalAlign.Top)
+        .zIndex(1000)
+        .hitTestBehavior(HitTestMode.Block)
       }
 
       // 右侧控制按钮
@@ -997,7 +1037,7 @@ struct KnowledgeStarMapGL {
         .translate({ y: this.selectedNodeRelations.length > 0 ? -280 : -180 })
       }
 
-      // 图例
+      // 图例（左下角，不遮挡操作区）
       Column({ space: 6 }) {
         ForEach(this.getGroupedNodes().slice(0, 6), (group: CategoryGroup) => {
           Row({ space: 6 }) {
@@ -1012,7 +1052,8 @@ struct KnowledgeStarMapGL {
       .padding(10)
       .backgroundColor('rgba(0, 0, 0, 0.3)')
       .borderRadius(8)
-      .position({ x: 12, y: 70 })
+      .position({ x: 12, y: '100%' })
+      .translate({ y: -180 })
       .hitTestBehavior(HitTestMode.Transparent)
 
       // 故事弹窗

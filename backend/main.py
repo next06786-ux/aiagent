@@ -179,12 +179,10 @@ def get_or_create_user_system(user_id: str):
 
 @app.get("/health")
 async def health_check():
-    """单机 GPU 主后端健康检查"""
+    """主后端健康检查"""
     from backend.startup_manager import get_init_status
-    from backend.llm.sglang_client import get_sglang_client
 
     status = get_init_status()
-    sglang_health = await get_sglang_client().health_check()
     lora_dir = os.environ.get("LORA_MODELS_DIR", "./models/lora")
     lora_dir_exists = os.path.exists(lora_dir)
     lora_user_count = 0
@@ -194,16 +192,15 @@ async def health_check():
             if os.path.isdir(os.path.join(lora_dir, d))
         ])
 
-    overall_status = "healthy" if sglang_health.get("status") == "healthy" else "degraded"
+    overall_status = "healthy" if status['llm_service'] else "degraded"
 
     return {
         "status": overall_status,
         "timestamp": datetime.now().isoformat(),
-        "deployment_mode": "single_gpu_host",
-        "model": os.environ.get("SGLANG_MODEL_NAME", "Qwen/Qwen3.5-9B"),
+        "deployment_mode": "transformers_native",
+        "model": "Qwen/Qwen3.5-9B",
         "services": {
             "fastapi": "✓ 就绪",
-            "sglang": "✓ 就绪" if sglang_health.get("status") == "healthy" else f"⚠️ {sglang_health}",
             "llm": "✓ 就绪" if status['llm_service'] else "⚠️ 未就绪",
             "knowledge_graph": "✓ 就绪" if status['knowledge_graph'] else "⚠️ 未就绪",
             "rag": "✓ 就绪" if status['rag_system'] else "⚠️ 未就绪",

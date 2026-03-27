@@ -43,13 +43,39 @@ class LoRAModelManager:
             print(f"📥 加载基础模型: {model_path}")
             if not os.path.exists(model_path):
                 raise FileNotFoundError(f"本地基础模型目录不存在: {model_path}")
+            
+            # 检查是否启用量化
+            from backend.llm.model_config import get_quantization_config
+            quant_config = get_quantization_config()
+            
+            load_kwargs = {
+                "trust_remote_code": True,
+                "device_map": "auto",
+                "local_files_only": True
+            }
+            
+            # 根据配置选择加载方式
+            if quant_config.get("enable_quantization") and quant_config.get("load_in_4bit"):
+                # 使用 4-bit 量化加载（bitsandbytes）
+                print("🔧 启用 4-bit 量化加载...")
+                from transformers import BitsAndBytesConfig
+                
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_use_double_quant=quant_config.get("bnb_4bit_use_double_quant", True),
+                    bnb_4bit_quant_type=quant_config.get("bnb_4bit_quant_type", "nf4"),
+                    bnb_4bit_compute_dtype=torch.bfloat16
+                )
+                load_kwargs["quantization_config"] = bnb_config
+            else:
+                # 使用 FP16 或 BF16 加载
+                load_kwargs["torch_dtype"] = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+            
             self.base_model = AutoModelForCausalLM.from_pretrained(
                 model_path,
-                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto",
-                trust_remote_code=True,
-                local_files_only=True
+                **load_kwargs
             )
+            
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_path,
                 trust_remote_code=True,
@@ -57,7 +83,9 @@ class LoRAModelManager:
             )
             if self.tokenizer.pad_token_id is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-            print("✅ 基础模型加载完成\n")
+            
+            vram_gb = torch.cuda.memory_allocated() / 1024**3 if torch.cuda.is_available() else 0
+            print(f"✅ 基础模型加载完成 (VRAM: {vram_gb:.2f} GB)\n")
     
     def get_user_lora_path(self, user_id: str) -> Optional[str]:
         """获取用户最新的 LoRA 模型路径"""
@@ -88,9 +116,26 @@ class LoRAModelManager:
         """获取用户 LoRA 模型路径（别名方法）"""
         return self.get_user_lora_path(user_id)
     
-    def load_user_lora(self, user_id: str) -> Optional[PeftModel]:
-        """加载用户的 LoRA 模型"""
+    def get_quantized_lora_path(self, user_id: str) -> Optional[str]:
+        """获取用户量化 LoRA 模型路径（如果存在）"""
+        lora_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora")
+        )
+        q4_path = os.path.join(lora_dir, f"{user_id}_q4")
         
+        if os.path.exists(q4_path):
+            config_file = os.path.join(q4_path, "adapter_config.json")
+            if os.path.exists(config_file):
+                return q4_path
+        
+        return None
+
+    def load_user_lora(self, user_id: str, prefer_quantized: bool = True) -> Optional[PeftModel]:
+        """
+        加载用户的 LoRA 模型
+        
+        优先加载量化版本（如果存在且启用了量化）
+        """
         # 如果已经加载，直接返回
         if user_id in self.loaded_loras:
             return self.loaded_loras[user_id]
@@ -98,8 +143,24 @@ class LoRAModelManager:
         # 加载基础模型
         self.load_base_model()
         
-        # 查找用户的 LoRA
-        lora_path = self.get_user_lora_path(user_id)
+        # 检查是否优先使用量化 LoRA
+        lora_path = None
+        is_quantized = False
+        
+        if prefer_quantized:
+            from backend.llm.model_config import MODEL_CONFIG
+            lora_quant_cfg = MODEL_CONFIG.get("lora_config_quantization", {})
+            
+            if lora_quant_cfg.get("quantize_after_training"):
+                q4_path = self.get_quantized_lora_path(user_id)
+                if q4_path:
+                    lora_path = q4_path
+                    is_quantized = True
+                    print(f"🔧 找到量化 LoRA: {q4_path}")
+        
+        # 如果没有量化版本，使用原始版本
+        if not lora_path:
+            lora_path = self.get_user_lora_path(user_id)
         
         if not lora_path:
             print(f"⚠️  用户 {user_id} 还没有训练 LoRA 模型，使用基础模型")
@@ -108,11 +169,25 @@ class LoRAModelManager:
         adapter_safetensors = os.path.join(lora_path, "adapter_model.safetensors")
         adapter_bin = os.path.join(lora_path, "adapter_model.bin")
         if not os.path.exists(adapter_safetensors) and not os.path.exists(adapter_bin):
-            print(f"❌ 用户 {user_id} 的 LoRA 模型不完整，缺少 adapter 权重文件: {lora_path}")
-            return None
+            # 量化版本没有完整 adapter，回退到原始版本
+            if is_quantized:
+                print(f"⚠️  量化 LoRA 不完整，回退到原始版本")
+                lora_path = self.get_user_lora_path(user_id)
+                is_quantized = False
+                if not lora_path:
+                    return None
+                adapter_safetensors = os.path.join(lora_path, "adapter_model.safetensors")
+                adapter_bin = os.path.join(lora_path, "adapter_model.bin")
+                if not os.path.exists(adapter_safetensors) and not os.path.exists(adapter_bin):
+                    print(f"❌ 用户 {user_id} 的 LoRA 模型不完整: {lora_path}")
+                    return None
+            else:
+                print(f"❌ 用户 {user_id} 的 LoRA 模型不完整: {lora_path}")
+                return None
         
         try:
-            print(f"📥 加载用户 {user_id} 的 LoRA 模型...")
+            q_label = " (量化4-bit)" if is_quantized else ""
+            print(f"📥 加载用户 {user_id} 的 LoRA 模型{q_label}...")
             model = PeftModel.from_pretrained(
                 self.base_model,
                 model_id=lora_path,
@@ -120,12 +195,28 @@ class LoRAModelManager:
             )
             
             self.loaded_loras[user_id] = model
-            print(f"✅ LoRA 模型加载完成\n")
+            print(f"✅ LoRA 模型加载完成{q_label}\n")
             
             return model
             
         except Exception as e:
             print(f"❌ 加载 LoRA 失败: {e}")
+            # 如果量化版本加载失败，回退到原始版本
+            if is_quantized:
+                print("⚠️  尝试回退到原始 LoRA...")
+                original_path = self.get_user_lora_path(user_id)
+                if original_path:
+                    try:
+                        model = PeftModel.from_pretrained(
+                            self.base_model,
+                            model_id=original_path,
+                            is_trainable=False
+                        )
+                        self.loaded_loras[user_id] = model
+                        print(f"✅ 原始 LoRA 加载完成\n")
+                        return model
+                    except Exception as e2:
+                        print(f"❌ 原始 LoRA 也加载失败: {e2}")
             return None
     
     def unload_user_lora(self, user_id: str):
@@ -252,16 +343,34 @@ class LoRAModelManager:
         thread.join()
     
     def get_model_info(self, user_id: str) -> dict:
-        """获取用户模型信息"""
+        """获取用户模型信息（包含量化状态）"""
         lora_path = self.get_user_lora_path(user_id)
+        quantized_lora_path = self.get_quantized_lora_path(user_id)
         
         info = {
             "user_id": user_id,
             "has_lora": lora_path is not None,
             "lora_path": lora_path,
+            "has_quantized_lora": quantized_lora_path is not None,
+            "quantized_lora_path": quantized_lora_path,
             "is_loaded": user_id in self.loaded_loras,
-            "base_model": self.base_model_name
+            "base_model": self.base_model_name,
+            "base_model_quantized": False
         }
+        
+        # 检查基座模型是否使用了量化
+        try:
+            from backend.llm.model_config import get_quantization_config
+            quant_cfg = get_quantization_config()
+            info["base_model_quantized"] = quant_cfg.get("enable_quantization", False)
+            info["quantization_type"] = quant_cfg.get("quantization_type", "none")
+        except Exception:
+            pass
+        
+        # 当前 VRAM 使用
+        if torch.cuda.is_available():
+            info["vram_used_gb"] = round(torch.cuda.memory_allocated() / 1024**3, 2)
+            info["vram_total_gb"] = round(torch.cuda.get_device_properties(0).total_mem / 1024**3, 2)
         
         # 读取训练状态
         status_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora", user_id, "status.json"))
