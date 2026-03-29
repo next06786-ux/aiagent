@@ -1187,8 +1187,14 @@ async def speech_to_text(file: UploadFile = File(...)):
                         for s in sentences:
                             if isinstance(s, dict):
                                 result_holder["text"] += s.get("text", "")
+                            elif hasattr(s, 'text'):
+                                t = s.text
+                                if t:
+                                    result_holder["text"] += t
                             elif isinstance(s, str):
-                                result_holder["text"] += s
+                                # 过滤掉字段名拼接的脏数据
+                                if len(s) < 200 and 'sentence_id' not in s:
+                                    result_holder["text"] += s
 
             rec = Recognition(
                 model='paraformer-realtime-v2',
