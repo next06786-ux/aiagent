@@ -85,6 +85,7 @@ struct EnhancedDecisionFlow {
   @State selectedImageUri: string = ''
   private audioRecorder: media.AVRecorder | null = null
   private recordFilePath: string = ''
+  private inputController: TextInputController = new TextInputController()
 
   async aboutToAppear() {
     // 获取真实用户ID
@@ -184,9 +185,13 @@ struct EnhancedDecisionFlow {
   }
 
   // 继续信息收集
-  private async continueCollection() {
-    if (!this.userInput.trim()) {
+  private async continueCollection(overrideText?: string) {
+    const msgText = overrideText ?? this.userInput
+    if (!msgText.trim()) {
       return
+    }
+    if (overrideText) {
+      this.userInput = overrideText
     }
 
     // 如果在询问选项阶段
@@ -645,7 +650,7 @@ struct EnhancedDecisionFlow {
                 }
               })
             } else {
-              TextInput({ placeholder: this.getInputPlaceholder(), text: this.userInput })
+              TextInput({ placeholder: this.getInputPlaceholder(), text: this.userInput, controller: this.inputController })
                 .layoutWeight(1).height(40).fontSize(15)
                 .fontColor('#1A1A1A').placeholderColor('#999')
                 .backgroundColor('#F2F2F7')
@@ -1139,7 +1144,14 @@ struct EnhancedDecisionFlow {
       if (response.responseCode === 200) {
         const res = JSON.parse(response.result as string) as Record<string, Object>
         const data = res.data as Record<string, string>
-        this.userInput = data?.text || '(识别结果为空)'
+        const recognized = data?.text || ''
+        if (recognized && recognized !== '(识别结果为空)') {
+          this.userInput = recognized
+          // 先显示识别内容，500ms 后自动发送
+          setTimeout(() => { this.continueCollection(recognized) }, 500)
+        } else {
+          this.userInput = '(识别结果为空)'
+        }
       } else {
         this.userInput = '(语音识别失败)'
       }

@@ -1171,12 +1171,15 @@ async def speech_to_text(file: UploadFile = File(...)):
                 read_path = tmp_path
                 read_format = audio_format
 
-            result_holder: dict = {"text": "", "done": False}
+            result_holder: dict = {"text": "", "current": "", "done": False}
 
             class _Callback(RecognitionCallback):
                 def on_open(self) -> None:
                     pass
                 def on_close(self) -> None:
+                    # 把最后一句也加进去
+                    if result_holder["current"]:
+                        result_holder["text"] += result_holder["current"]
                     result_holder["done"] = True
                 def on_error(self, result) -> None:
                     print(f"语音识别回调错误: {result}")
@@ -1186,7 +1189,12 @@ async def speech_to_text(file: UploadFile = File(...)):
                     if sentence and isinstance(sentence, dict):
                         t = sentence.get("text", "")
                         if t:
-                            result_holder["text"] += t
+                            # 覆盖当前句子（不累加，避免重复）
+                            result_holder["current"] = t
+                            # 如果是句子结束，追加到最终结果并清空当前句
+                            if sentence.get("sentence_end", False):
+                                result_holder["text"] += t
+                                result_holder["current"] = ""
 
             rec = Recognition(
                 model='paraformer-realtime-v2',

@@ -67,6 +67,7 @@ struct AgentHome {
   @State selectedImageUri: string = '';
   private audioRecorder: media.AVRecorder | null = null;
   private recordFilePath: string = '';
+  private inputController: TextInputController = new TextInputController();
   private callTimer: number = -1;
   private callDuration: number = 0;
   @State callDurationText: string = '00:00';
@@ -249,9 +250,10 @@ struct AgentHome {
     this.dotAnimation1 = 1; this.dotAnimation2 = 1; this.dotAnimation3 = 1;
   }
 
-  async sendMessage() {
-    if (!this.inputText.trim() || this.isLoading) return;
-    const userMessage = this.inputText;
+  async sendMessage(overrideText?: string) {
+    const msgText = overrideText ?? this.inputText;
+    if (!msgText.trim() || this.isLoading) return;
+    const userMessage = msgText;
     this.inputText = '';
     this.isLoading = true;
     this.startLoadingAnimation();
@@ -493,6 +495,8 @@ struct AgentHome {
         const recognizedText = data?.text || '';
         if (recognizedText.trim().length > 0) {
           this.inputText = recognizedText;
+          // 先显示识别内容，500ms 后自动发送
+          setTimeout(() => { this.sendMessage(recognizedText); }, 500);
         } else {
           // 识别结果为空，可能是录音太短或环境噪音，给出提示并清空输入框
           this.inputText = '';
@@ -907,7 +911,7 @@ struct AgentHome {
               }
             })
           } else {
-            TextInput({ placeholder: '输入消息...', text: this.inputText })
+            TextInput({ placeholder: '输入消息...', text: this.inputText, controller: this.inputController })
               .layoutWeight(1).height(40).fontSize(14)
               .fontColor(Theme.Color.TextPrimary).placeholderColor(Theme.Color.TextTertiary)
               .backgroundColor(Theme.Color.BackgroundTertiary)
