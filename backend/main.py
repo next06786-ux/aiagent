@@ -1151,63 +1151,50 @@ async def speech_to_text(file: UploadFile = File(...)):
             tmp_path = tmp.name
         
         try:
-            import base64
-            import urllib.request
-            import json as _json
+            import threading
+            import time
+            from dashscope.audio.asr import Recognition, RecognitionCallback
 
-            # dashscope 1.25+ Transcription 不支持本地文件，改用 base64 inline 方式
-            # 通过 dashscope 的 HTTP REST API 直接发送
+            result_holder: dict = {"text": "", "done": False}
+
+            class _Callback(RecognitionCallback):
+                def on_open(self) -> None:
+                    pass
+                def on_close(self) -> None:
+                    result_holder["done"] = True
+                def on_error(self, result) -> None:
+                    print(f"语音识别回调错误: {result}")
+                    result_holder["done"] = True
+                def on_event(self, result) -> None:
+                    sentences = result.get_sentence()
+                    if sentences:
+                        for s in sentences:
+                            result_holder["text"] += s.get("text", "")
+
+            cb = _Callback()
+            rec = Recognition(
+                model='paraformer-realtime-v2',
+                callback=cb,
+                format=audio_format,
+                sample_rate=16000,
+                language_hints=['zh', 'en']
+            )
+            rec.start()
             with open(tmp_path, 'rb') as f:
-                audio_bytes = f.read()
-
-            # 先尝试用 Recognition callback 方式（兼容旧版）
-            text = ""
-            try:
-                import threading
-                result_holder: dict = {"text": "", "done": False, "error": None}
-
-                class _CB:
-                    def on_open(self): pass
-                    def on_close(self): result_holder["done"] = True
-                    def on_error(self, result): result_holder["error"] = str(result); result_holder["done"] = True
-                    def on_event(self, result):
-                        sentences = result.get_sentence()
-                        if sentences:
-                            result_holder["text"] += "".join([s.get("text","") for s in sentences])
-
-                from dashscope.audio.asr import Recognition, RecognitionCallback
-                cb = RecognitionCallback()
-                cb.on_open = _CB().on_open
-                cb.on_close = _CB().on_close
-                cb.on_error = _CB().on_error
-                cb.on_event = _CB().on_event
-
-                rec = Recognition(
-                    model='paraformer-realtime-v2',
-                    format=audio_format,
-                    sample_rate=16000,
-                    language_hints=['zh', 'en'],
-                    callback=cb
-                )
-                rec.start()
-                with open(tmp_path, 'rb') as f:
-                    while True:
-                        chunk = f.read(3200)
-                        if not chunk:
-                            break
-                        rec.send_audio_frame(chunk)
-                rec.stop()
-                # 等待结果
-                import time
-                for _ in range(30):
-                    if result_holder["done"]:
+                while True:
+                    chunk = f.read(3200)
+                    if not chunk:
                         break
-                    time.sleep(0.1)
-                text = result_holder["text"]
-            except Exception as e1:
-                print(f"Recognition callback 方式失败: {e1}")
-                # fallback: 返回空，不崩溃
-                text = ""
+                    rec.send_audio_frame(chunk)
+            rec.stop()
+
+            # 等待识别完成，最多 15 秒
+            for _ in range(150):
+                if result_holder["done"]:
+                    break
+                time.sleep(0.1)
+
+            text = result_holder["text"]
         finally:
             try:
                 os.unlink(tmp_path)
