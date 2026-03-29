@@ -6229,11 +6229,6 @@ from backend.emergence.insight_api import router as insight_router
 app.include_router(insight_router)
 
 print("智能洞察 API 已加载")
-
-# 注册平行人生游戏 API
-from backend.game.parallel_life_api import router as game_router
-app.include_router(game_router)
-print("平行人生游戏 API 已加载")
 print("   - POST /api/v1/insights/process - 处理对话消息")
 print("   - POST /api/v1/insights/generate - 生成智能洞察")
 print("   - GET /api/v1/insights/dashboard/{user_id} - 获取仪表盘数据")
@@ -7334,3 +7329,8 @@ def _residual_analyzer_status() -> Dict[str, Any]:
         return {"available": _residual_analyzer.get("available", False)}
     except Exception:
         return {"available": False}
+
+from backend.game.parallel_life_api import router as game_router
+app.include_router(game_router)
+print('平行人生游戏 API 已加载')
+
