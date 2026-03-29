@@ -1197,6 +1197,7 @@ async def speech_to_text(file: UploadFile = File(...)):
             )
             rec.start()
             _start_time = time.time()
+            with open(read_path, 'rb') as f:
                 while True:
                     chunk = f.read(3200)
                     if not chunk:
