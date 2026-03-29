@@ -1153,7 +1153,23 @@ async def speech_to_text(file: UploadFile = File(...)):
         try:
             import threading
             import time
+            import subprocess
             from dashscope.audio.asr import Recognition, RecognitionCallback
+
+            # m4a/mp4 需要先转成 PCM wav，Recognition 流式接口只支持 PCM
+            wav_path = tmp_path.replace(f'.{ext}', '.wav')
+            try:
+                subprocess.run(
+                    ['ffmpeg', '-y', '-i', tmp_path, '-ar', '16000', '-ac', '1',
+                     '-f', 'wav', wav_path],
+                    capture_output=True, timeout=30
+                )
+                read_path = wav_path
+                read_format = 'wav'
+            except Exception:
+                # ffmpeg 不可用，直接用原文件
+                read_path = tmp_path
+                read_format = audio_format
 
             result_holder: dict = {"text": "", "done": False}
 
@@ -1171,16 +1187,15 @@ async def speech_to_text(file: UploadFile = File(...)):
                         for s in sentences:
                             result_holder["text"] += s.get("text", "")
 
-            cb = _Callback()
             rec = Recognition(
                 model='paraformer-realtime-v2',
-                callback=cb,
-                format=audio_format,
+                callback=_Callback(),
+                format=read_format,
                 sample_rate=16000,
                 language_hints=['zh', 'en']
             )
             rec.start()
-            with open(tmp_path, 'rb') as f:
+            with open(read_path, 'rb') as f:
                 while True:
                     chunk = f.read(3200)
                     if not chunk:
@@ -1188,13 +1203,19 @@ async def speech_to_text(file: UploadFile = File(...)):
                     rec.send_audio_frame(chunk)
             rec.stop()
 
-            # 等待识别完成，最多 15 秒
             for _ in range(150):
                 if result_holder["done"]:
                     break
                 time.sleep(0.1)
 
             text = result_holder["text"]
+
+            # 清理 wav 临时文件
+            try:
+                if wav_path != tmp_path:
+                    os.unlink(wav_path)
+            except Exception:
+                pass
         finally:
             try:
                 os.unlink(tmp_path)
