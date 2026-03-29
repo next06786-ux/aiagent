@@ -1,589 +1,580 @@
 ﻿/**
- * 平行人生 · 决策游戏
- * 通过情景模拟收集用户决策偏好，用于个性化 LoRA 训练
+ * 平行人生 · 决策游戏 v2
+ * 事件链 + 属性系统 + 倒计时 + 游戏化结局
  */
 import { Theme } from '../common/Theme'
 import http from '@ohos.net.http'
 import { ApiConfig } from '../config/ApiConfig'
 import { getAuthService } from '../service/AuthService'
 
-// ── 数据类型 ──────────────────────────────────────────────────────────────
+interface StatDelta { emotion: number; finance: number; social: number }
 
 interface GameOption {
   id: string
-  label: string
-  detail: string
-  color: string
-  icon: string
-}
-
-interface OutcomeCard {
-  month: number
   text: string
+  sub: string
+  delta: StatDelta
+  next: string
 }
 
-interface FollowupQuestion {
-  id: string
-  text: string
-  type: string
-  left_label: string
-  right_label: string
-}
-
-interface Scenario {
+interface GameNode {
   id: string
   type: string
-  title: string
-  theme_color: string
-  bg_gradient: string[]
-  scene_text: string
+  text: string
   options: GameOption[]
-  followups: FollowupQuestion[]
 }
 
-interface OutcomeData {
-  chosen: string
-  outcomes: Record<string, OutcomeCard[]>
+interface Ending {
+  condition: string
+  title: string
+  text: string
+  badge: string
 }
 
-interface GamePayload {
-  user_id: string
-  scenario_id: string
-  scenario_type: string
-  initial_choice: string
+interface Chapter {
+  id: string
+  title: string
+  subtitle: string
+  theme: string
+  accent: string
+  cover_emoji: string
+  intro: string
+  nodes: GameNode[]
+  endings: Ending[]
+}
+
+interface ChoiceRecord {
+  node_id: string
+  option_id: string
   choice_time_ms: number
-  regret_triggered: boolean
-  final_choice: string
-  followup_answers: Record<string, number>
 }
 
-interface DimBar {
-  key: string
-  val: number
-}
+interface Stats { emotion: number; finance: number; social: number }
 
 @Entry
 @Component
 struct ParallelLifeGame {
-  @State phase: string = 'loading'
-  @State scenarios: Scenario[] = []
-  @State currentIndex: number = 0
-  @State chosenId: string = ''
-  @State finalChoiceId: string = ''
-  @State outcomeData: OutcomeData | null = null
-  @State followupAnswers: Record<string, number> = {}
-  @State currentFollowupIndex: number = 0
-  @State sliderValue: number = 0.5
-  @State cardAOpacity: number = 0
-  @State cardBOpacity: number = 0
-  @State cardATranslateY: number = 40
-  @State cardBTranslateY: number = 40
-  @State sceneTextOpacity: number = 0
-  @State outcomeRevealA: boolean = false
-  @State outcomeRevealB: boolean = false
-  @State resultOpacity: number = 0
-  @State dimBars: DimBar[] = []
+  // ── 状态 ──────────────────────────────────────────────────────────────
+  @State phase: string = 'loading'   // loading | intro | playing | result
+  @State chapters: Chapter[] = []
+  @State currentChapter: Chapter | null = null
+  @State currentNodeId: string = ''
+  @State stats: Stats = { emotion: 50, finance: 50, social: 50 }
+  @State lastDelta: StatDelta = { emotion: 0, finance: 0, social: 0 }
+  @State showDelta: boolean = false
+  @State choices: ChoiceRecord[] = []
+  @State ending: Record<string, string> = {}
+  @State finalStats: Stats = { emotion: 50, finance: 50, social: 50 }
 
-  private choiceStartTime: number = 0
-  private choiceTimeMs: number = 0
-  private regretTriggered: boolean = false
+  // 动效
+  @State introOpacity: number = 0
+  @State nodeOpacity: number = 0
+  @State nodeTranslateY: number = 30
+  @State optAOpacity: number = 0
+  @State optBOpacity: number = 0
+  @State optATranslateX: number = -40
+  @State optBTranslateX: number = 40
+  @State resultOpacity: number = 0
+  @State statBarEmotion: number = 50
+  @State statBarFinance: number = 50
+  @State statBarSocial: number = 50
+
+  // 倒计时
+  @State countdown: number = 15
+  @State countdownActive: boolean = false
+  private countdownTimer: number = -1
+
+  // 选择时间记录
+  private nodeStartTime: number = 0
+
   private authService = getAuthService()
 
-  aboutToAppear() {
-    this.loadScenarios()
-  }
+  aboutToAppear() { this.loadChapters() }
+  aboutToDisappear() { this.stopCountdown() }
 
-  async loadScenarios() {
+  // ── 数据加载 ──────────────────────────────────────────────────────────
+  async loadChapters() {
     try {
       const req = http.createHttp()
-      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/scenarios`,
+      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/chapters`,
         { method: http.RequestMethod.GET })
       req.destroy()
       if (res.responseCode === 200) {
         const body = JSON.parse(res.result as string) as Record<string, Object>
-        this.scenarios = body['data'] as Scenario[]
-        this.phase = 'scene'
-        this.animateSceneIn()
+        this.chapters = body['data'] as Chapter[]
+        if (this.chapters.length > 0) {
+          this.loadChapter(this.chapters[0].id)
+        }
       }
-    } catch (e) {
-      console.error('加载场景失败:', e)
-    }
+    } catch (e) { console.error('加载关卡失败:', e) }
   }
 
-  async loadOutcomes() {
-    const s = this.safeScenario()
-    if (!s) return
+  async loadChapter(chapterId: string) {
     try {
       const req = http.createHttp()
-      const res = await req.request(
-        `${ApiConfig.getBaseUrl()}/api/game/parallel-life/scenario/${s.id}/outcomes?chosen=${this.chosenId}`,
+      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/chapter/${chapterId}`,
         { method: http.RequestMethod.GET })
       req.destroy()
       if (res.responseCode === 200) {
         const body = JSON.parse(res.result as string) as Record<string, Object>
-        this.outcomeData = body['data'] as OutcomeData
-        this.phase = 'outcome'
-        this.animateOutcomeIn()
+        this.currentChapter = body['data'] as Chapter
+        this.phase = 'intro'
+        this.animateIntroIn()
       }
-    } catch (e) {
-      console.error('加载结局失败:', e)
-    }
+    } catch (e) { console.error('加载关卡详情失败:', e) }
   }
 
-  async submitResult() {
-    const s = this.safeScenario()
-    if (!s) return
+  // ── 游戏逻辑 ──────────────────────────────────────────────────────────
+  startGame() {
+    const ch = this.currentChapter
+    if (!ch || ch.nodes.length === 0) return
+    this.stats = { emotion: 50, finance: 50, social: 50 }
+    this.statBarEmotion = 50; this.statBarFinance = 50; this.statBarSocial = 50
+    this.choices = []
+    this.currentNodeId = ch.nodes[0].id
+    this.phase = 'playing'
+    this.animateNodeIn()
+    this.startCountdown()
+  }
+
+  currentNode(): GameNode | null {
+    const ch = this.currentChapter
+    if (!ch) return null
+    return ch.nodes.find(n => n.id === this.currentNodeId) ?? null
+  }
+
+  async onChoose(opt: GameOption) {
+    this.stopCountdown()
+    const timeMs = Date.now() - this.nodeStartTime
+    this.choices.push({ node_id: this.currentNodeId, option_id: opt.id, choice_time_ms: timeMs })
+
+    // 显示属性变化
+    this.lastDelta = opt.delta
+    this.showDelta = true
+
+    // 更新属性值
+    const newEmotion = Math.max(-100, Math.min(100, this.stats.emotion + opt.delta.emotion))
+    const newFinance = Math.max(-100, Math.min(100, this.stats.finance + opt.delta.finance))
+    const newSocial  = Math.max(-100, Math.min(100, this.stats.social  + opt.delta.social))
+    this.stats = { emotion: newEmotion, finance: newFinance, social: newSocial }
+    animateTo({ duration: 600, curve: Curve.Smooth }, () => {
+      this.statBarEmotion = newEmotion
+      this.statBarFinance = newFinance
+      this.statBarSocial  = newSocial
+    })
+
+    setTimeout(() => { this.showDelta = false }, 1500)
+
+    // 跳转下一节点
+    setTimeout(() => {
+      if (opt.next === 'ending') {
+        this.finishGame()
+      } else {
+        this.currentNodeId = opt.next
+        this.animateNodeIn()
+        this.startCountdown()
+      }
+    }, 800)
+  }
+
+  async finishGame() {
+    const ch = this.currentChapter
+    if (!ch) return
+    this.finalStats = { ...this.stats }
     try {
       const userId = this.authService.getCurrentUserId()
-      const payload: GamePayload = {
-        user_id: userId,
-        scenario_id: s.id,
-        scenario_type: s.type,
-        initial_choice: this.chosenId,
-        choice_time_ms: this.choiceTimeMs,
-        regret_triggered: this.regretTriggered,
-        final_choice: this.finalChoiceId || this.chosenId,
-        followup_answers: this.followupAnswers
-      }
       const req = http.createHttp()
-      await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/result`, {
+      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/finish`, {
         method: http.RequestMethod.POST,
         header: { 'Content-Type': 'application/json' },
-        extraData: JSON.stringify(payload)
+        extraData: JSON.stringify({
+          user_id: userId,
+          chapter_id: ch.id,
+          final_stats: this.finalStats,
+          choices: this.choices
+        })
       })
       req.destroy()
-    } catch (e) {
-      console.error('提交结果失败:', e)
-    }
-  }
-
-  safeScenario(): Scenario | null {
-    return this.scenarios.length > this.currentIndex ? this.scenarios[this.currentIndex] : null
-  }
-
-  safeChosenOpt(): GameOption | null {
-    const s = this.safeScenario()
-    if (!s) return null
-    return s.options.find(o => o.id === this.chosenId) ?? null
-  }
-
-  safeOtherOpt(): GameOption | null {
-    const s = this.safeScenario()
-    if (!s) return null
-    return s.options.find(o => o.id !== this.chosenId) ?? null
-  }
-
-  safeChosenOutcomes(): OutcomeCard[] {
-    if (!this.outcomeData) return []
-    return this.outcomeData.outcomes[this.chosenId] ?? []
-  }
-
-  safeOtherOutcomes(): OutcomeCard[] {
-    if (!this.outcomeData) return []
-    const s = this.safeScenario()
-    if (!s) return []
-    const otherId = s.options.find(o => o.id !== this.chosenId)?.id ?? ''
-    return this.outcomeData.outcomes[otherId] ?? []
-  }
-
-  safeFollowup(): FollowupQuestion | null {
-    const s = this.safeScenario()
-    if (!s || this.currentFollowupIndex >= s.followups.length) return null
-    return s.followups[this.currentFollowupIndex]
-  }
-
-  onChoose(optionId: string) {
-    this.choiceTimeMs = Date.now() - this.choiceStartTime
-    this.chosenId = optionId
-    this.phase = 'choosing'
-    this.loadOutcomes()
-  }
-
-  onRegret() {
-    this.regretTriggered = true
-    this.phase = 'scene'
-    this.chosenId = ''
-    this.animateSceneIn()
-  }
-
-  onConfirmChoice() {
-    this.finalChoiceId = this.chosenId
-    this.currentFollowupIndex = 0
-    this.sliderValue = 0.5
-    this.phase = 'followup'
-  }
-
-  onFollowupNext() {
-    const s = this.safeScenario()
-    if (!s) return
-    const q = this.safeFollowup()
-    if (!q) return
-    this.followupAnswers[q.id] = this.sliderValue
-    this.sliderValue = 0.5
-    if (this.currentFollowupIndex < s.followups.length - 1) {
-      this.currentFollowupIndex++
-    } else {
-      this.submitResult()
-      // 构建维度条数据（避免在 @Builder 里用 Object.keys）
-      const bars: DimBar[] = []
-      const keys = Object.keys(this.followupAnswers)
-      for (let i = 0; i < keys.length; i++) {
-        bars.push({ key: keys[i], val: (this.followupAnswers[keys[i]] as number) * 100 })
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record<string, Object>
+        const data = body['data'] as Record<string, Object>
+        this.ending = data['ending'] as Record<string, string>
       }
-      this.dimBars = bars
-      this.phase = 'result'
-      this.animateResultIn()
-    }
+    } catch (e) { console.error('提交结果失败:', e) }
+    this.phase = 'result'
+    this.animateResultIn()
   }
 
-  onNextScenario() {
-    if (this.currentIndex < this.scenarios.length - 1) {
-      this.currentIndex++
-      this.chosenId = ''
-      this.finalChoiceId = ''
-      this.outcomeData = null
-      this.followupAnswers = {}
-      this.regretTriggered = false
-      this.phase = 'scene'
-      this.animateSceneIn()
-    } else {
-      this.navigateBack()
+  // 倒计时超时自动选第一个选项
+  startCountdown() {
+    this.countdown = 15
+    this.countdownActive = true
+    this.nodeStartTime = Date.now()
+    this.countdownTimer = setInterval(() => {
+      this.countdown--
+      if (this.countdown <= 0) {
+        this.stopCountdown()
+        const node = this.currentNode()
+        if (node && node.options.length > 0) {
+          this.onChoose(node.options[0])
+        }
+      }
+    }, 1000)
+  }
+
+  stopCountdown() {
+    if (this.countdownTimer !== -1) {
+      clearInterval(this.countdownTimer)
+      this.countdownTimer = -1
     }
+    this.countdownActive = false
   }
 
   private navigateBack() {
+    this.stopCountdown()
     try { this.getUIContext().getRouter().back() } catch (e) {}
   }
 
-  animateSceneIn() {
-    this.sceneTextOpacity = 0
-    this.cardAOpacity = 0; this.cardBOpacity = 0
-    this.cardATranslateY = 40; this.cardBTranslateY = 40
-    this.choiceStartTime = Date.now()
+  // ── 动效 ──────────────────────────────────────────────────────────────
+  animateIntroIn() {
+    this.introOpacity = 0
     setTimeout(() => {
-      animateTo({ duration: 600, curve: Curve.Smooth }, () => { this.sceneTextOpacity = 1 })
-    }, 100)
-    setTimeout(() => {
-      animateTo({ duration: 500, curve: Curve.Smooth }, () => { this.cardAOpacity = 1; this.cardATranslateY = 0 })
-    }, 500)
-    setTimeout(() => {
-      animateTo({ duration: 500, curve: Curve.Smooth }, () => { this.cardBOpacity = 1; this.cardBTranslateY = 0 })
-    }, 700)
+      animateTo({ duration: 800, curve: Curve.Smooth }, () => { this.introOpacity = 1 })
+    }, 200)
   }
 
-  animateOutcomeIn() {
-    this.outcomeRevealA = false; this.outcomeRevealB = false
-    setTimeout(() => { this.outcomeRevealA = true }, 300)
-    setTimeout(() => { this.outcomeRevealB = true }, 600)
+  animateNodeIn() {
+    this.nodeOpacity = 0; this.nodeTranslateY = 30
+    this.optAOpacity = 0; this.optBOpacity = 0
+    this.optATranslateX = -40; this.optBTranslateX = 40
+    setTimeout(() => {
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.nodeOpacity = 1; this.nodeTranslateY = 0
+      })
+    }, 100)
+    setTimeout(() => {
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.optAOpacity = 1; this.optATranslateX = 0
+      })
+    }, 400)
+    setTimeout(() => {
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.optBOpacity = 1; this.optBTranslateX = 0
+      })
+    }, 550)
   }
 
   animateResultIn() {
     this.resultOpacity = 0
     setTimeout(() => {
       animateTo({ duration: 700, curve: Curve.Smooth }, () => { this.resultOpacity = 1 })
-    }, 200)
+    }, 300)
   }
 
-  getRiskLabel(): string {
-    const vals = Object.values(this.followupAnswers) as number[]
-    if (vals.length === 0) return '均衡型决策者'
-    const avg = vals.reduce((a, b) => a + b, 0) / vals.length
-    if (avg < 0.35) return '果断型决策者'
-    if (avg > 0.65) return '谨慎型决策者'
-    return '均衡型决策者'
+  // ── 辅助 ──────────────────────────────────────────────────────────────
+  statColor(val: number): string {
+    if (val >= 60) return '#34d399'
+    if (val >= 30) return '#fbbf24'
+    return '#f87171'
   }
 
-  getRiskDesc(): string {
-    const label = this.getRiskLabel()
-    if (label === '果断型决策者') return '你倾向于快速行动，接受不确定性，愿意用短期风险换取长期机会。'
-    if (label === '谨慎型决策者') return '你重视稳定性，倾向于在充分评估后再行动，对损失比较敏感。'
-    return '你在风险与稳定之间保持平衡，能根据具体情境灵活调整决策策略。'
+  deltaText(v: number): string {
+    return v > 0 ? `+${v}` : `${v}`
   }
 
+  accentColor(): string {
+    return this.currentChapter?.accent ?? '#7C3AED'
+  }
+
+  themeColor(): string {
+    return this.currentChapter?.theme ?? '#1a1a2e'
+  }
+
+  // ── build ──────────────────────────────────────────────────────────────
   build() {
     Stack() {
-      Column()
-        .width('100%').height('100%')
-        .backgroundColor(this.safeScenario()?.bg_gradient[0] ?? '#1a1a2e')
+      // 背景
+      Column().width('100%').height('100%').backgroundColor(this.themeColor())
 
+      // 顶部栏
       Row() {
-        Text('←')
-          .fontSize(24).fontColor('#FFFFFF').opacity(0.8)
+        Text('←').fontSize(22).fontColor('rgba(255,255,255,0.7)')
           .onClick(() => this.navigateBack())
-        Text('平行人生')
-          .fontSize(17).fontWeight(600).fontColor('#FFFFFF')
-          .margin({ left: 12 })
+        Text(this.currentChapter?.title ?? '平行人生')
+          .fontSize(16).fontWeight(600).fontColor('#FFFFFF').margin({ left: 12 })
         Blank()
-        if (this.scenarios.length > 0) {
-          Text(`${this.currentIndex + 1} / ${this.scenarios.length}`)
-            .fontSize(13).fontColor('rgba(255,255,255,0.5)')
+        if (this.phase === 'playing') {
+          // 倒计时圆圈
+          Stack() {
+            Circle({ width: 36, height: 36 }).fill('rgba(255,255,255,0.1)')
+            Text(`${this.countdown}`)
+              .fontSize(14).fontWeight(700)
+              .fontColor(this.countdown <= 5 ? '#f87171' : '#FFFFFF')
+          }.width(36).height(36)
         }
       }
-      .width('100%').height(56)
-      .padding({ left: 16, right: 20 })
+      .width('100%').height(56).padding({ left: 16, right: 16 })
       .position({ x: 0, y: 0 }).zIndex(10)
 
-      if (this.phase === 'loading') {
-        this.buildLoading()
-      } else if (this.phase === 'scene' || this.phase === 'choosing') {
-        this.buildScene()
-      } else if (this.phase === 'outcome') {
-        this.buildOutcome()
-      } else if (this.phase === 'followup') {
-        this.buildFollowup()
-      } else if (this.phase === 'result') {
-        this.buildResult()
+      // 属性条（游戏中显示）
+      if (this.phase === 'playing') {
+        Column({ space: 6 }) {
+          this.StatBar('情绪', this.statBarEmotion, '😊')
+          this.StatBar('财务', this.statBarFinance, '💰')
+          this.StatBar('社交', this.statBarSocial, '👥')
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 64, bottom: 0 })
+        .position({ x: 0, y: 0 }).zIndex(9)
       }
+
+      // 属性变化浮层
+      if (this.showDelta) {
+        Column({ space: 4 }) {
+          if (this.lastDelta.emotion !== 0) {
+            Text(`情绪 ${this.deltaText(this.lastDelta.emotion)}`)
+              .fontSize(14).fontWeight(700)
+              .fontColor(this.lastDelta.emotion > 0 ? '#34d399' : '#f87171')
+          }
+          if (this.lastDelta.finance !== 0) {
+            Text(`财务 ${this.deltaText(this.lastDelta.finance)}`)
+              .fontSize(14).fontWeight(700)
+              .fontColor(this.lastDelta.finance > 0 ? '#34d399' : '#f87171')
+          }
+          if (this.lastDelta.social !== 0) {
+            Text(`社交 ${this.deltaText(this.lastDelta.social)}`)
+              .fontSize(14).fontWeight(700)
+              .fontColor(this.lastDelta.social > 0 ? '#34d399' : '#f87171')
+          }
+        }
+        .position({ x: 0, y: 160 }).width('100%')
+        .alignItems(HorizontalAlign.Center).zIndex(20)
+      }
+
+      // 内容区
+      if (this.phase === 'loading') { this.buildLoading() }
+      else if (this.phase === 'intro') { this.buildIntro() }
+      else if (this.phase === 'playing') { this.buildPlaying() }
+      else if (this.phase === 'result') { this.buildResult() }
     }
     .width('100%').height('100%')
+  }
+
+  @Builder
+  StatBar(label: string, val: number, emoji: string) {
+    Row({ space: 6 }) {
+      Text(emoji).fontSize(12)
+      Text(label).fontSize(11).fontColor('rgba(255,255,255,0.6)').width(28)
+      Row() {
+        Column()
+          .height(4)
+          .width(`${Math.max(0, (val + 100) / 2)}%`)
+          .backgroundColor(this.statColor(val))
+          .borderRadius(2)
+        Blank()
+      }
+      .layoutWeight(1).backgroundColor('rgba(255,255,255,0.1)').borderRadius(2)
+      Text(`${val}`).fontSize(11).fontColor('rgba(255,255,255,0.5)').width(28).textAlign(TextAlign.End)
+    }.width('100%').alignItems(VerticalAlign.Center)
   }
 
   @Builder buildLoading() {
     Column({ space: 16 }) {
       LoadingProgress().width(48).height(48).color('#FFFFFF')
-      Text('加载场景中...').fontSize(14).fontColor('rgba(255,255,255,0.6)')
+      Text('加载中...').fontSize(14).fontColor('rgba(255,255,255,0.6)')
     }
     .width('100%').height('100%')
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
-  @Builder buildScene() {
-    Scroll() {
-      Column({ space: 0 }) {
-        Column({ space: 8 }) {
-          Text(this.safeScenario()?.title ?? '')
-            .fontSize(13).fontColor(this.safeScenario()?.theme_color ?? '#FFFFFF')
-            .fontWeight(600).letterSpacing(2)
-            .padding({ left: 12, right: 12, top: 5, bottom: 5 })
-            .backgroundColor('rgba(255,255,255,0.08)')
-            .borderRadius(Theme.Radius.round)
-          Text(this.safeScenario()?.scene_text ?? '')
-            .fontSize(20).fontWeight(700)
-            .fontColor('#FFFFFF').lineHeight(32)
-            .textAlign(TextAlign.Center)
-            .opacity(this.sceneTextOpacity)
-            .animation({ duration: 600, curve: Curve.Smooth })
-        }
-        .width('100%')
-        .padding({ top: 80, left: 24, right: 24, bottom: 32 })
-        .alignItems(HorizontalAlign.Center)
-
-        Column({ space: 14 }) {
-          ForEach(this.safeScenario()?.options ?? [], (opt: GameOption, idx: number) => {
-            Column({ space: 10 }) {
-              Row({ space: 12 }) {
-                Column()
-                  .width(4).height(48)
-                  .backgroundColor(opt.color)
-                  .borderRadius(2)
-                Column({ space: 4 }) {
-                  Text(opt.label).fontSize(17).fontWeight(700).fontColor('#FFFFFF')
-                  Text(opt.detail).fontSize(13).fontColor('rgba(255,255,255,0.6)').lineHeight(20)
-                }
-                .layoutWeight(1).alignItems(HorizontalAlign.Start)
-                Text('→').fontSize(20).fontColor(opt.color)
-              }
-              .width('100%').alignItems(VerticalAlign.Center)
-            }
-            .width('100%').padding(20)
-            .backgroundColor('rgba(255,255,255,0.07)')
-            .borderRadius(Theme.Radius.l)
-            .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
-            .opacity(idx === 0 ? this.cardAOpacity : this.cardBOpacity)
-            .translate({ y: idx === 0 ? this.cardATranslateY : this.cardBTranslateY })
-            .animation({ duration: 500, curve: Curve.Smooth })
-            .onClick(() => this.onChoose(opt.id))
-            .stateStyles({
-              pressed: { .scale({ x: 0.97, y: 0.97 }).backgroundColor('rgba(255,255,255,0.12)') },
-              normal:  { .scale({ x: 1, y: 1 }).backgroundColor('rgba(255,255,255,0.07)') }
-            })
-          })
-        }
-        .padding({ left: 20, right: 20, bottom: 40 })
-      }
-    }
-    .scrollBar(BarState.Off).width('100%').height('100%')
-  }
-
-  @Builder buildOutcome() {
-    Scroll() {
-      Column({ space: 20 }) {
-        Text('两条路的走向')
-          .fontSize(16).fontWeight(600).fontColor('rgba(255,255,255,0.7)')
-          .margin({ top: 72, bottom: 4 })
-
-        Row({ space: 12 }) {
-          Column({ space: 10 }) {
-            Text('你的选择')
-              .fontSize(11).fontColor(this.safeChosenOpt()?.color ?? '#FFFFFF')
-              .fontWeight(600).letterSpacing(1)
-            Text(this.safeChosenOpt()?.label ?? '')
-              .fontSize(14).fontWeight(700).fontColor('#FFFFFF')
-            ForEach(this.safeChosenOutcomes(), (card: OutcomeCard, idx: number) => {
-              Column({ space: 4 }) {
-                Text(`第 ${card.month} 个月`).fontSize(10).fontColor('rgba(255,255,255,0.4)')
-                Text(card.text).fontSize(13).fontColor('rgba(255,255,255,0.85)').lineHeight(20)
-              }
-              .width('100%').padding(12)
-              .backgroundColor('rgba(255,255,255,0.06)')
-              .borderRadius(Theme.Radius.m)
-              .opacity(this.outcomeRevealA ? 1 : 0)
-              .translate({ y: this.outcomeRevealA ? 0 : 20 })
-              .animation({ duration: 500, curve: Curve.Smooth, delay: idx * 150 })
-            })
-          }
-          .layoutWeight(1).alignItems(HorizontalAlign.Start)
-
-          Column().width(1).height('100%').backgroundColor('rgba(255,255,255,0.1)')
-
-          Column({ space: 10 }) {
-            Text('另一条路')
-              .fontSize(11).fontColor('rgba(255,255,255,0.4)')
-              .fontWeight(600).letterSpacing(1)
-            Text(this.safeOtherOpt()?.label ?? '')
-              .fontSize(14).fontWeight(700).fontColor('rgba(255,255,255,0.5)')
-            ForEach(this.safeOtherOutcomes(), (card: OutcomeCard, idx: number) => {
-              Column({ space: 4 }) {
-                Text(`第 ${card.month} 个月`).fontSize(10).fontColor('rgba(255,255,255,0.3)')
-                Text(card.text).fontSize(13).fontColor('rgba(255,255,255,0.45)').lineHeight(20)
-              }
-              .width('100%').padding(12)
-              .backgroundColor('rgba(255,255,255,0.03)')
-              .borderRadius(Theme.Radius.m)
-              .opacity(this.outcomeRevealB ? 1 : 0)
-              .translate({ y: this.outcomeRevealB ? 0 : 20 })
-              .animation({ duration: 500, curve: Curve.Smooth, delay: idx * 150 })
-            })
-          }
-          .layoutWeight(1).alignItems(HorizontalAlign.Start)
-        }
-        .width('100%').padding({ left: 20, right: 20 })
-        .alignItems(VerticalAlign.Top)
-
-        Column({ space: 12 }) {
-          Button('就这样，继续')
-            .width('100%').height(50)
-            .fontSize(15).fontWeight(600).fontColor('#FFFFFF')
-            .backgroundColor(this.safeChosenOpt()?.color ?? Theme.Color.Primary)
-            .borderRadius(Theme.Radius.round)
-            .onClick(() => this.onConfirmChoice())
-          Button('我想反悔')
-            .width('100%').height(44)
-            .fontSize(14).fontColor('rgba(255,255,255,0.5)')
-            .backgroundColor('rgba(255,255,255,0.06)')
-            .borderRadius(Theme.Radius.round)
-            .onClick(() => this.onRegret())
-        }
-        .padding({ left: 20, right: 20, bottom: 40 })
-      }
-      .width('100%')
-    }
-    .scrollBar(BarState.Off).width('100%').height('100%')
-  }
-
-  @Builder buildFollowup() {
+  @Builder buildIntro() {
     Column({ space: 0 }) {
-      Blank().height(80)
-      Row({ space: 8 }) {
-        ForEach(this.safeScenario()?.followups ?? [], (_: FollowupQuestion, idx: number) => {
-          Circle({ width: 6, height: 6 })
-            .fill(idx === this.currentFollowupIndex ? '#FFFFFF' : 'rgba(255,255,255,0.25)')
-        })
-      }.margin({ bottom: 40 })
-
-      Text(this.safeFollowup()?.text ?? '')
-        .fontSize(22).fontWeight(700).fontColor('#FFFFFF')
-        .lineHeight(34).textAlign(TextAlign.Center)
-        .padding({ left: 28, right: 28 })
-        .margin({ bottom: 48 })
-
-      Column({ space: 16 }) {
-        Slider({ value: this.sliderValue * 100, min: 0, max: 100, step: 1, style: SliderStyle.OutSet })
-          .width('80%')
-          .trackColor('rgba(255,255,255,0.2)')
-          .selectedColor('#FFFFFF')
-          .blockColor('#FFFFFF')
-          .onChange((val: number) => { this.sliderValue = val / 100 })
-        Row() {
-          Text(this.safeFollowup()?.left_label ?? '').fontSize(12).fontColor('rgba(255,255,255,0.5)')
-          Blank()
-          Text(this.safeFollowup()?.right_label ?? '').fontSize(12).fontColor('rgba(255,255,255,0.5)')
-        }.width('80%')
+      Blank().layoutWeight(1)
+      Column({ space: 24 }) {
+        Text(this.currentChapter?.cover_emoji ?? '🎮')
+          .fontSize(72).textAlign(TextAlign.Center)
+        Text(this.currentChapter?.title ?? '')
+          .fontSize(28).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+        Text(this.currentChapter?.subtitle ?? '')
+          .fontSize(15).fontColor('rgba(255,255,255,0.6)').textAlign(TextAlign.Center)
+        Column()
+          .width(40).height(2)
+          .backgroundColor(this.accentColor())
+          .borderRadius(1)
+        Text(this.currentChapter?.intro ?? '')
+          .fontSize(15).fontColor('rgba(255,255,255,0.8)')
+          .lineHeight(26).textAlign(TextAlign.Center)
+          .padding({ left: 32, right: 32 })
       }
-      .width('100%').alignItems(HorizontalAlign.Center)
+      .opacity(this.introOpacity)
+      .animation({ duration: 800, curve: Curve.Smooth })
+      Blank().layoutWeight(1)
+      Column({ space: 12 }) {
+        Button('开始游戏')
+          .width('80%').height(54)
+          .fontSize(17).fontWeight(700).fontColor('#FFFFFF')
+          .backgroundColor(this.accentColor())
+          .borderRadius(Theme.Radius.round)
+          .shadow({ radius: 20, color: this.accentColor(), offsetY: 6, offsetX: 0 })
+          .onClick(() => this.startGame())
+        Text('每次选择都会影响你的情绪、财务和社交')
+          .fontSize(12).fontColor('rgba(255,255,255,0.35)').textAlign(TextAlign.Center)
+      }
+      .width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 48 })
+    }
+    .width('100%').height('100%').alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder buildPlaying() {
+    Column({ space: 0 }) {
+      Blank().height(160)
+
+      // 事件文字
+      Column({ space: 0 }) {
+        Text(this.currentNode()?.text ?? '')
+          .fontSize(18).fontWeight(600).fontColor('#FFFFFF')
+          .lineHeight(30).textAlign(TextAlign.Center)
+          .padding({ left: 24, right: 24 })
+      }
+      .opacity(this.nodeOpacity)
+      .translate({ y: this.nodeTranslateY })
+      .animation({ duration: 400, curve: Curve.Smooth })
 
       Blank().layoutWeight(1)
 
-      Button(this.currentFollowupIndex < (this.safeScenario()?.followups.length ?? 1) - 1 ? '下一题' : '查看我的画像')
-        .width('80%').height(52)
-        .fontSize(16).fontWeight(600).fontColor('#1a1a2e')
-        .backgroundColor('#FFFFFF')
-        .borderRadius(Theme.Radius.round)
-        .margin({ bottom: 48 })
-        .onClick(() => this.onFollowupNext())
+      // 选项卡片
+      Column({ space: 14 }) {
+        ForEach(this.currentNode()?.options ?? [], (opt: GameOption, idx: number) => {
+          Column({ space: 8 }) {
+            Text(opt.text)
+              .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+            Text(opt.sub)
+              .fontSize(12).fontColor('rgba(255,255,255,0.55)').lineHeight(18)
+            // 属性预览
+            Row({ space: 12 }) {
+              if (opt.delta.emotion !== 0) {
+                Text(`情绪${this.deltaText(opt.delta.emotion)}`)
+                  .fontSize(11).fontColor(opt.delta.emotion > 0 ? '#34d399' : '#f87171')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(opt.delta.emotion > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                  .borderRadius(Theme.Radius.round)
+              }
+              if (opt.delta.finance !== 0) {
+                Text(`财务${this.deltaText(opt.delta.finance)}`)
+                  .fontSize(11).fontColor(opt.delta.finance > 0 ? '#34d399' : '#f87171')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(opt.delta.finance > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                  .borderRadius(Theme.Radius.round)
+              }
+              if (opt.delta.social !== 0) {
+                Text(`社交${this.deltaText(opt.delta.social)}`)
+                  .fontSize(11).fontColor(opt.delta.social > 0 ? '#34d399' : '#f87171')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(opt.delta.social > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                  .borderRadius(Theme.Radius.round)
+              }
+            }
+          }
+          .width('100%').padding(18)
+          .backgroundColor('rgba(255,255,255,0.07)')
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1.5, color: idx === 0 ? `${this.accentColor()}66` : 'rgba(255,255,255,0.1)' })
+          .opacity(idx === 0 ? this.optAOpacity : this.optBOpacity)
+          .translate({ x: idx === 0 ? this.optATranslateX : this.optBTranslateX })
+          .animation({ duration: 400, curve: Curve.Smooth })
+          .onClick(() => this.onChoose(opt))
+          .stateStyles({
+            pressed: { .scale({ x: 0.97, y: 0.97 }).backgroundColor('rgba(255,255,255,0.13)') },
+            normal:  { .scale({ x: 1, y: 1 }).backgroundColor('rgba(255,255,255,0.07)') }
+          })
+        })
+      }
+      .padding({ left: 20, right: 20, bottom: 48 })
     }
     .width('100%').height('100%').alignItems(HorizontalAlign.Center)
   }
 
   @Builder buildResult() {
-    Column({ space: 0 }) {
-      Blank().height(80)
-      Column({ space: 24 }) {
-        Text(this.getRiskLabel())
-          .fontSize(28).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
-        Text(this.getRiskDesc())
-          .fontSize(15).fontColor('rgba(255,255,255,0.7)')
-          .lineHeight(26).textAlign(TextAlign.Center)
-          .padding({ left: 32, right: 32 })
+    Scroll() {
+      Column({ space: 0 }) {
+        Blank().height(72)
+        Column({ space: 20 }) {
+          // 徽章
+          Column({ space: 8 }) {
+            Text('🏆').fontSize(56).textAlign(TextAlign.Center)
+            Text(this.ending['badge'] ?? '完成')
+              .fontSize(13).fontColor(this.accentColor()).fontWeight(600)
+              .padding({ left: 16, right: 16, top: 5, bottom: 5 })
+              .backgroundColor(`${this.accentColor()}22`)
+              .borderRadius(Theme.Radius.round)
+          }.alignItems(HorizontalAlign.Center)
+
+          Text(this.ending['title'] ?? '游戏结束')
+            .fontSize(26).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+
+          Text(this.ending['text'] ?? '')
+            .fontSize(15).fontColor('rgba(255,255,255,0.75)')
+            .lineHeight(26).textAlign(TextAlign.Center)
+            .padding({ left: 28, right: 28 })
+
+          // 最终属性
+          Column({ space: 10 }) {
+            Text('最终状态').fontSize(13).fontColor('rgba(255,255,255,0.4)').fontWeight(600)
+            Row({ space: 0 }) {
+              this.FinalStatBlock('情绪', this.finalStats.emotion, '😊')
+              this.FinalStatBlock('财务', this.finalStats.finance, '💰')
+              this.FinalStatBlock('社交', this.finalStats.social, '👥')
+            }.width('100%')
+          }
+          .width('88%').padding(20)
+          .backgroundColor('rgba(255,255,255,0.06)')
+          .borderRadius(Theme.Radius.l)
+
+          // 选择统计
+          Text(`共做了 ${this.choices.length} 次选择`)
+            .fontSize(13).fontColor('rgba(255,255,255,0.35)')
+
+          Text('你的选择已用于优化专属 AI 模型')
+            .fontSize(12).fontColor('rgba(255,255,255,0.25)')
+        }
+        .opacity(this.resultOpacity)
+        .animation({ duration: 700, curve: Curve.Smooth })
+
+        Blank().height(32)
 
         Column({ space: 12 }) {
-          ForEach(this.dimBars, (bar: DimBar) => {
-            Column({ space: 6 }) {
-              Row() {
-                Text(bar.key).fontSize(12).fontColor('rgba(255,255,255,0.5)')
-                Blank()
-                Text(`${Math.round(bar.val)}%`).fontSize(12).fontColor('rgba(255,255,255,0.5)')
-              }.width('100%')
-              Row() {
-                Column()
-                  .height(4).width(`${bar.val}%`)
-                  .backgroundColor(this.safeScenario()?.theme_color ?? Theme.Color.Primary)
-                  .borderRadius(2)
-                Blank()
-              }
-              .width('100%').backgroundColor('rgba(255,255,255,0.1)').borderRadius(2)
-            }
-          })
+          Button('进入决策副本')
+            .width('80%').height(52)
+            .fontSize(15).fontWeight(700).fontColor('#FFFFFF')
+            .backgroundColor(this.accentColor())
+            .borderRadius(Theme.Radius.round)
+            .onClick(() => {
+              try { this.getUIContext().getRouter().pushUrl({ url: 'pages/QuickDecisionInput' }) }
+              catch (e) { this.navigateBack() }
+            })
+          Button('再玩一次')
+            .width('80%').height(44)
+            .fontSize(14).fontColor('rgba(255,255,255,0.5)')
+            .backgroundColor('rgba(255,255,255,0.06)')
+            .borderRadius(Theme.Radius.round)
+            .onClick(() => {
+              this.phase = 'intro'
+              this.animateIntroIn()
+            })
         }
-        .width('80%').padding(20)
-        .backgroundColor('rgba(255,255,255,0.06)')
-        .borderRadius(Theme.Radius.l)
+        .width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 48 })
       }
-      .opacity(this.resultOpacity)
-      .animation({ duration: 700, curve: Curve.Smooth })
-
-      Blank().layoutWeight(1)
-
-      Column({ space: 12 }) {
-        Button(this.currentIndex < this.scenarios.length - 1 ? '下一个场景' : '完成，进入决策副本')
-          .width('80%').height(52)
-          .fontSize(15).fontWeight(600).fontColor('#1a1a2e')
-          .backgroundColor('#FFFFFF')
-          .borderRadius(Theme.Radius.round)
-          .onClick(() => {
-            if (this.currentIndex < this.scenarios.length - 1) {
-              this.onNextScenario()
-            } else {
-              try {
-                this.getUIContext().getRouter().pushUrl({ url: 'pages/QuickDecisionInput' })
-              } catch (e) { this.navigateBack() }
-            }
-          })
-        Text('数据已用于优化你的专属 AI 模型')
-          .fontSize(12).fontColor('rgba(255,255,255,0.3)').margin({ bottom: 8 })
-      }
-      .width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 40 })
+      .width('100%').alignItems(HorizontalAlign.Center)
     }
-    .width('100%').height('100%').alignItems(HorizontalAlign.Center)
+    .scrollBar(BarState.Off).width('100%').height('100%')
+  }
+
+  @Builder
+  FinalStatBlock(label: string, val: number, emoji: string) {
+    Column({ space: 6 }) {
+      Text(emoji).fontSize(22)
+      Text(`${val}`).fontSize(20).fontWeight(800).fontColor(this.statColor(val))
+      Text(label).fontSize(11).fontColor('rgba(255,255,255,0.4)')
+    }
+    .layoutWeight(1).alignItems(HorizontalAlign.Center).padding(12)
   }
 }

@@ -250,7 +250,7 @@ struct AgentHome {
     this.dotAnimation1 = 1; this.dotAnimation2 = 1; this.dotAnimation3 = 1;
   }
 
-  async sendMessage(overrideText?: string) {
+  async sendMessage(overrideText?: string, skipUserPush?: boolean) {
     const msgText = overrideText ?? this.inputText;
     if (!msgText.trim() || this.isLoading) return;
     const userMessage = msgText;
@@ -258,7 +258,9 @@ struct AgentHome {
     this.isLoading = true;
     this.startLoadingAnimation();
     this.showAiCorePanel = true;
-    this.messages.push(new ChatMessage(Date.now().toString(), 'user', userMessage, Date.now()));
+    if (!skipUserPush) {
+      this.messages.push(new ChatMessage(Date.now().toString(), 'user', userMessage, Date.now()));
+    }
     const aiMsgId = (Date.now() + 1).toString();
     this.messages.push(new ChatMessage(aiMsgId, 'assistant', '', Date.now(), ''));
     try {
@@ -472,7 +474,10 @@ struct AgentHome {
         this.audioRecorder = null;
       }
       this.isRecording = false;
-      this.inputText = '识别中...';
+      this.inputText = '';
+      // 松手后立刻在对话列表显示"语音识别中"占位气泡
+      const placeholderId = `voice_placeholder_${Date.now()}`;
+      this.messages.push(new ChatMessage(placeholderId, 'user', '🎤 识别中...', Date.now()));
 
       // 上传音频到后端转文字
       const httpRequest = http.createHttp();
@@ -494,9 +499,18 @@ struct AgentHome {
         const data = res.data as Record<string, string>;
         const recognizedText = data?.text || '';
         if (recognizedText.trim().length > 0) {
+          // 替换占位气泡为真实识别内容
+          const idx = this.messages.findIndex(m => m.id === placeholderId);
+          if (idx >= 0) {
+            const updated = new ChatMessage(placeholderId, 'user', recognizedText, Date.now());
+            const newMsgs: ChatMessage[] = [];
+            for (let i = 0; i < this.messages.length; i++) {
+              newMsgs.push(i === idx ? updated : this.messages[i]);
+            }
+            this.messages = newMsgs;
+          }
           this.inputText = recognizedText;
-          // 先显示识别内容，500ms 后自动发送
-          setTimeout(() => { this.sendMessage(recognizedText); }, 500);
+          this.sendMessage(recognizedText, true);
         } else {
           // 识别结果为空，可能是录音太短或环境噪音，给出提示并清空输入框
           this.inputText = '';

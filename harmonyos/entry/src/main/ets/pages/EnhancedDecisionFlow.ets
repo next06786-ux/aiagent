@@ -1147,8 +1147,7 @@ struct EnhancedDecisionFlow {
         const recognized = data?.text || ''
         if (recognized && recognized !== '(识别结果为空)') {
           this.userInput = recognized
-          // 先显示识别内容，500ms 后自动发送
-          setTimeout(() => { this.continueCollection(recognized) }, 500)
+          this.continueCollection(recognized)
         } else {
           this.userInput = '(识别结果为空)'
         }
