@@ -1182,19 +1182,11 @@ async def speech_to_text(file: UploadFile = File(...)):
                     print(f"语音识别回调错误: {result}")
                     result_holder["done"] = True
                 def on_event(self, result) -> None:
-                    sentences = result.get_sentence()
-                    if sentences:
-                        for s in sentences:
-                            if isinstance(s, dict):
-                                result_holder["text"] += s.get("text", "")
-                            elif hasattr(s, 'text'):
-                                t = s.text
-                                if t:
-                                    result_holder["text"] += t
-                            elif isinstance(s, str):
-                                # 过滤掉字段名拼接的脏数据
-                                if len(s) < 200 and 'sentence_id' not in s:
-                                    result_holder["text"] += s
+                    sentence = result.get_sentence()
+                    if sentence and isinstance(sentence, dict):
+                        t = sentence.get("text", "")
+                        if t:
+                            result_holder["text"] += t
 
             rec = Recognition(
                 model='paraformer-realtime-v2',
