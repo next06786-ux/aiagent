@@ -1212,6 +1212,7 @@ async def speech_to_text(file: UploadFile = File(...)):
                 time.sleep(0.1)
 
             text = result_holder["text"]
+            print(f"[语音识别] 识别结果: '{text}', done={result_holder['done']}")
 
             # 清理 wav 临时文件
             try:
