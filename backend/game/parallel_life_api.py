@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 平行人生 · 决策游戏 API v2
 事件链结构：玩家扮演主角，连续做 4-5 个决策，属性值实时变化，走向不同结局
@@ -49,7 +50,7 @@ CHAPTERS = [
             {
                 "id": "n2a",
                 "type": "choice",
-                "text": "入职三个月，你发现大厂的工作节奏比想象中更快。\n\n周五晚上 10 点，leader 突然发来消息：\n"周末能来加个班吗，项目有点急。"",
+                "text": "入职三个月，你发现大厂的工作节奏比想象中更快。\n\n周五晚上 10 点，leader 突然发来消息：\n'周末能来加个班吗，项目有点急。'",
                 "options": [
                     {
                         "id": "A",
@@ -70,7 +71,7 @@ CHAPTERS = [
             {
                 "id": "n2b",
                 "type": "choice",
-                "text": "创业公司的节奏很快，你每天都在学新东西。\n\n但三个月后，公司融资遇到了麻烦，\nCEO 在全员会上说：\n"接下来两个月，大家工资打八折，共渡难关。"",
+                "text": "创业公司的节奏很快，你每天都在学新东西。\n\n但三个月后，公司融资遇到了麻烦，\nCEO 在全员会上说：\n'接下来两个月，大家工资打八折，共渡难关。'",
                 "options": [
                     {
                         "id": "A",
@@ -382,9 +383,9 @@ def _save_training_data(req: FinishRequest, ch: Dict, ending: Dict):
             if node:
                 opt = next((o for o in node["options"] if o["id"] == c.get("option_id")), None)
                 if opt:
-                    choices_desc.append(f"面对"{node['text'][:30]}..."，选择了"{opt['text']}"")
+                    choices_desc.append(f"面对[{node['text'][:30]}...]，选择了[{opt['text']}]")
 
-        user_msg = f"我玩了一个叫"{ch['title']}"的人生模拟游戏。" + "；".join(choices_desc[:3]) + "。"
+        user_msg = f"我玩了一个叫[{ch['title']}]的人生模拟游戏。" + "；".join(choices_desc[:3]) + "。"
         assistant_msg = (
             f"从你的选择来看，{ending['text'][:60]}。"
             f"你的决策风格偏向{'冒险探索' if req.final_stats.get('social', 50) > 50 else '稳健保守'}，"
