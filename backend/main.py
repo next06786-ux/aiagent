@@ -1185,7 +1185,10 @@ async def speech_to_text(file: UploadFile = File(...)):
                     sentences = result.get_sentence()
                     if sentences:
                         for s in sentences:
-                            result_holder["text"] += s.get("text", "")
+                            if isinstance(s, dict):
+                                result_holder["text"] += s.get("text", "")
+                            elif isinstance(s, str):
+                                result_holder["text"] += s
 
             rec = Recognition(
                 model='paraformer-realtime-v2',
