@@ -296,12 +296,17 @@ def obr_fwrd(model, dataloader, dev, args):
         def __init__(self, module):
             super().__init__()
             self.module = module
+            # Qwen3.5 需要 layer_type 属性
+            if hasattr(module, 'layer_type'):
+                self.layer_type = module.layer_type
+            if hasattr(module, 'attention_type'):
+                self.attention_type = module.attention_type
 
         def forward(self, inp, **kwargs):
             inps[cache['i']] = inp
             cache['i'] += 1
-            cache['attention_mask'] = kwargs['attention_mask']
-            cache['position_ids'] = kwargs['position_ids']
+            cache['attention_mask'] = kwargs.get('attention_mask', None)
+            cache['position_ids'] = kwargs.get('position_ids', None)
             raise ValueError
 
     layers[0] = Catcher(layers[0])
@@ -322,37 +327,74 @@ def obr_fwrd(model, dataloader, dev, args):
     position_ids = cache['position_ids']
 
     quantizers = {}
-    sequential = [
-        ['self_attn.k_proj.linear', 'self_attn.v_proj.linear', 'self_attn.q_proj.linear'],
+    # Qwen3.5 混合架构的 sequential 路径（FlatQuant 包装后，Linear 在 .linear 下）
+    sequential_self_attn = [
+        ['self_attn.q_proj.linear', 'self_attn.v_proj.linear', 'self_attn.k_proj.linear'],
         ['self_attn.o_proj.linear'],
         ['mlp.up_proj.linear', 'mlp.gate_proj.linear'],
         ['mlp.down_proj.linear']
     ]
-    # sequential = [
-    #             ['self_attn.k_proj', 'self_attn.v_proj', 'self_attn.q_proj'],
-    #             ['self_attn.o_proj'],
-    #             ['mlp.up_proj', 'mlp.gate_proj'],
-    #             ['mlp.down_proj']
-    #         ]
+    sequential_linear_attn = [
+        ['linear_attn.q_proj.linear', 'linear_attn.k_proj.linear', 'linear_attn.v_proj.linear'],
+        ['linear_attn.in_proj_z.linear', 'linear_attn.in_proj_b.linear', 'linear_attn.in_proj_a.linear'],
+        ['linear_attn.out_proj.linear'],
+        ['mlp.up_proj.linear', 'mlp.gate_proj.linear'],
+        ['mlp.down_proj.linear']
+    ]
+    
+    def forward_layer(layer, inp, attention_mask, position_ids):
+        """兼容 Qwen3.5 的 layer forward"""
+        try:
+            return layer(inp, attention_mask=attention_mask, position_ids=position_ids)[0]
+        except TypeError as e:
+            if "position_embeddings" in str(e):
+                if hasattr(model.model, 'rotary_emb'):
+                    model.model.rotary_emb = model.model.rotary_emb.to(inp.device)
+                    position_embeddings = model.model.rotary_emb(inp, position_ids.to(inp.device) if position_ids is not None else None)
+                else:
+                    position_embeddings = None
+                return layer(inp, attention_mask=attention_mask, position_ids=position_ids, position_embeddings=position_embeddings)[0]
+            raise
+
     for i in range(len(layers)):
         print(f'\nLayer {i}:', flush=True, end=' ')
         layer = layers[i].to(dev)
         full = find_qlayers(layer, layers=[torch.nn.Linear])
+        
+        # 根据层类型选择 sequential 路径和量化配置
+        is_self_attn_layer = not (
+            hasattr(layers[i] if layers[i] is not layer else layer, 'linear_attn') or
+            any(k.startswith('linear_attn.') for k in full.keys())
+        )
+        
+        if is_self_attn_layer:
+            sequential = sequential_self_attn
+            # self_attn 层权重分布窄（std~0.016），W4+稀疏会严重破坏
+            # 使用 W8 + 不稀疏
+            layer_w_bits = 8
+            layer_sparsity = 0.0
+            print(f'(self_attn: W8, no sparsity)', end=' ', flush=True)
+        else:
+            sequential = sequential_linear_attn
+            # linear_attn 层权重分布宽，W4+稀疏效果好
+            layer_w_bits = args.w_bits
+            layer_sparsity = args.sparsity_ratio
+        
         for names in sequential:
-            subset = {n: full[n] for n in names}
+            subset = {n: full[n] for n in names if n in full}
+            if not subset:
+                continue
 
             gptq = {}
             for name in subset:
                 print(f'{name}', end='  ', flush=True)
-                layer_weight_bits = args.w_bits
                 layer_weight_sym = not (args.w_asym)
                 if 'lm_head' in name:
-                    layer_weight_bits = 16
                     continue
                 gptq[name] = OBR(subset[name])
                 gptq[name].quantizer = WeightQuantizer()
                 gptq[name].quantizer.configure(
-                    layer_weight_bits, perchannel=True, sym=layer_weight_sym, mse=args.gptq_mse
+                    layer_w_bits, perchannel=True, sym=layer_weight_sym, mse=args.gptq_mse
                 )
 
             def add_batch(name):
@@ -365,22 +407,21 @@ def obr_fwrd(model, dataloader, dev, args):
             for name in subset:
                 handles.append(subset[name].register_forward_hook(add_batch(name)))
             for j in range(args.nsamples):
-                outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
+                outs[j] = forward_layer(layer, inps[j].unsqueeze(0), attention_mask, position_ids)
             for h in handles:
                 h.remove()
 
             for name in subset:
-                # gptq[name].baseline_with_sparsegpt_gptq_obs(percdamp=args.percdamp, sparsity_ratio=args.sparsity_ratio, prune_n=args.prune_n, prune_m = args.prune_m)
                 gptq[name].optimal_brain_restoration(percdamp=args.percdamp,
-                                                     sparsity_ratio=args.sparsity_ratio,
-                                                     prune_n=args.prune_n, prune_m = args.prune_m,
+                                                     sparsity_ratio=layer_sparsity,
+                                                     prune_n=args.prune_n, prune_m=args.prune_m,
                                                      obr_alpha=args.obr_alpha,
                                                      obr_rtn=args.obr_rtn)
                 quantizers['model.layers.%d.%s' % (i, name)] = gptq[name].quantizer
                 gptq[name].free()
 
         for j in range(args.nsamples):
-            outs[j] = layer(inps[j].unsqueeze(0), attention_mask=attention_mask, position_ids=position_ids)[0]
+            outs[j] = forward_layer(layer, inps[j].unsqueeze(0), attention_mask, position_ids)
 
         layers[i] = layer.cpu()
         del layer

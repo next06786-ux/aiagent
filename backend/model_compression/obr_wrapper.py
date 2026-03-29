@@ -15,6 +15,89 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
+def _unwrap_flatquant(model):
+    """
+    拆除 FlatQuant 包装，还原原始模型结构。
+    变换矩阵已在 reparameterize 时融合进权重，
+    拆包后权重值保留融合效果，但模型结构恢复为原始的 nn.Linear。
+    
+    这样 obr_fwrd 面对的是干净的原始模型结构，
+    不会有 FlatQuantizedLinear 的 forward 路径干扰。
+    """
+    import torch.nn as nn
+    
+    for idx in range(model.config.num_hidden_layers):
+        layer = model.model.layers[idx]
+        
+        # 处理注意力层
+        if hasattr(layer, 'linear_attn'):
+            attn = layer.linear_attn
+            # GatedDeltaNet: 拆分的 q/k/v_proj 需要合并回 in_proj_qkv
+            if hasattr(attn, 'q_proj') and hasattr(attn.q_proj, 'linear'):
+                import torch
+                q_w = attn.q_proj.linear.weight.data
+                k_w = attn.k_proj.linear.weight.data
+                v_w = attn.v_proj.linear.weight.data
+                merged_w = torch.cat([q_w, k_w, v_w], dim=0)
+                
+                # 创建新的 in_proj_qkv
+                new_qkv = nn.Linear(merged_w.shape[1], merged_w.shape[0], bias=False)
+                new_qkv.weight = nn.Parameter(merged_w)
+                
+                # 还原到原始结构
+                # 删除拆分的 proj，恢复 in_proj_qkv
+                if hasattr(attn, '_module'):
+                    # 包装类模式
+                    attn._module.in_proj_qkv = new_qkv
+                else:
+                    attn.in_proj_qkv = new_qkv
+                
+                # 还原其他 Linear 层
+                for name in ['in_proj_z', 'in_proj_b', 'in_proj_a', 'out_proj']:
+                    fql = getattr(attn, name, None)
+                    if fql is not None and hasattr(fql, 'linear'):
+                        if hasattr(attn, '_module'):
+                            setattr(attn._module, name, fql.linear)
+                        else:
+                            setattr(attn, name, fql.linear)
+                
+                # 用原始模块替换包装类
+                if hasattr(attn, '_module'):
+                    # 保留非 Linear 组件已经在 _module 上
+                    layer.linear_attn = attn._module
+                    # 确保 in_proj_qkv 是合并后的
+                    layer.linear_attn.in_proj_qkv = new_qkv
+        
+        elif hasattr(layer, 'self_attn'):
+            attn = layer.self_attn
+            if hasattr(attn, '_module'):
+                # FlatQuantQwen3_5StdAttention: 委托模式
+                # 把 FlatQuantizedLinear 的 linear 还原到 _module
+                for name in ['q_proj', 'k_proj', 'v_proj', 'o_proj']:
+                    fql = getattr(attn, name, None)
+                    if fql is not None and hasattr(fql, 'linear'):
+                        setattr(attn._module, name, fql.linear)
+                layer.self_attn = attn._module
+        
+        # 处理 MLP 层
+        mlp = layer.mlp
+        if hasattr(mlp, 'up_proj') and hasattr(mlp.up_proj, 'linear'):
+            for name in ['up_proj', 'gate_proj', 'down_proj']:
+                fql = getattr(mlp, name, None)
+                if fql is not None and hasattr(fql, 'linear'):
+                    setattr(layer.mlp, name, fql.linear)
+            # FlatQuantQwen3MLP 需要还原 act_fn 和 hidden_size
+            if hasattr(mlp, 'act_fn') and not hasattr(layer.mlp, 'act_fn'):
+                layer.mlp.act_fn = mlp.act_fn
+            if hasattr(mlp, 'hidden_size') and not hasattr(layer.mlp, 'hidden_size'):
+                layer.mlp.hidden_size = mlp.hidden_size
+            if hasattr(mlp, 'intermediate_size') and not hasattr(layer.mlp, 'intermediate_size'):
+                layer.mlp.intermediate_size = mlp.intermediate_size
+    
+    logger.info(f"  拆包完成: {model.config.num_hidden_layers} 层")
+    return model
+
+
 class OBRCompressor:
     """OBR FlatQuant 压缩器包装"""
     
@@ -145,6 +228,12 @@ class OBRCompressor:
     
     def compress(self) -> Dict[str, Any]:
         """执行 OBR 压缩"""
+        import time as _time
+        _start_time = _time.time()
+        
+        def _elapsed():
+            return f"[{_time.time() - _start_time:.0f}s]"
+        
         logger.info(f"\n{'='*60}")
         logger.info(f"开始 OBR FlatQuant 压缩")
         logger.info(f"{'='*60}")
@@ -178,71 +267,77 @@ class OBRCompressor:
             logger.info(f"  kv_cache_bits: K{args.k_bits}V{args.v_bits}")
             logger.info(f"  sparsity: {args.sparsity_ratio}")
             
-            # 初始化
+            # ========== 阶段 1: 加载模型 ==========
             utils.seed_everything(seed=args.seed)
-            logger.info(f"\n加载模型: {self.model_name}")
+            logger.info(f"\n{_elapsed()} [1/6] 加载模型: {self.model_name}")
             
-            # 使用 OBR 的模型加载器（已修复兼容性）
             model, apply_flatquant_to_model = model_utils.get_model(args.model, None)
             model.eval()
             
             tokenizer = transformers.AutoTokenizer.from_pretrained(
                 args.model, use_fast=False, trust_remote_code=True
             )
+            logger.info(f"{_elapsed()} [1/6] 模型加载完成 ✓")
             
-            # 加载校准数据
-            logger.info(f"加载校准数据: {args.cali_dataset} ({args.nsamples} samples)")
+            # ========== 阶段 2: 加载校准数据 ==========
+            logger.info(f"\n{_elapsed()} [2/6] 加载校准数据: {args.cali_dataset} ({args.nsamples} samples)")
             trainloader = data_utils.get_loaders(
                 args, args.cali_dataset, nsamples=args.nsamples,
                 seed=args.seed, model=args.model,
                 seqlen=model.seqlen, eval_mode=False
             )
+            logger.info(f"{_elapsed()} [2/6] 校准数据加载完成 ✓")
             
-            # 应用 FlatQuant
+            # ========== 阶段 3: 应用 FlatQuant 包装 ==========
             if args.quantize:
-                logger.info(f"\n应用 FlatQuant 量化...")
+                logger.info(f"\n{_elapsed()} [3/6] 应用 FlatQuant 量化包装...")
                 model = apply_flatquant_to_model(args, model)
-                logger.info(f"FlatQuant 应用完成")
+                logger.info(f"{_elapsed()} [3/6] FlatQuant 包装完成 ✓")
             
-            # 校准训练 - 学习最优变换矩阵
+            # ========== 阶段 4: 校准训练 ==========
             if args.cali_trans or args.add_diag or args.lwc or args.lac:
-                logger.info(f"\n执行 FlatQuant 校准训练...")
-                logger.info(f"  - 在 {args.nsamples} 个校准样本上微调变换矩阵")
-                logger.info(f"  - cali_trans: {args.cali_trans}")
-                logger.info(f"  - add_diag: {args.add_diag}")
-                logger.info(f"  - lwc: {args.lwc} (learnable weight clipping)")
-                logger.info(f"  - lac: {args.lac} (learnable activation clipping)")
-                
-                train_utils.cali_flat_quant(args, model, trainloader, utils.DEV, logger=logger)
-                logger.info(f"校准训练完成")
+                # 检查是否有已保存的校准参数可以恢复
+                flat_params_path = os.path.join(args.exp_dir, "flat_parameters.pth")
+                if os.path.exists(flat_params_path):
+                    logger.info(f"\n{_elapsed()} [4/6] 发现已保存的校准参数: {flat_params_path}")
+                    logger.info(f"  跳过校准训练，直接加载参数...")
+                    flat_utils.load_flat_parameters(args, model, path=args.exp_dir)
+                    logger.info(f"{_elapsed()} [4/6] 校准参数加载完成 ✓")
+                else:
+                    num_layers = model.config.num_hidden_layers
+                    logger.info(f"\n{_elapsed()} [4/6] 执行 FlatQuant 校准训练 ({num_layers} 层 × {args.epochs} epochs)...")
+                    logger.info(f"  cali_trans={args.cali_trans}, add_diag={args.add_diag}, lwc={args.lwc}, lac={args.lac}")
+                    logger.info(f"  预计耗时: ~{num_layers * args.epochs * 7 / 60:.0f} 分钟")
+                    train_utils.cali_flat_quant(args, model, trainloader, utils.DEV, logger=logger)
+                    logger.info(f"{_elapsed()} [4/6] 校准训练完成 ✓")
             
-            # 重参数化模型 - 应用学到的变换
+            # ========== 阶段 5: 重参数化 + OBR 量化 ==========
             if args.quantize:
-                logger.info(f"\n执行模型重参数化...")
+                logger.info(f"\n{_elapsed()} [5/6] 执行模型重参数化...")
                 flat_utils.reparameterize_model(model)
-                logger.info(f"重参数化完成")
+                logger.info(f"{_elapsed()} [5/6] 重参数化完成 ✓")
             
-            # OBR 量化 - 执行核心算法：GPTQ + WANDA 稀疏化 + Hessian 补偿
             if args.w_bits < 16 and not args.load_qmodel_path:
-                logger.info(f"\n执行 OBR 联合量化+稀疏化...")
-                logger.info(f"  - 权重量化: {args.w_bits}-bit")
-                logger.info(f"  - 激活量化: {args.a_bits}-bit")
-                logger.info(f"  - KV cache 量化: K{args.k_bits}V{args.v_bits}")
-                logger.info(f"  - 稀疏度: {args.sparsity_ratio*100:.0f}%")
-                logger.info(f"  - 方法: GPTQ + WANDA + Hessian 补偿")
+                logger.info(f"\n{_elapsed()} [5/6] 执行 OBR 联合量化+稀疏化...")
+                logger.info(f"  W{args.w_bits}-bit + {args.sparsity_ratio*100:.0f}% 稀疏 (GPTQ + WANDA + Hessian)")
                 
                 quantizers = obr_utils.obr_fwrd(model, trainloader, utils.DEV, args)
-                logger.info(f"OBR 压缩完成")
+                logger.info(f"{_elapsed()} [5/6] OBR 量化+稀疏化完成 ✓")
             
-            # 保存模型
+            # ========== 阶段 6: 保存模型 ==========
             if args.save_qmodel_path:
-                logger.info(f"\n保存量化模型到 {args.save_qmodel_path}")
+                logger.info(f"\n{_elapsed()} [6/6] 保存量化模型到 {args.save_qmodel_path}")
                 os.makedirs(os.path.dirname(args.save_qmodel_path), exist_ok=True)
                 save_dict = model.state_dict()
                 torch.save(save_dict, args.save_qmodel_path)
+                
+                # 计算文件大小
+                file_size_gb = os.path.getsize(args.save_qmodel_path) / (1024**3)
+                logger.info(f"{_elapsed()} [6/6] 模型已保存 ({file_size_gb:.2f} GB) ✓")
             
+            total_time = _time.time() - _start_time
             logger.info(f"\n{'='*60}")
-            logger.info(f"✅ OBR 压缩成功")
+            logger.info(f"✅ OBR 压缩成功 (总耗时: {total_time/60:.1f} 分钟)")
             logger.info(f"{'='*60}")
             
             return {
@@ -255,11 +350,13 @@ class OBRCompressor:
                 "sparsity": self.sparsity_ratio,
                 "output_path": self.output_dir,
                 "config_path": args.exp_dir,
+                "total_time_minutes": round(total_time / 60, 1),
                 "completion_time": datetime.now().isoformat(),
             }
         
         except Exception as e:
-            logger.error(f"\n❌ OBR 压缩失败: {e}")
+            elapsed = _time.time() - _start_time
+            logger.error(f"\n❌ OBR 压缩失败 (在 {elapsed:.0f}s 时): {e}")
             import traceback
             traceback.print_exc()
             return {

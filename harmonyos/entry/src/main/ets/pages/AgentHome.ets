@@ -96,6 +96,7 @@ struct AgentHome {
     { id: 'decision', title: '决策副本', subtitle: '探索未来', route: 'pages/QuickDecisionInput', color: '#6B48FF', iconName: 'comparison' },
     { id: 'dashboard', title: '智能洞察', subtitle: '涌现发现', route: 'pages/SmartInsights', color: '#FF9500', iconName: 'analytics' },
     { id: 'profile', title: '我的账号', subtitle: '个人中心', route: 'pages/UserProfile', color: '#00C853', iconName: 'user' },
+    { id: 'game', title: '平行人生', subtitle: '决策游戏', route: 'pages/ParallelLifeGame', color: '#FF6B9D', iconName: 'game' },
   ];
 
   aboutToAppear() {
@@ -139,7 +140,7 @@ struct AgentHome {
   // ===== 球体位置与动画 =====
   private initOrbPositions() {
     const count = this.features.length;
-    const radius = 145;
+    const radius = 155;
     const cy = this.centerY + 10;
     const positions: OrbPos[] = [];
     for (let i = 0; i < count; i++) {
@@ -159,7 +160,7 @@ struct AgentHome {
     this.orbAnimTimer = setInterval(() => {
       const time = Date.now() / 1000;
       const count = this.features.length;
-      const radius = 145;
+      const radius = 155;
       const cy = this.centerY + 10;
       const newPos: OrbPos[] = [];
       for (let i = 0; i < count; i++) {

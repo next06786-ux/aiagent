@@ -28,6 +28,7 @@
     "pages/QuickDecisionInput",
     "pages/EnhancedDecisionFlow",
     "pages/EnhancedDecisionResult",
-    "pages/SmartInsights"
+    "pages/SmartInsights",
+    "pages/ParallelLifeGame"
   ]
 }

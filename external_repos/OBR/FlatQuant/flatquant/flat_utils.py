@@ -28,15 +28,33 @@ def reparameterize_ln(ln, trans):
 
 
 def reparameterize_model(model):
+    import torch
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     for idx in range(model.config.num_hidden_layers):
-        layer = model.model.layers[idx]
-        layer.self_attn.reparameterize()
+        layer = model.model.layers[idx].to(dev)
+        # 兼容 Qwen3.5 混合架构：linear_attn 或 self_attn
+        if hasattr(layer, 'self_attn'):
+            attn = layer.self_attn
+            ln = layer.input_layernorm
+        elif hasattr(layer, 'linear_attn'):
+            attn = layer.linear_attn
+            ln = layer.input_layernorm if hasattr(layer, 'input_layernorm') else None
+        else:
+            logging.warning(f"Layer {idx}: 无法识别注意力类型，跳过 reparameterize")
+            model.model.layers[idx] = layer.cpu()
+            continue
+        
+        attn.reparameterize()
         layer.mlp.reparameterize()
         # fuse per-channel scaling to layernorm
-        if layer.self_attn.ln_trans is not None and layer.self_attn.ln_trans.add_diag:
-            reparameterize_ln(layer.input_layernorm, layer.self_attn.ln_trans)
+        if hasattr(attn, 'ln_trans') and attn.ln_trans is not None and attn.ln_trans.add_diag and ln is not None:
+            reparameterize_ln(ln, attn.ln_trans)
         if layer.mlp.up_gate_trans is not None and layer.mlp.up_gate_trans.add_diag:
             reparameterize_ln(layer.post_attention_layernorm, layer.mlp.up_gate_trans)
+        
+        model.model.layers[idx] = layer.cpu()
+        torch.cuda.empty_cache()
     return model
 
 
@@ -66,7 +84,10 @@ def save_flat_matrices(args, model, rank=None):
     flat_matrices = {}
     for i in range(len(model.model.layers)):
         layer = model.model.layers[i]
-        layer.self_attn.rep_matrix_only()
+        if hasattr(layer, 'self_attn'):
+            layer.self_attn.rep_matrix_only()
+        elif hasattr(layer, 'linear_attn'):
+            layer.linear_attn.rep_matrix_only()
         layer.mlp.rep_matrix_only()
         paras_name = ["trans.matrix", "trans.diag_scale", "clip_factor_w", "clip_factor_a"]
         flat_matrices[i] = get_paras_dict_by_name(layer, required_names=paras_name)
@@ -87,7 +108,10 @@ def load_flat_matrices(args, model, path=None):
     
     for i in range(len(flat_parameters.keys())):
         flat_param = flat_parameters[i]
-        layers[i].self_attn.rep_matrix_only()
+        if hasattr(layers[i], 'self_attn'):
+            layers[i].self_attn.rep_matrix_only()
+        elif hasattr(layers[i], 'linear_attn'):
+            layers[i].linear_attn.rep_matrix_only()
         layers[i].mlp.rep_matrix_only()
         layers[i].load_state_dict(flat_param, strict=False)
     return model

@@ -611,7 +611,8 @@ struct EnhancedDecisionFlow {
           Row({ space: 8 }) {
             // 左：拍照
             Button({ type: ButtonType.Circle }) {
-              SimpleIcon({ iconName: 'camera', iconSize: 20, color: '#666' })
+              Text('📷')
+                .fontSize(18)
             }
             .width(38).height(38)
             .backgroundColor('#F2F2F7')
@@ -624,8 +625,9 @@ struct EnhancedDecisionFlow {
             // 中：输入框 或 按住说话
             if (this.isVoiceMode) {
               Column() {
-                SimpleIcon({ iconName: 'mic', iconSize: 16,
-                  color: this.isRecording ? '#FF3B30' : '#666' })
+                Text(this.isRecording ? '●' : '◎')
+                  .fontSize(16)
+                  .fontColor(this.isRecording ? '#FF3B30' : '#666')
                 Text(this.isRecording ? '松开发送' : '按住说话')
                   .fontSize(13).fontWeight(600)
                   .fontColor(this.isRecording ? '#FF3B30' : '#666')
@@ -655,8 +657,9 @@ struct EnhancedDecisionFlow {
 
             // 右1：语音/文本切换
             Button({ type: ButtonType.Circle }) {
-              SimpleIcon({ iconName: this.isVoiceMode ? 'keyboard' : 'mic', iconSize: 20,
-                color: this.isVoiceMode ? '#007AFF' : '#666' })
+              Text(this.isVoiceMode ? '⌨' : '◎')
+                .fontSize(18)
+                .fontColor(this.isVoiceMode ? '#007AFF' : '#666')
             }
             .width(38).height(38)
             .backgroundColor(this.isVoiceMode ? 'rgba(0,122,255,0.08)' : '#F2F2F7')
@@ -670,7 +673,9 @@ struct EnhancedDecisionFlow {
             // 右2：加号按钮 或 发送按钮（文本模式有内容时变发送）
             if (!this.isVoiceMode && this.userInput.trim().length > 0) {
               Button({ type: ButtonType.Circle }) {
-                SimpleIcon({ iconName: 'send', iconSize: 18, color: '#FFFFFF' })
+                Text('▶')
+                  .fontSize(16)
+                  .fontColor('#FFFFFF')
               }
               .width(38).height(38)
               .backgroundColor(this.isLoading ? '#CCCCCC' : '#007AFF')
@@ -697,7 +702,8 @@ struct EnhancedDecisionFlow {
               // 相册
               Column({ space: 6 }) {
                 Button({ type: ButtonType.Circle }) {
-                  SimpleIcon({ iconName: 'image', iconSize: 24, color: '#007AFF' })
+                  Text('🖼')
+                    .fontSize(22)
                 }
                 .width(52).height(52)
                 .backgroundColor('rgba(0,122,255,0.08)')
@@ -709,8 +715,9 @@ struct EnhancedDecisionFlow {
               // 通话
               Column({ space: 6 }) {
                 Button({ type: ButtonType.Circle }) {
-                  SimpleIcon({ iconName: this.isInCall ? 'end_call' : 'phone', iconSize: 24,
-                    color: this.isInCall ? '#FFFFFF' : '#00C853' })
+                  Text(this.isInCall ? '✕' : '✆')
+                    .fontSize(22)
+                    .fontColor(this.isInCall ? '#FFFFFF' : '#00C853')
                 }
                 .width(52).height(52)
                 .backgroundColor(this.isInCall ? '#FF3B30' : 'rgba(0,200,83,0.10)')
@@ -990,47 +997,41 @@ struct EnhancedDecisionFlow {
       if (result.photoUris && result.photoUris.length > 0) {
         this.selectedImageUri = result.photoUris[0]
         try {
+          const context = getContext(this) as common.UIAbilityContext
+          const sandboxPath = `${context.cacheDir}/upload_img.jpg`
+          const srcFile = await fs.open(result.photoUris[0], fs.OpenMode.READ_ONLY)
+          const destFile = await fs.open(sandboxPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC)
+          await fs.copyFile(srcFile.fd, destFile.fd)
+          await fs.close(srcFile.fd)
+          await fs.close(destFile.fd)
           const httpRequest = http.createHttp()
           const response = await httpRequest.request(
             `${ApiConfig.getApiUrl('/api/chat/upload-image')}?user_id=${this.userId}`,
-  async stopRecording() {
-    try {
-      if (this.audioRecorder) {
-        await this.audioRecorder.stop()
-        await this.audioRecorder.release()
-        this.audioRecorder = null
-      }
-      this.isRecording = false
-      this.userInput = '识别中...'
-      const httpRequest = http.createHttp()
-      const response = await httpRequest.request(
-        `${ApiConfig.getApiUrl('/api/chat/speech-to-text')}`,
-        {
-          method: http.RequestMethod.POST,
-          header: { 'Content-Type': 'multipart/form-data' },
-          multiFormDataList: [{
-            name: 'file', contentType: 'audio/mp4',
-            remoteFileName: 'voice.m4a', filePath: this.recordFilePath
-          }],
-          connectTimeout: 30000, readTimeout: 30000
+            {
+              method: http.RequestMethod.POST,
+              header: { 'Content-Type': 'multipart/form-data' },
+              multiFormDataList: [{
+                name: 'file', contentType: 'image/jpeg',
+                remoteFileName: 'image.jpg', filePath: sandboxPath
+              }],
+              connectTimeout: 30000, readTimeout: 30000
+            }
+          )
+          httpRequest.destroy()
+          if (response.responseCode === 200) {
+            const res = JSON.parse(response.result as string) as Record<string, Object>
+            const data = res.data as Record<string, string>
+            this.userInput = data?.description ? `[图片: ${data.description}]` : '[图片已添加]'
+          } else {
+            this.userInput = '[图片已添加]'
+          }
+        } catch (uploadErr) {
+          console.error('图片上传失败:', uploadErr)
+          this.userInput = '[图片已添加]'
         }
-      )
-      httpRequest.destroy()
-      if (response.responseCode === 200) {
-        const res = JSON.parse(response.result as string) as Record<string, Object>
-        const data = res.data as Record<string, string>
-        this.userInput = data?.text || '(识别结果为空)'
-        if (!this.userInput || this.userInput.trim() === '' || this.userInput === '(识别结果为空)') {
-          promptAction.showToast({ message: '语音识别为空，请重试' })
-          this.userInput = ''
-        }
-      } else {
-        this.userInput = '(语音识别失败)'
       }
     } catch (err) {
-      console.error('停止录音失败:', err)
-      this.userInput = '(录音处理失败)'
-      this.isRecording = false
+      console.error('选择图片失败:', err)
     }
   }
 
@@ -1075,7 +1076,9 @@ struct EnhancedDecisionFlow {
     this.callDuration = 0
     this.callDurationText = '00:00'
     promptAction.showToast({ message: '通话已结束' })
-  }sync startRecording() {
+  }
+
+  async startRecording() {
     try {
       const atManager = abilityAccessCtrl.createAtManager()
       const context = getContext(this) as common.UIAbilityContext

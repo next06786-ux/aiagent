@@ -21,6 +21,8 @@ from .inference_integration import (
     get_inference_stats,
 )
 
+from .fusion_compressor import FusionCompressor
+
 __all__ = [
     "ModelQuantizer",
     "QuantizationMethod",
@@ -28,6 +30,7 @@ __all__ = [
     "CompressionQualityMonitor",
     "LoRAQuantizer",
     "OBRCompressor",
+    "FusionCompressor",
     "QuantizedModelLoader",
     "get_or_create_inference_pipeline",
     "create_inference_pipeline",

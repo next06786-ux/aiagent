@@ -159,41 +159,89 @@ class AutoLoRATrainer:
         return True
 
     def get_user_conversations(self) -> List[Dict]:
-        """从数据库获取用户对话数据用于训练（只取上次训练后的新对话）"""
+        """从数据库获取用户对话数据用于训练（只取上次训练后的新对话）
+        
+        分层策略：
+        - 决策相关对话全部保留（高信号）
+        - 游戏数据额外加权（复制一份，强化决策偏好学习）
+        - 通用对话按比例采样（最多占决策数据的50%，保留语言风格）
+        """
+        import random
+
+        DECISION_KEYWORDS = [
+            '要不要', '该不该', '值不值', '怎么选', '如何选择',
+            '换工作', '考研', '创业', '投资', '搬家', '辞职', '跳槽',
+            '纠结', '犹豫', '拿不定主意', '建议', '风险', '机会', '后悔',
+            '打算', '计划', '决定', '选择', '利弊', '优缺点',
+            '要去', '要留', '要做', '要放弃', '要坚持'
+        ]
+
         try:
             from backend.database.models import ConversationHistory, Database
             from backend.database.config import DatabaseConfig
-            
+
             db = Database(DatabaseConfig.get_database_url())
             session = db.get_session()
-            
+
             query = session.query(ConversationHistory).filter(
                 ConversationHistory.user_id == self.user_id
             )
             if self.status.get("last_train_time"):
                 query = query.filter(ConversationHistory.timestamp > self.status["last_train_time"])
-            
+
             rows = query.order_by(ConversationHistory.timestamp.asc()).all()
             session.close()
-            
-            conversations = []
+
+            # 构建对话对，同时记录 session_id
+            raw_pairs = []
             i = 0
             while i < len(rows) - 1:
                 if rows[i].role == 'user' and rows[i + 1].role == 'assistant':
                     user_msg = rows[i].content or ""
-                    ai_msg = rows[i + 1].content or ""
+                    ai_msg   = rows[i + 1].content or ""
                     if user_msg.strip() and ai_msg.strip() and '无法回答' not in ai_msg:
-                        conversations.append({
-                            "user": user_msg,
-                            "assistant": ai_msg,
-                            "timestamp": rows[i].timestamp.isoformat() if rows[i].timestamp else ""
+                        raw_pairs.append({
+                            "user":       user_msg,
+                            "assistant":  ai_msg,
+                            "timestamp":  rows[i].timestamp.isoformat() if rows[i].timestamp else "",
+                            "session_id": getattr(rows[i], 'session_id', '') or ''
                         })
                     i += 2
                 else:
                     i += 1
-            
-            print(f"从数据库获取 {len(conversations)} 条新对话对（上次训练后）")
-            return conversations
+
+            # 分层
+            game_convs     = []
+            decision_convs = []
+            general_convs  = []
+
+            for conv in raw_pairs:
+                sid  = conv.get('session_id', '')
+                text = conv['user'] + conv['assistant']
+                if sid.startswith('game_'):
+                    game_convs.append(conv)
+                elif any(kw in text for kw in DECISION_KEYWORDS):
+                    decision_convs.append(conv)
+                else:
+                    general_convs.append(conv)
+
+            # 游戏数据加权（复制一份，强化决策偏好信号）
+            weighted_game = game_convs * 2
+
+            # 通用数据采样（最多占决策+游戏数据量的50%）
+            decision_total = len(decision_convs) + len(game_convs)
+            max_general    = max(10, decision_total // 2)
+            sampled_general = random.sample(general_convs, min(len(general_convs), max_general))
+
+            result = weighted_game + decision_convs + sampled_general
+            random.shuffle(result)
+
+            print(
+                f"[LoRA训练数据] 游戏:{len(game_convs)}×2  决策:{len(decision_convs)}"
+                f"  通用采样:{len(sampled_general)}/{len(general_convs)}  合计:{len(result)}"
+            )
+            return result
+
         except Exception as e:
             print(f"从数据库获取对话失败: {e}")
             return []

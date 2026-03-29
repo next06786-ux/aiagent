@@ -57,7 +57,11 @@ class LoRADecisionAnalyzer:
         if self.is_user_training(user_id):
             raise RuntimeError(f"用户 {user_id} 的 LoRA 正在训练中，请稍后再试个性化决策模拟")
 
-        prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=False)
+        # 查询知识图谱中的相关人物，注入 prompt
+        kg_context = self._query_relevant_persons(user_id, question)
+
+        prompt = self._build_timeline_prompt(question, option, profile, num_events,
+                                             strict=False, kg_context=kg_context)
         response = await asyncio.to_thread(
             self.lora_manager.generate,
             user_id,
@@ -70,7 +74,8 @@ class LoRADecisionAnalyzer:
         timeline = self._parse_timeline_json(response)
 
         if not timeline:
-            retry_prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=True)
+            retry_prompt = self._build_timeline_prompt(question, option, profile, num_events,
+                                                       strict=True, kg_context=kg_context)
             retry_response = await asyncio.to_thread(
                 self.lora_manager.generate,
                 user_id,
@@ -244,7 +249,47 @@ class LoRADecisionAnalyzer:
         
         return status
 
-    def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any, num_events: int, strict: bool = False) -> str:
+    def _query_relevant_persons(self, user_id: str, question: str) -> str:
+        """从知识图谱中查询与决策问题相关的人物，返回可注入 prompt 的文本"""
+        try:
+            from backend.knowledge.neo4j_knowledge_graph import Neo4jKnowledgeGraph
+            with Neo4jKnowledgeGraph(user_id) as kg:
+                # 取中心度最高的前5个人物节点
+                central_nodes = kg.get_central_nodes(limit=5)
+                if not central_nodes:
+                    return ""
+
+                lines = []
+                for node in central_nodes:
+                    name = node.get('name', '')
+                    if not name:
+                        continue
+                    rels = kg.get_entity_relationships(name)
+                    # 取前3条关系描述
+                    rel_parts = []
+                    for r in rels[:3]:
+                        rel_type   = r.get('type', '')
+                        rel_target = r.get('target', '') or r.get('name', '')
+                        if rel_type and rel_target:
+                            rel_parts.append(f"{rel_type} {rel_target}")
+                        elif rel_type:
+                            rel_parts.append(rel_type)
+                    rel_desc = "、".join(rel_parts) if rel_parts else "相关人物"
+                    lines.append(f"- {name}（{rel_desc}）")
+
+                if not lines:
+                    return ""
+
+                result = "\n".join(lines)
+                print(f"[知识图谱] 注入 {len(lines)} 个相关人物到决策 prompt")
+                return result
+        except Exception as e:
+            print(f"[知识图谱] 查询相关人物失败: {e}")
+            return ""
+
+    def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any,
+                                num_events: int, strict: bool = False,
+                                kg_context: str = "") -> str:
         if strict:
             prompt = "<|im_start|>system\n你是用户的未来决策推演引擎。只输出合法 JSON 数组，不要解释，不要代码块，不要思考过程，不要额外文本。<|im_end|>\n"
         else:
@@ -257,6 +302,8 @@ class LoRADecisionAnalyzer:
             prompt += f"用户决策风格：{getattr(profile, 'decision_style', '未知')}\n"
             prompt += f"用户风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
             prompt += f"用户生活优先级：{getattr(profile, 'life_priority', '未知')}\n"
+        if kg_context:
+            prompt += f"用户相关人物背景（可在事件中具体提及）：\n{kg_context}\n"
         prompt += (
             f"请输出 {num_events} 个按时间递进的关键事件，每个事件都要贴近真实生活路径。\n"
             "要求：\n"

@@ -229,7 +229,11 @@ class WeightQuantizer(torch.nn.Module):
                 q = scale * q
                 return q.to(x_dtype)
             else:
-                raise NotImplementedError
+                scale = self.scale[row_idx].to(x.device)
+                zero = self.zero[row_idx].to(x.device)
+                q = torch.clamp(torch.round(x / scale) + zero, 0, self.maxq)
+                q = scale * (q - zero)
+                return q.to(x_dtype)
         return x
     
     

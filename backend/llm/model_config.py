@@ -28,6 +28,18 @@ MODEL_CONFIG = {
             "sparsity": 0.5,
             "dtype": "int4",
             "device_map": "auto"
+        },
+        "qwen3.5-9b-fusion": {
+            "local_path": "models/qwen-fusion",
+            "display_name": "Qwen 3.5 (9B) - OBR+llmquant 融合压缩",
+            "vram_required": 3.0,
+            "inference_speed": 250,
+            "context_length": 32768,
+            "description": "FlatQuant 变换 + SVD 低秩分解 + 残差量化 (~1.5-2.5 bit)",
+            "compression_method": "OBR_llmquant_fusion",
+            "quantization_bits": 2,
+            "dtype": "mixed",
+            "device_map": "auto"
         }
     },
     "inference_config": {
@@ -112,8 +124,8 @@ def list_available_models():
 
 
 def switch_model(model_key: str):
-    if model_key != "qwen3.5-9b":
-        raise ValueError("当前部署仅支持 qwen3.5-9b")
+    if model_key not in MODEL_CONFIG["available_models"]:
+        raise ValueError(f"不支持的模型: {model_key}，可选: {list(MODEL_CONFIG['available_models'].keys())}")
     MODEL_CONFIG["current_model"] = model_key
     return get_current_model_config()
 

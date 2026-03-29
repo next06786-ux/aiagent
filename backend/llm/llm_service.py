@@ -65,45 +65,42 @@ class LLMService:
         
         elif self.provider == LLMProvider.TRANSFORMERS:
             try:
-                from transformers import AutoModelForCausalLM, AutoTokenizer
-                from backend.llm.model_config import get_model_hf_name, get_quantization_config
+                from backend.llm.model_config import get_model_hf_name, get_quantization_config, get_current_model_config
+                from backend.model_compression.inference_integration import QuantizedModelLoader
+                import torch
                 
+                model_cfg = get_current_model_config()
                 model_name = get_model_hf_name()
                 quant_config = get_quantization_config()
+                loader = QuantizedModelLoader()
                 
-                load_kwargs = {
-                    "trust_remote_code": True,
-                    "device_map": "auto",
-                }
-                
-                # 根据量化配置加载
-                if quant_config.get("enable_quantization") and quant_config.get("load_in_4bit"):
-                    from transformers import BitsAndBytesConfig
-                    import torch
-                    load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                        load_in_4bit=True,
-                        bnb_4bit_use_double_quant=quant_config.get("bnb_4bit_use_double_quant", True),
-                        bnb_4bit_quant_type=quant_config.get("bnb_4bit_quant_type", "nf4"),
-                        bnb_4bit_compute_dtype=torch.bfloat16
+                # OBR 压缩模型：需要原始模型路径来初始化结构
+                obr_weights = os.path.join(model_name, "quantized_model.pt") if os.path.isdir(model_name) else None
+                if obr_weights and os.path.exists(obr_weights):
+                    print(f"🔧 检测到 OBR 压缩模型，加载中...")
+                    original_model = os.environ.get(
+                        "LOCAL_BASE_MODEL_PATH",
+                        "/root/autodl-tmp/models/base/Qwen3.5-9B"
                     )
-                    print(f"🔧 启用 4-bit 量化加载...")
-                elif quant_config.get("enable_quantization") and quant_config.get("load_in_8bit"):
-                    from transformers import BitsAndBytesConfig
-                    load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
-                    print(f"🔧 启用 8-bit 量化加载...")
+                    self.client, self.tokenizer = loader.load_obr_compressed_model(
+                        model_dir=model_name,
+                        original_model_name=original_model,
+                    )
                 else:
-                    import torch
-                    load_kwargs["torch_dtype"] = torch.float16
+                    # OBR 压缩模型尚未生成，使用原始 FP16 加载
+                    # 运行 compress_base_model.py 生成压缩模型后将自动切换
+                    original_model = os.environ.get(
+                        "LOCAL_BASE_MODEL_PATH",
+                        "/root/autodl-tmp/models/base/Qwen3.5-9B"
+                    )
+                    print(f"ℹ️  未找到 OBR 压缩模型，使用原始 FP16 模型: {original_model}")
+                    self.client, self.tokenizer = loader.load_without_quantization(original_model)
                 
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-                self.client = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
                 self.model = model_name
                 self.enabled = True
                 
-                import torch
                 vram_gb = torch.cuda.memory_allocated() / 1024**3 if torch.cuda.is_available() else 0
-                quant_label = " (4-bit量化)" if quant_config.get("load_in_4bit") else ""
-                print(f"✓ Transformers 模型已加载: {model_name}{quant_label} (VRAM: {vram_gb:.2f}GB)")
+                print(f"✓ Transformers 模型已加载: {model_name} (VRAM: {vram_gb:.2f}GB)")
             except Exception as e:
                 print(f"⚠️ Transformers 模型加载失败: {e}")
                 self.enabled = False
