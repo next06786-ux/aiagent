@@ -1196,7 +1196,7 @@ async def speech_to_text(file: UploadFile = File(...)):
                 language_hints=['zh', 'en']
             )
             rec.start()
-            with open(read_path, 'rb') as f:
+            _start_time = time.time()
                 while True:
                     chunk = f.read(3200)
                     if not chunk:
@@ -1210,7 +1210,8 @@ async def speech_to_text(file: UploadFile = File(...)):
                 time.sleep(0.1)
 
             text = result_holder["text"]
-            print(f"[语音识别] 识别结果: '{text}', done={result_holder['done']}")
+            elapsed = time.time() - _start_time
+            print(f"[语音识别] 识别结果: '{text}', done={result_holder['done']}, 耗时: {elapsed:.1f}s")
 
             # 清理 wav 临时文件
             try:

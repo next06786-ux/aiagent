@@ -483,7 +483,7 @@ struct AgentHome {
             name: 'file', contentType: 'audio/mp4',
             remoteFileName: 'voice.m4a', filePath: this.recordFilePath
           }],
-          connectTimeout: 30000, readTimeout: 30000
+          connectTimeout: 30000, readTimeout: 60000
         }
       );
       httpRequest.destroy();
