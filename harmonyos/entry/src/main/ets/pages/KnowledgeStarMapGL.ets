@@ -147,6 +147,7 @@ struct KnowledgeStarMapGL {
   @State selectedNodeIdx: number = -1
   @State showPersonList: boolean = false
   @State showCategoryList: boolean = false
+  @State showRelationOverview: boolean = false
   @State zoomScale: number = 1.0
   @State nodeScreenPositions: NodeScreenPos[] = []
   @State selectedNodeRelations: NodeRelation[] = []
@@ -743,6 +744,67 @@ struct KnowledgeStarMapGL {
       // 右上角：类型筛选 + 人物列表（紧贴顶部栏）
       if (this.nodes.length > 0) {
         Row({ space: 6 }) {
+          // 关系总览按钮
+          Column() {
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 4 }) {
+                Text('关系').fontSize(12).fontColor('#FFFFFF').fontWeight(600)
+                Text(this.showRelationOverview ? '▲' : '▼').fontSize(10).fontColor('rgba(255,255,255,0.6)')
+              }.padding({ left: 10, right: 10 })
+            }
+            .height(32)
+            .backgroundColor('rgba(10, 10, 30, 0.85)')
+            .borderRadius(16)
+            .border({ width: 1, color: 'rgba(255,255,255,0.15)' })
+            .onClick(() => {
+              this.showRelationOverview = !this.showRelationOverview
+              if (this.showRelationOverview) { this.showCategoryList = false; this.showPersonList = false }
+            })
+
+            // 关系总览下拉面板
+            if (this.showRelationOverview) {
+              Scroll() {
+                Column({ space: 0 }) {
+                  ForEach(this.nodes, (node: GraphNode, idx: number) => {
+                    Column({ space: 2 }) {
+                      Row({ space: 6 }) {
+                        Circle({ width: 8, height: 8 }).fill(this.getNodeColor(node.category))
+                        Text(node.name).fontSize(13).fontWeight(600).fontColor('#FFFFFF').layoutWeight(1)
+                        Text(`${node.connections}`).fontSize(10).fontColor('rgba(255,255,255,0.4)')
+                      }.width('100%').padding({ left: 10, right: 10, top: 6, bottom: 2 })
+                      // 显示该人物的关系
+                      if (this.nativeModule) {
+                        ForEach(this.nativeModule.getNodeRelations(idx).slice(0, 3), (rel: NodeRelation) => {
+                          Row({ space: 4 }) {
+                            Text('  ->').fontSize(10).fontColor('rgba(255,255,255,0.3)')
+                            Text(rel.name).fontSize(11).fontColor('rgba(255,255,255,0.6)')
+                          }.padding({ left: 20, right: 10 })
+                        })
+                      }
+                    }
+                    .width('100%')
+                    .onClick(() => {
+                      if (this.nativeModule) {
+                        this.nativeModule.focusOnNode(idx)
+                        this.selectedNodeIdx = idx
+                        this.selectedNodeRelations = this.nativeModule.getNodeRelations(idx)
+                        this.showRelationOverview = false
+                      }
+                    })
+                  })
+                }.padding({ top: 6, bottom: 6 })
+              }
+              .scrollBar(BarState.Off)
+              .constraintSize({ maxHeight: 400 })
+              .width(180)
+              .backgroundColor('rgba(10, 10, 30, 0.92)')
+              .borderRadius(10)
+              .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
+              .margin({ top: 4 })
+            }
+          }
+          .alignItems(HorizontalAlign.End)
+
           // 类型列表按钮（在人物列表左侧）
           Column() {
             // 触发按钮

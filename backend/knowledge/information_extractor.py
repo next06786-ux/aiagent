@@ -173,7 +173,7 @@ class InformationExtractor:
         return extracted
     
     def extract_from_conversation(self, conversation_text: str, metadata: Dict = None) -> Dict[str, List[Dict]]:
-        """从对话文本中提取信息 - 只提取人物实体"""
+        """从对话文本中提取信息 - 提取人物实体和关联故事"""
         metadata = metadata or {}
         
         extracted = {
@@ -182,16 +182,138 @@ class InformationExtractor:
             "concepts": []
         }
         
-        # 优先用 LLM 智能提取
-        llm_persons = self._extract_persons_llm(conversation_text)
-        if llm_persons:
-            extracted["entities"].extend(llm_persons)
+        # 用 LLM 同时提取人物和故事
+        llm_result = self._extract_persons_and_stories_llm(conversation_text)
+        if llm_result:
+            extracted["entities"].extend(llm_result.get("entities", []))
+            extracted["events"].extend(llm_result.get("events", []))
         else:
-            # LLM 失败时降级到正则提取
+            # LLM 失败时降级到正则提取（只提取人物）
             persons = self._extract_persons(conversation_text)
             extracted["entities"].extend(persons)
         
         return extracted
+    
+    def _extract_persons_and_stories_llm(self, text: str) -> Optional[Dict[str, List[Dict]]]:
+        """用大模型同时提取人物和关联故事"""
+        try:
+            from openai import OpenAI
+            api_key = os.getenv("DASHSCOPE_API_KEY")
+            if not api_key:
+                return None
+            
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            )
+            
+            prompt = f"""从以下对话中同时提取：1) 提到的人物  2) 与人物相关的故事/事件
+
+重要规则：
+1. 绝对不要把代词当作人物名字："你"、"我"、"他"、"她"、"对方"、"别人"、"自己"等不能作为人物名
+2. 如果只用代词指代某人且无法确定具体是谁，跳过该人物
+3. "父母"拆成"爸爸"和"妈妈"
+4. 同一个人的不同称呼合并，用最具体的名字
+5. 故事要关联到具体的人物，描述这个人在对话中提到的事情
+6. 故事应该是有意义的信息，不是简单的"提到了某人"
+
+对话内容：
+{text[:2000]}
+
+请以JSON格式返回：
+{{
+  "persons": [
+    {{
+      "name": "人物名（不能是代词）",
+      "category": "family/close_friends/colleagues/friends/weak_ties",
+      "description": "一句话描述",
+      "stories": ["与此人相关的故事1", "与此人相关的故事2"]
+    }}
+  ]
+}}
+
+如果没有具体人物，返回 {{"persons": []}}
+只返回JSON。"""
+
+            response = client.chat.completions.create(
+                model="qwen-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=1500
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            if result_text.startswith("```"):
+                result_text = re.sub(r'^```\w*\n?', '', result_text)
+                result_text = re.sub(r'\n?```$', '', result_text)
+            
+            data = json.loads(result_text)
+            persons_data = data.get("persons", [])
+            
+            if not isinstance(persons_data, list):
+                return None
+            
+            pronoun_blacklist = {
+                '你', '我', '他', '她', '它', '对方', '那个人', '这个人', '某人', '别人',
+                '自己', '人家', '大家', '我们', '他们', '她们', '你们', '咱们', '咱',
+                '谁', '某某', '那位', '这位', '那人', '此人', '本人', '用户', 'AI', '助手'
+            }
+            valid_categories = {'family', 'close_friends', 'colleagues', 'friends', 'weak_ties'}
+            
+            entities = []
+            events = []
+            seen = set()
+            
+            for p in persons_data:
+                name = p.get('name', '').strip()
+                if not name or name in pronoun_blacklist or len(name) < 2:
+                    continue
+                if name in seen:
+                    continue
+                seen.add(name)
+                
+                category = p.get('category', 'friends')
+                if category not in valid_categories:
+                    category = 'friends'
+                
+                stories = p.get('stories', [])
+                
+                entities.append({
+                    "name": name,
+                    "type": "entity",
+                    "entity_type": "person",
+                    "category": category,
+                    "confidence": 0.9,
+                    "attributes": {
+                        "description": p.get('description', ''),
+                        "extracted_by": "llm",
+                        "stories": stories
+                    }
+                })
+                
+                # 把故事作为事件节点，关联到人物
+                for story in stories:
+                    if story and len(story) > 5:
+                        events.append({
+                            "name": story[:50],
+                            "type": "event",
+                            "category": category,
+                            "confidence": 0.85,
+                            "attributes": {
+                                "related_person": name,
+                                "full_story": story,
+                                "extracted_by": "llm"
+                            }
+                        })
+            
+            if entities:
+                print(f"  [LLM提取] 识别到 {len(entities)} 个人物, {len(events)} 个故事")
+            
+            return {"entities": entities, "events": events}
+            
+        except Exception as e:
+            print(f"  [LLM提取] 人物+故事提取失败: {e}")
+            return None
     
     def _extract_persons_llm(self, text: str) -> List[Dict]:
         """用大模型智能提取人物"""
@@ -210,21 +332,24 @@ class InformationExtractor:
 
 重要规则：
 1. "父母"不是一个人，要拆成"爸爸"和"妈妈"两个人
-2. "对方"、"他"、"她"、"那个人"等代词，如果上下文能确定是谁，就用那个人的名字，不要单独作为一个人物
-3. 同一个人的不同称呼要合并（如"小雨"和"对方"是同一个人，只保留"小雨"）
-4. "爸爸"和"父亲"是同一个人，只保留一个
-5. 不要提取"我"、"用户"、"AI"、"助手"
+2. 绝对不要把代词当作人物名字。以下词语绝对不能作为人物名字出现：
+   "你"、"我"、"他"、"她"、"它"、"对方"、"那个人"、"这个人"、"某人"、"别人"、"自己"、"人家"、"大家"、"我们"、"他们"、"她们"、"你们"、"咱们"、"咱"
+3. 如果对话中只用代词指代某人（如"她很好"），但上下文无法确定具体是谁，则跳过这个人，不要提取
+4. 同一个人的不同称呼要合并（如"小雨"和"对方"是同一个人，只保留"小雨"）
+5. "爸爸"和"父亲"是同一个人，只保留一个
+6. 不要提取"我"、"用户"、"AI"、"助手"
+7. 只提取有明确称呼或名字的人物
 
 对话内容：
 {text[:2000]}
 
 请以JSON数组格式返回，每个人物包含：
-- name: 人物称呼（用最具体的名字，如有真名用真名）
+- name: 人物称呼（用最具体的名字，如有真名用真名。绝对不能是代词）
 - category: 关系类别，只能是以下之一：family（家人）、close_friends（好友）、colleagues（同事）、friends（朋友）、weak_ties（弱关系）
 - description: 一句话描述这个人物在对话中的角色或提到的事情
 - aliases: 这个人在对话中的其他称呼（数组，如 ["对方", "她"]）
 
-如果对话中没有提到任何人物，返回空数组 []
+如果对话中没有提到任何具体人物（只有代词），返回空数组 []
 只返回JSON，不要其他文字。"""
 
             response = client.chat.completions.create(
@@ -248,13 +373,16 @@ class InformationExtractor:
             persons = []
             seen = set()
             valid_categories = {'family', 'close_friends', 'colleagues', 'friends', 'weak_ties'}
+            # 代词黑名单 - 绝对不能作为人物名字
+            pronoun_blacklist = {
+                '你', '我', '他', '她', '它', '对方', '那个人', '这个人', '某人', '别人',
+                '自己', '人家', '大家', '我们', '他们', '她们', '你们', '咱们', '咱',
+                '谁', '某某', '那位', '这位', '那人', '此人', '本人', '用户', 'AI', '助手',
+                '对象', '那边', '这边', '人', '朋友们', '同学们', '家人们'
+            }
             
             # 代词/泛称黑名单 — 不应作为独立人物
-            PRONOUN_BLACKLIST = {
-                '对方', '他', '她', '它', '他们', '她们', '那个人', '这个人',
-                '别人', '某人', '大家', '人家', '自己', '本人',
-                '我', '用户', 'AI', '助手', '你', '您'
-            }
+            PRONOUN_BLACKLIST = pronoun_blacklist  # 使用上面定义的完整黑名单
             
             # 别名合并映射
             ALIAS_MAP = {
@@ -310,9 +438,16 @@ class InformationExtractor:
         if not text:
             return persons
 
+        # 代词黑名单
+        pronoun_blacklist = {
+            '你', '我', '他', '她', '它', '对方', '那个人', '这个人', '某人', '别人',
+            '自己', '人家', '大家', '我们', '他们', '她们', '你们', '咱们', '咱',
+            '谁', '某某', '那位', '这位', '那人', '此人', '本人', '用户', 'AI', '助手',
+            '对象', '那边', '这边', '人', '朋友们', '同学们', '家人们'
+        }
+
         # 预处理：把"父母"拆成"爸爸"和"妈妈"
         text_processed = text.replace('父母', '爸爸和妈妈').replace('爸妈', '爸爸和妈妈')
-            return persons
         
         # 1. 称谓模式匹配 - 提取带称谓的人物
         relation_patterns = {
@@ -369,7 +504,7 @@ class InformationExtractor:
             if name and 2 <= len(name) <= 4 and name not in seen_names:
                 # 过滤掉明显不是人名的
                 skip_words = {'我们', '他们', '她们', '你们', '大家', '自己', '别人', '对方', '这个', '那个', '什么', '怎么', '为什么', '可以', '不能', '应该', '已经'}
-                if name not in skip_words:
+                if name not in skip_words and name not in pronoun_blacklist:
                     seen_names.add(name)
                     persons.append({
                         "name": name,
@@ -384,7 +519,8 @@ class InformationExtractor:
         matches = re.findall(called_pattern, text)
         for match in matches:
             name = match.strip()
-            if name and len(name) >= 2 and name not in seen_names:
+            if name and len(name) >= 2 and name not in seen_names and name not in pronoun_blacklist:
+                seen_names.add(name)
                 seen_names.add(name)
                 persons.append({
                     "name": name,

@@ -81,19 +81,20 @@ void main() {
     
     float alpha = core + inner1 + inner2 + outer1 + outer2 + glow;
     
-    // 选中节点添加精致光环
+    // 选中节点添加高级光环效果
     if (vSelected > 0.5) {
-        // 内圈光环
-        float ring = smoothstep(0.42, 0.38, dist) * smoothstep(0.3, 0.36, dist);
-        alpha += ring * 0.9 * vPulse;
+        // 柔和的内层辉光 - 从核心向外扩散
+        float innerBloom = exp(-dist * dist * 12.0) * 0.4 * vPulse;
+        alpha += innerBloom;
         
-        // 外圈光晕
-        float outerRing = smoothstep(0.52, 0.46, dist) * smoothstep(0.38, 0.44, dist);
-        alpha += outerRing * 0.5;
+        // 精致的薄光环 - 用高斯函数而非硬边
+        float ringDist = abs(dist - 0.38);
+        float thinRing = exp(-ringDist * ringDist * 800.0) * 0.7 * vPulse;
+        alpha += thinRing;
         
-        // 最外层呼吸光晕
-        float breathGlow = smoothstep(0.65, 0.5, dist) * 0.15 * vPulse;
-        alpha += breathGlow;
+        // 外层柔和呼吸光晕 - 大范围低强度
+        float outerBloom = exp(-dist * dist * 4.0) * 0.12 * (0.7 + 0.3 * vPulse);
+        alpha += outerBloom;
     }
     
     // 核心纯白，向外渐变到节点颜色，更柔和的过渡
@@ -101,9 +102,9 @@ void main() {
     vec3 brightColor = vColor * 1.4;  // 颜色更鲜艳
     vec3 color = mix(brightColor, white, core * 0.95 + inner1 * 0.6 + inner2 * 0.2);
     
-    // 选中节点颜色更亮
+    // 选中节点颜色更亮但保持自然
     if (vSelected > 0.5) {
-        color = mix(color, white, 0.25);
+        color = mix(color, white, 0.15 + 0.1 * vPulse);
     }
     
     fragColor = vec4(color, alpha);

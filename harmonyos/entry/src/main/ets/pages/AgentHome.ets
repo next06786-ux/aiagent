@@ -583,6 +583,9 @@ struct AgentHome {
       Circle({ width: 200, height: 200 }).fill('#764ba2').opacity(0.025).blur(60)
         .position({ x: this.centerX + 30, y: this.centerY + 60 })
 
+      // 符文法阵连接线 - AI核心向功能球体赋能
+      this.buildRuneLines()
+
       // 功能球体层
       this.buildOrbsLayer()
 
@@ -616,11 +619,11 @@ struct AgentHome {
           Circle({ width: 40, height: 40 }).fill(Theme.Color.Primary).opacity(0.12)
           Circle({ width: 32, height: 32 })
             .linearGradient({ angle: 135, colors: [['#667eea', 0], ['#764ba2', 1]] })
-          Text('LS').fontSize(13).fontWeight(700).fontColor('#FFFFFF')
+          Text('PL').fontSize(13).fontWeight(700).fontColor('#FFFFFF')
         }.width(40).height(40)
 
         Column({ space: 2 }) {
-          Text('LifeSwarm').fontSize(17).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+          Text('ParaLife · 平行境').fontSize(17).fontWeight(700).fontColor(Theme.Color.TextPrimary)
           Text(this.userInfo ? `${this.userInfo.nickname}，你好` : '智能生活助手')
             .fontSize(11).fontColor(Theme.Color.TextTertiary)
         }.alignItems(HorizontalAlign.Start)
@@ -736,6 +739,63 @@ struct AgentHome {
     .opacity(this.showContent ? 1 : 0)
     .scale({ x: this.showContent ? 1 : 0.85, y: this.showContent ? 1 : 0.85 })
     .animation({ duration: 800, curve: Curve.Smooth, delay: 0 })
+  }
+
+  @Builder
+  buildRuneLines() {
+    // 符文法阵：从AI核心到每个功能球体的能量连接线
+    ForEach(this.orbPositions, (orb: OrbPos, index: number) => {
+      // 能量线 - 从中心到球体的渐变线条
+      Line()
+        .width('100%').height('100%')
+        .startPoint([this.centerX, this.centerY - 5])
+        .endPoint([orb.x, orb.y])
+        .stroke(orb.color)
+        .strokeWidth(1)
+        .strokeOpacity(0.08 + Math.sin(Date.now() / 1000 * 0.5 + index) * 0.03)
+        .strokeDashArray([8, 12])
+        .position({ x: 0, y: 0 })
+        .hitTestBehavior(HitTestMode.None)
+        .opacity(this.showContent ? 1 : 0)
+        .animation({ duration: 800, curve: Curve.Smooth, delay: 200 + index * 80 })
+
+      // 中间能量节点 - 连接线中点的小光点
+      Circle({ width: 4, height: 4 })
+        .fill(orb.color)
+        .opacity(0.2)
+        .position({
+          x: (this.centerX + orb.x) / 2 - 2,
+          y: (this.centerY - 5 + orb.y) / 2 - 2
+        })
+        .hitTestBehavior(HitTestMode.None)
+    })
+
+    // 外层法阵环 - 连接所有球体的五边形
+    ForEach(this.orbPositions, (orb: OrbPos, index: number) => {
+      if (index < this.orbPositions.length - 1) {
+        Line()
+          .width('100%').height('100%')
+          .startPoint([orb.x, orb.y])
+          .endPoint([this.orbPositions[index + 1].x, this.orbPositions[index + 1].y])
+          .stroke('rgba(107, 72, 255, 0.06)')
+          .strokeWidth(0.8)
+          .strokeDashArray([4, 8])
+          .position({ x: 0, y: 0 })
+          .hitTestBehavior(HitTestMode.None)
+      }
+    })
+    // 闭合五边形最后一条边
+    if (this.orbPositions.length >= 2) {
+      Line()
+        .width('100%').height('100%')
+        .startPoint([this.orbPositions[this.orbPositions.length - 1].x, this.orbPositions[this.orbPositions.length - 1].y])
+        .endPoint([this.orbPositions[0].x, this.orbPositions[0].y])
+        .stroke('rgba(107, 72, 255, 0.06)')
+        .strokeWidth(0.8)
+        .strokeDashArray([4, 8])
+        .position({ x: 0, y: 0 })
+        .hitTestBehavior(HitTestMode.None)
+    }
   }
 
   @Builder

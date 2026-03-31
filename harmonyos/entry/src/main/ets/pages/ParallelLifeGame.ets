@@ -394,84 +394,100 @@ struct ParallelLifeGame {
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
+  // 塔罗牌分类颜色
+  tarotCategoryColor(category: string): string {
+    if (category === '命运' || category === 'fate') return '#6B48FF'
+    if (category === '爱情' || category === 'love') return '#FF6B9D'
+    if (category === '事业' || category === 'career') return '#0A59F7'
+    if (category === '财富' || category === 'wealth') return '#FF9500'
+    return '#00C853'
+  }
+
   @Builder buildChapterSelect() {
     Scroll() {
       Column({ space: 20 }) {
-        // Hero卡片 - 与UserProfile的buildUserCard一致
+        // Hero卡片 - 塔罗牌主题
         Stack({ alignContent: Alignment.BottomStart }) {
           Column().width('100%').height('100%')
-            .linearGradient({ angle: 135, colors: [['#FF6B9D', 0], ['#6B48FF', 1]] })
-            .opacity(0.12)
-          Circle({ width: 150, height: 150 }).fill('#FF6B9D').opacity(0.2).blur(60)
+            .linearGradient({ angle: 135, colors: [['#1a1a2e', 0], ['#16213e', 0.5], ['#0f3460', 1]] })
+          Circle({ width: 150, height: 150 }).fill('#6B48FF').opacity(0.08).blur(60)
             .position({ x: -40, y: -40 })
-          Circle({ width: 100, height: 100 }).fill('#6B48FF').opacity(0.15).blur(50)
+          Circle({ width: 100, height: 100 }).fill('#FF6B9D').opacity(0.06).blur(50)
             .position({ x: '80%', y: '60%' })
           Column({ space: 10 }) {
-            Stack() {
-              Circle({ width: 64, height: 64 }).fill('#FF6B9D').opacity(0.15)
-              SimpleIcon({ iconName: 'life', iconSize: 32, color: '#FF6B9D' })
-            }.width(64).height(64)
-            Text('平行人生').fontSize(24).fontWeight(700).fontColor(Theme.Color.TextPrimary)
-            Text('每一个选择，都通向不同的人生').fontSize(14).fontColor(Theme.Color.TextSecondary)
-          }.padding(24).width('100%').alignItems(HorizontalAlign.Start)
+            Text('*').fontSize(36).fontColor('rgba(255,255,255,0.6)')
+            Text('平行人生').fontSize(24).fontWeight(700).fontColor('#FFFFFF')
+            Text('抽取一张命运之牌，开启你的平行旅程').fontSize(13).fontColor('rgba(255,255,255,0.5)')
+          }.padding(24).width('100%').alignItems(HorizontalAlign.Center)
         }
         .width('100%').height(180)
-        .backgroundColor(Theme.Color.GlassHeavy)
-        .backdropBlur(Theme.Blur.Heavy)
         .borderRadius(Theme.Radius.xl)
-        .border({ width: 1, color: Theme.Color.BorderLight })
+        .border({ width: 1, color: 'rgba(107,72,255,0.2)' })
         .shadow(Theme.Shadow.Medium)
         .opacity(this.showContent ? 1 : 0)
         .scale({ x: this.showContent ? 1 : 0.95, y: this.showContent ? 1 : 0.95 })
         .animation({ duration: 700, curve: Curve.Smooth, delay: 0 })
 
-        // 随机开始按钮
-        Button('随机开始')
+        // 随机抽牌按钮
+        Button('随机抽取命运之牌')
           .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
-          .backgroundColor(Theme.Color.Secondary)
+          .linearGradient({ angle: 135, colors: [['#6B48FF', 0], ['#FF6B9D', 1]] })
           .borderRadius(Theme.Radius.l)
-          .shadow(Theme.Shadow.GlowPrimary)
+          .shadow({ radius: 16, color: 'rgba(107,72,255,0.3)', offsetX: 0, offsetY: 4 })
           .onClick(() => this.loadRandomChapter())
           .opacity(this.showContent ? 1 : 0)
           .translate({ y: this.showContent ? 0 : 20 })
           .animation({ duration: 600, curve: Curve.Smooth, delay: 100 })
 
-        // 关卡列表标题
-        Text('选择关卡')
+        // 塔罗牌关卡列表
+        Text('命运牌组')
           .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
           .padding({ left: 8 })
           .opacity(this.showContent ? 1 : 0)
           .translate({ x: this.showContent ? 0 : -20 })
           .animation({ duration: 600, curve: Curve.Smooth, delay: 200 })
 
-        // 关卡列表 - 与UserProfile的buildMenuItem一致
-        ForEach(this.chapters, (ch: Chapter, index: number) => {
-          Row({ space: 12 }) {
-            Stack() {
-              Circle({ width: 48, height: 48 }).fill(ch.accent || '#6B48FF').opacity(0.15)
-              SimpleIcon({ iconName: 'life', iconSize: 24, color: ch.accent || '#6B48FF' })
-            }.width(48).height(48)
-            Column({ space: 4 }) {
-              Text(ch.title).fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-              Text(ch.subtitle).fontSize(12).fontColor(Theme.Color.TextTertiary)
-            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Text('->')
-              .fontSize(20).fontColor(Theme.Color.TextTertiary)
-          }
-          .width('100%').padding(16)
-          .backgroundColor(Theme.Color.BackgroundSecondary)
-          .borderRadius(Theme.Radius.l)
-          .border({ width: 1, color: Theme.Color.BorderLight })
-          .shadow(Theme.Shadow.Soft)
-          .onClick(() => this.loadChapter(ch.id))
-          .opacity(this.showContent ? 1 : 0)
-          .translate({ x: this.showContent ? 0 : -30 })
-          .animation({ duration: 600, curve: Curve.Smooth, delay: 300 + index * 80 })
-          .stateStyles({
-            pressed: { .scale({ x: 0.98, y: 0.98 }).backgroundColor('#F8F9FA') },
-            normal:  { .scale({ x: 1, y: 1 }).backgroundColor(Theme.Color.BackgroundSecondary) }
+        // 塔罗牌网格 - 每行2张
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+          ForEach(this.chapters, (ch: Chapter, index: number) => {
+            Column({ space: 8 }) {
+              // 塔罗牌正面
+              Stack() {
+                // 牌面背景
+                Column().width('100%').height('100%')
+                  .linearGradient({ angle: 180, colors: [[ch.accent || '#6B48FF', 0], ['#1a1a2e', 1]] })
+                  .borderRadius(Theme.Radius.l)
+                // 牌面装饰
+                Column().width('100%').height('100%')
+                  .border({ width: 1.5, color: 'rgba(255,255,255,0.15)' })
+                  .borderRadius(Theme.Radius.l)
+                // 内框
+                Column().width('85%').height('85%')
+                  .border({ width: 0.5, color: 'rgba(255,255,255,0.1)' })
+                  .borderRadius(Theme.Radius.m)
+                // 牌面内容
+                Column({ space: 6 }) {
+                  Text(ch.cover_emoji || '*').fontSize(28)
+                  Text(ch.title).fontSize(14).fontWeight(700).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+                  Text(ch.subtitle).fontSize(11).fontColor('rgba(255,255,255,0.5)').textAlign(TextAlign.Center)
+                }.justifyContent(FlexAlign.Center)
+              }
+              .width('100%').height(140)
+              .borderRadius(Theme.Radius.l)
+              .shadow({ radius: 12, color: `${ch.accent || '#6B48FF'}33`, offsetX: 0, offsetY: 6 })
+            }
+            .width('47%')
+            .margin({ bottom: 14 })
+            .onClick(() => this.loadChapter(ch.id))
+            .opacity(this.showContent ? 1 : 0)
+            .scale({ x: this.showContent ? 1 : 0.9, y: this.showContent ? 1 : 0.9 })
+            .animation({ duration: 600, curve: Curve.Smooth, delay: 300 + index * 100 })
+            .stateStyles({
+              pressed: { .scale({ x: 0.95, y: 0.95 }) },
+              normal:  { .scale({ x: 1, y: 1 }) }
+            })
           })
-        })
+        }.width('100%')
 
         Column().height(40)
       }.padding({ left: 16, right: 16, bottom: 60 })

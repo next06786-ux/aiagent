@@ -454,7 +454,7 @@ struct UserProfile {
       
       // 版本信息
       Row() {
-        Text('LifeSwarm v1.0.0')
+        Text('ParaLife v1.0.0')
           .fontSize(12)
           .fontColor(Theme.Color.TextTertiary)
       }

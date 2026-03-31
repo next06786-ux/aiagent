@@ -62,6 +62,187 @@ class DecisionSimulator:
         events = [e.event for e in timeline[:3] if hasattr(e, 'event')]
         return ' → '.join(events) if events else '暂无推演数据'
 
+    async def simulate_decision(
+        self,
+        user_id: str,
+        question: str,
+        options: List[Dict[str, str]],
+    ):
+        """
+        HTTP 模式的完整决策模拟（非流式）
+        为每个选项生成时间线，然后生成推荐
+        """
+        from dataclasses import dataclass, asdict as _asdict
+
+        @dataclass
+        class TimelineEvent:
+            event_id: str
+            parent_event_id: Optional[str]
+            month: int
+            event: str
+            impact: Dict[str, float]
+            probability: float
+            event_type: str = "general"
+            branch_group: str = "main"
+            node_level: int = 1
+            risk_tag: str = "medium"
+            opportunity_tag: str = "medium"
+            visual_weight: float = 0.5
+
+        @dataclass
+        class DecisionOption:
+            option_id: str
+            title: str
+            description: str
+            timeline: list
+            final_score: float
+            risk_level: float
+            risk_assessment: Optional[Dict] = None
+
+        @dataclass
+        class SimulationResult:
+            simulation_id: str
+            user_id: str
+            question: str
+            options: list
+            recommendation: str
+            created_at: str
+
+        profile = None
+        if self.personality_test:
+            try:
+                profile = self.personality_test.load_profile(user_id)
+            except Exception:
+                profile = None
+
+        simulated_options = []
+
+        for i, option in enumerate(options):
+            option_branch = option.get('title', f'option_{i}').lower().replace(' ', '_')
+            logger.info(f"[HTTP推演] 开始推演选项 {i+1}: {option.get('title')}")
+
+            # 注入 PKF 上下文
+            try:
+                from backend.decision.personal_knowledge_fusion import (
+                    PersonalFactExtractor, CausalReasoningGraph
+                )
+                extractor = PersonalFactExtractor(user_id)
+                facts = extractor.extract_all()
+                causal_graph = CausalReasoningGraph(question, option.get("title", ""), facts)
+                causal_graph.build()
+                causal_chains = causal_graph.get_chains()
+                pkf_context = "个人事实：\n"
+                for f in facts[:8]:
+                    pkf_context += f"- {f.to_text()}\n"
+                pkf_context += "\n因果推理链：\n"
+                for chain in causal_chains[:4]:
+                    chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
+                    pkf_context += f"- {chain_str}\n"
+                self.lora_analyzer._pkf_context = pkf_context
+            except Exception:
+                self.lora_analyzer._pkf_context = ""
+
+            # 生成时间线
+            timeline = []
+            timeline_data = await self.lora_analyzer.generate_timeline_with_lora(
+                user_id=user_id,
+                question=question,
+                option=option,
+                profile=profile,
+                num_events=12
+            )
+
+            previous_event_id = None
+            for idx, e in enumerate(timeline_data or []):
+                negative_impact = sum(abs(v) for v in e.get('impact', {}).values() if v < 0)
+                positive_impact = sum(v for v in e.get('impact', {}).values() if v > 0)
+                node = TimelineEvent(
+                    event_id=f"{option_branch}_node_{idx+1}",
+                    parent_event_id=previous_event_id,
+                    month=e.get('month', idx + 1),
+                    event=e.get('event', ''),
+                    impact=e.get('impact', {}),
+                    probability=e.get('probability', 0.5),
+                    event_type=self._infer_event_type(e.get('event', '')),
+                    branch_group=option_branch,
+                    node_level=idx + 1,
+                    risk_tag="high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium"),
+                    opportunity_tag="high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium"),
+                    visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                )
+                previous_event_id = node.event_id
+                timeline.append(node)
+
+            final_score = self._calculate_final_score(timeline, profile)
+            risk_level = self._calculate_risk_level(timeline)
+
+            simulated_options.append(DecisionOption(
+                option_id=f"option_{i+1}",
+                title=option.get('title', f'选项{i+1}'),
+                description=option.get('description', ''),
+                timeline=timeline,
+                final_score=final_score,
+                risk_level=risk_level,
+                risk_assessment=None
+            ))
+
+        # 生成推荐
+        options_for_rec = [
+            {
+                "title": opt.title,
+                "description": opt.description,
+                "final_score": opt.final_score,
+                "risk_level": opt.risk_level,
+                "timeline_summary": self._summarize_timeline(opt.timeline)
+            }
+            for opt in simulated_options
+        ]
+        recommendation = ""
+        try:
+            rec_stream = ""
+            async for chunk in self.lora_analyzer.stream_recommendation_generation(
+                user_id=user_id, question=question, options=options_for_rec, profile=profile
+            ):
+                rec_stream += chunk
+            recommendation = self.lora_analyzer._clean_recommendation(rec_stream)
+        except Exception as e:
+            logger.warning(f"推荐生成失败: {e}")
+            recommendation = "暂无推荐"
+
+        simulation_id = f"sim_{user_id}_{int(__import__('time').time())}"
+
+        # 保存记录
+        try:
+            from backend.database.models import Database
+            from backend.database.config import DatabaseConfig
+            from datetime import datetime
+            import sqlalchemy
+            db = Database(DatabaseConfig.get_database_url())
+            db_session = db.get_session()
+            db_session.execute(
+                sqlalchemy.text("""
+                    INSERT IGNORE INTO decision_records
+                    (simulation_id, user_id, question, options_count, recommendation, created_at)
+                    VALUES (:sid, :uid, :q, :oc, :rec, :ca)
+                """),
+                {"sid": simulation_id, "uid": user_id, "q": question[:500],
+                 "oc": len(options), "rec": recommendation[:1000],
+                 "ca": datetime.now().isoformat()}
+            )
+            db_session.commit()
+            db_session.close()
+        except Exception as save_err:
+            logger.warning(f"保存决策记录失败: {save_err}")
+
+        return SimulationResult(
+            simulation_id=simulation_id,
+            user_id=user_id,
+            question=question,
+            options=simulated_options,
+            recommendation=recommendation,
+            created_at=__import__('datetime').datetime.now().isoformat()
+        )
+
 
 simulator = DecisionSimulator()
 
@@ -293,6 +474,7 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
         )
         
         # 3. 转换为可序列化格式
+        from dataclasses import asdict as _safe_asdict
         response_data = {
             "code": 200,
             "message": "决策模拟完成",
@@ -306,7 +488,7 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
                         "option_id": opt.option_id,
                         "title": opt.title,
                         "description": opt.description,
-                        "timeline": [asdict(event) for event in opt.timeline],
+                        "timeline": [_safe_asdict(event) if hasattr(event, '__dataclass_fields__') else event for event in opt.timeline],
                         "final_score": opt.final_score,
                         "risk_level": opt.risk_level,
                         "risk_assessment": opt.risk_assessment

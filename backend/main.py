@@ -6282,7 +6282,14 @@ async def get_personality_profile(user_id: str):
 from backend.decision.enhanced_decision_api import router as enhanced_decision_router
 app.include_router(enhanced_decision_router)
 
-print("增强决策 API 已加载")
+# 在 app 级别注册决策推演 WebSocket（与 /ws/chat 同级，确保反向代理兼容）
+from backend.decision.enhanced_decision_api import simulate_with_collection_ws as _decision_ws_handler
+@app.websocket("/ws/decision-simulate")
+async def decision_simulate_ws(websocket: WebSocket):
+    """决策推演 WebSocket - 注册在 app 级别确保代理兼容"""
+    await _decision_ws_handler(websocket)
+
+print("增强决策 API 已加载（含 app 级 WebSocket）")
 
 # ==================== 智能洞察 API ====================
 

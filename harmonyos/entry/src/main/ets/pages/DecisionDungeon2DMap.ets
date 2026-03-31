@@ -238,7 +238,7 @@ struct DecisionDungeon2DMap {
 
   private async startStreamSimulation() {
     if (!this.dungeonId) { this.streamStatus = '缺少会话信息'; return }
-    this.streamStatus = '正在准备推演...'
+    this.streamStatus = '正在初始化推演引擎...'
     this.showContent = true
 
     // 限制选项数量不超过4个
@@ -251,11 +251,13 @@ struct DecisionDungeon2DMap {
       return
     }
 
+    this.streamStatus = `准备推演 ${opts.length} 个决策方向，正在建立连接...`
+
     // 先尝试 WebSocket，失败后自动降级到 HTTP
     let httpFallbackTriggered = false
 
     const triggerHttpFallback = () => {
-      if (httpFallbackTriggered) return  // 防止重复触发
+      if (httpFallbackTriggered) return
       httpFallbackTriggered = true
       if (this.ws) { try { this.ws.close() } catch (_) {} this.ws = null }
       this.fallbackToHttp(opts)
@@ -315,8 +317,8 @@ struct DecisionDungeon2DMap {
         triggerHttpFallback()
       })
       this.ws.onClose(() => {})
-      await this.ws.connect('/api/decision/enhanced/ws/simulate')
-      this.streamStatus = '等待模型响应...'
+      await this.ws.connect('/ws/decision-simulate')
+      this.streamStatus = '连接成功，正在加载LoRA模型和用户画像...'
       this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
     } catch (e) {
       console.info('[DecisionMap] WebSocket 连接异常，降级到 HTTP:', (e as Error).message)
@@ -326,8 +328,25 @@ struct DecisionDungeon2DMap {
 
   // HTTP 降级方案：当 WebSocket 不可用时（如云平台不支持 WS），使用 HTTP 接口完成推演
   private async fallbackToHttp(opts: StreamRequestOption[]) {
-    this.streamStatus = 'WebSocket不可用，正在通过HTTP推演...'
-    promptAction.showToast({ message: '已切换到HTTP模式推演' })
+    this.streamStatus = '正在切换到HTTP模式...'
+    promptAction.showToast({ message: 'WebSocket不可用，已切换HTTP模式' })
+
+    // 模拟进度提示
+    const statusMessages = [
+      '正在加载LoRA个性化模型...',
+      '正在分析用户画像和决策上下文...',
+      '正在为各选项生成12个月推演时间线...',
+      '模型推演中，请耐心等待（约1-3分钟）...'
+    ]
+    let msgIdx = 0
+    const progressTimer = setInterval(() => {
+      if (msgIdx < statusMessages.length) {
+        this.streamStatus = statusMessages[msgIdx]
+        msgIdx++
+      }
+    }, 8000)
+    this.streamStatus = statusMessages[0]
+    msgIdx = 1
     try {
       const httpRequest = http.createHttp()
       const response = await httpRequest.request(
@@ -349,6 +368,8 @@ struct DecisionDungeon2DMap {
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>
         if ((result.code as number) === 200 && result.data) {
+          clearInterval(progressTimer)
+          this.streamStatus = '推演完成，正在渲染时间线...'
           const data = result.data as Record<string, Object>
           // 用 HTTP 返回的完整数据构建地图
           this.dungeonData = {
@@ -369,15 +390,17 @@ struct DecisionDungeon2DMap {
             try { this.structuredRecommendation = JSON.parse(rec) as RecommendationData }
             catch (_) { this.structuredRecommendation = null }
           }
-          this.streamStatus = '推演完成'
+          this.streamStatus = '全部推演完成'
           return
         }
       }
       // HTTP 也失败了
+      clearInterval(progressTimer)
       const errBody = response.result ? (response.result as string).substring(0, 200) : '无响应'
       this.streamStatus = `推演失败(HTTP ${response.responseCode})`
       console.error('[DecisionMap] HTTP 推演失败:', errBody)
     } catch (e) {
+      clearInterval(progressTimer)
       this.streamStatus = '推演失败，请检查网络后返回重试'
       console.error('[DecisionMap] HTTP 推演异常:', (e as Error).message)
     }
