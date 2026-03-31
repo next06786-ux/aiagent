@@ -478,8 +478,14 @@ struct EnhancedDecisionFlow {
       .backgroundColor('rgba(255,255,255,0.95)')
 
       // 主内容区
-      if (this.currentPhase === 'init') {
+      if (this.currentPhase === 'init' && !this.initialQuestion) {
         this.InitView()
+      } else if (this.currentPhase === 'init' && this.initialQuestion) {
+        // 有初始问题时跳过 InitView，直接显示加载状态
+        Column({ space: 16 }) {
+          LoadingProgress().width(40).height(40).color('#007AFF')
+          Text('正在启动信息收集...').fontSize(14).fontColor('#666')
+        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.currentPhase === 'result') {
         this.ResultView()
       } else {

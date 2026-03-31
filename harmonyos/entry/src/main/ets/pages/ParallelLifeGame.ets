@@ -10,7 +10,7 @@ import { ApiConfig } from '../config/ApiConfig'
 import { getAuthService } from '../service/AuthService'
 import router from '@ohos.router'
 
-interface StatDelta { emotion: number; finance: number; social: number }
+interface StatDelta { emotion: number; finance: number; social: number; health: number; growth: number; confidence: number; stress: number }
 
 interface GameOption {
   id: string
@@ -53,7 +53,7 @@ interface ChoiceRecord {
   choice_time_ms: number
 }
 
-interface Stats { emotion: number; finance: number; social: number }
+interface Stats { emotion: number; finance: number; social: number; health: number; growth: number; confidence: number; stress: number }
 
 @Entry
 @Component
@@ -63,12 +63,12 @@ struct ParallelLifeGame {
   @State chapters: Chapter[] = []
   @State currentChapter: Chapter | null = null
   @State currentNodeId: string = ''
-  @State stats: Stats = { emotion: 50, finance: 50, social: 50 }
-  @State lastDelta: StatDelta = { emotion: 0, finance: 0, social: 0 }
+  @State stats: Stats = { emotion: 50, finance: 50, social: 50, health: 50, growth: 50, confidence: 50, stress: 30 }
+  @State lastDelta: StatDelta = { emotion: 0, finance: 0, social: 0, health: 0, growth: 0, confidence: 0, stress: 0 }
   @State showDelta: boolean = false
   @State choices: ChoiceRecord[] = []
   @State ending: Record<string, string> = {}
-  @State finalStats: Stats = { emotion: 50, finance: 50, social: 50 }
+  @State finalStats: Stats = { emotion: 50, finance: 50, social: 50, health: 50, growth: 50, confidence: 50, stress: 30 }
   @State freeInputText: string = ''
   @State showContent: boolean = false
 
@@ -86,14 +86,14 @@ struct ParallelLifeGame {
   // 动效
   @State nodeOpacity: number = 0
   @State nodeTranslateY: number = 30
-  @State optAOpacity: number = 0
-  @State optBOpacity: number = 0
-  @State optATranslateX: number = -40
-  @State optBTranslateX: number = 40
   @State resultOpacity: number = 0
   @State statBarEmotion: number = 50
   @State statBarFinance: number = 50
   @State statBarSocial: number = 50
+  @State statBarHealth: number = 50
+  @State statBarGrowth: number = 50
+  @State statBarConfidence: number = 50
+  @State statBarStress: number = 30
 
   // 倒计时
   @State countdown: number = 15
@@ -159,8 +159,9 @@ struct ParallelLifeGame {
   startGame() {
     const ch = this.currentChapter
     if (!ch || ch.nodes.length === 0) return
-    this.stats = { emotion: 50, finance: 50, social: 50 }
+    this.stats = { emotion: 50, finance: 50, social: 50, health: 50, growth: 50, confidence: 50, stress: 30 }
     this.statBarEmotion = 50; this.statBarFinance = 50; this.statBarSocial = 50
+    this.statBarHealth = 50; this.statBarGrowth = 50; this.statBarConfidence = 50; this.statBarStress = 30
     this.choices = []
     this.currentNodeId = ch.nodes[0].id
     this.phase = 'playing'
@@ -180,14 +181,22 @@ struct ParallelLifeGame {
     this.choices.push({ node_id: this.currentNodeId, option_id: opt.id, choice_time_ms: timeMs })
     this.lastDelta = opt.delta
     this.showDelta = true
-    const newEmotion = Math.max(-100, Math.min(100, this.stats.emotion + opt.delta.emotion))
-    const newFinance = Math.max(-100, Math.min(100, this.stats.finance + opt.delta.finance))
-    const newSocial  = Math.max(-100, Math.min(100, this.stats.social  + opt.delta.social))
-    this.stats = { emotion: newEmotion, finance: newFinance, social: newSocial }
+    const newEmotion = Math.max(-100, Math.min(100, this.stats.emotion + (opt.delta.emotion || 0)))
+    const newFinance = Math.max(-100, Math.min(100, this.stats.finance + (opt.delta.finance || 0)))
+    const newSocial  = Math.max(-100, Math.min(100, this.stats.social  + (opt.delta.social || 0)))
+    const newHealth  = Math.max(-100, Math.min(100, this.stats.health  + (opt.delta.health || 0)))
+    const newGrowth  = Math.max(-100, Math.min(100, this.stats.growth  + (opt.delta.growth || 0)))
+    const newConf    = Math.max(-100, Math.min(100, this.stats.confidence + (opt.delta.confidence || 0)))
+    const newStress  = Math.max(-100, Math.min(100, this.stats.stress  + (opt.delta.stress || 0)))
+    this.stats = { emotion: newEmotion, finance: newFinance, social: newSocial, health: newHealth, growth: newGrowth, confidence: newConf, stress: newStress }
     animateTo({ duration: 600, curve: Curve.Smooth }, () => {
       this.statBarEmotion = newEmotion
       this.statBarFinance = newFinance
       this.statBarSocial  = newSocial
+      this.statBarHealth  = newHealth
+      this.statBarGrowth  = newGrowth
+      this.statBarConfidence = newConf
+      this.statBarStress  = newStress
     })
     setTimeout(() => { this.showDelta = false }, 1500)
     setTimeout(() => {
@@ -226,7 +235,7 @@ struct ParallelLifeGame {
   async finishGame() {
     const ch = this.currentChapter
     if (!ch) return
-    this.finalStats = { emotion: this.stats.emotion, finance: this.stats.finance, social: this.stats.social }
+    this.finalStats = { emotion: this.stats.emotion, finance: this.stats.finance, social: this.stats.social, health: this.stats.health, growth: this.stats.growth, confidence: this.stats.confidence, stress: this.stats.stress }
     try {
       const userId = this.authService.getCurrentUserId()
       const req = http.createHttp()
@@ -275,11 +284,9 @@ struct ParallelLifeGame {
 
   animateNodeIn() {
     this.nodeOpacity = 0; this.nodeTranslateY = 30
-    this.optAOpacity = 0; this.optBOpacity = 0
-    this.optATranslateX = -40; this.optBTranslateX = 40
+    this.showContent = false
     setTimeout(() => { animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.nodeOpacity = 1; this.nodeTranslateY = 0 }) }, 100)
-    setTimeout(() => { animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.optAOpacity = 1; this.optATranslateX = 0 }) }, 400)
-    setTimeout(() => { animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.optBOpacity = 1; this.optBTranslateX = 0 }) }, 550)
+    setTimeout(() => { this.showContent = true }, 300)
   }
 
   statColor(val: number): string {
@@ -327,44 +334,42 @@ struct ParallelLifeGame {
 
         // 属性条（游戏中显示）
         if (this.phase === 'playing') {
-          Column({ space: 8 }) {
+          Column({ space: 6 }) {
             this.StatBar('情绪', this.statBarEmotion, 'heart')
             this.StatBar('财务', this.statBarFinance, 'chart')
             this.StatBar('社交', this.statBarSocial, 'user')
+            this.StatBar('健康', this.statBarHealth, 'shield')
+            this.StatBar('成长', this.statBarGrowth, 'learning')
+            this.StatBar('自信', this.statBarConfidence, 'brain')
+            this.StatBar('压力', this.statBarStress, 'alert')
           }
-          .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 12 })
+          .width('100%').padding({ left: 16, right: 16, top: 6, bottom: 10 })
           .backgroundColor(Theme.Color.BackgroundSecondary)
           .border({ width: { bottom: 0.5 }, color: Theme.Color.BorderLight })
         }
 
         // 属性变化浮层
         if (this.showDelta) {
-          Row({ space: 12 }) {
-            if (this.lastDelta.emotion !== 0) {
-              Text(`情绪 ${this.deltaText(this.lastDelta.emotion)}`)
-                .fontSize(13).fontWeight(600)
-                .fontColor(this.lastDelta.emotion > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
-                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-                .backgroundColor(this.lastDelta.emotion > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
-                .borderRadius(Theme.Radius.round)
+          Scroll() {
+            Row({ space: 8 }) {
+              ForEach(
+                [
+                  { k: 'emotion', l: '情绪' }, { k: 'finance', l: '财务' }, { k: 'social', l: '社交' },
+                  { k: 'health', l: '健康' }, { k: 'growth', l: '成长' }, { k: 'confidence', l: '自信' }, { k: 'stress', l: '压力' }
+                ].filter(d => (this.lastDelta as Record<string, number>)[d.k] !== 0 && (this.lastDelta as Record<string, number>)[d.k] !== undefined),
+                (d: Record<string, string>) => {
+                  const val = (this.lastDelta as Record<string, number>)[d.k] as number
+                  Text(`${d.l}${this.deltaText(val)}`)
+                    .fontSize(12).fontWeight(600)
+                    .fontColor(val > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                    .backgroundColor(val > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                    .borderRadius(Theme.Radius.round)
+                }
+              )
             }
-            if (this.lastDelta.finance !== 0) {
-              Text(`财务 ${this.deltaText(this.lastDelta.finance)}`)
-                .fontSize(13).fontWeight(600)
-                .fontColor(this.lastDelta.finance > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
-                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-                .backgroundColor(this.lastDelta.finance > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
-                .borderRadius(Theme.Radius.round)
-            }
-            if (this.lastDelta.social !== 0) {
-              Text(`社交 ${this.deltaText(this.lastDelta.social)}`)
-                .fontSize(13).fontWeight(600)
-                .fontColor(this.lastDelta.social > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
-                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-                .backgroundColor(this.lastDelta.social > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
-                .borderRadius(Theme.Radius.round)
-            }
-          }.width('100%').justifyContent(FlexAlign.Center).padding(8)
+          }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+          .width('100%').padding(6)
         }
 
         // 内容区
@@ -422,13 +427,12 @@ struct ParallelLifeGame {
     this.tarotGlowOpacity = 0
   }
 
-  // 抽牌动画序列
+  // 抽牌动画序列 — 所有牌都走 AI 生成
   private drawTarotCard(index: number) {
     if (this.tarotDrawn) return
     this.tarotDrawn = true
     this.tarotSelectedIdx = index
 
-    // 第1步：其他牌淡出 + 缩小
     const newScales = [...this.tarotCardScales]
     const newOpacities = [...this.tarotCardOpacities]
     for (let i = 0; i < this.chapters.length; i++) {
@@ -439,7 +443,6 @@ struct ParallelLifeGame {
       this.tarotCardOpacities = newOpacities
     })
 
-    // 第2步：选中牌上移 + 放大
     setTimeout(() => {
       animateTo({ duration: 500, curve: Curve.Smooth }, () => {
         this.tarotSelectedY = -120
@@ -447,7 +450,6 @@ struct ParallelLifeGame {
       })
     }, 350)
 
-    // 第3步：翻转 + 光效
     setTimeout(() => {
       animateTo({ duration: 600, curve: Curve.Smooth }, () => {
         this.tarotRotateY = 180
@@ -455,18 +457,40 @@ struct ParallelLifeGame {
       })
     }, 900)
 
-    // 第4步：光效消退 + 标记翻转完成
     setTimeout(() => {
       this.tarotFlipped = true
-      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
-        this.tarotGlowOpacity = 0
-      })
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.tarotGlowOpacity = 0 })
     }, 1500)
 
-    // 第5步：加载关卡
+    // 调用 AI 生成关卡（和动画并行）
+    this.generateAndLoadChapter(index)
+  }
+
+  private async generateAndLoadChapter(fallbackIndex: number) {
+    try {
+      const req = http.createHttp()
+      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/generate`,
+        { method: http.RequestMethod.GET, connectTimeout: 30000, readTimeout: 30000 })
+      req.destroy()
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record<string, Object>
+        if (body['success']) {
+          this.currentChapter = body['data'] as Chapter
+          setTimeout(() => { this.phase = 'intro' }, 2500)
+          return
+        }
+      }
+    } catch (e) {
+      console.error('AI生成关卡失败:', e)
+    }
+    // 降级到预设关卡
     setTimeout(() => {
-      this.loadChapter(this.chapters[index].id)
-    }, 2200)
+      if (fallbackIndex < this.chapters.length) {
+        this.loadChapter(this.chapters[fallbackIndex].id)
+      } else {
+        this.loadRandomChapter()
+      }
+    }, 2500)
   }
 
   // 随机抽牌 — 调用大模型生成全新关卡
@@ -760,10 +784,14 @@ struct ParallelLifeGame {
           .shadow(Theme.Shadow.Soft)
 
           // 属性说明
-          Row({ space: 12 }) {
+          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
             this.buildStatPreview('情绪', 'heart', '#00C853')
             this.buildStatPreview('财务', 'chart', '#FF9500')
             this.buildStatPreview('社交', 'user', '#0A59F7')
+            this.buildStatPreview('健康', 'shield', '#E91E63')
+            this.buildStatPreview('成长', 'learning', '#6B48FF')
+            this.buildStatPreview('自信', 'brain', '#009688')
+            this.buildStatPreview('压力', 'alert', '#FF3B30')
           }.width('100%')
 
           // 提示
@@ -792,14 +820,14 @@ struct ParallelLifeGame {
 
   @Builder
   buildStatPreview(label: string, iconName: string, color: string) {
-    Column({ space: 8 }) {
+    Column({ space: 6 }) {
       Stack() {
-        Circle({ width: 40, height: 40 }).fill(color).opacity(0.15)
-        SimpleIcon({ iconName: iconName, iconSize: 20, color: color })
-      }.width(40).height(40)
-      Text(label).fontSize(12).fontColor(Theme.Color.TextTertiary)
+        Circle({ width: 32, height: 32 }).fill(color).opacity(0.15)
+        SimpleIcon({ iconName: iconName, iconSize: 16, color: color })
+      }.width(32).height(32)
+      Text(label).fontSize(11).fontColor(Theme.Color.TextTertiary)
     }
-    .layoutWeight(1).padding(16)
+    .width('30%').padding(10).margin({ bottom: 8 })
     .backgroundColor(Theme.Color.BackgroundSecondary)
     .borderRadius(Theme.Radius.l)
     .border({ width: 1, color: Theme.Color.BorderLight })
@@ -864,30 +892,25 @@ struct ParallelLifeGame {
                   Column({ space: 4 }) {
                     Text(opt.text).fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
                     Text(opt.sub).fontSize(12).fontColor(Theme.Color.TextTertiary).maxLines(2)
-                    // 属性预览标签
-                    Row({ space: 8 }) {
-                      if (opt.delta.emotion !== 0) {
-                        Text(`情绪${this.deltaText(opt.delta.emotion)}`)
-                          .fontSize(11).fontColor(opt.delta.emotion > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
-                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                          .backgroundColor(opt.delta.emotion > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
-                          .borderRadius(Theme.Radius.round)
+                    // 属性预览标签 — 显示所有非零维度
+                    Scroll() {
+                      Row({ space: 6 }) {
+                        ForEach(
+                          [
+                            { k: 'emotion', l: '情绪' }, { k: 'finance', l: '财务' }, { k: 'social', l: '社交' },
+                            { k: 'health', l: '健康' }, { k: 'growth', l: '成长' }, { k: 'confidence', l: '自信' }, { k: 'stress', l: '压力' }
+                          ].filter(d => (opt.delta as Record<string, number>)[d.k] !== 0 && (opt.delta as Record<string, number>)[d.k] !== undefined),
+                          (d: Record<string, string>) => {
+                            const val = (opt.delta as Record<string, number>)[d.k] as number
+                            Text(`${d.l}${this.deltaText(val)}`)
+                              .fontSize(10).fontColor(val > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                              .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+                              .backgroundColor(val > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                              .borderRadius(Theme.Radius.round)
+                          }
+                        )
                       }
-                      if (opt.delta.finance !== 0) {
-                        Text(`财务${this.deltaText(opt.delta.finance)}`)
-                          .fontSize(11).fontColor(opt.delta.finance > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
-                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                          .backgroundColor(opt.delta.finance > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
-                          .borderRadius(Theme.Radius.round)
-                      }
-                      if (opt.delta.social !== 0) {
-                        Text(`社交${this.deltaText(opt.delta.social)}`)
-                          .fontSize(11).fontColor(opt.delta.social > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
-                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                          .backgroundColor(opt.delta.social > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
-                          .borderRadius(Theme.Radius.round)
-                      }
-                    }.margin({ top: 4 })
+                    }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).margin({ top: 4 })
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
                   Text('->')
                     .fontSize(20).fontColor(Theme.Color.TextTertiary)
@@ -898,9 +921,9 @@ struct ParallelLifeGame {
                 .border({ width: 1, color: Theme.Color.BorderLight })
                 .shadow(Theme.Shadow.Soft)
                 .onClick(() => this.onChoose(opt))
-                .opacity(idx === 0 ? this.optAOpacity : this.optBOpacity)
-                .translate({ x: idx === 0 ? this.optATranslateX : this.optBTranslateX })
-                .animation({ duration: 400, curve: Curve.Smooth })
+                .opacity(this.showContent ? 1 : 0)
+                .translate({ x: this.showContent ? 0 : -30 })
+                .animation({ duration: 400, curve: Curve.Smooth, delay: 100 + idx * 80 })
                 .stateStyles({
                   pressed: { .scale({ x: 0.98, y: 0.98 }).backgroundColor('#F8F9FA') },
                   normal:  { .scale({ x: 1, y: 1 }).backgroundColor(Theme.Color.BackgroundSecondary) }
@@ -965,13 +988,16 @@ struct ParallelLifeGame {
           .animation({ duration: 700, curve: Curve.Smooth })
         }
 
-        // 最终属性 - 与UserProfile的buildStatsSection一致
-        Row({ space: 12 }) {
+        // 最终属性
+        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
           this.FinalStatItem('情绪', this.finalStats.emotion, 'heart')
           this.FinalStatItem('财务', this.finalStats.finance, 'chart')
           this.FinalStatItem('社交', this.finalStats.social, 'user')
-        }
-        .width('100%')
+          this.FinalStatItem('健康', this.finalStats.health, 'shield')
+          this.FinalStatItem('成长', this.finalStats.growth, 'learning')
+          this.FinalStatItem('自信', this.finalStats.confidence, 'brain')
+          this.FinalStatItem('压力', this.finalStats.stress, 'alert')
+        }.width('100%')
         .opacity(this.resultOpacity)
         .animation({ duration: 700, curve: Curve.Smooth })
 
@@ -1023,15 +1049,15 @@ struct ParallelLifeGame {
 
   @Builder
   FinalStatItem(label: string, val: number, iconName: string) {
-    Column({ space: 8 }) {
+    Column({ space: 6 }) {
       Stack() {
-        Circle({ width: 40, height: 40 }).fill(this.statColor(val)).opacity(0.15)
-        SimpleIcon({ iconName: iconName, iconSize: 20, color: this.statColor(val) })
-      }.width(40).height(40)
-      Text(`${val}`).fontSize(20).fontWeight(700).fontColor(this.statColor(val))
-      Text(label).fontSize(12).fontColor(Theme.Color.TextTertiary)
+        Circle({ width: 36, height: 36 }).fill(this.statColor(val)).opacity(0.15)
+        SimpleIcon({ iconName: iconName, iconSize: 16, color: this.statColor(val) })
+      }.width(36).height(36)
+      Text(`${val}`).fontSize(18).fontWeight(700).fontColor(this.statColor(val))
+      Text(label).fontSize(11).fontColor(Theme.Color.TextTertiary)
     }
-    .layoutWeight(1).padding(16)
+    .width('30%').padding(12).margin({ bottom: 10 })
     .backgroundColor(Theme.Color.BackgroundSecondary)
     .borderRadius(Theme.Radius.l)
     .border({ width: 1, color: Theme.Color.BorderLight })

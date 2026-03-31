@@ -131,10 +131,14 @@ struct DecisionDungeon2DMap {
   private canvasWidth: number = 2800
   private canvasHeight: number = 800
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
-  private neuralCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
-  private neuralAnimTimer: number = -1
+  @State tokenCount: number = 0
+  @State tokensPerSec: number = 0
+  @State parsedEventCount: number = 0
+  private tokenTimestamps: number[] = []
 
   aboutToAppear() {
+    // 标记有活跃推演
+    AppStorage.setOrCreate('activeSimulation', '')
     const params = router.getParams() as Record<string, string>
     if (params?.simulationData) {
       try {
@@ -190,71 +194,6 @@ struct DecisionDungeon2DMap {
 
   aboutToDisappear() {
     if (this.ws) { this.ws.close(); this.ws = null }
-    if (this.neuralAnimTimer !== -1) { clearInterval(this.neuralAnimTimer); this.neuralAnimTimer = -1 }
-  }
-
-  private startNeuralAnimation() {
-    if (this.neuralAnimTimer !== -1) return
-    let t = 0
-    this.neuralAnimTimer = setInterval(() => {
-      t += 0.08
-      const ctx = this.neuralCtx
-      const w = 320
-      const h = 80
-      ctx.clearRect(0, 0, w * 3, h * 3)
-
-      // 3层神经网络节点
-      const layers = [4, 6, 4]
-      const nodePositions: number[][] = []
-      for (let l = 0; l < layers.length; l++) {
-        const count = layers[l]
-        const lx = 40 + l * 120
-        for (let n = 0; n < count; n++) {
-          const ny = 10 + (n + 0.5) * (60 / count)
-          nodePositions.push([lx, ny, l])
-        }
-      }
-
-      // 画连接线（带脉冲）
-      ctx.lineWidth = 0.5
-      let idx = 0
-      for (let l = 0; l < layers.length - 1; l++) {
-        const startNodes = nodePositions.filter(p => p[2] === l)
-        const endNodes = nodePositions.filter(p => p[2] === l + 1)
-        for (const s of startNodes) {
-          for (const e of endNodes) {
-            const pulse = Math.sin(t * 2 + idx * 0.5) * 0.5 + 0.5
-            ctx.strokeStyle = `rgba(10, 89, 247, ${0.08 + pulse * 0.12})`
-            ctx.beginPath()
-            ctx.moveTo(s[0], s[1])
-            ctx.lineTo(e[0], e[1])
-            ctx.stroke()
-            idx++
-          }
-        }
-      }
-
-      // 画节点
-      for (const p of nodePositions) {
-        const pulse = Math.sin(t * 3 + p[0] * 0.05 + p[1] * 0.1) * 0.5 + 0.5
-        const r = 3 + pulse * 2
-        ctx.fillStyle = `rgba(10, 89, 247, ${0.3 + pulse * 0.4})`
-        ctx.beginPath()
-        ctx.arc(p[0], p[1], r, 0, Math.PI * 2)
-        ctx.fill()
-      }
-
-      // 流动的数据点
-      for (let i = 0; i < 5; i++) {
-        const progress = ((t * 0.5 + i * 0.2) % 1)
-        const px = 40 + progress * 240
-        const py = 20 + Math.sin(t * 2 + i) * 20
-        ctx.fillStyle = `rgba(107, 72, 255, ${0.5 + Math.sin(t + i) * 0.3})`
-        ctx.beginPath()
-        ctx.arc(px, py, 2, 0, Math.PI * 2)
-        ctx.fill()
-      }
-    }, 80)
   }
 
   // ===== 数据方法 =====
@@ -321,6 +260,9 @@ struct DecisionDungeon2DMap {
     }
 
     this.streamStatus = `准备推演 ${opts.length} 个决策方向，正在建立连接...`
+    // 记录活跃推演到 AppStorage，供其他页面显示悬浮球
+    AppStorage.setOrCreate('activeSimulation', this.dungeonId)
+    AppStorage.setOrCreate('activeSimulationQuestion', this.dungeonData?.title || '决策推演')
 
     // 纯 WebSocket 模式
     try {
@@ -333,7 +275,15 @@ struct DecisionDungeon2DMap {
             if (type === 'start') { this.streamStatus = '推演已启动' }
             else if (type === 'thinking_chunk') {
               this.liveThinkingText = (this.liveThinkingText + ((ev.content as string) || '')).slice(-800)
-              this.streamStatus = '模型推演中...'
+              // 真实 token 计数
+              const chunkLen = ((ev.content as string) || '').length
+              this.tokenCount += chunkLen
+              this.tokenTimestamps.push(Date.now())
+              // 计算最近3秒的速度
+              const now = Date.now()
+              this.tokenTimestamps = this.tokenTimestamps.filter(t => now - t < 3000)
+              this.tokensPerSec = Math.round(this.tokenTimestamps.length / 3)
+              this.streamStatus = `模型推演中 · ${this.tokenCount} tokens · ${this.tokensPerSec} tok/s`
             }
             else if (type === 'status' || type === 'thinking') { this.streamStatus = (ev.content as string) || '' }
             else if (type === 'option_start') {
@@ -363,6 +313,7 @@ struct DecisionDungeon2DMap {
             }
             else if (type === 'done') {
               this.streamStatus = '全部推演完成'
+              AppStorage.setOrCreate('activeSimulation', '')  // 清除活跃推演
               if (this.ws) { this.ws.close(); this.ws = null }
             }
             else if (type === 'error') {
@@ -389,6 +340,7 @@ struct DecisionDungeon2DMap {
   }
 
   private handleNode(ev: Record<string, Object>) {
+    this.parsedEventCount++
     const node = ev.node as Record<string, Object>
     const optTitle = ev.option_title as string
     const oi = this.findOptIdx(optTitle)
@@ -711,26 +663,62 @@ struct DecisionDungeon2DMap {
 
   @Builder
   buildStatusBar() {
-    Column({ space: 4 }) {
+    Column({ space: 6 }) {
       Row({ space: 8 }) {
         LoadingProgress().width(14).height(14).color(Theme.Color.Primary)
         Text(this.streamStatus).fontSize(11).fontColor(Theme.Color.Primary).layoutWeight(1)
       }.width('100%')
 
-      // 神经网络推演可视化 — 模型推演中时显示
-      if (this.processingNodeId || this.streamStatus.includes('推演') || this.streamStatus.includes('模型')) {
-        Canvas(this.neuralCtx)
-          .width('100%')
-          .height(80)
-          .backgroundColor('rgba(10, 89, 247, 0.02)')
-          .borderRadius(8)
-          .onReady(() => { this.startNeuralAnimation() })
-      }
+      // 真实推理数据可视化 — 模型推演中时显示
+      if (this.tokenCount > 0 || this.processingNodeId) {
+        Column({ space: 8 }) {
+          // 实时指标行
+          Row({ space: 16 }) {
+            Column({ space: 2 }) {
+              Text(`${this.tokenCount}`).fontSize(16).fontWeight(700).fontColor(Theme.Color.Primary)
+              Text('tokens').fontSize(9).fontColor(Theme.Color.TextTertiary)
+            }.alignItems(HorizontalAlign.Center)
+            Column({ space: 2 }) {
+              Text(`${this.tokensPerSec}`).fontSize(16).fontWeight(700).fontColor(Theme.Color.Secondary)
+              Text('tok/s').fontSize(9).fontColor(Theme.Color.TextTertiary)
+            }.alignItems(HorizontalAlign.Center)
+            Column({ space: 2 }) {
+              Text(`${this.parsedEventCount}`).fontSize(16).fontWeight(700).fontColor(Theme.Color.Accent)
+              Text('事件').fontSize(9).fontColor(Theme.Color.TextTertiary)
+            }.alignItems(HorizontalAlign.Center)
+            Column({ space: 2 }) {
+              Text(`${this.nodes.filter(n => n.optionIndex === this.activeOptionIndex && !n.id.startsWith('root_')).length}`)
+                .fontSize(16).fontWeight(700).fontColor(Theme.Color.Warning)
+              Text('节点').fontSize(9).fontColor(Theme.Color.TextTertiary)
+            }.alignItems(HorizontalAlign.Center)
+          }.width('100%').justifyContent(FlexAlign.SpaceAround)
 
-      if (this.liveThinkingText) {
-        Text(this.liveThinkingText.slice(-200))
-          .fontSize(10).fontColor(Theme.Color.TextTertiary)
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+          // token 生成速度条
+          Row() {
+            Column()
+              .height(3)
+              .width(`${Math.min(100, this.tokensPerSec * 5)}%`)
+              .backgroundColor(Theme.Color.Primary)
+              .borderRadius(2)
+          }.width('100%').height(3).backgroundColor(Theme.Color.BorderLight).borderRadius(2)
+
+          // 实时输出文本流（模型正在生成的原始文本）
+          if (this.liveThinkingText) {
+            Text(this.liveThinkingText.slice(-150))
+              .fontSize(9).fontColor(Theme.Color.TextTertiary)
+              .fontFamily('monospace')
+              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+              .padding(6)
+              .backgroundColor(Theme.Color.BackgroundTertiary)
+              .borderRadius(4)
+          }
+        }
+        .width('100%')
+        .padding(10)
+        .backgroundColor(Theme.Color.BackgroundSecondary)
+        .borderRadius(Theme.Radius.m)
+        .border({ width: 0.5, color: Theme.Color.BorderLight })
       }
     }
     .width('100%').padding({ left: 16, right: 16, top: 6, bottom: 6 })

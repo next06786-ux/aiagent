@@ -52,6 +52,8 @@ struct QuickDecisionInput {
   @State trainingStage: string = ''
   @State decisionHistory: DecisionRecord[] = []
   private trainingPollTimer: number = -1
+  @StorageProp('activeSimulation') activeSimulationId: string = ''
+  @StorageProp('activeSimulationQuestion') activeSimulationQuestion: string = ''
   @State selectedMenuIdx: number = -1
   private userId: string = ''
 
@@ -222,17 +224,9 @@ struct QuickDecisionInput {
   }
 
   private isRecentSimulation(): boolean {
-    if (this.decisionHistory.length === 0) return false
-    const latest = this.decisionHistory[0]
-    if (!latest.created_at) return false
-    try {
-      const created = new Date(latest.created_at).getTime()
-      const now = Date.now()
-      // 最近10分钟内的推演才显示悬浮球
-      return (now - created) < 10 * 60 * 1000
-    } catch (e) {
-      return false
-    }
+    // 只在当前会话中有活跃推演时显示，不基于数据库历史
+    // 通过 router params 传递推演状态
+    return false  // 默认不显示，只有从推演页面返回时才可能显示
   }
 
   build() {
@@ -280,28 +274,27 @@ struct QuickDecisionInput {
       }
       .width('100%').height('100%')
 
-      // 推演中悬浮导航球 — 最近10分钟内有推演记录时显示
-      if (this.decisionHistory.length > 0 && this.isRecentSimulation()) {
+      // 推演中悬浮球 — 仅当有活跃推演时显示
+      if (this.activeSimulationId !== '') {
         Column({ space: 4 }) {
           Stack() {
             Circle({ width: 52, height: 52 })
               .linearGradient({ angle: 135, colors: [['#6B48FF', 0], ['#0A59F7', 1]] })
-              .shadow({ radius: 10, color: 'rgba(107,72,255,0.25)', offsetX: 0, offsetY: 3 })
-            LoadingProgress().width(20).height(20).color('#FFFFFF')
+              .shadow({ radius: 10, color: 'rgba(107,72,255,0.3)', offsetX: 0, offsetY: 3 })
+            LoadingProgress().width(22).height(22).color('#FFFFFF')
           }.width(52).height(52)
           Text('推演中').fontSize(9).fontColor(Theme.Color.Secondary)
         }
         .alignItems(HorizontalAlign.Center)
         .margin({ right: 16, bottom: 80 })
         .onClick(() => {
-          const latest = this.decisionHistory[0]
           router.pushUrl({
             url: 'pages/DecisionDungeon2DMap',
             params: {
-              dungeonId: latest.session_id,
+              dungeonId: this.activeSimulationId,
               userId: this.userId,
-              question: latest.question,
-              recommendation: latest.recommendation,
+              question: this.activeSimulationQuestion,
+              recommendation: '',
               isHistory: 'true'
             }
           })

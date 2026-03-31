@@ -753,6 +753,7 @@ struct KnowledgeStarMapGL {
               }.padding({ left: 10, right: 10 })
             }
             .height(32)
+            .hitTestBehavior(HitTestMode.Block)
             .backgroundColor('rgba(10, 10, 30, 0.85)')
             .borderRadius(16)
             .border({ width: 1, color: 'rgba(255,255,255,0.15)' })
@@ -807,7 +808,6 @@ struct KnowledgeStarMapGL {
 
           // 类型列表按钮（在人物列表左侧）
           Column() {
-            // 触发按钮
             Button({ type: ButtonType.Normal }) {
               Row({ space: 4 }) {
                 Text('分类').fontSize(12).fontColor('#FFFFFF').fontWeight(600)
@@ -818,6 +818,7 @@ struct KnowledgeStarMapGL {
             .backgroundColor('rgba(10, 10, 30, 0.85)')
             .borderRadius(16)
             .border({ width: 1, color: 'rgba(255,255,255,0.15)' })
+            .hitTestBehavior(HitTestMode.Block)
             .onClick(() => {
               this.showCategoryList = !this.showCategoryList
               if (this.showCategoryList) this.showPersonList = false
@@ -850,7 +851,6 @@ struct KnowledgeStarMapGL {
 
           // 人物列表按钮
           Column() {
-            // 触发按钮
             Button({ type: ButtonType.Normal }) {
               Row({ space: 4 }) {
                 Text('人物').fontSize(12).fontColor('#FFFFFF').fontWeight(600)
@@ -864,6 +864,7 @@ struct KnowledgeStarMapGL {
             .backgroundColor('rgba(10, 10, 30, 0.85)')
             .borderRadius(16)
             .border({ width: 1, color: 'rgba(255,255,255,0.15)' })
+            .hitTestBehavior(HitTestMode.Block)
             .onClick(() => {
               this.showPersonList = !this.showPersonList
               if (this.showPersonList) this.showCategoryList = false

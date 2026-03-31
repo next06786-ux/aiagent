@@ -63,7 +63,7 @@ struct UserProfile {
     {
       id: 'about',
       title: '关于应用',
-      subtitle: '版本信息与帮助',
+      subtitle: 'ParaLife v1.0.0',
       icon: 'info',
       color: '#4facfe'
     }
@@ -395,12 +395,26 @@ struct UserProfile {
       this.selectedMenu = index;
       if (item.route) {
         router.pushUrl({ url: item.route });
-      } else if (item.action) {
-        item.action();
+      } else if (item.id === 'notification') {
+        promptAction.showDialog({
+          title: '通知设置',
+          message: '推演完成通知：已开启\n洞察提醒：已开启\n系统消息：已开启',
+          buttons: [{ text: '确定', color: Theme.Color.Primary }]
+        })
+      } else if (item.id === 'privacy') {
+        promptAction.showDialog({
+          title: '隐私设置',
+          message: '数据收集：已开启（用于个性化推演）\n对话记录：本地加密存储\n知识图谱：仅本人可见',
+          buttons: [{ text: '确定', color: Theme.Color.Primary }]
+        })
+      } else if (item.id === 'about') {
+        promptAction.showDialog({
+          title: 'ParaLife · 平行境',
+          message: '版本：v1.0.0\n\n基于 Qwen3.5-9B + LoRA 个性化微调\n知识图谱 · 决策推演 · 平行人生\n\n© 2026 ParaLife Team',
+          buttons: [{ text: '确定', color: Theme.Color.Primary }]
+        })
       }
-      setTimeout(() => {
-        this.selectedMenu = -1;
-      }, 300);
+      setTimeout(() => { this.selectedMenu = -1; }, 300);
     })
     .opacity(this.showContent ? 1 : 0)
     .translate({ x: this.showContent ? 0 : -30 })
