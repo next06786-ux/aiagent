@@ -791,102 +791,97 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             await websocket.send_json({
                 "type": "status",
                 "stage": "profile_loaded",
-                "content": "用户画像已加载，准备逐个推演决策选项"
+                "content": "用户画像已加载，准备提取个人知识..."
             })
+
+            # ── PKF 只做一次，缓存给所有选项复用 ──
+            pkf_context_cached = ""
+            await websocket.send_json({
+                "type": "status",
+                "stage": "pkf_knowledge",
+                "content": "正在分析你的个人背景和决策因果关系..."
+            })
+
+            heartbeat_active = True
+            async def send_pkf_heartbeat():
+                tick = 0
+                stages = [
+                    "正在提取个人事实...",
+                    "正在构建因果推理图...",
+                    "正在注入知识图谱上下文...",
+                ]
+                while heartbeat_active:
+                    await asyncio.sleep(3)
+                    if not heartbeat_active:
+                        break
+                    try:
+                        await websocket.send_json({
+                            "type": "status",
+                            "stage": "preparing",
+                            "content": stages[min(tick, len(stages) - 1)]
+                        })
+                    except Exception:
+                        break
+                    tick += 1
+
+            heartbeat_task = asyncio.create_task(send_pkf_heartbeat())
+            try:
+                from backend.decision.personal_knowledge_fusion import (
+                    PersonalFactExtractor, CausalReasoningGraph
+                )
+                import concurrent.futures
+                loop = asyncio.get_event_loop()
+
+                def _run_pkf_once():
+                    extractor = PersonalFactExtractor(user_id)
+                    facts = extractor.extract_all()
+                    # 用第一个选项的标题构建因果图（个人事实是通用的）
+                    first_title = options[0].get("title", "") if options else ""
+                    cg = CausalReasoningGraph(question, first_title, facts)
+                    cg.build()
+                    chains = cg.get_chains()
+                    return facts, chains
+
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    facts, causal_chains = await loop.run_in_executor(pool, _run_pkf_once)
+
+                pkf_context_cached = "个人事实：\n"
+                for f in facts[:8]:
+                    pkf_context_cached += f"- {f.to_text()}\n"
+                pkf_context_cached += "\n因果推理链：\n"
+                for chain in causal_chains[:4]:
+                    chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
+                    pkf_context_cached += f"- {chain_str}\n"
+
+                await websocket.send_json({
+                    "type": "status",
+                    "stage": "pkf_ready",
+                    "content": f"已提取 {len(facts)} 条个人事实，构建 {len(causal_chains)} 条因果链（所有选项共用）"
+                })
+                simulator.lora_analyzer._pkf_context = pkf_context_cached
+            except Exception as pkf_err:
+                logger.warning(f"PKF-DS 增强失败，降级为普通推演: {pkf_err}")
+                simulator.lora_analyzer._pkf_context = ""
+            finally:
+                heartbeat_active = False
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
+
             simulated_options = []
 
-            # 并行为所有选项生成时间线（32GB 显存足够并行 2-3 个推理）
             async def generate_option_timeline(i: int, option: dict):
-                """为单个选项生成时间线并流式推送节点（PKF-DS 增强版）"""
+                """为单个选项生成时间线并流式推送节点（PKF 已缓存）"""
                 await websocket.send_json({
                     "type": "option_start",
                     "option_id": f"option_{i+1}",
                     "title": option.get("title", f"选项{i+1}")
                 })
 
-                # ── PKF-DS 阶段 1-2：抽取个人事实 + 构建因果图 ──
-                await websocket.send_json({
-                    "type": "status",
-                    "stage": "pkf_knowledge",
-                    "option_id": f"option_{i+1}",
-                    "content": "正在分析你的个人背景和决策因果关系..."
-                })
-
-                # 启动心跳任务，在耗时操作期间保持连接活跃
-                heartbeat_active = True
-                async def send_heartbeat():
-                    tick = 0
-                    stages = [
-                        "正在提取个人事实...",
-                        "正在构建因果推理图...",
-                        "正在注入知识图谱上下文...",
-                        "正在加载LoRA个性化模型...",
-                        "模型准备就绪，即将开始推演..."
-                    ]
-                    while heartbeat_active:
-                        await asyncio.sleep(3)
-                        if not heartbeat_active:
-                            break
-                        msg = stages[min(tick, len(stages) - 1)]
-                        try:
-                            await websocket.send_json({
-                                "type": "status",
-                                "stage": "preparing",
-                                "option_id": f"option_{i+1}",
-                                "content": msg
-                            })
-                        except Exception:
-                            break
-                        tick += 1
-
-                heartbeat_task = asyncio.create_task(send_heartbeat())
-
-                try:
-                    from backend.decision.personal_knowledge_fusion import (
-                        PersonalFactExtractor, CausalReasoningGraph
-                    )
-                    # 在线程池中执行阻塞的 PKF 操作
-                    import concurrent.futures
-                    loop = asyncio.get_event_loop()
-
-                    def _run_pkf():
-                        extractor = PersonalFactExtractor(user_id)
-                        facts = extractor.extract_all()
-                        cg = CausalReasoningGraph(question, option.get("title", ""), facts)
-                        cg.build()
-                        chains = cg.get_chains()
-                        return facts, chains
-
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        facts, causal_chains = await loop.run_in_executor(pool, _run_pkf)
-
-                    # 把个人事实和因果链注入到 LoRA 的 life_context
-                    pkf_context = "个人事实：\n"
-                    for f in facts[:8]:
-                        pkf_context += f"- {f.to_text()}\n"
-                    pkf_context += "\n因果推理链：\n"
-                    for chain in causal_chains[:4]:
-                        chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
-                        pkf_context += f"- {chain_str}\n"
-
-                    await websocket.send_json({
-                        "type": "status",
-                        "stage": "pkf_ready",
-                        "option_id": f"option_{i+1}",
-                        "content": f"已提取 {len(facts)} 条个人事实，构建 {len(causal_chains)} 条因果链"
-                    })
-                    # 把 PKF 上下文注入 LoRA analyzer 的 life_context
-                    simulator.lora_analyzer._pkf_context = pkf_context
-                except Exception as pkf_err:
-                    logger.warning(f"PKF-DS 增强失败，降级为普通推演: {pkf_err}")
-                    simulator.lora_analyzer._pkf_context = ""
-                finally:
-                    heartbeat_active = False
-                    heartbeat_task.cancel()
-                    try:
-                        await heartbeat_task
-                    except asyncio.CancelledError:
-                        pass
+                # PKF 上下文直接复用缓存，不再重新提取
+                simulator.lora_analyzer._pkf_context = pkf_context_cached
 
                 await websocket.send_json({
                     "type": "status",
