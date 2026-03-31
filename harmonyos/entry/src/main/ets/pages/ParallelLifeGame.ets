@@ -469,11 +469,66 @@ struct ParallelLifeGame {
     }, 2200)
   }
 
-  // 随机抽牌
-  private drawRandomTarot() {
+  // 随机抽牌 — 调用大模型生成全新关卡
+  private async drawRandomTarot() {
     if (this.chapters.length === 0) return
+    // 先播放随机选牌动画
     const idx = Math.floor(Math.random() * this.chapters.length)
-    this.drawTarotCard(idx)
+    this.tarotDrawn = true
+    this.tarotSelectedIdx = idx
+
+    // 动画：其他牌淡出
+    const newScales = [...this.tarotCardScales]
+    const newOpacities = [...this.tarotCardOpacities]
+    for (let i = 0; i < this.chapters.length; i++) {
+      if (i !== idx) { newScales[i] = 0.8; newOpacities[i] = 0 }
+    }
+    animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+      this.tarotCardScales = newScales
+      this.tarotCardOpacities = newOpacities
+    })
+
+    // 选中牌上移
+    setTimeout(() => {
+      animateTo({ duration: 500, curve: Curve.Smooth }, () => {
+        this.tarotSelectedY = -120
+        this.tarotSelectedScale = 1.3
+      })
+    }, 350)
+
+    // 翻转
+    setTimeout(() => {
+      animateTo({ duration: 600, curve: Curve.Smooth }, () => {
+        this.tarotRotateY = 180
+        this.tarotGlowOpacity = 0.6
+      })
+    }, 900)
+
+    setTimeout(() => {
+      this.tarotFlipped = true
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.tarotGlowOpacity = 0 })
+    }, 1500)
+
+    // 调用 AI 生成关卡（和动画并行）
+    try {
+      const req = http.createHttp()
+      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/generate`,
+        { method: http.RequestMethod.GET, connectTimeout: 30000, readTimeout: 30000 })
+      req.destroy()
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record<string, Object>
+        if (body['success']) {
+          this.currentChapter = body['data'] as Chapter
+          // 等动画播完再跳转
+          setTimeout(() => { this.phase = 'intro' }, 2500)
+          return
+        }
+      }
+    } catch (e) {
+      console.error('AI生成关卡失败，使用预设关卡:', e)
+    }
+    // 降级：使用预设关卡
+    setTimeout(() => { this.loadRandomChapter() }, 2500)
   }
 
   @Builder buildChapterSelect() {

@@ -317,38 +317,32 @@ class LoRADecisionAnalyzer:
         return status
 
     def _query_relevant_persons(self, user_id: str, question: str) -> str:
-        """从知识图谱中查询与决策问题相关的人物，返回可注入 prompt 的文本"""
+        """从知识图谱中查询人物，只注入最核心的家人/好友"""
         try:
             from backend.knowledge.neo4j_knowledge_graph import Neo4jKnowledgeGraph
             with Neo4jKnowledgeGraph(user_id) as kg:
-                # 取中心度最高的前5个人物节点
-                central_nodes = kg.get_central_nodes(limit=5)
+                central_nodes = kg.get_central_nodes(limit=3)
                 if not central_nodes:
                     return ""
-
                 lines = []
                 for node in central_nodes:
                     name = node.get('name', '')
                     if not name:
                         continue
                     rels = kg.get_entity_relationships(name)
-                    # 取前3条关系描述
                     rel_parts = []
-                    for r in rels[:3]:
-                        rel_type   = r.get('type', '')
+                    for r in rels[:2]:
+                        rel_type = r.get('type', '')
                         rel_target = r.get('target', '') or r.get('name', '')
                         if rel_type and rel_target:
                             rel_parts.append(f"{rel_type} {rel_target}")
-                        elif rel_type:
-                            rel_parts.append(rel_type)
                     rel_desc = "、".join(rel_parts) if rel_parts else "相关人物"
                     lines.append(f"- {name}（{rel_desc}）")
-
                 if not lines:
                     return ""
-
                 result = "\n".join(lines)
-                print(f"[知识图谱] 注入 {len(lines)} 个相关人物到决策 prompt")
+                result += "\n注意：只在这些人物与当前决策场景直接相关时才提及，不要强行塞进每个事件。"
+                print(f"[知识图谱] 注入 {len(lines)} 个核心人物到决策 prompt")
                 return result
         except Exception as e:
             print(f"[知识图谱] 查询相关人物失败: {e}")

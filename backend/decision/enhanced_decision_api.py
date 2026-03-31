@@ -972,26 +972,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         })
 
                 timeline_data = simulator.lora_analyzer._parse_timeline_json(stream_buffer)
-                if not timeline_data:
-                    retry_timeline = await simulator.lora_analyzer.generate_timeline_with_lora(
-                        user_id=user_id,
-                        question=question,
-                        option=option,
-                        profile=profile,
-                        num_events=12
-                    )
-                    timeline_data = retry_timeline
 
-                if not timeline:
+                # 如果增量解析完全失败（timeline 为空），才用 fallback 一次性解析
+                if not timeline and timeline_data:
                     previous_event_id = None
                     for idx, e in enumerate(timeline_data):
-                        await websocket.send_json({
-                            "type": "thinking",
-                            "stage": "timeline_event",
-                            "option_id": f"option_{i+1}",
-                            "option_title": option['title'],
-                            "content": f"正在生成 {option['title']} 的第 {idx + 1} 个关键事件"
-                        })
                         negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
                         positive_impact = sum(v for v in e['impact'].values() if v > 0)
                         risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
@@ -1018,6 +1003,33 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                             "option_title": option['title'],
                             "node": asdict(node)
                         })
+                elif not timeline:
+                    # 完全没有数据，重试一次
+                    retry_timeline = await simulator.lora_analyzer.generate_timeline_with_lora(
+                        user_id=user_id, question=question, option=option, profile=profile, num_events=12
+                    )
+                    if retry_timeline:
+                        previous_event_id = None
+                        for idx, e in enumerate(retry_timeline):
+                            negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
+                            positive_impact = sum(v for v in e['impact'].values() if v > 0)
+                            risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                            node = TimelineEvent(
+                                event_id=f"{option_branch}_node_{idx+1}",
+                                parent_event_id=previous_event_id,
+                                month=e['month'], event=e['event'], impact=e['impact'],
+                                probability=e['probability'],
+                                event_type=simulator._infer_event_type(e['event']),
+                                branch_group=option_branch, node_level=idx + 1,
+                                risk_tag=risk_tag
+                            )
+                            previous_event_id = node.event_id
+                            timeline.append(node)
+                            await websocket.send_json({
+                                "type": "node", "option_id": f"option_{i+1}",
+                                "option_title": option['title'], "node": asdict(node)
+                            })
+                # 如果增量解析已经成功（timeline 不为空），不再重复发送节点
 
                 final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
                 risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5

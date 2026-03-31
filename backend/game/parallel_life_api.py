@@ -429,6 +429,123 @@ async def get_random_chapter():
     return {"success": True, "data": ch}
 
 
+@router.get("/generate")
+async def generate_random_chapter():
+    """调用大模型 API 随机生成一个全新关卡"""
+    import random
+    try:
+        from openai import OpenAI
+        import os
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            # 降级到预设关卡
+            ch = random.choice(CHAPTERS)
+            return {"success": True, "data": ch, "generated": False}
+
+        # 随机选一个主题方向
+        themes = [
+            "一段意外的旅行改变了你的人生轨迹",
+            "你收到了一封来自陌生人的信，里面有一个改变命运的机会",
+            "你的好朋友突然找你借一大笔钱",
+            "公司裁员名单上出现了你的名字",
+            "你在路上捡到了一个装满现金的钱包",
+            "前任突然联系你说想复合",
+            "你被选中参加一个改变人生的真人秀节目",
+            "室友/合租人做了一件让你很不舒服的事",
+            "你发现了一个可以赚快钱但有风险的副业",
+            "父母突然告诉你家里出了大事需要你回去",
+            "你暗恋的人突然向你表白了",
+            "你的创业项目终于拿到了第一笔投资",
+            "毕业后你面临留在大城市还是回老家的选择",
+            "你最好的朋友要移民了，问你要不要一起",
+        ]
+        theme = random.choice(themes)
+        accents = ["#7C3AED", "#FF6B9D", "#0A59F7", "#FF9500", "#00C853", "#E91E63", "#009688"]
+        accent = random.choice(accents)
+        emojis = ["?", "!", "*", "$", "#", "@", "&", "~", "+", "W", "H", "S"]
+        emoji = random.choice(emojis)
+
+        client = OpenAI(api_key=api_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+        prompt = f"""你是一个互动叙事游戏设计师。请根据以下主题生成一个完整的决策游戏关卡。
+
+主题：{theme}
+
+要求：
+1. 生成 4 个决策节点（n1, n2a, n2b, n3），形成分支树结构
+2. n1 有 2 个选项，分别通向 n2a 和 n2b
+3. n2a 和 n2b 各有 2 个选项，都通向 n3
+4. n3 是一个自由输入节点（type: "free_input"），让玩家写感悟
+5. 每个选项要有具体的 delta 影响值（emotion/finance/social，范围 -20 到 20）
+6. 生成 3 个不同的结局
+7. 所有文本要生动、接地气、有代入感
+
+返回 JSON 格式：
+{{
+  "title": "关卡标题（4-6字）",
+  "subtitle": "副标题（10-15字）",
+  "intro": "关卡介绍（50-100字，用\\n换行）",
+  "nodes": [
+    {{"id": "n1", "type": "choice", "text": "场景描述",
+      "options": [
+        {{"id": "A", "text": "选项文本", "sub": "补充说明", "delta": {{"emotion": 5, "finance": -10, "social": 5}}, "next": "n2a"}},
+        {{"id": "B", "text": "选项文本", "sub": "补充说明", "delta": {{"emotion": -5, "finance": 10, "social": -5}}, "next": "n2b"}}
+      ]}},
+    {{"id": "n2a", "type": "choice", "text": "场景描述",
+      "options": [
+        {{"id": "A", "text": "选项", "sub": "说明", "delta": {{"emotion": 10, "finance": -5, "social": 0}}, "next": "n3"}},
+        {{"id": "B", "text": "选项", "sub": "说明", "delta": {{"emotion": -10, "finance": 5, "social": 0}}, "next": "n3"}}
+      ]}},
+    {{"id": "n2b", "type": "choice", "text": "场景描述",
+      "options": [
+        {{"id": "A", "text": "选项", "sub": "说明", "delta": {{"emotion": 5, "finance": 0, "social": 10}}, "next": "n3"}},
+        {{"id": "B", "text": "选项", "sub": "说明", "delta": {{"emotion": -5, "finance": 0, "social": -10}}, "next": "n3"}}
+      ]}},
+    {{"id": "n3", "type": "free_input", "text": "反思问题", "options": [], "next": "ending"}}
+  ],
+  "endings": [
+    {{"condition": "emotion_high", "threshold": {{"emotion": 40}}, "title": "结局标题", "text": "结局描述", "badge": "徽章名"}},
+    {{"condition": "finance_high", "threshold": {{"finance": 40}}, "title": "结局标题", "text": "结局描述", "badge": "徽章名"}},
+    {{"condition": "balanced", "threshold": {{}}, "title": "结局标题", "text": "结局描述", "badge": "徽章名"}}
+  ]
+}}
+
+只返回 JSON，不要其他文字。"""
+
+        response = client.chat.completions.create(
+            model="qwen-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.9,
+            max_tokens=2000
+        )
+        result_text = response.choices[0].message.content.strip()
+        # 清理 markdown 包裹
+        import re
+        if result_text.startswith("```"):
+            result_text = re.sub(r'^```\w*\n?', '', result_text)
+            result_text = re.sub(r'\n?```$', '', result_text)
+
+        chapter_data = json.loads(result_text)
+
+        # 补充必要字段
+        chapter_data["id"] = f"ch_gen_{random.randint(10000, 99999)}"
+        chapter_data["theme"] = "#1a1a2e"
+        chapter_data["accent"] = accent
+        chapter_data["cover_emoji"] = emoji
+        if "intro" not in chapter_data:
+            chapter_data["intro"] = chapter_data.get("subtitle", "")
+
+        return {"success": True, "data": chapter_data, "generated": True}
+
+    except Exception as e:
+        print(f"[平行人生] AI生成关卡失败: {e}")
+        import traceback
+        traceback.print_exc()
+        # 降级到预设关卡
+        import random as rnd
+        ch = rnd.choice(CHAPTERS)
+        return {"success": True, "data": ch, "generated": False}
+
+
 @router.get("/chapter/{chapter_id}")
 async def get_chapter(chapter_id: str):
     """获取关卡完整数据（含所有节点）"""

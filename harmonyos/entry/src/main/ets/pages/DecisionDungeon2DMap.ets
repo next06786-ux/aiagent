@@ -8,6 +8,7 @@ import promptAction from '@ohos.promptAction'
 import { ApiConfig } from '../config/ApiConfig'
 import { WebSocketUtil } from '../utils/WebSocketUtil'
 import { Theme } from '../common/Theme'
+import { SimpleIcon } from '../components/IconRenderer'
 
 interface TimelineEvent {
   event_id?: string
@@ -130,6 +131,8 @@ struct DecisionDungeon2DMap {
   private canvasWidth: number = 2800
   private canvasHeight: number = 800
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
+  private neuralCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
+  private neuralAnimTimer: number = -1
 
   aboutToAppear() {
     const params = router.getParams() as Record<string, string>
@@ -187,6 +190,71 @@ struct DecisionDungeon2DMap {
 
   aboutToDisappear() {
     if (this.ws) { this.ws.close(); this.ws = null }
+    if (this.neuralAnimTimer !== -1) { clearInterval(this.neuralAnimTimer); this.neuralAnimTimer = -1 }
+  }
+
+  private startNeuralAnimation() {
+    if (this.neuralAnimTimer !== -1) return
+    let t = 0
+    this.neuralAnimTimer = setInterval(() => {
+      t += 0.08
+      const ctx = this.neuralCtx
+      const w = 320
+      const h = 80
+      ctx.clearRect(0, 0, w * 3, h * 3)
+
+      // 3层神经网络节点
+      const layers = [4, 6, 4]
+      const nodePositions: number[][] = []
+      for (let l = 0; l < layers.length; l++) {
+        const count = layers[l]
+        const lx = 40 + l * 120
+        for (let n = 0; n < count; n++) {
+          const ny = 10 + (n + 0.5) * (60 / count)
+          nodePositions.push([lx, ny, l])
+        }
+      }
+
+      // 画连接线（带脉冲）
+      ctx.lineWidth = 0.5
+      let idx = 0
+      for (let l = 0; l < layers.length - 1; l++) {
+        const startNodes = nodePositions.filter(p => p[2] === l)
+        const endNodes = nodePositions.filter(p => p[2] === l + 1)
+        for (const s of startNodes) {
+          for (const e of endNodes) {
+            const pulse = Math.sin(t * 2 + idx * 0.5) * 0.5 + 0.5
+            ctx.strokeStyle = `rgba(10, 89, 247, ${0.08 + pulse * 0.12})`
+            ctx.beginPath()
+            ctx.moveTo(s[0], s[1])
+            ctx.lineTo(e[0], e[1])
+            ctx.stroke()
+            idx++
+          }
+        }
+      }
+
+      // 画节点
+      for (const p of nodePositions) {
+        const pulse = Math.sin(t * 3 + p[0] * 0.05 + p[1] * 0.1) * 0.5 + 0.5
+        const r = 3 + pulse * 2
+        ctx.fillStyle = `rgba(10, 89, 247, ${0.3 + pulse * 0.4})`
+        ctx.beginPath()
+        ctx.arc(p[0], p[1], r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      // 流动的数据点
+      for (let i = 0; i < 5; i++) {
+        const progress = ((t * 0.5 + i * 0.2) % 1)
+        const px = 40 + progress * 240
+        const py = 20 + Math.sin(t * 2 + i) * 20
+        ctx.fillStyle = `rgba(107, 72, 255, ${0.5 + Math.sin(t + i) * 0.3})`
+        ctx.beginPath()
+        ctx.arc(px, py, 2, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }, 80)
   }
 
   // ===== 数据方法 =====
@@ -648,6 +716,17 @@ struct DecisionDungeon2DMap {
         LoadingProgress().width(14).height(14).color(Theme.Color.Primary)
         Text(this.streamStatus).fontSize(11).fontColor(Theme.Color.Primary).layoutWeight(1)
       }.width('100%')
+
+      // 神经网络推演可视化 — 模型推演中时显示
+      if (this.processingNodeId || this.streamStatus.includes('推演') || this.streamStatus.includes('模型')) {
+        Canvas(this.neuralCtx)
+          .width('100%')
+          .height(80)
+          .backgroundColor('rgba(10, 89, 247, 0.02)')
+          .borderRadius(8)
+          .onReady(() => { this.startNeuralAnimation() })
+      }
+
       if (this.liveThinkingText) {
         Text(this.liveThinkingText.slice(-200))
           .fontSize(10).fontColor(Theme.Color.TextTertiary)
