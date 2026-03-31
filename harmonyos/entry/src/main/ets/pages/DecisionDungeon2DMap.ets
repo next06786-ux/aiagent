@@ -255,6 +255,7 @@ struct DecisionDungeon2DMap {
 
     // 先尝试 WebSocket，失败后自动降级到 HTTP
     let httpFallbackTriggered = false
+    let wsEverReceivedMessage = false  // 是否曾经收到过消息
 
     const triggerHttpFallback = () => {
       if (httpFallbackTriggered) return
@@ -266,6 +267,7 @@ struct DecisionDungeon2DMap {
     try {
       this.ws = new WebSocketUtil()
       this.ws.onMessage((data: string) => {
+        wsEverReceivedMessage = true
         setTimeout(() => {
           try {
             const ev = JSON.parse(data) as Record<string, Object>
@@ -313,8 +315,15 @@ struct DecisionDungeon2DMap {
         }, 0)
       })
       this.ws.onError(() => {
-        console.info('[DecisionMap] WebSocket 错误，降级到 HTTP')
-        triggerHttpFallback()
+        if (!wsEverReceivedMessage) {
+          // 从未收到过消息 = 连接阶段就失败了，降级到 HTTP
+          console.info('[DecisionMap] WebSocket 连接阶段失败，降级到 HTTP')
+          triggerHttpFallback()
+        } else {
+          // 已经收到过消息，中途断开 = 可能是超时，不降级，显示错误
+          console.info('[DecisionMap] WebSocket 推演中途断开')
+          this.streamStatus = '推演连接中断，请返回重试'
+        }
       })
       this.ws.onClose(() => {})
       await this.ws.connect('/ws/decision-simulate')
