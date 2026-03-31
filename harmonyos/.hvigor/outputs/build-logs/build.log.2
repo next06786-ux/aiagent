@@ -499,3 +499,133 @@ Require stack:
 [2026-03-31T11:21:13.137] [DEBUG] debug-file - entry : default@ProcessCompiledResources cost memory 0.0552825927734375
 [2026-03-31T11:21:13.138] [DEBUG] debug-file - runTaskFromQueue task cost before running: 4 s 424 ms 
 [2026-03-31T11:21:13.138] [INFO] debug-file - Finished :entry:default@ProcessCompiledResources... after 2 ms 
+[2026-03-31T11:21:13.141] [DEBUG] debug-file - Executing task :entry:default@PackageHap
+[2026-03-31T11:21:13.153] [DEBUG] debug-file - entry:default@PackageHap is not up-to-date, since the input file 'E:\ai\harmonyos\entry\build\default\intermediates\loader_out\default\ets' has been changed.
+[2026-03-31T11:21:13.153] [DEBUG] debug-file - Incremental task entry:default@PackageHap pre-execution cost: 11 ms .
+[2026-03-31T11:21:13.154] [DEBUG] debug-file - Use tool [E:\devecostudio-windows-6.0.2.640\DevEco Studio\sdk\default\openharmony\toolchains\lib\app_packing_tool.jar]
+ [
+  'java',
+  '-Dfile.encoding=GBK',
+  '-jar',
+  'E:\\devecostudio-windows-6.0.2.640\\DevEco Studio\\sdk\\default\\openharmony\\toolchains\\lib\\app_packing_tool.jar',
+  '--mode',
+  'hap',
+  '--force',
+  'true',
+  '--lib-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\intermediates\\stripped_native_libs\\default',
+  '--json-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\intermediates\\package\\default\\module.json',
+  '--resources-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\intermediates\\res\\default\\resources',
+  '--index-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\intermediates\\res\\default\\resources.index',
+  '--pack-info-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\outputs\\default\\pack.info',
+  '--out-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\outputs\\default\\entry-default-unsigned.hap',
+  '--ets-path',
+  'E:\\ai\\harmonyos\\entry\\build\\default\\intermediates\\loader_out\\default\\ets'
+]
+[2026-03-31T11:21:13.243] [DEBUG] debug-file - java daemon socket received message:{"code":0,"message":"pack success"}
+[2026-03-31T11:21:13.249] [DEBUG] debug-file - entry : default@PackageHap cost memory 0.6750030517578125
+[2026-03-31T11:21:13.249] [DEBUG] debug-file - runTaskFromQueue task cost before running: 4 s 536 ms 
+[2026-03-31T11:21:13.250] [INFO] debug-file - Finished :entry:default@PackageHap... after 109 ms 
+[2026-03-31T11:21:13.252] [DEBUG] debug-file - Executing task :entry:default@PackingCheck
+[2026-03-31T11:21:13.260] [DEBUG] debug-file - entry : default@PackingCheck cost memory 0.332275390625
+[2026-03-31T11:21:13.260] [DEBUG] debug-file - runTaskFromQueue task cost before running: 4 s 547 ms 
+[2026-03-31T11:21:13.260] [INFO] debug-file - Finished :entry:default@PackingCheck... after 8 ms 
+[2026-03-31T11:21:13.263] [DEBUG] debug-file - Executing task :entry:default@SignHap
+[2026-03-31T11:21:13.266] [DEBUG] debug-file - entry:default@SignHap is not up-to-date, since the input file 'E:\ai\harmonyos\entry\build\default\outputs\default\entry-default-unsigned.hap' has been changed.
+[2026-03-31T11:21:13.266] [DEBUG] debug-file - Incremental task entry:default@SignHap pre-execution cost: 3 ms .
+[2026-03-31T11:21:13.296] [DEBUG] debug-file - java daemon socket close code:1000 reason:close by user
+[2026-03-31T11:21:13.328] [DEBUG] debug-file - java daemon socket received message:{"code":0,"message":"verify profile success"}
+[2026-03-31T11:21:13.336] [DEBUG] debug-file - java daemon socket close code:1000 reason:close by user
+[2026-03-31T11:21:13.677] [DEBUG] debug-file - java daemon socket received message:{"code":0,"message":"sign app success"}
+[2026-03-31T11:21:13.678] [DEBUG] debug-file - entry : default@SignHap cost memory 0.5508575439453125
+[2026-03-31T11:21:13.679] [DEBUG] debug-file - runTaskFromQueue task cost before running: 4 s 965 ms 
+[2026-03-31T11:21:13.680] [INFO] debug-file - Finished :entry:default@SignHap... after 416 ms 
+[2026-03-31T11:21:13.682] [DEBUG] debug-file - Executing task :entry:default@CollectDebugSymbol
+[2026-03-31T11:21:13.684] [DEBUG] debug-file - entry : default@CollectDebugSymbol cost memory 0.08005523681640625
+[2026-03-31T11:21:13.684] [DEBUG] debug-file - runTaskFromQueue task cost before running: 4 s 971 ms 
+[2026-03-31T11:21:13.685] [INFO] debug-file - Finished :entry:default@CollectDebugSymbol... after 2 ms 
+[2026-03-31T11:21:13.685] [DEBUG] debug-file - Executing task :entry:assembleHap
+[2026-03-31T11:21:13.685] [DEBUG] debug-file - entry : assembleHap cost memory 0.01230621337890625
+[2026-03-31T11:21:13.685] [DEBUG] debug-file - runTaskFromQueue task cost before running: 4 s 972 ms 
+[2026-03-31T11:21:13.686] [INFO] debug-file - Finished :entry:assembleHap... after 1 ms 
+[2026-03-31T11:21:13.703] [INFO] debug-file - BUILD SUCCESSFUL in 4 s 989 ms 
+[2026-03-31T11:21:13.703] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@PreBuild is up-to-date.
+[2026-03-31T11:21:13.704] [DEBUG] debug-file - Update task entry:default@CreateModuleInfo output file:E:\ai\harmonyos\entry\build\default\generated\profile\default\ModuleInfo.ts cache.
+[2026-03-31T11:21:13.704] [DEBUG] debug-file - Incremental task entry:default@CreateModuleInfo post-execution cost:1 ms .
+[2026-03-31T11:21:13.704] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@GenerateMetadata is up-to-date.
+[2026-03-31T11:21:13.704] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@MergeProfile is up-to-date.
+[2026-03-31T11:21:13.704] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@CreateBuildProfile is up-to-date.
+[2026-03-31T11:21:13.705] [DEBUG] debug-file - Update task entry:default@GeneratePkgContextInfo output file:E:\ai\harmonyos\entry\build\default\intermediates\loader\default\pkgContextInfo.json cache.
+[2026-03-31T11:21:13.705] [DEBUG] debug-file - Incremental task entry:default@GeneratePkgContextInfo post-execution cost:1 ms .
+[2026-03-31T11:21:13.705] [DEBUG] debug-file - Update task entry:default@ProcessIntegratedHsp output file:E:\ai\harmonyos\build\cache\default\integrated_hsp\integratedHspCache.json cache.
+[2026-03-31T11:21:13.705] [DEBUG] debug-file - Incremental task entry:default@ProcessIntegratedHsp post-execution cost:1 ms .
+[2026-03-31T11:21:13.706] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@MakePackInfo is up-to-date.
+[2026-03-31T11:21:13.706] [DEBUG] debug-file - Update task entry:default@SyscapTransform input file:E:\devecostudio-windows-6.0.2.640\DevEco Studio\sdk\default\openharmony\toolchains\syscap_tool.exe cache by regenerate.
+[2026-03-31T11:21:13.706] [DEBUG] debug-file - Update task entry:default@SyscapTransform input file:E:\devecostudio-windows-6.0.2.640\DevEco Studio\sdk\default\openharmony\ets\api\device-define cache by regenerate.
+[2026-03-31T11:21:13.709] [DEBUG] debug-file - Update task entry:default@SyscapTransform output file:E:\ai\harmonyos\entry\build\default\intermediates\syscap\default\rpcid.sc cache.
+[2026-03-31T11:21:13.710] [DEBUG] debug-file - Incremental task entry:default@SyscapTransform post-execution cost:5 ms .
+[2026-03-31T11:21:13.710] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@ProcessProfile is up-to-date.
+[2026-03-31T11:21:13.710] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@ProcessRouterMap is up-to-date.
+[2026-03-31T11:21:13.710] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@ProcessShareConfig is up-to-date.
+[2026-03-31T11:21:13.710] [DEBUG] debug-file - Update task entry:default@ProcessStartupConfig output file:E:\ai\harmonyos\entry\build\default\intermediates\startup\default\startup_config.json cache.
+[2026-03-31T11:21:13.711] [DEBUG] debug-file - Incremental task entry:default@ProcessStartupConfig post-execution cost:1 ms .
+[2026-03-31T11:21:13.711] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@ProcessResource is up-to-date.
+[2026-03-31T11:21:13.711] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@GenerateLoaderJson is up-to-date.
+[2026-03-31T11:21:13.711] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@CompileResource is up-to-date.
+[2026-03-31T11:21:13.714] [DEBUG] debug-file - Update task entry:default@CompileArkTS input file:E:\ai\harmonyos\entry\build\default\intermediates\loader\default cache by regenerate.
+[2026-03-31T11:21:13.715] [DEBUG] debug-file - Update task entry:default@CompileArkTS input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\ResourceTable.txt cache by regenerate.
+[2026-03-31T11:21:13.715] [DEBUG] debug-file - Update task entry:default@CompileArkTS input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\ark_module.json cache by regenerate.
+[2026-03-31T11:21:13.716] [DEBUG] debug-file - Update task entry:default@CompileArkTS input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\resources\base\profile cache by regenerate.
+[2026-03-31T11:21:13.717] [DEBUG] debug-file - Update task entry:default@CompileArkTS input file:E:\ai\harmonyos\entry\src\main\ets cache from map.
+[2026-03-31T11:21:13.717] [DEBUG] debug-file - Update task entry:default@CompileArkTS input file:E:\ai\harmonyos\entry\build\default\generated\profile\default\BuildProfile.ets cache by regenerate.
+[2026-03-31T11:21:13.717] [DEBUG] debug-file - Update task entry:default@CompileArkTS output file:E:\ai\harmonyos\entry\build\default\intermediates\loader_out\default\ets cache.
+[2026-03-31T11:21:13.720] [DEBUG] debug-file - Incremental task entry:default@CompileArkTS post-execution cost:9 ms .
+[2026-03-31T11:21:13.722] [DEBUG] debug-file - Update task entry:default@BuildJS input file:E:\ai\harmonyos\entry\build\default\intermediates\loader\default cache by regenerate.
+[2026-03-31T11:21:13.723] [DEBUG] debug-file - Update task entry:default@BuildJS input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\ResourceTable.txt cache by regenerate.
+[2026-03-31T11:21:13.723] [DEBUG] debug-file - Update task entry:default@BuildJS input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\ark_module.json cache by regenerate.
+[2026-03-31T11:21:13.724] [DEBUG] debug-file - Update task entry:default@BuildJS input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\resources\base\profile cache by regenerate.
+[2026-03-31T11:21:13.725] [DEBUG] debug-file - Update task entry:default@BuildJS output file:E:\ai\harmonyos\entry\build\default\intermediates\loader_out\default\js cache.
+[2026-03-31T11:21:13.726] [DEBUG] debug-file - Incremental task entry:default@BuildJS post-execution cost:7 ms .
+[2026-03-31T11:21:13.727] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@ProcessLibs is up-to-date.
+[2026-03-31T11:21:13.727] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@DoNativeStrip is up-to-date.
+[2026-03-31T11:21:13.727] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@CacheNativeLibs is up-to-date.
+[2026-03-31T11:21:13.727] [DEBUG] debug-file - There is no need to refresh cache, since the incremental task entry:default@GeneratePkgModuleJson is up-to-date.
+[2026-03-31T11:21:13.727] [DEBUG] debug-file - Incremental task entry:default@ProcessCompiledResources post-execution cost:1 ms .
+[2026-03-31T11:21:13.729] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\intermediates\stripped_native_libs\default cache by regenerate.
+[2026-03-31T11:21:13.732] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\module.json cache by regenerate.
+[2026-03-31T11:21:13.733] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\resources cache by regenerate.
+[2026-03-31T11:21:13.738] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\intermediates\res\default\resources.index cache by regenerate.
+[2026-03-31T11:21:13.738] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\outputs\default\pack.info cache by regenerate.
+[2026-03-31T11:21:13.739] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\intermediates\loader_out\default\ets cache from map.
+[2026-03-31T11:21:13.741] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\intermediates\loader_out\default\ets\sourceMaps.map cache by regenerate.
+[2026-03-31T11:21:13.742] [DEBUG] debug-file - Update task entry:default@PackageHap input file:E:\ai\harmonyos\entry\build\default\generated\profile\default\BuildProfile.ets cache by regenerate.
+[2026-03-31T11:21:13.743] [DEBUG] debug-file - Update task entry:default@PackageHap output file:E:\ai\harmonyos\entry\build\default\outputs\default\entry-default-unsigned.hap cache.
+[2026-03-31T11:21:13.744] [DEBUG] debug-file - Update task entry:default@PackageHap output file:E:\ai\harmonyos\entry\build\default\intermediates\source_map\default\sourceMaps.map cache.
+[2026-03-31T11:21:13.744] [DEBUG] debug-file - Update task entry:default@PackageHap output file:E:\ai\harmonyos\entry\build\default\outputs\default\mapping\sourceMaps.map cache.
+[2026-03-31T11:21:13.745] [DEBUG] debug-file - Incremental task entry:default@PackageHap post-execution cost:18 ms .
+[2026-03-31T11:21:13.745] [DEBUG] debug-file - Update task entry:default@SignHap input file:C:\Users\22976\.ohos\config\default_harmonyos_br6spum0sU_8PKJxqZagW77-Ai8f7QteYwY0lZgzZ8U=.cer cache by regenerate.
+[2026-03-31T11:21:13.746] [DEBUG] debug-file - Update task entry:default@SignHap input file:C:\Users\22976\.ohos\config\default_harmonyos_br6spum0sU_8PKJxqZagW77-Ai8f7QteYwY0lZgzZ8U=.p7b cache by regenerate.
+[2026-03-31T11:21:13.746] [DEBUG] debug-file - Update task entry:default@SignHap input file:C:\Users\22976\.ohos\config\default_harmonyos_br6spum0sU_8PKJxqZagW77-Ai8f7QteYwY0lZgzZ8U=.p12 cache by regenerate.
+[2026-03-31T11:21:13.746] [DEBUG] debug-file - Update task entry:default@SignHap input file:E:\ai\harmonyos\entry\build\default\outputs\default\entry-default-unsigned.hap cache from map.
+[2026-03-31T11:21:13.746] [DEBUG] debug-file - Update task entry:default@SignHap output file:E:\ai\harmonyos\entry\build\default\outputs\default\entry-default-signed.hap cache.
+[2026-03-31T11:21:13.747] [DEBUG] debug-file - Incremental task entry:default@SignHap post-execution cost:3 ms .
+[2026-03-31T11:21:13.748] [DEBUG] debug-file - Update task entry:default@CollectDebugSymbol input file:E:\ai\harmonyos\entry\build\default\intermediates\loader_out\default\ets\sourceMaps.map cache by regenerate.
+[2026-03-31T11:21:13.748] [DEBUG] debug-file - Update task entry:default@CollectDebugSymbol input file:E:\ai\harmonyos\entry\build\default\intermediates\libs\default cache by regenerate.
+[2026-03-31T11:21:13.751] [DEBUG] debug-file - Update task entry:default@CollectDebugSymbol output file:E:\ai\harmonyos\entry\build\default\outputs\default\symbol cache.
+[2026-03-31T11:21:13.751] [DEBUG] debug-file - Incremental task entry:default@CollectDebugSymbol post-execution cost:5 ms .
+[2026-03-31T11:21:13.792] [DEBUG] debug-file - Cleanup worker 17.
+[2026-03-31T11:21:13.793] [DEBUG] debug-file - Worker 17 has been cleaned up.
+[2026-03-31T11:21:13.793] [DEBUG] debug-file - Current idle worker size: 2.
+[2026-03-31T11:21:13.793] [DEBUG] debug-file - Current resident worker size: 3.
+[2026-03-31T11:21:13.795] [DEBUG] debug-file - hvigor build process will be closed.
+[2026-03-31T11:21:13.795] [DEBUG] debug-file - java daemon socket close code:1000 reason:close by user
+[2026-03-31T11:21:13.805] [DEBUG] debug-file - session manager: send message to worker process.
+[2026-03-31T11:21:13.806] [DEBUG] debug-file - session manager: send message to worker process.
+[2026-03-31T11:21:13.806] [DEBUG] debug-file - watch worker: worker id should be larger than 0. Nothing will be sent to any worker thread.
+[2026-03-31T11:21:13.807] [DEBUG] debug-file - watch worker: worker id should be larger than 0. Nothing will be sent to any worker thread.
+[2026-03-31T11:21:13.847] [DEBUG] debug-file - worker[17] exits with exit code 1.

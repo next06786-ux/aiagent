@@ -177,7 +177,7 @@ struct AgentHome {
         });
       }
       this.orbPositions = newPos;
-    }, 50);
+    }, 100);
   }
 
   private stopOrbAnimation() {
@@ -188,15 +188,15 @@ struct AgentHome {
     if (this.aiCoreAnimTimer !== -1) return;
     let t = 0;
     this.aiCoreAnimTimer = setInterval(() => {
-      t += 0.05;
-      animateTo({ duration: 50, curve: Curve.Linear }, () => {
+      t += 0.06;
+      animateTo({ duration: 80, curve: Curve.Linear }, () => {
         this.aiCoreBreath = 1.0 + Math.sin(t * 1.2) * 0.05;
         this.aiCoreRing1 = (t * 18) % 360;
         this.aiCoreRing2 = (t * -12 + 120) % 360;
         this.aiCoreInnerRotate = (t * 25) % 360;
-        this.runePulse = (Math.sin(t * 0.8) + 1) / 2;  // 0~1 脉冲
+        this.runePulse = (Math.sin(t * 0.8) + 1) / 2;
       });
-    }, 50);
+    }, 80);
   }
 
   private stopAiCoreAnimation() {
@@ -745,58 +745,34 @@ struct AgentHome {
 
   @Builder
   buildRuneLines() {
-    // ═══ 符文法阵：AI核心 → 功能球体 赋能连接 ═══
+    // 符文法阵：AI核心 → 功能球体 赋能连接（轻量版，避免卡顿）
 
-    // 1. 从AI核心到每个球体的能量射线
+    // 从AI核心到每个球体的能量射线
     ForEach(this.orbPositions, (orb: OrbPos, index: number) => {
-      // 主能量线 - 明显的渐变虚线
+      // 能量线
       Line()
         .width('100%').height('100%')
         .startPoint([this.centerX, this.centerY - 5])
         .endPoint([orb.x, orb.y])
         .stroke(orb.color)
-        .strokeWidth(1.5)
-        .strokeOpacity(0.15 + this.runePulse * 0.1)
+        .strokeWidth(1.2)
+        .strokeOpacity(0.12 + this.runePulse * 0.08)
         .strokeDashArray([6, 10])
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
 
-      // 能量线发光层 - 更宽更模糊的底层光
-      Line()
-        .width('100%').height('100%')
-        .startPoint([this.centerX, this.centerY - 5])
-        .endPoint([orb.x, orb.y])
-        .stroke(orb.color)
-        .strokeWidth(4)
-        .strokeOpacity(0.04 + this.runePulse * 0.03)
-        .position({ x: 0, y: 0 })
-        .hitTestBehavior(HitTestMode.None)
-        .blur(3)
-
-      // 能量脉冲点 - 沿连接线移动的光点（用 runePulse 驱动位置）
-      Circle({ width: 6, height: 6 })
-        .fill(orb.color)
-        .opacity(0.4 + this.runePulse * 0.3)
-        .shadow({ radius: 8, color: orb.color, offsetX: 0, offsetY: 0 })
-        .position({
-          x: this.centerX + (orb.x - this.centerX) * (0.3 + this.runePulse * 0.4) - 3,
-          y: (this.centerY - 5) + (orb.y - (this.centerY - 5)) * (0.3 + this.runePulse * 0.4) - 3
-        })
-        .hitTestBehavior(HitTestMode.None)
-
-      // 中间能量节点 - 连接线中点的固定光点
+      // 脉冲光点 - 沿线移动
       Circle({ width: 5, height: 5 })
         .fill(orb.color)
-        .opacity(0.25 + this.runePulse * 0.15)
-        .shadow({ radius: 6, color: orb.color, offsetX: 0, offsetY: 0 })
+        .opacity(0.5 + this.runePulse * 0.3)
         .position({
-          x: (this.centerX + orb.x) / 2 - 2.5,
-          y: ((this.centerY - 5) + orb.y) / 2 - 2.5
+          x: this.centerX + (orb.x - this.centerX) * (0.25 + this.runePulse * 0.45) - 2.5,
+          y: (this.centerY - 5) + (orb.y - (this.centerY - 5)) * (0.25 + this.runePulse * 0.45) - 2.5
         })
         .hitTestBehavior(HitTestMode.None)
     })
 
-    // 2. 外层五边形法阵环 - 连接所有球体
+    // 五边形法阵外环
     ForEach(this.orbPositions, (orb: OrbPos, index: number) => {
       if (index < this.orbPositions.length - 1) {
         Line()
@@ -804,42 +780,25 @@ struct AgentHome {
           .startPoint([orb.x, orb.y])
           .endPoint([this.orbPositions[index + 1].x, this.orbPositions[index + 1].y])
           .stroke('#6B48FF')
-          .strokeWidth(0.8)
-          .strokeOpacity(0.1 + this.runePulse * 0.05)
+          .strokeWidth(0.6)
+          .strokeOpacity(0.08 + this.runePulse * 0.04)
           .strokeDashArray([3, 8])
           .position({ x: 0, y: 0 })
           .hitTestBehavior(HitTestMode.None)
       }
     })
-    // 闭合五边形
     if (this.orbPositions.length >= 2) {
       Line()
         .width('100%').height('100%')
         .startPoint([this.orbPositions[this.orbPositions.length - 1].x, this.orbPositions[this.orbPositions.length - 1].y])
         .endPoint([this.orbPositions[0].x, this.orbPositions[0].y])
         .stroke('#6B48FF')
-        .strokeWidth(0.8)
-        .strokeOpacity(0.1 + this.runePulse * 0.05)
+        .strokeWidth(0.6)
+        .strokeOpacity(0.08 + this.runePulse * 0.04)
         .strokeDashArray([3, 8])
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
     }
-
-    // 3. 中心法阵光环 - AI核心周围的旋转符文环
-    Circle({ width: 200, height: 200 })
-      .fill('transparent')
-      .border({ width: 0.6, color: `rgba(107, 72, 255, ${0.06 + this.runePulse * 0.04})` })
-      .position({ x: this.centerX - 100, y: this.centerY - 105 })
-      .rotate({ angle: this.aiCoreRing1 * 0.3 })
-      .hitTestBehavior(HitTestMode.None)
-
-    Circle({ width: 240, height: 240 })
-      .fill('transparent')
-      .border({ width: 0.4, color: `rgba(107, 72, 255, ${0.03 + this.runePulse * 0.02})` })
-      .strokeDashArray([12, 20])
-      .position({ x: this.centerX - 120, y: this.centerY - 125 })
-      .rotate({ angle: -this.aiCoreRing2 * 0.2 })
-      .hitTestBehavior(HitTestMode.None)
   }
 
   @Builder

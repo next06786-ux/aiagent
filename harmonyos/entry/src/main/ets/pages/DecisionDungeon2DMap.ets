@@ -316,16 +316,31 @@ struct DecisionDungeon2DMap {
       })
       this.ws.onError(() => {
         if (!wsEverReceivedMessage) {
-          // 从未收到过消息 = 连接阶段就失败了，降级到 HTTP
           console.info('[DecisionMap] WebSocket 连接阶段失败，降级到 HTTP')
           triggerHttpFallback()
         } else {
-          // 已经收到过消息，中途断开 = 可能是超时，不降级，显示错误
-          console.info('[DecisionMap] WebSocket 推演中途断开')
-          this.streamStatus = '推演连接中断，请返回重试'
+          // 已经收到过消息，中途断开
+          console.info('[DecisionMap] WebSocket 推演中途断开，尝试HTTP继续')
+          // 如果已经有节点数据，说明部分推演成功了，用HTTP补完剩余
+          if (this.nodes.length > 0) {
+            this.streamStatus = '连接中断，正在用HTTP补完推演...'
+            triggerHttpFallback()
+          } else {
+            this.streamStatus = '推演连接中断，正在重试...'
+            triggerHttpFallback()
+          }
         }
       })
-      this.ws.onClose(() => {})
+      this.ws.onClose(() => {
+        // WebSocket 正常关闭（非 done 触发的关闭）也尝试 HTTP 补完
+        if (wsEverReceivedMessage && this.streamStatus !== '全部推演完成' && this.streamStatus !== '推演完成') {
+          console.info('[DecisionMap] WebSocket 意外关闭，HTTP补完')
+          if (this.nodes.length > 0) {
+            this.streamStatus = '连接关闭，正在用HTTP补完...'
+          }
+          triggerHttpFallback()
+        }
+      })
       await this.ws.connect('/ws/decision-simulate')
       this.streamStatus = '连接成功，正在加载LoRA模型和用户画像...'
       this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)

@@ -131,8 +131,9 @@ class LoRADecisionAnalyzer:
         num_events: int = 12
     ):
         """分批流式生成时间线：每批 4 个节点，共 3 批，后续批次带上前面的结果作为上下文"""
-        kg_context = self._query_relevant_persons(user_id, question)
-        life_context = self._retrieve_life_context(user_id, question)
+        # 在线程中执行可能阻塞的知识图谱查询
+        kg_context = await asyncio.to_thread(self._query_relevant_persons, user_id, question)
+        life_context = await asyncio.to_thread(self._retrieve_life_context, user_id, question)
 
         batch_size = 4
         generated_so_far: List[Dict] = []
@@ -166,6 +167,8 @@ class LoRADecisionAnalyzer:
             for chunk in self.lora_manager.generate_stream(user_id, prompt, 400, 0.25):
                 batch_buffer += chunk
                 yield chunk
+                # 让出事件循环，防止长时间阻塞导致 WebSocket 超时断开
+                await asyncio.sleep(0)
 
             # 解析本批次结果，加入上下文
             batch_events = self._parse_timeline_json(batch_buffer)
@@ -181,6 +184,7 @@ class LoRADecisionAnalyzer:
         prompt = self._build_recommendation_prompt(question, options, profile)
         for chunk in self.lora_manager.generate_stream(user_id, prompt, 140, 0.35):
             yield chunk
+            await asyncio.sleep(0)
 
     async def generate_branch_events_with_lora(
         self,
