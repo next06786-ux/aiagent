@@ -316,6 +316,72 @@ CHAPTERS = [
             {"condition": "social_high", "threshold": {"social": 40}, "title": "连接者", "text": "你在探索的过程中认识了很多新朋友，你的世界变大了。", "badge": "破圈达人"},
             {"condition": "balanced", "threshold": {}, "title": "探索中", "text": "改变不是一蹴而就的，你已经迈出了第一步，这就够了。", "badge": "起步者"}
         ]
+    },
+    {
+        "id": "ch_money_game",
+        "title": "财富迷局",
+        "subtitle": "当机会和风险同时敲门",
+        "theme": "#1a2e1a",
+        "accent": "#FF9500",
+        "cover_emoji": "$",
+        "tarot_suit": "金币",
+        "intro": "你攒了一笔钱，朋友拉你一起投资。\n听起来很靠谱，但你也听说过太多翻车的故事。\n\n是稳稳存银行，还是搏一把？",
+        "nodes": [
+            {"id": "n1", "type": "choice", "text": "朋友说有个项目，投10万半年翻倍。你怎么看？",
+             "options": [
+                 {"id": "A", "text": "投5万试试水", "sub": "控制风险，先小额参与", "delta": {"emotion": 5, "finance": -15, "social": 10}, "next": "n2a"},
+                 {"id": "B", "text": "全部存定期", "sub": "稳妥第一，不碰不熟的东西", "delta": {"emotion": -5, "finance": 10, "social": -5}, "next": "n2b"}
+             ]},
+            {"id": "n2a", "type": "choice", "text": "第二个月，项目说要追加投资才能拿到更高回报。",
+             "options": [
+                 {"id": "A", "text": "再投5万，相信朋友", "sub": "加大投入，搏更高收益", "delta": {"emotion": -10, "finance": -20, "social": 5}, "next": "n3"},
+                 {"id": "B", "text": "不追加，观望", "sub": "见好就收，保持冷静", "delta": {"emotion": 5, "finance": 0, "social": -5}, "next": "n3"}
+             ]},
+            {"id": "n2b", "type": "choice", "text": "存了定期后，你发现物价涨了不少，存款利率跑不赢通胀。",
+             "options": [
+                 {"id": "A", "text": "学习理财知识", "sub": "花时间研究基金和股票", "delta": {"emotion": 5, "finance": 5, "social": 0}, "next": "n3"},
+                 {"id": "B", "text": "无所谓，安全最重要", "sub": "继续存银行，心安理得", "delta": {"emotion": 0, "finance": -5, "social": 0}, "next": "n3"}
+             ]},
+            {"id": "n3", "type": "free_input", "text": "回顾这段理财经历，你最大的感悟是什么？", "options": [], "next": "ending"}
+        ],
+        "endings": [
+            {"condition": "finance_high", "threshold": {"finance": 40}, "title": "理财达人", "text": "你在风险和收益之间找到了平衡，开始建立自己的投资体系。", "badge": "金融新星"},
+            {"condition": "emotion_high", "threshold": {"emotion": 40}, "title": "心态稳健", "text": "不管赚没赚到钱，你的心态一直很稳，这比什么都重要。", "badge": "淡定哥"},
+            {"condition": "balanced", "threshold": {}, "title": "交了学费", "text": "有些教训只有亲身经历才能学到，这笔学费不亏。", "badge": "成长中"}
+        ]
+    },
+    {
+        "id": "ch_family_pressure",
+        "title": "家庭期望",
+        "subtitle": "父母的期望和自己的梦想",
+        "theme": "#2e1a1a",
+        "accent": "#FF6B9D",
+        "cover_emoji": "H",
+        "tarot_suit": "圣杯",
+        "intro": "过年回家，父母又开始催你了。\n考公、结婚、买房...他们的期望像山一样压过来。\n\n你想走自己的路，但又不想让他们失望。",
+        "nodes": [
+            {"id": "n1", "type": "choice", "text": "妈妈说：'你同学都考上公务员了，你也去考吧。'",
+             "options": [
+                 {"id": "A", "text": "答应试试", "sub": "先报名，考不考再说", "delta": {"emotion": -10, "finance": -5, "social": 10}, "next": "n2a"},
+                 {"id": "B", "text": "坦白说不想考", "sub": "直接表达自己的想法", "delta": {"emotion": 10, "finance": 0, "social": -15}, "next": "n2b"}
+             ]},
+            {"id": "n2a", "type": "choice", "text": "你报了名，但复习的时候完全看不进去。",
+             "options": [
+                 {"id": "A", "text": "硬着头皮考", "sub": "既然答应了就做到", "delta": {"emotion": -15, "finance": -5, "social": 5}, "next": "n3"},
+                 {"id": "B", "text": "跟父母摊牌", "sub": "说清楚自己真正想做什么", "delta": {"emotion": 15, "finance": 0, "social": -10}, "next": "n3"}
+             ]},
+            {"id": "n2b", "type": "choice", "text": "爸妈很失望，家里气氛变得很僵。",
+             "options": [
+                 {"id": "A", "text": "用行动证明自己", "sub": "在自己的领域做出成绩", "delta": {"emotion": 10, "finance": 10, "social": -5}, "next": "n3"},
+                 {"id": "B", "text": "找个折中方案", "sub": "既不完全听从也不完全对抗", "delta": {"emotion": 5, "finance": 0, "social": 5}, "next": "n3"}
+             ]},
+            {"id": "n3", "type": "free_input", "text": "如果能对父母说一句真心话，你会说什么？", "options": [], "next": "ending"}
+        ],
+        "endings": [
+            {"condition": "emotion_high", "threshold": {"emotion": 40}, "title": "忠于自我", "text": "你选择了自己的路，虽然不容易，但你活得更真实了。", "badge": "真我"},
+            {"condition": "social_high", "threshold": {"social": 40}, "title": "家和万事兴", "text": "你找到了和家人沟通的方式，理解是双向的。", "badge": "调和者"},
+            {"condition": "balanced", "threshold": {}, "title": "在路上", "text": "家庭和自我之间的平衡，是一辈子的课题。", "badge": "成长中"}
+        ]
     }
 ]
 

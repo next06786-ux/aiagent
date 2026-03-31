@@ -221,6 +221,20 @@ struct QuickDecisionInput {
     router.replaceUrl({ url: 'pages/EnhancedDecisionFlow', params: { userId: this.userId, initialQuestion: this.userInput } })
   }
 
+  private isRecentSimulation(): boolean {
+    if (this.decisionHistory.length === 0) return false
+    const latest = this.decisionHistory[0]
+    if (!latest.created_at) return false
+    try {
+      const created = new Date(latest.created_at).getTime()
+      const now = Date.now()
+      // 最近10分钟内的推演才显示悬浮球
+      return (now - created) < 10 * 60 * 1000
+    } catch (e) {
+      return false
+    }
+  }
+
   build() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
@@ -266,34 +280,31 @@ struct QuickDecisionInput {
       }
       .width('100%').height('100%')
 
-      // 推演中悬浮导航球 — 当有最近的推演记录时显示
-      if (this.decisionHistory.length > 0) {
+      // 推演中悬浮导航球 — 最近10分钟内有推演记录时显示
+      if (this.decisionHistory.length > 0 && this.isRecentSimulation()) {
         Column({ space: 4 }) {
           Stack() {
-            Circle({ width: 56, height: 56 })
+            Circle({ width: 52, height: 52 })
               .linearGradient({ angle: 135, colors: [['#6B48FF', 0], ['#0A59F7', 1]] })
-              .shadow({ radius: 12, color: 'rgba(107,72,255,0.3)', offsetX: 0, offsetY: 4 })
-            SimpleIcon({ iconName: 'comparison', iconSize: 24, color: '#FFFFFF' })
-          }.width(56).height(56)
-          Text('推演').fontSize(10).fontColor(Theme.Color.TextTertiary)
+              .shadow({ radius: 10, color: 'rgba(107,72,255,0.25)', offsetX: 0, offsetY: 3 })
+            LoadingProgress().width(20).height(20).color('#FFFFFF')
+          }.width(52).height(52)
+          Text('推演中').fontSize(9).fontColor(Theme.Color.Secondary)
         }
         .alignItems(HorizontalAlign.Center)
         .margin({ right: 16, bottom: 80 })
         .onClick(() => {
-          // 跳转到最近一次推演
-          if (this.decisionHistory.length > 0) {
-            const latest = this.decisionHistory[0]
-            router.pushUrl({
-              url: 'pages/DecisionDungeon2DMap',
-              params: {
-                dungeonId: latest.session_id,
-                userId: this.userId,
-                question: latest.question,
-                recommendation: latest.recommendation,
-                isHistory: 'true'
-              }
-            })
-          }
+          const latest = this.decisionHistory[0]
+          router.pushUrl({
+            url: 'pages/DecisionDungeon2DMap',
+            params: {
+              dungeonId: latest.session_id,
+              userId: this.userId,
+              question: latest.question,
+              recommendation: latest.recommendation,
+              isHistory: 'true'
+            }
+          })
         })
         .stateStyles({
           pressed: { .scale({ x: 0.9, y: 0.9 }) },

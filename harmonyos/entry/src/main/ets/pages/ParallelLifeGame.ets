@@ -636,27 +636,25 @@ struct ParallelLifeGame {
         }.width(140).height(210)
       }
 
-      // 牌正面（rotateY 90-180 可见）
+      // 牌正面（rotateY 90-180 可见）— 需要镜像翻转文字才正
       if (this.tarotRotateY >= 90) {
         Stack() {
-          // 牌面背景
           Column()
             .width(140).height(210)
             .linearGradient({ angle: 180, colors: [[ch.accent || '#6B48FF', 0], ['#1a1a2e', 1]] })
             .borderRadius(12)
             .border({ width: 2, color: 'rgba(255,255,255,0.2)' })
             .shadow({ radius: 16, color: `${ch.accent || '#6B48FF'}44`, offsetX: 0, offsetY: 8 })
-          // 内框
           Column()
             .width(120).height(190)
             .border({ width: 0.5, color: 'rgba(255,255,255,0.12)' })
             .borderRadius(9)
-          // 牌面内容
           Column({ space: 8 }) {
             Text(ch.cover_emoji || '').fontSize(36)
             Text(ch.title).fontSize(16).fontWeight(700).fontColor('#FFFFFF').textAlign(TextAlign.Center)
             Text(ch.subtitle).fontSize(12).fontColor('rgba(255,255,255,0.6)').textAlign(TextAlign.Center)
           }.justifyContent(FlexAlign.Center)
+          .scale({ x: -1 })  // 镜像翻转，抵消 rotateY 的镜像效果
         }.width(140).height(210)
       }
     }

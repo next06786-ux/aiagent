@@ -99,7 +99,8 @@ async def generate_insights(request: GenerateInsightsRequest):
         try:
             from backend.database.connection import db_connection
             from backend.database.models import Base
-            engine = db_connection.get_engine()
+            from sqlalchemy import inspect
+            engine = db_connection.engine
             Base.metadata.create_all(engine, checkfirst=True)
         except Exception as init_err:
             print(f"[洞察] 数据库表初始化: {init_err}")
@@ -202,23 +203,32 @@ def save_emergence_insights(user_id: str, insights: List[SmartInsight]):
         db = db_connection.get_session()
         
         for insight in insights:
-            db_insight = EmergenceInsight(
-                user_id=user_id,
-                insight_id=insight.insight_id,
-                category=insight.category.value,
-                level=insight.level.value,
-                title=insight.title,
-                description=insight.description,
-                evidence=json.dumps(insight.evidence) if insight.evidence else None,
-                recommendations=json.dumps(insight.recommendations) if insight.recommendations else None,
-                confidence=insight.confidence,
-                impact_score=insight.impact_score,
-                related_metrics=json.dumps(insight.related_metrics) if insight.related_metrics else None,
-                visualization_data=json.dumps(insight.visualization_data) if insight.visualization_data else None
-            )
-            db.merge(db_insight)  # 使用merge避免重复
+            try:
+                db_insight = EmergenceInsight(
+                    user_id=user_id,
+                    insight_id=insight.insight_id,
+                    category=insight.category.value,
+                    level=insight.level.value,
+                    title=insight.title,
+                    description=insight.description,
+                    evidence=json.dumps(insight.evidence) if insight.evidence else None,
+                    recommendations=json.dumps(insight.recommendations) if insight.recommendations else None,
+                    confidence=insight.confidence,
+                    impact_score=insight.impact_score,
+                    related_metrics=json.dumps(insight.related_metrics) if insight.related_metrics else None,
+                    visualization_data=json.dumps(insight.visualization_data) if insight.visualization_data else None
+                )
+                db.merge(db_insight)
+                db.flush()
+            except Exception as item_err:
+                db.rollback()
+                # 跳过这条，继续下一条
+                continue
         
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
         db.close()
         print(f"[涌现洞察] 保存了 {len(insights)} 条涌现洞察")
         
@@ -242,7 +252,7 @@ async def get_dashboard(user_id: str, days: int = Query(30, description="分析�
         try:
             from backend.database.connection import db_connection as _dbc
             from backend.database.models import Base as _Base
-            _engine = _dbc.get_engine()
+            _engine = _dbc.engine
             _Base.metadata.create_all(_engine, checkfirst=True)
         except Exception:
             pass

@@ -755,16 +755,16 @@ struct AgentHome {
         .startPoint([this.centerX, this.centerY - 5])
         .endPoint([orb.x, orb.y])
         .stroke(orb.color)
-        .strokeWidth(1.2)
-        .strokeOpacity(0.12 + this.runePulse * 0.08)
+        .strokeWidth(1.5)
+        .strokeOpacity(0.18 + this.runePulse * 0.12)
         .strokeDashArray([6, 10])
         .position({ x: 0, y: 0 })
         .hitTestBehavior(HitTestMode.None)
 
       // 脉冲光点 - 沿线移动
-      Circle({ width: 5, height: 5 })
+      Circle({ width: 6, height: 6 })
         .fill(orb.color)
-        .opacity(0.5 + this.runePulse * 0.3)
+        .opacity(0.6 + this.runePulse * 0.3)
         .position({
           x: this.centerX + (orb.x - this.centerX) * (0.25 + this.runePulse * 0.45) - 2.5,
           y: (this.centerY - 5) + (orb.y - (this.centerY - 5)) * (0.25 + this.runePulse * 0.45) - 2.5

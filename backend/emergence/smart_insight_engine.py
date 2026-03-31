@@ -1,6 +1,6 @@
-"""
-智能洞察引擎
-整合对话分析和涌现检测，生成高级洞察
+﻿"""
+鏅鸿兘娲炲療寮曟搸
+鏁村悎瀵硅瘽鍒嗘瀽鍜屾秾鐜版娴嬶紝鐢熸垚楂樼骇娲炲療
 """
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
@@ -14,36 +14,36 @@ from .emergence_detector import EmergenceDetector, EmergenceEvent, EmergenceType
 
 
 class InsightLevel(Enum):
-    """洞察级别"""
-    INFO = "info"           # 信息性洞察
-    SUGGESTION = "suggestion"  # 建议性洞察
-    WARNING = "warning"     # 警告性洞察
-    CRITICAL = "critical"   # 关键性洞察
+    """娲炲療绾у埆"""
+    INFO = "info"           # 淇℃伅鎬ф礊瀵?
+    SUGGESTION = "suggestion"  # 寤鸿鎬ф礊瀵?
+    WARNING = "warning"     # 璀﹀憡鎬ф礊瀵?
+    CRITICAL = "critical"   # 鍏抽敭鎬ф礊瀵?
 
 
 class InsightCategory(Enum):
-    """洞察分类"""
-    CASCADE = "cascade"           # 级联效应
-    SYNERGY = "synergy"           # 协同增益
-    TIPPING_POINT = "tipping_point"  # 临界点
-    FEEDBACK_LOOP = "feedback_loop"  # 反馈环路
-    PATTERN = "pattern"           # 行为模式
-    TREND = "trend"               # 趋势变化
-    ANOMALY = "anomaly"           # 异常检测
+    """娲炲療鍒嗙被"""
+    CASCADE = "cascade"           # 绾ц仈鏁堝簲
+    SYNERGY = "synergy"           # 鍗忓悓澧炵泭
+    TIPPING_POINT = "tipping_point"  # 涓寸晫鐐?
+    FEEDBACK_LOOP = "feedback_loop"  # 鍙嶉鐜矾
+    PATTERN = "pattern"           # 琛屼负妯″紡
+    TREND = "trend"               # 瓒嬪娍鍙樺寲
+    ANOMALY = "anomaly"           # 寮傚父妫€娴?
 
 
 @dataclass
 class SmartInsight:
-    """智能洞察"""
+    """鏅鸿兘娲炲療"""
     insight_id: str
     category: InsightCategory
     level: InsightLevel
     title: str
     description: str
-    evidence: List[str]  # 支撑证据
-    recommendations: List[str]  # 建议行动
+    evidence: List[str]  # 鏀拺璇佹嵁
+    recommendations: List[str]  # 寤鸿琛屽姩
     confidence: float
-    impact_score: float  # 影响力分数 0-100
+    impact_score: float  # 褰卞搷鍔涘垎鏁?0-100
     created_at: datetime = field(default_factory=datetime.now)
     related_metrics: List[str] = field(default_factory=list)
     visualization_data: Dict[str, Any] = field(default_factory=dict)
@@ -66,19 +66,23 @@ class SmartInsight:
 
 
 class SmartInsightEngine:
-    """智能洞察引擎"""
+    """鏅鸿兘娲炲療寮曟搸"""
     
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.conversation_analyzer = ConversationAnalyzer(user_id)
         self.emergence_detector = EmergenceDetector(user_id)
         self.insights: List[SmartInsight] = []
-        self.insight_counter = 0
         
-        # 存储的洞察数据（从数据库加载）
+        # 瀛樺偍鐨勬礊瀵熸暟鎹紙浠庢暟鎹簱鍔犺浇锛?
         self.stored_insights: List[Dict[str, Any]] = []
+    
+    def _gen_insight_id(self) -> str:
+        """鐢熸垚鍞竴鐨?insight_id"""
+        import uuid
+        return f"insight_{uuid.uuid4().hex[:12]}"
         
-        # LLM服务（可选，用于生成更智能的洞察描述）
+        # LLM鏈嶅姟锛堝彲閫夛紝鐢ㄤ簬鐢熸垚鏇存櫤鑳界殑娲炲療鎻忚堪锛?
         self.llm = None
         try:
             from backend.llm.llm_service import get_llm_service
@@ -88,23 +92,23 @@ class SmartInsightEngine:
     
     def load_stored_insights(self, insights: List[Dict[str, Any]]):
         """
-        加载已存储的洞察数据（从数据库读取的）
+        鍔犺浇宸插瓨鍌ㄧ殑娲炲療鏁版嵁锛堜粠鏁版嵁搴撹鍙栫殑锛?
         
         Args:
-            insights: 洞察数据列表
+            insights: 娲炲療鏁版嵁鍒楄〃
         """
         self.stored_insights = insights
         
-        # 将数据同步到涌现检测器
+        # 灏嗘暟鎹悓姝ュ埌娑岀幇妫€娴嬪櫒
         self._sync_stored_to_emergence_detector()
         
-        print(f"[智能洞察引擎] 加载了 {len(insights)} 条存储的洞察数据")
+        print(f"[鏅鸿兘娲炲療寮曟搸] 鍔犺浇浜?{len(insights)} 鏉″瓨鍌ㄧ殑娲炲療鏁版嵁")
     
     def _sync_stored_to_emergence_detector(self):
-        """将存储的洞察数据同步到涌现检测器"""
+        """灏嗗瓨鍌ㄧ殑娲炲療鏁版嵁鍚屾鍒版秾鐜版娴嬪櫒"""
         from collections import defaultdict
         
-        # 按天聚合数据
+        # 鎸夊ぉ鑱氬悎鏁版嵁
         daily_data = defaultdict(lambda: defaultdict(list))
         
         for insight in self.stored_insights:
@@ -122,27 +126,27 @@ class SmartInsightEngine:
             category = insight.get("category", "")
             value = insight.get("value")
             
-            # 情绪数据
+            # 鎯呯华鏁版嵁
             if data_type == "emotion" and value is not None:
                 daily_data[day_key]["emotion_score"].append(value)
             
-            # 话题数据
+            # 璇濋鏁版嵁
             if data_type == "topic":
                 daily_data[day_key][f"topic_{category}"].append(1)
             
-            # 实体数据（健康、财务等）
+            # 瀹炰綋鏁版嵁锛堝仴搴枫€佽储鍔＄瓑锛?
             if data_type == "entity" and value is not None:
                 metadata = insight.get("metadata", {})
                 metric_type = metadata.get("metric_type", category)
                 daily_data[day_key][metric_type].append(value)
             
-            # 意图数据
+            # 鎰忓浘鏁版嵁
             if data_type == "intent":
                 metadata = insight.get("metadata", {})
                 intent_type = metadata.get("intent_type", "unknown")
                 daily_data[day_key][f"intent_{intent_type}"].append(1)
         
-        # 计算每天的平均值并添加到涌现检测器
+        # 璁＄畻姣忓ぉ鐨勫钩鍧囧€煎苟娣诲姞鍒版秾鐜版娴嬪櫒
         for day, metrics in sorted(daily_data.items()):
             try:
                 timestamp = datetime.strptime(day, "%Y-%m-%d")
@@ -157,13 +161,13 @@ class SmartInsightEngine:
     
     def process_conversation(self, messages: List[Dict[str, Any]]) -> List[ConversationInsight]:
         """
-        处理对话消息，提取洞察数据
+        澶勭悊瀵硅瘽娑堟伅锛屾彁鍙栨礊瀵熸暟鎹?
         
         Args:
-            messages: 消息列表 [{"role": "user", "content": "...", "id": "...", "metadata": {...}}]
+            messages: 娑堟伅鍒楄〃 [{"role": "user", "content": "...", "id": "...", "metadata": {...}}]
         
         Returns:
-            提取的洞察列表
+            鎻愬彇鐨勬礊瀵熷垪琛?
         """
         all_insights = []
         
@@ -176,13 +180,13 @@ class SmartInsightEngine:
             )
             all_insights.extend(insights)
         
-        # 将数据同步到涌现检测器
+        # 灏嗘暟鎹悓姝ュ埌娑岀幇妫€娴嬪櫒
         self._sync_to_emergence_detector()
         
         return all_insights
     
     def _sync_to_emergence_detector(self):
-        """将对话洞察同步到涌现检测器"""
+        """灏嗗璇濇礊瀵熷悓姝ュ埌娑岀幇妫€娴嬪櫒"""
         export_data = self.conversation_analyzer.export_for_emergence()
         
         for day, metrics in export_data.items():
@@ -191,55 +195,55 @@ class SmartInsightEngine:
     
     def generate_insights(self) -> List[SmartInsight]:
         """
-        生成智能洞察
+        鐢熸垚鏅鸿兘娲炲療
         
         Returns:
-            智能洞察列表
+            鏅鸿兘娲炲療鍒楄〃
         """
         new_insights = []
         
-        # 1. 检测涌现现象
+        # 1. 妫€娴嬫秾鐜扮幇璞?
         emergence_events = self.emergence_detector.detect_all_emergences()
         
-        # 2. 将涌现事件转换为智能洞察
+        # 2. 灏嗘秾鐜颁簨浠惰浆鎹负鏅鸿兘娲炲療
         for event in emergence_events:
             insight = self._convert_emergence_to_insight(event)
             if insight:
                 new_insights.append(insight)
         
-        # 3. 生成级联效应洞察
+        # 3. 鐢熸垚绾ц仈鏁堝簲娲炲療
         cascade_insights = self._detect_cascade_effects()
         new_insights.extend(cascade_insights)
         
-        # 4. 生成协同增益洞察
+        # 4. 鐢熸垚鍗忓悓澧炵泭娲炲療
         synergy_insights = self._detect_synergy_opportunities()
         new_insights.extend(synergy_insights)
         
-        # 5. 生成临界点预警
+        # 5. 鐢熸垚涓寸晫鐐归璀?
         tipping_insights = self._detect_tipping_points()
         new_insights.extend(tipping_insights)
         
-        # 6. 生成反馈环路洞察
+        # 6. 鐢熸垚鍙嶉鐜矾娲炲療
         loop_insights = self._detect_feedback_loops()
         new_insights.extend(loop_insights)
         
-        # 7. 生成行为模式洞察
+        # 7. 鐢熸垚琛屼负妯″紡娲炲療
         pattern_insights = self._detect_behavior_patterns()
         new_insights.extend(pattern_insights)
         
-        # 8. 按影响力排序
+        # 8. 鎸夊奖鍝嶅姏鎺掑簭
         new_insights.sort(key=lambda x: x.impact_score, reverse=True)
         
-        # 保存洞察
+        # 淇濆瓨娲炲療
         self.insights.extend(new_insights)
         
         return new_insights
     
     def _convert_emergence_to_insight(self, event: EmergenceEvent) -> Optional[SmartInsight]:
-        """将涌现事件转换为智能洞察"""
+        """灏嗘秾鐜颁簨浠惰浆鎹负鏅鸿兘娲炲療"""
         self.insight_counter += 1
         
-        # 根据涌现类型确定洞察分类和级别
+        # 鏍规嵁娑岀幇绫诲瀷纭畾娲炲療鍒嗙被鍜岀骇鍒?
         category_map = {
             EmergenceType.PATTERN: InsightCategory.PATTERN,
             EmergenceType.NONLINEAR: InsightCategory.ANOMALY,
@@ -256,12 +260,12 @@ class SmartInsightEngine:
             level = InsightLevel.SUGGESTION
         
         return SmartInsight(
-            insight_id=f"insight_{self.insight_counter}",
+            insight_id=self._gen_insight_id(),
             category=category_map.get(event.emergence_type, InsightCategory.PATTERN),
             level=level,
             title=self._generate_insight_title(event),
             description=event.description,
-            evidence=[f"检测到{event.emergence_type.value}类型的涌现现象"],
+            evidence=[f"妫€娴嬪埌{event.emergence_type.value}绫诲瀷鐨勬秾鐜扮幇璞?],
             recommendations=self._generate_recommendations(event),
             confidence=event.confidence,
             impact_score=event.strength * 100,
@@ -269,74 +273,74 @@ class SmartInsightEngine:
         )
     
     def _generate_insight_title(self, event: EmergenceEvent) -> str:
-        """生成洞察标题"""
+        """鐢熸垚娲炲療鏍囬"""
         type_titles = {
-            EmergenceType.PATTERN: "发现新模式",
-            EmergenceType.NONLINEAR: "非线性变化",
-            EmergenceType.SYNERGY: "协同效应",
-            EmergenceType.FEEDBACK_LOOP: "反馈循环",
-            EmergenceType.THRESHOLD: "临界点预警",
-            EmergenceType.BIFURCATION: "行为分化",
+            EmergenceType.PATTERN: "鍙戠幇鏂版ā寮?,
+            EmergenceType.NONLINEAR: "闈炵嚎鎬у彉鍖?,
+            EmergenceType.SYNERGY: "鍗忓悓鏁堝簲",
+            EmergenceType.FEEDBACK_LOOP: "鍙嶉寰幆",
+            EmergenceType.THRESHOLD: "涓寸晫鐐归璀?,
+            EmergenceType.BIFURCATION: "琛屼负鍒嗗寲",
         }
-        return type_titles.get(event.emergence_type, "新发现")
+        return type_titles.get(event.emergence_type, "鏂板彂鐜?)
     
     def _generate_recommendations(self, event: EmergenceEvent) -> List[str]:
-        """生成建议"""
+        """鐢熸垚寤鸿"""
         recommendations = []
         
         if event.emergence_type == EmergenceType.FEEDBACK_LOOP:
             if event.strength > 0.7:
-                recommendations.append("这是一个强反馈循环，建议主动干预打破负向循环")
-            recommendations.append("关注循环中的关键节点，小改变可能带来大效果")
+                recommendations.append("杩欐槸涓€涓己鍙嶉寰幆锛屽缓璁富鍔ㄥ共棰勬墦鐮磋礋鍚戝惊鐜?)
+            recommendations.append("鍏虫敞寰幆涓殑鍏抽敭鑺傜偣锛屽皬鏀瑰彉鍙兘甯︽潵澶ф晥鏋?)
         
         elif event.emergence_type == EmergenceType.THRESHOLD:
-            recommendations.append("你正接近一个临界点，建议提前采取行动")
-            recommendations.append("监控相关指标的变化趋势")
+            recommendations.append("浣犳鎺ヨ繎涓€涓复鐣岀偣锛屽缓璁彁鍓嶉噰鍙栬鍔?)
+            recommendations.append("鐩戞帶鐩稿叧鎸囨爣鐨勫彉鍖栬秼鍔?)
         
         elif event.emergence_type == EmergenceType.SYNERGY:
-            recommendations.append("继续保持这些行为的组合，它们产生了协同效应")
-            recommendations.append("尝试增加这些活动的频率")
+            recommendations.append("缁х画淇濇寔杩欎簺琛屼负鐨勭粍鍚堬紝瀹冧滑浜х敓浜嗗崗鍚屾晥搴?)
+            recommendations.append("灏濊瘯澧炲姞杩欎簺娲诲姩鐨勯鐜?)
         
         elif event.emergence_type == EmergenceType.PATTERN:
-            recommendations.append("这个模式值得关注，可能揭示了深层规律")
+            recommendations.append("杩欎釜妯″紡鍊煎緱鍏虫敞锛屽彲鑳芥彮绀轰簡娣卞眰瑙勫緥")
         
         return recommendations
     
     def _detect_cascade_effects(self) -> List[SmartInsight]:
-        """检测级联效应"""
+        """妫€娴嬬骇鑱旀晥搴?""
         insights = []
         
-        # 获取情绪趋势
+        # 鑾峰彇鎯呯华瓒嬪娍
         emotion_trend = self.conversation_analyzer.get_emotion_trend(days=14)
         
         if len(emotion_trend) >= 3:
-            # 检测情绪下降是否伴随其他指标变化
+            # 妫€娴嬫儏缁笅闄嶆槸鍚︿即闅忓叾浠栨寚鏍囧彉鍖?
             recent_emotions = [d["avg_emotion"] for d in emotion_trend[-3:]]
             if all(recent_emotions[i] < recent_emotions[i-1] for i in range(1, len(recent_emotions))):
-                # 情绪持续下降
+                # 鎯呯华鎸佺画涓嬮檷
                 self.insight_counter += 1
                 insights.append(SmartInsight(
-                    insight_id=f"insight_{self.insight_counter}",
+                    insight_id=self._gen_insight_id(),
                     category=InsightCategory.CASCADE,
                     level=InsightLevel.WARNING,
-                    title="情绪级联下降",
-                    description="你的情绪在过去几天持续下降，这可能会影响到工作效率、社交意愿和睡眠质量",
+                    title="鎯呯华绾ц仈涓嬮檷",
+                    description="浣犵殑鎯呯华鍦ㄨ繃鍘诲嚑澶╂寔缁笅闄嶏紝杩欏彲鑳戒細褰卞搷鍒板伐浣滄晥鐜囥€佺ぞ浜ゆ剰鎰垮拰鐫＄湢璐ㄩ噺",
                     evidence=[
-                        f"情绪从 {recent_emotions[0]:.1f} 下降到 {recent_emotions[-1]:.1f}",
-                        "连续3天呈下降趋势"
+                        f"鎯呯华浠?{recent_emotions[0]:.1f} 涓嬮檷鍒?{recent_emotions[-1]:.1f}",
+                        "杩炵画3澶╁憟涓嬮檷瓒嬪娍"
                     ],
                     recommendations=[
-                        "尝试进行一些让你开心的活动",
-                        "与朋友或家人聊聊天",
-                        "保证充足的睡眠",
-                        "适当运动可以改善情绪"
+                        "灏濊瘯杩涜涓€浜涜浣犲紑蹇冪殑娲诲姩",
+                        "涓庢湅鍙嬫垨瀹朵汉鑱婅亰澶?,
+                        "淇濊瘉鍏呰冻鐨勭潯鐪?,
+                        "閫傚綋杩愬姩鍙互鏀瑰杽鎯呯华"
                     ],
                     confidence=0.8,
                     impact_score=75,
                     related_metrics=["emotion_score"],
                     visualization_data={
                         "type": "cascade_flow",
-                        "nodes": ["情绪下降", "工作效率↓", "社交意愿↓", "睡眠质量↓"],
+                        "nodes": ["鎯呯华涓嬮檷", "宸ヤ綔鏁堢巼鈫?, "绀句氦鎰忔効鈫?, "鐫＄湢璐ㄩ噺鈫?],
                         "trend": emotion_trend
                     }
                 ))
@@ -344,36 +348,36 @@ class SmartInsightEngine:
         return insights
     
     def _detect_synergy_opportunities(self) -> List[SmartInsight]:
-        """检测协同增益机会"""
+        """妫€娴嬪崗鍚屽鐩婃満浼?""
         insights = []
         
-        # 获取话题分布
+        # 鑾峰彇璇濋鍒嗗竷
         topic_dist = self.conversation_analyzer.get_topic_distribution(days=7)
         
-        # 检测健康+社交的协同
+        # 妫€娴嬪仴搴?绀句氦鐨勫崗鍚?
         if topic_dist.get("health", 0) > 2 and topic_dist.get("social", 0) > 2:
             self.insight_counter += 1
             insights.append(SmartInsight(
-                insight_id=f"insight_{self.insight_counter}",
+                insight_id=self._gen_insight_id(),
                 category=InsightCategory.SYNERGY,
                 level=InsightLevel.SUGGESTION,
-                title="健康与社交的协同机会",
-                description="你最近同时关注健康和社交话题，研究表明将两者结合（如约朋友一起运动）效果更好",
+                title="鍋ュ悍涓庣ぞ浜ょ殑鍗忓悓鏈轰細",
+                description="浣犳渶杩戝悓鏃跺叧娉ㄥ仴搴峰拰绀句氦璇濋锛岀爺绌惰〃鏄庡皢涓よ€呯粨鍚堬紙濡傜害鏈嬪弸涓€璧疯繍鍔級鏁堟灉鏇村ソ",
                 evidence=[
-                    f"健康话题出现 {topic_dist.get('health', 0)} 次",
-                    f"社交话题出现 {topic_dist.get('social', 0)} 次"
+                    f"鍋ュ悍璇濋鍑虹幇 {topic_dist.get('health', 0)} 娆?,
+                    f"绀句氦璇濋鍑虹幇 {topic_dist.get('social', 0)} 娆?
                 ],
                 recommendations=[
-                    "尝试约朋友一起跑步或健身",
-                    "参加团体运动活动",
-                    "组织户外徒步聚会"
+                    "灏濊瘯绾︽湅鍙嬩竴璧疯窇姝ユ垨鍋ヨ韩",
+                    "鍙傚姞鍥綋杩愬姩娲诲姩",
+                    "缁勭粐鎴峰寰掓鑱氫細"
                 ],
                 confidence=0.75,
                 impact_score=65,
                 related_metrics=["health", "social"],
                 visualization_data={
                     "type": "synergy_diagram",
-                    "factors": ["健康活动", "社交活动"],
+                    "factors": ["鍋ュ悍娲诲姩", "绀句氦娲诲姩"],
                     "combined_effect": "1+1>2"
                 }
             ))
@@ -381,10 +385,10 @@ class SmartInsightEngine:
         return insights
     
     def _detect_tipping_points(self) -> List[SmartInsight]:
-        """检测临界点"""
+        """妫€娴嬩复鐣岀偣"""
         insights = []
         
-        # 获取情绪数据
+        # 鑾峰彇鎯呯华鏁版嵁
         emotion_insights = self.conversation_analyzer.get_insights_by_category("emotion", days=7)
         
         if emotion_insights:
@@ -392,24 +396,24 @@ class SmartInsightEngine:
             if emotion_values:
                 avg_emotion = sum(emotion_values) / len(emotion_values)
                 
-                # 情绪临界点检测
-                if avg_emotion < 4:  # 低于4分是危险区
+                # 鎯呯华涓寸晫鐐规娴?
+                if avg_emotion < 4:  # 浣庝簬4鍒嗘槸鍗遍櫓鍖?
                     self.insight_counter += 1
                     insights.append(SmartInsight(
-                        insight_id=f"insight_{self.insight_counter}",
+                        insight_id=self._gen_insight_id(),
                         category=InsightCategory.TIPPING_POINT,
                         level=InsightLevel.CRITICAL,
-                        title="情绪临界点预警",
-                        description=f"你的平均情绪分数为 {avg_emotion:.1f}，已接近临界点。持续低迷可能导致更严重的问题",
+                        title="鎯呯华涓寸晫鐐归璀?,
+                        description=f"浣犵殑骞冲潎鎯呯华鍒嗘暟涓?{avg_emotion:.1f}锛屽凡鎺ヨ繎涓寸晫鐐广€傛寔缁綆杩峰彲鑳藉鑷存洿涓ラ噸鐨勯棶棰?,
                         evidence=[
-                            f"7天平均情绪: {avg_emotion:.1f}/10",
-                            f"检测到 {len(emotion_values)} 次情绪记录"
+                            f"7澶╁钩鍧囨儏缁? {avg_emotion:.1f}/10",
+                            f"妫€娴嬪埌 {len(emotion_values)} 娆℃儏缁褰?
                         ],
                         recommendations=[
-                            "建议与信任的人倾诉",
-                            "考虑寻求专业帮助",
-                            "尝试正念冥想或深呼吸",
-                            "保证基本的作息规律"
+                            "寤鸿涓庝俊浠荤殑浜哄€捐瘔",
+                            "鑰冭檻瀵绘眰涓撲笟甯姪",
+                            "灏濊瘯姝ｅ康鍐ユ兂鎴栨繁鍛煎惛",
+                            "淇濊瘉鍩烘湰鐨勪綔鎭寰?
                         ],
                         confidence=0.85,
                         impact_score=90,
@@ -427,53 +431,53 @@ class SmartInsightEngine:
         return insights
     
     def _detect_feedback_loops(self) -> List[SmartInsight]:
-        """检测反馈环路"""
+        """妫€娴嬪弽棣堢幆璺?""
         insights = []
         
-        # 从对话中检测可能的反馈循环模式
+        # 浠庡璇濅腑妫€娴嬪彲鑳界殑鍙嶉寰幆妯″紡
         topic_dist = self.conversation_analyzer.get_topic_distribution(days=14)
         emotion_trend = self.conversation_analyzer.get_emotion_trend(days=14)
         
-        # 检测压力-情绪负向循环
-        if topic_dist.get("work", 0) > 5:  # 工作话题频繁
+        # 妫€娴嬪帇鍔?鎯呯华璐熷悜寰幆
+        if topic_dist.get("work", 0) > 5:  # 宸ヤ綔璇濋棰戠箒
             if emotion_trend and len(emotion_trend) >= 3:
                 recent_avg = sum(d["avg_emotion"] for d in emotion_trend[-3:]) / 3
-                if recent_avg < 5:  # 情绪偏低
+                if recent_avg < 5:  # 鎯呯华鍋忎綆
                     self.insight_counter += 1
                     insights.append(SmartInsight(
-                        insight_id=f"insight_{self.insight_counter}",
+                        insight_id=self._gen_insight_id(),
                         category=InsightCategory.FEEDBACK_LOOP,
                         level=InsightLevel.WARNING,
-                        title="工作压力-情绪负向循环",
-                        description="检测到可能的负向反馈循环：工作压力大 → 情绪低落 → 效率下降 → 更大压力",
+                        title="宸ヤ綔鍘嬪姏-鎯呯华璐熷悜寰幆",
+                        description="妫€娴嬪埌鍙兘鐨勮礋鍚戝弽棣堝惊鐜細宸ヤ綔鍘嬪姏澶?鈫?鎯呯华浣庤惤 鈫?鏁堢巼涓嬮檷 鈫?鏇村ぇ鍘嬪姏",
                         evidence=[
-                            f"工作相关话题出现 {topic_dist.get('work', 0)} 次",
-                            f"近期平均情绪: {recent_avg:.1f}/10"
+                            f"宸ヤ綔鐩稿叧璇濋鍑虹幇 {topic_dist.get('work', 0)} 娆?,
+                            f"杩戞湡骞冲潎鎯呯华: {recent_avg:.1f}/10"
                         ],
                         recommendations=[
-                            "尝试打破循环：先处理情绪，再处理工作",
-                            "设定工作边界，避免过度投入",
-                            "每天留出放松时间",
-                            "将大任务分解为小步骤"
+                            "灏濊瘯鎵撶牬寰幆锛氬厛澶勭悊鎯呯华锛屽啀澶勭悊宸ヤ綔",
+                            "璁惧畾宸ヤ綔杈圭晫锛岄伩鍏嶈繃搴︽姇鍏?,
+                            "姣忓ぉ鐣欏嚭鏀炬澗鏃堕棿",
+                            "灏嗗ぇ浠诲姟鍒嗚В涓哄皬姝ラ"
                         ],
                         confidence=0.7,
                         impact_score=80,
                         related_metrics=["work", "emotion_score"],
                         visualization_data={
                             "type": "loop_diagram",
-                            "nodes": ["工作压力", "情绪低落", "效率下降", "更大压力"],
+                            "nodes": ["宸ヤ綔鍘嬪姏", "鎯呯华浣庤惤", "鏁堢巼涓嬮檷", "鏇村ぇ鍘嬪姏"],
                             "loop_type": "negative",
-                            "break_points": ["情绪低落"]
+                            "break_points": ["鎯呯华浣庤惤"]
                         }
                     ))
         
         return insights
     
     def _detect_behavior_patterns(self) -> List[SmartInsight]:
-        """检测行为模式"""
+        """妫€娴嬭涓烘ā寮?""
         insights = []
         
-        # 获取意图分布
+        # 鑾峰彇鎰忓浘鍒嗗竷
         intent_insights = [
             i for i in self.conversation_analyzer.insights
             if i.data_type == DataType.INTENT
@@ -484,22 +488,22 @@ class SmartInsightEngine:
             intent_type = insight.metadata.get("intent_type", "unknown")
             intent_counts[intent_type] += 1
         
-        # 检测频繁寻求建议的模式
+        # 妫€娴嬮绻佸姹傚缓璁殑妯″紡
         if intent_counts.get("seeking_advice", 0) > 5:
             self.insight_counter += 1
             insights.append(SmartInsight(
-                insight_id=f"insight_{self.insight_counter}",
+                insight_id=self._gen_insight_id(),
                 category=InsightCategory.PATTERN,
                 level=InsightLevel.INFO,
-                title="决策支持需求模式",
-                description="你最近频繁寻求建议，这可能表示你正面临一些需要决策的事情",
+                title="鍐崇瓥鏀寔闇€姹傛ā寮?,
+                description="浣犳渶杩戦绻佸姹傚缓璁紝杩欏彲鑳借〃绀轰綘姝ｉ潰涓翠竴浜涢渶瑕佸喅绛栫殑浜嬫儏",
                 evidence=[
-                    f"寻求建议的对话出现 {intent_counts.get('seeking_advice', 0)} 次"
+                    f"瀵绘眰寤鸿鐨勫璇濆嚭鐜?{intent_counts.get('seeking_advice', 0)} 娆?
                 ],
                 recommendations=[
-                    "尝试使用决策副本功能进行深度分析",
-                    "列出决策的利弊清单",
-                    "给自己设定决策截止时间"
+                    "灏濊瘯浣跨敤鍐崇瓥鍓湰鍔熻兘杩涜娣卞害鍒嗘瀽",
+                    "鍒楀嚭鍐崇瓥鐨勫埄寮婃竻鍗?,
+                    "缁欒嚜宸辫瀹氬喅绛栨埅姝㈡椂闂?
                 ],
                 confidence=0.7,
                 impact_score=50,
@@ -510,22 +514,22 @@ class SmartInsightEngine:
                 }
             ))
         
-        # 检测频繁抱怨的模式
+        # 妫€娴嬮绻佹姳鎬ㄧ殑妯″紡
         if intent_counts.get("complaining", 0) > 3:
             self.insight_counter += 1
             insights.append(SmartInsight(
-                insight_id=f"insight_{self.insight_counter}",
+                insight_id=self._gen_insight_id(),
                 category=InsightCategory.PATTERN,
                 level=InsightLevel.SUGGESTION,
-                title="负面表达增多",
-                description="最近你的对话中负面表达增多，这可能反映了一些潜在的不满或压力",
+                title="璐熼潰琛ㄨ揪澧炲",
+                description="鏈€杩戜綘鐨勫璇濅腑璐熼潰琛ㄨ揪澧炲锛岃繖鍙兘鍙嶆槧浜嗕竴浜涙綔鍦ㄧ殑涓嶆弧鎴栧帇鍔?,
                 evidence=[
-                    f"抱怨类表达出现 {intent_counts.get('complaining', 0)} 次"
+                    f"鎶辨€ㄧ被琛ㄨ揪鍑虹幇 {intent_counts.get('complaining', 0)} 娆?
                 ],
                 recommendations=[
-                    "尝试将抱怨转化为具体的问题描述",
-                    "思考哪些是可以改变的，哪些需要接受",
-                    "与朋友倾诉或写日记释放情绪"
+                    "灏濊瘯灏嗘姳鎬ㄨ浆鍖栦负鍏蜂綋鐨勯棶棰樻弿杩?,
+                    "鎬濊€冨摢浜涙槸鍙互鏀瑰彉鐨勶紝鍝簺闇€瑕佹帴鍙?,
+                    "涓庢湅鍙嬪€捐瘔鎴栧啓鏃ヨ閲婃斁鎯呯华"
                 ],
                 confidence=0.65,
                 impact_score=55,
@@ -535,7 +539,7 @@ class SmartInsightEngine:
         return insights
     
     def get_dashboard_data(self) -> Dict[str, Any]:
-        """获取仪表盘数据"""
+        """鑾峰彇浠〃鐩樻暟鎹?""
         return {
             "user_id": self.user_id,
             "generated_at": datetime.now().isoformat(),
@@ -552,19 +556,19 @@ class SmartInsightEngine:
         }
     
     def get_insights_by_level(self, level: InsightLevel) -> List[SmartInsight]:
-        """按级别获取洞察"""
+        """鎸夌骇鍒幏鍙栨礊瀵?""
         return [i for i in self.insights if i.level == level]
     
     def get_insights_by_category(self, category: InsightCategory) -> List[SmartInsight]:
-        """按分类获取洞察"""
+        """鎸夊垎绫昏幏鍙栨礊瀵?""
         return [i for i in self.insights if i.category == category]
 
 
-# 全局实例缓存
+# 鍏ㄥ眬瀹炰緥缂撳瓨
 _engines: Dict[str, SmartInsightEngine] = {}
 
 def get_smart_insight_engine(user_id: str) -> SmartInsightEngine:
-    """获取智能洞察引擎实例"""
+    """鑾峰彇鏅鸿兘娲炲療寮曟搸瀹炰緥"""
     if user_id not in _engines:
         _engines[user_id] = SmartInsightEngine(user_id)
     return _engines[user_id]

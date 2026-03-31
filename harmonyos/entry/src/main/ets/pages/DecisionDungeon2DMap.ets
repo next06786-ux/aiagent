@@ -689,6 +689,28 @@ struct DecisionDungeon2DMap {
 
   @Builder
   buildNodeCards() {
+    if (this.nodes.length === 0) {
+      // 历史记录无节点数据时显示推荐结论
+      Column({ space: 16 }) {
+        SimpleIcon({ iconName: 'comparison', iconSize: 40, color: Theme.Color.TextTertiary })
+        Text('历史推演节点数据未保存').fontSize(15).fontColor(Theme.Color.TextSecondary)
+        if (this.dungeonData?.recommendation) {
+          Column({ space: 8 }) {
+            Text('AI 推荐结论').fontSize(14).fontWeight(600).fontColor(Theme.Color.Primary)
+            Text(this.dungeonData.recommendation)
+              .fontSize(14).fontColor(Theme.Color.TextSecondary).lineHeight(22)
+          }
+          .width('100%').padding(16)
+          .backgroundColor('rgba(10,89,247,0.04)')
+          .borderRadius(Theme.Radius.l)
+        }
+        Text('新的推演会保存完整节点数据')
+          .fontSize(12).fontColor(Theme.Color.TextTertiary)
+      }
+      .width('100%').layoutWeight(1)
+      .padding(32)
+      .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+    } else {
     // 2D可视化画布 - 可拖拽缩放
     Scroll() {
       Scroll() {
@@ -737,6 +759,7 @@ struct DecisionDungeon2DMap {
             .border({ width: 1, color: this.selectedNodeId === node.id ? 'rgba(10, 89, 247, 0.2)' : Theme.Color.BorderLight })
             .shadow(Theme.Shadow.Soft)
             .position({ x: node.position.x * this.zoomScale - 20, y: node.position.y * this.zoomScale - 20 })
+            .scale({ x: this.zoomScale, y: this.zoomScale, centerX: 0, centerY: 0 })
             .onClick(() => { this.selectedNodeId = node.id; this.showDetail = true })
           })
         }
@@ -748,8 +771,10 @@ struct DecisionDungeon2DMap {
               this.zoomScaleBase = this.zoomScale
             })
             .onActionUpdate((event: GestureEvent) => {
-              const newScale = Math.max(0.4, Math.min(2.0, this.zoomScaleBase * event.scale))
-              this.zoomScale = newScale
+              const newScale = Math.max(0.5, Math.min(1.8, this.zoomScaleBase * event.scale))
+              animateTo({ duration: 50, curve: Curve.Linear }, () => {
+                this.zoomScale = newScale
+              })
               this.drawCanvas()
             })
         )
@@ -758,6 +783,7 @@ struct DecisionDungeon2DMap {
     }
     .scrollable(ScrollDirection.Vertical).scrollBar(BarState.Auto)
     .layoutWeight(1)
+    } // end else (has nodes)
   }
 
   @Builder

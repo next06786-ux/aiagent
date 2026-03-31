@@ -927,9 +927,10 @@ struct KnowledgeStarMapGL {
           }
           .alignItems(HorizontalAlign.End)
         }
-        .position({ x: '100%', y: 8 })
-        .translate({ x: -16 })
-        .alignItems(VerticalAlign.Top)
+        .position({ x: 0, y: 64 })
+        .width('100%')
+        .justifyContent(FlexAlign.End)
+        .padding({ right: 12 })
         .zIndex(1000)
         .hitTestBehavior(HitTestMode.Block)
       }
