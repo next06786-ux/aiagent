@@ -204,7 +204,7 @@ struct DecisionDungeon2DMap {
     const summaries: OptionSummary[] = []
     this.dungeonData.options.forEach((opt: DungeonOption, oi: number) => {
       summaries.push({ index: oi, title: opt.title, color: this.optColor(oi),
-        finalScore: opt.final_score, riskLevel: opt.risk_level, status: '推演完成', progress: 1 })
+        finalScore: opt.final_score || 0, riskLevel: opt.risk_level || 0, status: '推演完成', progress: 1 })
       const rootId = `root_${oi}`
       allNodes.push({ id: rootId, parentId: '', title: opt.title, description: '起点',
         month: 0, probability: 1, position: { x: 60, y: 300 },

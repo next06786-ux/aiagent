@@ -12,6 +12,10 @@ import router from '@ohos.router'
 
 interface StatDelta { emotion: number; finance: number; social: number; health: number; growth: number; confidence: number; stress: number }
 
+interface Stats { emotion: number; finance: number; social: number; health: number; growth: number; confidence: number; stress: number }
+
+interface StatLabel { k: string; l: string }
+
 interface GameOption {
   id: string
   text: string
@@ -52,8 +56,6 @@ interface ChoiceRecord {
   option_id: string
   choice_time_ms: number
 }
-
-interface Stats { emotion: number; finance: number; social: number; health: number; growth: number; confidence: number; stress: number }
 
 @Entry
 @Component
@@ -297,6 +299,23 @@ struct ParallelLifeGame {
   deltaText(v: number): string { return v > 0 ? `+${v}` : `${v}` }
   accentColor(): string { return this.currentChapter?.accent ?? '#6B48FF' }
 
+  // 获取 delta 中某个维度的值
+  getDeltaVal(delta: StatDelta, key: string): number {
+    if (key === 'emotion') return delta.emotion
+    if (key === 'finance') return delta.finance
+    if (key === 'social') return delta.social
+    if (key === 'health') return delta.health
+    if (key === 'growth') return delta.growth
+    if (key === 'confidence') return delta.confidence
+    if (key === 'stress') return delta.stress
+    return 0
+  }
+
+  private statLabels: StatLabel[] = [
+    { k: 'emotion', l: '情绪' }, { k: 'finance', l: '财务' }, { k: 'social', l: '社交' },
+    { k: 'health', l: '健康' }, { k: 'growth', l: '成长' }, { k: 'confidence', l: '自信' }, { k: 'stress', l: '压力' }
+  ]
+
   // ── build ──────────────────────────────────────────────────────────────
   build() {
     Stack() {
@@ -353,17 +372,13 @@ struct ParallelLifeGame {
           Scroll() {
             Row({ space: 8 }) {
               ForEach(
-                [
-                  { k: 'emotion', l: '情绪' }, { k: 'finance', l: '财务' }, { k: 'social', l: '社交' },
-                  { k: 'health', l: '健康' }, { k: 'growth', l: '成长' }, { k: 'confidence', l: '自信' }, { k: 'stress', l: '压力' }
-                ].filter(d => (this.lastDelta as Record<string, number>)[d.k] !== 0 && (this.lastDelta as Record<string, number>)[d.k] !== undefined),
-                (d: Record<string, string>) => {
-                  const val = (this.lastDelta as Record<string, number>)[d.k] as number
-                  Text(`${d.l}${this.deltaText(val)}`)
+                this.statLabels.filter((d: StatLabel) => this.getDeltaVal(this.lastDelta, d.k) !== 0),
+                (d: StatLabel) => {
+                  Text(`${d.l}${this.deltaText(this.getDeltaVal(this.lastDelta, d.k))}`)
                     .fontSize(12).fontWeight(600)
-                    .fontColor(val > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                    .fontColor(this.getDeltaVal(this.lastDelta, d.k) > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
                     .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                    .backgroundColor(val > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                    .backgroundColor(this.getDeltaVal(this.lastDelta, d.k) > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
                     .borderRadius(Theme.Radius.round)
                 }
               )
@@ -896,16 +911,12 @@ struct ParallelLifeGame {
                     Scroll() {
                       Row({ space: 6 }) {
                         ForEach(
-                          [
-                            { k: 'emotion', l: '情绪' }, { k: 'finance', l: '财务' }, { k: 'social', l: '社交' },
-                            { k: 'health', l: '健康' }, { k: 'growth', l: '成长' }, { k: 'confidence', l: '自信' }, { k: 'stress', l: '压力' }
-                          ].filter(d => (opt.delta as Record<string, number>)[d.k] !== 0 && (opt.delta as Record<string, number>)[d.k] !== undefined),
-                          (d: Record<string, string>) => {
-                            const val = (opt.delta as Record<string, number>)[d.k] as number
-                            Text(`${d.l}${this.deltaText(val)}`)
-                              .fontSize(10).fontColor(val > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                          this.statLabels.filter((d: StatLabel) => this.getDeltaVal(opt.delta, d.k) !== 0),
+                          (d: StatLabel) => {
+                            Text(`${d.l}${this.deltaText(this.getDeltaVal(opt.delta, d.k))}`)
+                              .fontSize(10).fontColor(this.getDeltaVal(opt.delta, d.k) > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
                               .padding({ left: 5, right: 5, top: 2, bottom: 2 })
-                              .backgroundColor(val > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                              .backgroundColor(this.getDeltaVal(opt.delta, d.k) > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
                               .borderRadius(Theme.Radius.round)
                           }
                         )

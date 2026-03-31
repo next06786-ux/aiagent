@@ -288,16 +288,8 @@ struct QuickDecisionInput {
         .alignItems(HorizontalAlign.Center)
         .margin({ right: 16, bottom: 80 })
         .onClick(() => {
-          router.pushUrl({
-            url: 'pages/DecisionDungeon2DMap',
-            params: {
-              dungeonId: this.activeSimulationId,
-              userId: this.userId,
-              question: this.activeSimulationQuestion,
-              recommendation: '',
-              isHistory: 'true'
-            }
-          })
+          // 推演进行中：直接返回到推演页面（它还在路由栈里）
+          try { router.back() } catch (e) {}
         })
         .stateStyles({
           pressed: { .scale({ x: 0.9, y: 0.9 }) },

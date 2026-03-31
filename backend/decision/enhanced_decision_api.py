@@ -268,7 +268,7 @@ class SimulateWithCollectedInfoRequest(BaseModel):
 
 @router.get("/record/{simulation_id}")
 async def get_decision_record(simulation_id: str):
-    """获取单条决策推演记录详情"""
+    """获取单条决策推演记录详情（含完整 timeline）"""
     try:
         from backend.database.models import Database
         from backend.database.config import DatabaseConfig
@@ -277,7 +277,7 @@ async def get_decision_record(simulation_id: str):
         db_session = db.get_session()
         row = db_session.execute(
             sqlalchemy.text("""
-                SELECT simulation_id, user_id, question, options_count, recommendation, created_at
+                SELECT simulation_id, user_id, question, options_count, recommendation, timeline_data, created_at
                 FROM decision_records WHERE simulation_id = :sid
             """),
             {"sid": simulation_id}
@@ -285,6 +285,15 @@ async def get_decision_record(simulation_id: str):
         db_session.close()
         if not row:
             return {"code": 404, "message": "记录不存在", "data": None}
+
+        # 解析 timeline_data
+        options = []
+        if row[5]:
+            try:
+                options = json.loads(row[5])
+            except Exception:
+                options = []
+
         return {
             "code": 200,
             "data": {
@@ -293,8 +302,8 @@ async def get_decision_record(simulation_id: str):
                 "question": row[2] or "",
                 "options_count": row[3] or 0,
                 "recommendation": row[4] or "",
-                "created_at": row[5] or "",
-                "options": []  # 历史推演节点数据暂不存储，只显示推荐结论
+                "options": options,
+                "created_at": row[6] or "",
             }
         }
     except Exception as e:
@@ -1162,16 +1171,50 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 # 用原生SQL插入，避免模型定义问题
                 db_session.execute(
                     __import__('sqlalchemy').text("""
-                        INSERT IGNORE INTO decision_records 
-                        (simulation_id, user_id, question, options_count, recommendation, created_at)
-                        VALUES (:sid, :uid, :q, :oc, :rec, :ca)
+                        CREATE TABLE IF NOT EXISTS decision_records (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            simulation_id VARCHAR(100) UNIQUE NOT NULL,
+                            user_id VARCHAR(100) NOT NULL,
+                            question TEXT,
+                            options_count INT DEFAULT 0,
+                            recommendation TEXT,
+                            timeline_data LONGTEXT,
+                            created_at VARCHAR(50),
+                            INDEX idx_user_id (user_id)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """)
+                )
+                db_session.commit()
+
+                # 序列化完整的 timeline 数据
+                timeline_json = json.dumps([
+                    {
+                        "option_id": opt.option_id,
+                        "title": opt.title,
+                        "description": opt.description,
+                        "final_score": opt.final_score,
+                        "risk_level": opt.risk_level,
+                        "timeline": [asdict(e) for e in opt.timeline]
+                    }
+                    for opt in simulated_options
+                ], ensure_ascii=False)
+
+                db_session.execute(
+                    __import__('sqlalchemy').text("""
+                        INSERT INTO decision_records 
+                        (simulation_id, user_id, question, options_count, recommendation, timeline_data, created_at)
+                        VALUES (:sid, :uid, :q, :oc, :rec, :td, :ca)
+                        ON DUPLICATE KEY UPDATE
+                        recommendation = VALUES(recommendation),
+                        timeline_data = VALUES(timeline_data)
                     """),
                     {
                         "sid": simulation_id,
                         "uid": user_id,
                         "q": question[:500],
                         "oc": len(options),
-                        "rec": recommendation[:1000] if recommendation else "",
+                        "rec": recommendation[:2000] if recommendation else "",
+                        "td": timeline_json,
                         "ca": datetime.now().isoformat()
                     }
                 )
