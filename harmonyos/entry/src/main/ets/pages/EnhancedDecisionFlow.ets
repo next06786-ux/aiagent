@@ -301,17 +301,30 @@ struct EnhancedDecisionFlow {
                          userResponse.toLowerCase().includes('no')
 
     if (!hasNoOptions) {
-      // 用户提供了选项，解析它们
+      // 提取用户提到的选项线索（传给后端让大模型润色）
       this.userOptions = userResponse.split(/[,，、]/).map(opt => opt.trim()).filter(opt => opt.length > 0)
     }
 
-    // 请求 AI 生成建议选项
+    // 添加等待提示
+    this.messages.push({
+      role: 'system',
+      content: '正在分析你的情况，规划决策选项...',
+      timestamp: new Date().toISOString()
+    })
+
+    // 请求大模型统一规划选项（润色用户选项 + 补充AI建议）
     await this.generateAISuggestions()
     
+    // 移除等待提示
+    const lastMsg = this.messages[this.messages.length - 1]
+    if (lastMsg && lastMsg.role === 'system' && lastMsg.content.includes('正在分析')) {
+      this.messages.pop()
+    }
+
     this.isLoading = false
   }
 
-  // 生成 AI 建议选项
+  // 统一选项规划：由大模型基于完整信息生成结构化选项
   private async generateAISuggestions(): Promise<void> {
     try {
       const httpRequest = http.createHttp()
@@ -324,8 +337,8 @@ struct EnhancedDecisionFlow {
             session_id: this.sessionId,
             user_options: this.userOptions
           }),
-          connectTimeout: 30000,
-          readTimeout: 30000
+          connectTimeout: 60000,
+          readTimeout: 60000
         }
       )
       httpRequest.destroy()
@@ -335,57 +348,38 @@ struct EnhancedDecisionFlow {
         if (result.code === 200 && result.data) {
           const data = result.data as Record<string, Object>
           const aiOptions = data.ai_options as OptionInput[]
-          this.aiSuggestedOptions = aiOptions
-
-          // 合并所有选项，优先用户选项，总数不超过4个
+          
+          // 后端已经统一规划好了所有选项（包括润色后的用户选项和AI补充选项）
+          // 直接使用后端返回的结果，不再手动拼接粗糙的用户输入
           this.allOptions = []
-          
-          // 添加用户选项（优先）
-          for (const userOpt of this.userOptions) {
+          for (const opt of aiOptions) {
             if (this.allOptions.length >= 4) break
-            const opt: OptionInput = { title: userOpt, description: `你提出的选择` }
-            this.allOptions.push(opt)
-          }
-          
-          // 添加 AI 建议（补充到4个以内）
-          for (const aiOpt of this.aiSuggestedOptions) {
-            if (this.allOptions.length >= 4) break
-            this.allOptions.push(aiOpt)
-          }
-
-          // 也检查信息收集阶段提取到的选项
-          if (this.collectedInfo && this.collectedInfo.options_mentioned.length > 0 && this.userOptions.length === 0) {
-            // 用户没有明确给选项，但信息收集阶段提取到了
-            const existingTitles = this.allOptions.map(o => o.title)
-            for (const mentioned of this.collectedInfo.options_mentioned) {
-              if (this.allOptions.length >= 4) break
-              if (!existingTitles.includes(mentioned)) {
-                this.allOptions.unshift({ title: mentioned, description: '信息收集中提到的选项' })
-              }
+            if (opt.title && opt.title.length >= 2) {
+              this.allOptions.push(opt)
             }
-            // 再次限制到4个
-            this.allOptions = this.allOptions.slice(0, 4)
           }
 
-          // 显示选项确认
-          this.showOptionsConfirmation()
+          if (this.allOptions.length >= 2) {
+            this.showOptionsConfirmation()
+            return
+          }
         }
       }
     } catch (error) {
-      console.error('生成AI建议失败:', (error as Error).message)
-      // 降级：使用默认选项
-      this.useDefaultOptions()
+      console.error('选项规划失败:', (error as Error).message)
     }
+    // 降级：使用默认选项
+    this.useDefaultOptions()
   }
 
   // 显示选项确认
   private showOptionsConfirmation(): void {
-    let optionsText = '我为你准备了以下选项：\n\n'
+    let optionsText = '根据你的情况，我规划了以下决策方向：\n\n'
     for (let i = 0; i < this.allOptions.length; i++) {
       const opt = this.allOptions[i]
-      optionsText += `${i + 1}. ${opt.title}\n`
+      optionsText += `${i + 1}. ${opt.title}\n   ${opt.description}\n\n`
     }
-    optionsText += '\n点击"开始模拟"为每个选项创建决策副本。'
+    optionsText += '点击"开始模拟"，AI将为每个方向推演未来12个月的发展轨迹。'
 
     this.messages.push({
       role: 'assistant',
@@ -398,17 +392,20 @@ struct EnhancedDecisionFlow {
 
   // 使用默认选项
   private useDefaultOptions(): void {
+    this.allOptions = []
     if (this.userOptions.length > 0) {
-      // 只使用用户选项
+      // 基于用户线索构建基本选项
       for (const userOpt of this.userOptions) {
-        const opt: OptionInput = { title: userOpt, description: `你提出的选择` }
+        if (this.allOptions.length >= 3) break
+        const opt: OptionInput = { title: `选择${userOpt}方向`, description: `以${userOpt}为核心方向推进，评估长期影响` }
         this.allOptions.push(opt)
       }
-    } else {
-      // 使用通用默认选项
-      const opt1: OptionInput = { title: '选项A', description: '第一个选择' }
-      const opt2: OptionInput = { title: '选项B', description: '第二个选择' }
-      this.allOptions = [opt1, opt2]
+    }
+    if (this.allOptions.length < 2) {
+      const opt1: OptionInput = { title: '按当前倾向果断行动', description: '选择内心最倾向的方向立即执行，在实践中调整' }
+      const opt2: OptionInput = { title: '暂缓决定，先小范围试探', description: '不急于做最终决定，先用低成本方式试探各个方向' }
+      if (this.allOptions.length < 1) this.allOptions.push(opt1)
+      if (this.allOptions.length < 2) this.allOptions.push(opt2)
     }
     this.showOptionsConfirmation()
   }

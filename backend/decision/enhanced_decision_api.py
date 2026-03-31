@@ -408,106 +408,135 @@ class GenerateOptionsRequest(BaseModel):
 @router.post("/generate-options")
 async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]:
     """
-    生成 AI 建议选项
+    统一选项规划接口
     
-    根据收集的信息和用户已有选项，生成 1-2 个 AI 建议选项
+    不管用户是否提供了选项，都由大模型基于完整的信息收集结果来：
+    1. 润色/扩展用户给出的粗略选项（如"考研" → 完整的选项描述）
+    2. 补充用户没想到的合理选项
+    3. 确保每个选项都是有意义的、可推演的决策方向
+    
+    最终输出 2-4 个结构化选项，每个都有清晰的标题和描述。
     """
     try:
-        # 获取会话信息
         session = info_collector.get_session(request.session_id)
-        
         if not session:
             raise HTTPException(status_code=404, detail="会话不存在")
         
-        # 使用 LLM 生成建议选项
         from backend.llm.llm_service import get_llm_service
         llm_service = get_llm_service()
         
-        ai_options = []
+        collected_info = session.get("collected_info", {})
+        initial_question = session.get("initial_question", "")
+        options_mentioned = collected_info.get("options_mentioned", [])
+        
+        # 合并所有来源的选项线索：用户明确输入 + 信息收集阶段提取到的
+        all_hints = list(set(request.user_options + options_mentioned))
+        
+        final_options = []
         
         if llm_service and llm_service.enabled:
             try:
-                collected_info = session.get("collected_info", {})
-                initial_question = session.get("initial_question", "")
+                # 构建对话历史摘要
+                conversation_summary = ""
+                for msg in session.get("conversation_history", [])[-8:]:
+                    role = "用户" if msg["role"] == "user" else "AI"
+                    conversation_summary += f"{role}: {msg['content'][:150]}\n"
                 
-                prompt = f"""基于以下信息，为用户推荐1-2个决策选项：
+                prompt = f"""你是一个专业的决策分析师。用户正在面临一个重要决策，你需要根据收集到的完整信息，规划出 2-4 个真正有意义的决策选项。
 
-问题：{initial_question}
+## 用户的决策问题
+{initial_question}
 
-用户已有选项：{', '.join(request.user_options) if request.user_options else '无'}
+## 信息收集过程中的对话
+{conversation_summary}
 
-收集的信息：
-- 背景：{collected_info.get('decision_context', {})}
-- 约束：{collected_info.get('user_constraints', {})}
-- 优先级：{collected_info.get('priorities', {})}
+## 收集到的结构化信息
+- 决策背景：{json.dumps(collected_info.get('decision_context', {}), ensure_ascii=False)}
+- 约束条件：{json.dumps(collected_info.get('user_constraints', {}), ensure_ascii=False)}
+- 优先级：{json.dumps(collected_info.get('priorities', {}), ensure_ascii=False)}
 - 顾虑：{collected_info.get('concerns', [])}
 
-请以JSON格式返回，格式如下：
+## 用户提到过的选项线索
+{', '.join(all_hints) if all_hints else '用户没有明确提出选项'}
+
+## 你的任务
+请输出 2-4 个决策选项，以 JSON 格式返回：
 {{
   "options": [
-    {{"title": "选项名称", "description": "简短描述"}},
-    {{"title": "选项名称", "description": "简短描述"}}
+    {{
+      "title": "选项的简洁标题（8-15字，清晰表达方向）",
+      "description": "对这个选项的具体说明（30-80字，包含关键行动和预期路径）"
+    }}
   ]
 }}
 
-要求：
-1. 推荐的选项要与用户已有选项不同
-2. 考虑用户的约束条件和优先级
-3. 每个选项要有实际可行性
-"""
-                
+## 要求
+1. 如果用户提到了选项线索（如"考研""工作"），必须基于这些线索来润色和扩展，不要忽略用户的意图。例如用户说"考研"，你应该输出类似"全力备考研究生 — 用一年时间冲刺目标院校，提升学历竞争力"。
+2. 每个选项的 title 必须是一个完整的、有方向感的短句，不能只是一两个字。
+3. 每个选项的 description 必须具体说明这条路怎么走、核心行动是什么。
+4. 选项之间要有明显的差异性，代表不同的决策方向。
+5. 可以在用户线索基础上补充 1-2 个用户没想到但合理的选项。
+6. 总数控制在 2-4 个，不要超过 4 个。
+7. 只返回 JSON，不要有其他内容。"""
+
                 messages = [
-                    {"role": "system", "content": "你是一个专业的决策顾问，擅长为用户提供合理的决策选项。"},
+                    {"role": "system", "content": "你是一个资深决策分析师。你的核心能力是把模糊的决策意向转化为清晰、可执行、可推演的决策选项。你输出的每个选项都应该让用户一看就明白这条路意味着什么。"},
                     {"role": "user", "content": prompt}
                 ]
                 
                 response = llm_service.chat(messages, temperature=0.7, response_format="json_object")
                 
-                print(f"📝 LLM原始响应: {response[:200] if response else '(空响应)'}")
+                logger.info(f"[选项规划] LLM响应: {response[:300] if response else '(空)'}")
                 
-                if not response or not response.strip():
-                    print("⚠️ LLM返回空响应")
-                    raise ValueError("LLM返回空响应")
-                
-                result = json.loads(response)
-                
-                if "options" in result:
-                    ai_options = result["options"][:2]  # 最多2个
+                if response and response.strip():
+                    result = json.loads(response)
+                    if "options" in result and isinstance(result["options"], list):
+                        for opt in result["options"][:4]:
+                            title = opt.get("title", "").strip()
+                            desc = opt.get("description", "").strip()
+                            # 质量校验：标题至少4个字，描述至少10个字
+                            if len(title) >= 4 and len(desc) >= 10:
+                                final_options.append({"title": title, "description": desc})
                 
             except Exception as e:
-                logger.error(f"LLM生成选项失败: {e}")
+                logger.error(f"LLM选项规划失败: {e}")
                 import traceback
                 traceback.print_exc()
         
-        # 如果 LLM 失败或没有生成，使用更适合副本模拟的默认选项
-        if not ai_options:
-            if not request.user_options or len(request.user_options) < 2:
-                ai_options = [
-                    {"title": "直接行动", "description": "先按当前倾向执行，边做边调整"},
-                    {"title": "小规模试错", "description": "先做低成本试验，再决定是否全面投入"}
-                ]
-            else:
-                # 用户已有足够选项，最多补充1个
-                ai_options = [
-                    {"title": "综合方案", "description": "结合多个选项的优势，先做阶段性组合尝试"}
-                ]
-        
-        # 限制总选项数：用户选项 + AI选项 合计不超过4个
-        max_ai = max(0, 4 - len(request.user_options))
-        ai_options = ai_options[:max_ai]
+        # 降级方案：如果大模型完全失败，基于用户线索构建基本选项
+        if not final_options:
+            if all_hints:
+                for hint in all_hints[:3]:
+                    hint = hint.strip()
+                    if len(hint) >= 2:
+                        final_options.append({
+                            "title": f"选择{hint}方向",
+                            "description": f"以{hint}为核心方向推进，评估这条路径的长期影响"
+                        })
+            # 始终补充一个兜底选项
+            if len(final_options) < 2:
+                final_options.append({
+                    "title": "暂缓决定，先小范围试探",
+                    "description": "不急于做最终决定，先用低成本方式试探各个方向，收集更多信息后再做判断"
+                })
+            if len(final_options) < 2:
+                final_options.append({
+                    "title": "按当前倾向果断行动",
+                    "description": "选择内心最倾向的方向立即执行，在实践中调整和优化"
+                })
         
         return {
             "code": 200,
-            "message": "AI选项生成成功",
+            "message": "选项规划完成",
             "data": {
-                "ai_options": ai_options
+                "ai_options": final_options
             }
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"生成AI选项失败: {e}")
+        logger.error(f"选项规划失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
