@@ -575,12 +575,53 @@ async def simulate_with_collection_ws(websocket: WebSocket):
 
             # 并行为所有选项生成时间线（32GB 显存足够并行 2-3 个推理）
             async def generate_option_timeline(i: int, option: dict):
-                """为单个选项生成时间线并流式推送节点"""
+                """为单个选项生成时间线并流式推送节点（PKF-DS 增强版）"""
                 await websocket.send_json({
                     "type": "option_start",
                     "option_id": f"option_{i+1}",
                     "title": option.get("title", f"选项{i+1}")
                 })
+
+                # ── PKF-DS 阶段 1-2：抽取个人事实 + 构建因果图 ──
+                await websocket.send_json({
+                    "type": "status",
+                    "stage": "pkf_knowledge",
+                    "option_id": f"option_{i+1}",
+                    "content": "正在分析你的个人背景和决策因果关系..."
+                })
+                try:
+                    from backend.decision.personal_knowledge_fusion import (
+                        PersonalFactExtractor, CausalReasoningGraph
+                    )
+                    extractor = PersonalFactExtractor(user_id)
+                    facts = extractor.extract_all()
+                    causal_graph = CausalReasoningGraph(
+                        question, option.get("title", ""), facts
+                    )
+                    causal_edges = causal_graph.build()
+                    causal_chains = causal_graph.get_chains()
+
+                    # 把个人事实和因果链注入到 LoRA 的 life_context
+                    pkf_context = "个人事实：\n"
+                    for f in facts[:8]:
+                        pkf_context += f"- {f.to_text()}\n"
+                    pkf_context += "\n因果推理链：\n"
+                    for chain in causal_chains[:4]:
+                        chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
+                        pkf_context += f"- {chain_str}\n"
+
+                    await websocket.send_json({
+                        "type": "status",
+                        "stage": "pkf_ready",
+                        "option_id": f"option_{i+1}",
+                        "content": f"已提取 {len(facts)} 条个人事实，构建 {len(causal_chains)} 条因果链"
+                    })
+                    # 把 PKF 上下文注入 LoRA analyzer 的 life_context
+                    simulator.lora_analyzer._pkf_context = pkf_context
+                except Exception as pkf_err:
+                    logger.warning(f"PKF-DS 增强失败，降级为普通推演: {pkf_err}")
+                    simulator.lora_analyzer._pkf_context = ""
+
                 await websocket.send_json({
                     "type": "status",
                     "stage": "option_start",
@@ -626,7 +667,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     question=question,
                     option=option,
                     profile=profile,
-                    num_events=4
+                    num_events=12
                 ):
                     stream_buffer += chunk
                     await websocket.send_json({
@@ -674,7 +715,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         question=question,
                         option=option,
                         profile=profile,
-                        num_events=4
+                        num_events=12
                     )
                     timeline_data = retry_timeline
 
@@ -885,3 +926,94 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             await websocket.send_json({"type": "error", "content": str(e)})
         except Exception:
             pass
+
+
+# ── 推演纠错反馈（受 GenSim 纠错机制启发）──────────────────────────────────
+
+# 内存存储用户对推演事件的反馈，用于后续推演时注入 prompt
+_simulation_feedback: Dict[str, List[Dict[str, str]]] = {}
+
+
+class TimelineFeedbackRequest(BaseModel):
+    """用户对推演时间线事件的反馈"""
+    user_id: str
+    simulation_id: str
+    event_month: int
+    event_text: str
+    feedback_type: str  # "unlikely" | "accurate" | "comment"
+    comment: str = ""
+
+
+@router.post("/timeline-feedback")
+async def submit_timeline_feedback(req: TimelineFeedbackRequest) -> Dict[str, Any]:
+    """
+    用户对推演时间线中某个事件给出反馈。
+    反馈会被存储，在后续推演（如分支推演或重新推演）时注入 prompt，
+    让模型根据用户的真实判断调整推演方向。
+
+    参考：GenSim (NAACL 2025) 的纠错机制思路——
+    当仿真结果偏离用户认知时，通过反馈修正后续生成。
+    """
+    key = f"{req.user_id}_{req.simulation_id}"
+    if key not in _simulation_feedback:
+        _simulation_feedback[key] = []
+
+    _simulation_feedback[key].append({
+        "event": req.event_text,
+        "type": req.feedback_type,
+        "comment": req.comment,
+        "month": req.event_month
+    })
+
+    logger.info(f"[纠错反馈] 用户 {req.user_id} 对第 {req.event_month} 月事件反馈: {req.feedback_type}")
+
+    # 同时存入数据库作为 LoRA 训练数据
+    try:
+        from backend.database.connection import db_connection
+        from backend.database.models import ConversationHistory
+        from datetime import datetime
+
+        if req.feedback_type == "unlikely":
+            user_msg = f"你之前推演说第{req.event_month}个月会'{req.event_text}'，我觉得这不太可能发生。"
+            ai_msg = f"感谢你的反馈。我会调整对你的理解，在后续推演中降低类似事件的概率。"
+        elif req.feedback_type == "accurate":
+            user_msg = f"你推演的第{req.event_month}个月'{req.event_text}'，我觉得很准确。"
+            ai_msg = f"很高兴这个推演符合你的预期，这说明我对你的决策风格理解得比较到位。"
+        else:
+            user_msg = f"关于第{req.event_month}个月的推演'{req.event_text}'，我想说：{req.comment}"
+            ai_msg = f"收到你的反馈，我会在后续推演中考虑你的意见。"
+
+        db = db_connection.get_session()
+        now = datetime.utcnow()
+        db.add(ConversationHistory(
+            user_id=req.user_id, role="user", content=user_msg,
+            timestamp=now, session_id=f"feedback_{req.simulation_id}"
+        ))
+        db.add(ConversationHistory(
+            user_id=req.user_id, role="assistant", content=ai_msg,
+            timestamp=now, session_id=f"feedback_{req.simulation_id}"
+        ))
+        db.commit()
+        db.close()
+    except Exception as e:
+        logger.error(f"保存反馈训练数据失败: {e}")
+
+    return {
+        "success": True,
+        "message": "反馈已记录，将影响后续推演",
+        "feedback_count": len(_simulation_feedback[key])
+    }
+
+
+@router.get("/timeline-feedback/{user_id}/{simulation_id}")
+async def get_timeline_feedback(user_id: str, simulation_id: str) -> Dict[str, Any]:
+    """获取用户对某次推演的所有反馈"""
+    key = f"{user_id}_{simulation_id}"
+    feedbacks = _simulation_feedback.get(key, [])
+    return {"success": True, "data": feedbacks}
+
+
+def get_user_feedback_for_prompt(user_id: str, simulation_id: str) -> List[Dict[str, str]]:
+    """供 lora_decision_analyzer 调用，获取用户反馈用于注入 prompt"""
+    key = f"{user_id}_{simulation_id}"
+    return _simulation_feedback.get(key, [])

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>软件著作权登记信息表 - ParaLife · 平行境</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"SimSun","宋体",serif; font-size:12pt; color:#000; background:#fff; }
+@media print { body { margin:0; } }
+.page { width:210mm; min-height:297mm; margin:0 auto; padding:20mm 22mm 15mm 25mm; }
+h1 { font-family:"SimHei","黑体",sans-serif; font-size:16pt; font-weight:bold; text-align:center; letter-spacing:2px; margin-bottom:4mm; }
+h2 { font-family:"SimHei","黑体",sans-serif; font-size:13pt; text-align:center; margin-bottom:2mm; }
+.sub { text-align:center; font-size:11pt; color:#333; margin-bottom:10mm; }
+table { width:100%; border-collapse:collapse; margin-bottom:0; }
+td { border:1px solid #000; padding:6px 10px; font-size:11pt; line-height:1.8; vertical-align:top; }
+td.label { width:32%; background:#f8f8f8; font-weight:bold; white-space:nowrap; vertical-align:middle; }
+.sign { margin-top:12mm; display:flex; justify-content:space-between; }
+.sign-block { width:45%; }
+.sign-line { border-bottom:1px solid #000; margin:10mm 0 2mm 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>计算机软件著作权登记申请表</h1>
+<h2>ParaLife · 平行境</h2>
+<p class="sub">基于AI智能体架构的鸿蒙原生个性化生活决策助手</p>
+
+<table>
+  <tr>
+    <td class="label">版本号</td>
+    <td>V1.0</td>
+  </tr>
+  <tr>
+    <td class="label">软件分类</td>
+    <td>应用软件</td>
+  </tr>
+  <tr>
+    <td class="label">开发硬件环境</td>
+    <td>Intel Xeon Platinum 8358P @ 2.60GHz（双路），内存 503GB，NVIDIA GeForce RTX 4080 SUPER，存储 100GB 以上</td>
+  </tr>
+  <tr>
+    <td class="label">运行的硬件环境</td>
+    <td>华为鸿蒙智能终端设备（手机/平板），ARM 架构处理器，内存 4GB 及以上；服务端：Intel Xeon Platinum 8358P，内存 503GB，NVIDIA GeForce RTX 4080 SUPER</td>
+  </tr>
+  <tr>
+    <td class="label">开发该软件的操作系统</td>
+    <td>Ubuntu 22.04.5 LTS（Jammy Jellyfish）</td>
+  </tr>
+  <tr>
+    <td class="label">软件开发环境/开发工具</td>
+    <td>DevEco Studio 5.0（鸿蒙前端，本地）；VS Code 1.111.0 + Python 3.12.3（后端，服务器远程开发）；Git 2.x</td>
+  </tr>
+  <tr>
+    <td class="label">该软件的运行平台/操作系统</td>
+    <td>HarmonyOS NEXT（鸿蒙原生，客户端）；Ubuntu 22.04.5 LTS（服务端）</td>
+  </tr>
+  <tr>
+    <td class="label">软件运行支撑环境/支持软件</td>
+    <td>Python 3.12.3 运行时；FastAPI 0.135.1；MySQL 8.0.45（PyMySQL 1.1.2）；Neo4j 5.26.23；PyTorch 2.9.1；HuggingFace Transformers 5.3.0；PEFT 0.18.1；SQLAlchemy 2.0.48；HarmonyOS SDK API 12</td>
+  </tr>
+  <tr>
+    <td class="label">编程语言</td>
+    <td>Python 3.12.3（后端 AI 服务）；ArkTS / ArkUI（鸿蒙原生前端）</td>
+  </tr>
+  <tr>
+    <td class="label">源程序量</td>
+    <td>约 149 个源文件，后端 Python 代码约 35,000 行，前端 ArkTS 代码约 12,000 行，合计约 47,000 行</td>
+  </tr>
+  <tr>
+    <td class="label">开发目的</td>
+    <td>针对 18-35 岁青年群体在人生关键节点（职业转换、升学选择、城市迁移等）面临重大抉择时，通用 AI 助手"千人一面"、无法深度理解个体差异的痛点，开发一款能够持续学习用户个性特征、构建专属知识图谱、并以此为基础训练专属 AI 模型的个性化决策辅助系统，对每个决策选项进行 12 个月时间线推演，帮助用户做出更理性的人生判断。</td>
+  </tr>
+  <tr>
+    <td class="label">面向领域/行业</td>
+    <td>人工智能应用；个人生活管理；智能决策辅助；移动互联网（鸿蒙生态）；大模型个性化应用</td>
+  </tr>
+  <tr>
+    <td class="label">功能特点</td>
+    <td>
+      1. AI 智能体对话架构：系统以 Qwen3.5-9B 大语言模型为核心，AI 对话模块通过 WebSocket 实现实时流式输出，并与知识图谱、RAG 记忆、LoRA 个性化模型、涌现检测、六大领域分析引擎等子系统全面打通，用户每一次对话均可触发跨模块的智能联动，实现端到端的个性化智能体应用。<br><br>
+      2. 个性化知识图谱构建：在用户日常对话中持续提取人物实体信息，自动识别并分类用户的人际关系网络（家人、好友、同事、朋友、弱关系五类），构建并更新个人人际关系知识图谱（基于 Neo4j），支持 3D 星图可视化展示。<br><br>
+      3. 专属 AI 模型训练：以个人知识图谱为基础，通过 LoRA 微调技术对 Qwen3.5-9B 大语言模型进行个性化训练，生成专属于每位用户的 AI 模型，实现真正的"千人千面"。<br><br>
+      4. 决策路径推演：当用户面临重要决策时，系统对每个选项进行 12 个月时间线推演，量化评估各路径的风险与收益，生成可视化决策对比报告。<br><br>
+      5. 平行人生游戏：提供沉浸式决策模拟游戏，用户通过角色扮演体验不同人生选择的后果，游戏数据同步用于强化个性化模型训练。<br><br>
+      6. 涌现行为分析：基于涌现理论对用户行为模式进行实时分析，识别潜在的情绪波动、习惯变化等规律，提供主动预警与洞察。<br><br>
+      7. 多模态数据采集：支持文本、图片、语音等多模态输入，结合传感器数据进行综合分析，覆盖健康、时间、情绪、社交、财务、学习六大生活领域。<br><br>
+      8. 鸿蒙原生体验：基于 HarmonyOS NEXT 原生开发，采用 ArkUI 声明式 UI 框架，支持流畅动效与设备协同。
+    </td>
+  </tr>
+  <tr>
+    <td class="label">技术特点描述</td>
+    <td>
+      1. AI 智能体对话架构：系统以 Qwen3.5-9B 大语言模型为核心，通过 WebSocket 实现实时流式对话（含思维链推理过程输出）；对话模块与 RAG 记忆系统、Neo4j 知识图谱、LoRA 个性化模型、涌现检测器、六大领域分析引擎（健康/时间/情绪/社交/财务/学习）全面集成，每次对话自动触发信息提取、记忆存储、知识图谱更新等联动流程，构成完整的端到端智能体应用架构。<br><br>
+      2. 基于 LoRA 的大模型个性化微调：采用 PEFT 框架中的 LoRA 技术，在 Qwen3.5-9B 基座模型上为每位用户训练独立的低秩适配层，实现参数高效的个性化微调，训练数据来源于用户对话历史、决策记录及游戏行为，通过自动化调度器定期触发增量训练。<br><br>
+      3. 融合模型压缩技术（FlatQuant + OBR）：实现 FlatQuant 正交变换量化与 OBR（Outlier-Based Rounding）融合压缩方案，将模型量化至 INT4/INT8 精度，在保持生成质量的前提下大幅降低推理延迟与内存占用，支持在移动端高效运行。<br><br>
+      4. Neo4j 知识图谱与 3D 可视化：采用 Neo4j 图数据库存储用户实体关系网络，通过自动化信息提取器从对话中识别人物、事件、概念等节点及其关联关系，并在前端以 3D 星图形式可视化呈现。<br><br>
+      5. 基于涌现理论的行为分析：引入复杂系统涌现理论，对用户多维行为数据进行时序分析，检测局部行为模式向全局特征的涌现过程，实现对用户状态变化的早期预警与智能洞察。
+    </td>
+  </tr>
+  <tr>
+    <td class="label">技术特点选项</td>
+    <td>人工智能 / 机器学习；自然语言处理；知识图谱；AI 智能体对话架构；大语言模型微调（LoRA）；模型量化压缩；检索增强生成（RAG）；涌现行为检测；多模态融合；鸿蒙原生开发（ArkTS/ArkUI）；图数据库（Neo4j）；WebSocket 实时通信；数字孪生</td>
+  </tr>
+</table>
+
+<div class="sign">
+  <div class="sign-block">
+    <p>著作权人（签章）：</p>
+    <div class="sign-line"></div>
+    <p>日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日</p>
+  </div>
+  <div class="sign-block">
+    <p>联系人：</p>
+    <div class="sign-line"></div>
+    <p>联系电话：</p>
+    <div class="sign-line"></div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

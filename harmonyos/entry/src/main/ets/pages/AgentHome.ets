@@ -1,5 +1,5 @@
 /**
- * 智能体主界面 - LifeSwarm Agent
+ * 智能体主界面 - ParaLife · 平行境
  * HarmonyOS 6 流体设计 · 功能球体环绕AI核心
  */
 import { Theme } from '../common/Theme';
@@ -97,7 +97,7 @@ struct AgentHome {
     { id: 'decision', title: '决策副本', subtitle: '探索未来', route: 'pages/QuickDecisionInput', color: '#6B48FF', iconName: 'comparison' },
     { id: 'dashboard', title: '智能洞察', subtitle: '涌现发现', route: 'pages/SmartInsights', color: '#FF9500', iconName: 'analytics' },
     { id: 'profile', title: '我的账号', subtitle: '个人中心', route: 'pages/UserProfile', color: '#00C853', iconName: 'user' },
-    { id: 'game', title: '平行人生', subtitle: '决策游戏', route: 'pages/ParallelLifeGame', color: '#FF6B9D', iconName: 'game' },
+    { id: 'game', title: '平行人生', subtitle: '决策游戏', route: 'pages/ParallelLifeGame', color: '#FF6B9D', iconName: 'life' },
   ];
 
   aboutToAppear() {
@@ -229,7 +229,7 @@ struct AgentHome {
 
   private addWelcomeMessage() {
     this.messages.push(new ChatMessage(Date.now().toString(), 'assistant',
-      '欢迎来到 LifeSwarm\n\n我是你的AI助手，可以帮你分析问题、辅助决策。\n\n点击中心AI核心开始对话，或选择周围的功能球体探索更多。',
+      '欢迎来到 ParaLife · 平行境\n\n我是你的AI助手，可以帮你分析问题、辅助决策。\n\n点击中心AI核心开始对话，或选择周围的功能球体探索更多。',
       Date.now()));
   }
 

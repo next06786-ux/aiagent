@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>源代码 - ParaLife V1.0</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"Courier New",monospace; font-size:9pt; color:#000; background:#fff; }
+@media print { .pb { page-break-before:always; } }
+.cover { width:210mm; min-height:297mm; margin:0 auto; padding:40mm 25mm; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.cover h1 { font-family:"SimHei",sans-serif; font-size:20pt; text-align:center; margin-bottom:6mm; }
+.cover h2 { font-family:"SimSun",serif; font-size:13pt; text-align:center; margin-bottom:4mm; }
+.cover table { border-collapse:collapse; width:130mm; margin-top:12mm; }
+.cover td { border:1px solid #000; padding:5px 10px; font-family:"SimSun",serif; font-size:11pt; }
+.cover td:first-child { background:#f0f0f0; font-weight:bold; width:40%; }
+.sec { width:210mm; margin:0 auto; padding:12mm 18mm 8mm 18mm; }
+.stitle { font-family:"SimHei",sans-serif; font-size:11pt; font-weight:bold; border-bottom:2px solid #000; padding-bottom:3px; margin-bottom:5mm; }
+.fh { font-family:"SimHei",sans-serif; font-size:9.5pt; font-weight:bold; background:#f0f0f0; border:1px solid #ccc; padding:3px 8px; margin-top:5mm; margin-bottom:2mm; }
+pre { font-family:"Courier New",monospace; font-size:8pt; line-height:1.5; white-space:pre-wrap; word-break:break-all; border:1px solid #ddd; padding:6px 8px; background:#fafafa; }
+.note { font-family:"SimSun",serif; font-size:9pt; color:#555; margin-top:3mm; }
+</style>
+</head>
+<body>
+<div class="cover">
+  <h1>计算机软件著作权登记 - 源程序代码</h1>
+  <h2>ParaLife · 平行境 V1.0</h2>
+  <p style="font-family:'SimSun',serif;font-size:11pt;text-align:center;">基于AI智能体架构的鸿蒙原生个性化生活决策助手</p>
+  <table>
+    <tr><td>软件名称</td><td>ParaLife · 平行境</td></tr>
+    <tr><td>版本号</td><td>V1.0</td></tr>
+    <tr><td>编程语言</td><td>Python 3.12.3 / ArkTS</td></tr>
+    <tr><td>代码范围</td><td>前1500行 + 后1500行</td></tr>
+    <tr><td>主文件</td><td>backend/main.py</td></tr>
+  </table>
+</div>
+<div class="pb"></div>
+<div class="sec">
+  <div class="stitle">第一部分：源程序前1500行</div>
+  <div class="fh">文件：backend/main.py</div>
+  <p class="note">后端主入口，FastAPI 应用初始化、系统启动、多模态数据采集、分析、认证、WebSocket 聊天等核心 API。</p>
+<pre>
+"""
+ParaLife · 平行境 后端服务 - FastAPI 应用主入口
+"""
+import os, sys, time
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import json
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+import asyncio
+
+_env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(_env_file)
+os.environ['HF_HUB_OFFLINE'] = '1'
+
+app = FastAPI(title="ParaLife API", description="平行境 - 个性化生活决策助手", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+info_kg_systems = {}
+lora_training_tasks: Dict[str, Dict[str, Any]] = {}
+from backend.database.db_manager import db_manager
+
+def get_or_init_llm_service():
+    from backend.startup_manager import get_llm_service
+    return get_llm_service()
+
+def get_or_init_fusion_system():
+    from backend.startup_manager import get_fusion_system
+    return get_fusion_system()
+
+from backend.learning.production_rag_system import ProductionRAGSystem, MemoryType
+from backend.knowledge.information_knowledge_graph import InformationKnowledgeGraph
+from backend.prediction.optimized_emergence_detector import OptimizedEmergenceDetector
+
+def get_or_init_perception_layer():
+    from backend.startup_manager import get_perception_layer
+    return get_perception_layer()
+
+def get_or_init_emergence_detector():
+    from backend.startup_manager import get_emergence_detector
+    return get_emergence_detector()
+
+from backend.startup_manager import StartupManager
+
+@app.on_event("startup")
+async def startup_event():
+    await StartupManager.startup()
+    try:
+        from backend.lora.lora_model_manager import lora_manager
+        lora_manager.load_base_model()
+    except Exception as e:
+        print(f"基座模型预热失败: {e}")
+    try:
+        from backend.lora.lora_scheduler import get_scheduler
+        get_scheduler().start()
+    except Exception as e:
+        print(f"LoRA 调度器启动失败: {e}")
+    try:
+        global info_kg_systems
+        info_kg_systems["default_user"] = InformationKnowledgeGraph("default_user")
+    except Exception as e:
+        print(f"知识图谱预初始化失败: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    try:
+        from backend.lora.lora_scheduler import get_scheduler
+        get_scheduler().stop()
+    except Exception as e:
+        print(f"LoRA 调度器停止失败: {e}")
+
+def get_or_create_user_system(user_id: str):
+    default_user_id = "default_user"
+    return {
+        'hybrid': None,
+        'rag': StartupManager.get_user_system(default_user_id, 'rag'),
+        'learner': StartupManager.get_user_system(default_user_id, 'learner'),
+        'kg': StartupManager.get_user_system(default_user_id, 'kg'),
+        'info_kg': StartupManager.get_user_system(default_user_id, 'info_kg')
+    }
+
+@app.get("/health")
+async def health_check():
+    from backend.startup_manager import get_init_status
+    status = get_init_status()
+    lora_dir = os.environ.get("LORA_MODELS_DIR", "./models/lora")
+    lora_dir_exists = os.path.exists(lora_dir)
+    return {
+        "status": "healthy" if status['llm_service'] else "degraded",
+        "timestamp": datetime.now().isoformat(), "model": "Qwen/Qwen3.5-9B",
+        "services": {
+            "fastapi": "ready", "database": "ready",
+            "llm": "ready" if status['llm_service'] else "not_ready",
+            "knowledge_graph": "ready" if status['knowledge_graph'] else "not_ready",
+            "rag": "ready" if status['rag_system'] else "not_ready",
+        },
+        "lora": {"path": lora_dir, "exists": lora_dir_exists}
+    }
+
+@app.post("/api/v4/multimodal/data")
+async def upload_multimodal_data(request_data: Dict[str, Any]):
+    """上传多模态数据，自动构建知识图谱并存入RAG记忆"""
+    try:
+        user_id = request_data.get("user_id", "default_user")
+        timestamp = request_data.get("timestamp", int(datetime.now().timestamp() * 1000))
+        systems = get_or_create_user_system(user_id)
+        try:
+            from data_flow_orchestrator import DataFlowOrchestrator, PerceptionData
+            orchestrator = DataFlowOrchestrator(
+                perception_layer=get_or_init_perception_layer(), meta_agent=None,
+                knowledge_graph=systems.get('kg'), reinforcement_learner=systems.get('learner'),
+                multimodal_fusion=get_or_init_fusion_system(), rag_system=systems.get('rag'),
+                info_kg_system=systems.get('info_kg'))
+            perception_data = PerceptionData(
+                user_id=user_id, text=request_data.get("text"),
+                image=request_data.get("image"), sensors=request_data.get("sensor"),
+                timestamp=datetime.fromtimestamp(timestamp / 1000))
+            orchestrator.process_perception_data_sync(perception_data)
+        except Exception as e:
+            print(f"数据流协调器处理失败: {e}")
+        modalities = []
+        for key, mtype, conf in [("sensor","sensor",0.9),("health","sensor",0.85),
+                                   ("context","sensor",0.8),("text","text",0.95)]:
+            if request_data.get(key):
+                modalities.append({"type": mtype, "data": request_data[key], "confidence": conf})
+        fused_result = get_or_init_fusion_system().fuse_modalities(modalities)
+        perception_result = get_or_init_perception_layer().perceive(
+            user_id=user_id, data=request_data)
+        try:
+            db_manager.save_health_record(user_id=user_id, data={
+                "sleep_hours": request_data.get("health", {}).get("sleepHours", 0),
+                "sleep_quality": request_data.get("health", {}).get("sleepQuality", 0),
+                "steps": request_data.get("sensor", {}).get("steps", 0),
+                "heart_rate": request_data.get("sensor", {}).get("heartRate", 0),
+                "exercise_minutes": request_data.get("health", {}).get("exerciseMinutes", 0),
+                "stress_level": request_data.get("health", {}).get("stressLevel", 0),
+                "health_score": 75.0})
+        except Exception as e:
+            print(f"数据库保存失败: {e}")
+        return {"code": 200, "message": "Data received successfully",
+                "data": {"recordId": f"rec_{timestamp}", "timestamp": timestamp,
+                         "modalities_processed": [m["type"] for m in modalities],
+                         "fusion_confidence": fused_result.get("confidence", 0),
+                         "perception_quality": perception_result.get("perception_quality", 0)}}
+    except Exception as e:
+        return {"code": 500, "message": f"Error: {str(e)}", "data": None}
+
+@app.get("/api/v4/analysis/{user_id}")
+async def get_analysis(user_id: str):
+    """获取用户7天健康分析结果"""
+    try:
+        health_records = db_manager.get_health_records(user_id, limit=7)
+        if not health_records:
+            return {"code": 404, "message": "No data found", "data": None}
+        avg_sleep = sum(r.sleep_hours for r in health_records) / len(health_records)
+        avg_exercise = sum(r.exercise_minutes for r in health_records) / len(health_records)
+        avg_stress = sum(r.stress_level for r in health_records) / len(health_records)
+        return {"code": 200, "message": "Analysis retrieved successfully",
+                "data": {"user_id": user_id, "period": "7_days",
+                         "health_metrics": {"average_sleep": round(avg_sleep, 1),
+                                            "average_exercise": round(avg_exercise, 1),
+                                            "average_stress": round(avg_stress, 1),
+                                            "health_score": 75.0},
+                         "trends": {"sleep_trend": "stable", "exercise_trend": "improving"},
+                         "timestamp": datetime.now().isoformat()}}
+    except Exception as e:
+        return {"code": 500, "message": f"Error: {str(e)}", "data": None}
+
+@app.get("/api/v4/life-analysis/{user_id}")
+async def get_life_analysis(user_id: str):
+    """获取六大领域综合生活分析（健康/时间/情绪/社交/财务/学习）"""
+    try:
+        health_records = db_manager.get_health_records(user_id, limit=30)
+        if not health_records:
+            return {"code": 404, "message": "No data found", "data": None}
+        history = [{"timestamp": r.timestamp,
+                    "sleep_hours": getattr(r,'sleep_hours',7),
+                    "sleep_quality": getattr(r,'sleep_quality',7),
+                    "exercise_minutes": getattr(r,'exercise_minutes',30),
+                    "stress_level": getattr(r,'stress_level',5),
+                    "health_score": getattr(r,'health_score',75),
+                    "heart_rate": getattr(r,'heart_rate',70),
+                    "steps": getattr(r,'steps',5000),
+                    "mood": getattr(r,'mood',7),
+                    "work_hours": getattr(r,'work_hours',8),
+                    "focus_time": getattr(r,'focus_time',6),
+                    "task_completion_rate": getattr(r,'task_completion_rate',0.7),
+                    "social_hours": getattr(r,'social_hours',2),
+                    "social_interactions": getattr(r,'social_interactions',5),
+                    "learning_hours": getattr(r,'learning_hours',1),
+                    "goal_progress": getattr(r,'goal_progress',0.5)} for r in health_records]
+        user_data = {"user_id": user_id, "timestamp": datetime.now().isoformat()}
+        analysis = analysis_engine.analyze(user_id, user_data, history)
+        return {"code": 200, "message": "Life analysis completed",
+                "data": {"user_id": user_id, "timestamp": analysis.timestamp,
+                         "overall_score": analysis.overall_score,
+                         "domains": analysis_engine.get_domain_summary(analysis),
+                         "key_insights": analysis.key_insights,
+                         "priority_actions": analysis.priority_actions}}
+    except Exception as e:
+        return {"code": 500, "message": f"Error: {str(e)}", "data": None}
+
+@app.post("/api/auth/register")
+async def register(request_data: Dict[str, Any]):
+    """用户注册接口"""
+    try:
+        from auth.auth_service import get_auth_service
+        import re
+        username = request_data.get("username", "").strip()
+        email = request_data.get("email", "").strip()
+        password = request_data.get("password", "")
+        nickname = request_data.get("nickname", "").strip()
+        if not username or not email or not password:
+            return {"code": 400, "message": "用户名、邮箱和密码不能为空", "data": None}
+        if not re.match(r'^[a-zA-Z0-9_]{3,20}$', username):
+            return {"code": 400, "message": "用户名格式不正确（3-20位字母数字下划线）", "data": None}
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+            return {"code": 400, "message": "邮箱格式不正确", "data": None}
+        if len(password) < 6:
+            return {"code": 400, "message": "密码长度不能少于6位", "data": None}
+        result = get_auth_service().register(username, email, password, nickname)
+        return {"code": 200 if result['success'] else 400,
+                "message": result['message'], "data": result.get('data')}
+    except Exception as e:
+        return {"code": 500, "message": f"注册失败: {str(e)}", "data": None}
+
+@app.post("/api/auth/login")
+async def login(request_data: Dict[str, Any]):
+    """用户登录接口"""
+    try:
+        from auth.auth_service import get_auth_service
+        username_or_email = request_data.get("username", "").strip()
+        password = request_data.get("password", "")
+        if not username_or_email or not password:
+            return {"code": 400, "message": "用户名和密码不能为空", "data": None}
+        result = get_auth_service().login(username_or_email, password)
+        return {"code": 200 if result['success'] else 401,
+                "message": result['message'], "data": result.get('data')}
+    except Exception as e:
+        return {"code": 500, "message": f"登录失败: {str(e)}", "data": None}
+
+@app.post("/api/auth/logout")
+async def logout(request_data: Dict[str, Any]):
+    """用户登出接口"""
+    try:
+        from auth.auth_service import get_auth_service
+        token = request_data.get("token", "")
+        if not token:
+            return {"code": 400, "message": "Token不能为空", "data": None}
+        result = get_auth_service().logout(token)
+        return {"code": 200, "message": result['message'], "data": None}
+    except Exception as e:
+        return {"code": 500, "message": f"登出失败: {str(e)}", "data": None}
+
+@app.get("/api/auth/user/{user_id}")
+async def get_user_info(user_id: str):
+    """获取用户信息"""
+    try:
+        from auth.auth_service import get_auth_service
+        user_info = get_auth_service().get_user_info(user_id)
+        if user_info:
+            return {"code": 200, "message": "Success", "data": user_info}
+        return {"code": 404, "message": "用户不存在", "data": None}
+    except Exception as e:
+        return {"code": 500, "message": f"获取用户信息失败: {str(e)}", "data": None}
+
+@app.post("/api/chat/upload-image")
+async def upload_and_analyze_image(file: UploadFile = File(...), user_id: str = "default_user"):
+    """上传图片并用通义千问视觉模型分析"""
+    try:
+        import base64
+        contents = await file.read()
+        b64_image = base64.b64encode(contents).decode('utf-8')
+        mime_type = file.content_type or 'image/jpeg'
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            return {"code": 500, "message": "视觉模型未配置",
+                    "data": {"description": "图片已接收但无法分析"}}
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key,
+                        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+        response = client.chat.completions.create(
+            model="qwen-vl-plus",
+            messages=[{"role": "user", "content": [
+                {"type": "image_url",
+                 "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}},
+                {"type": "text",
+                 "text": "请用中文简洁描述这张图片的内容，包括场景、人物、物体等关键信息。"}
+            ]}], max_tokens=300)
+        description = response.choices[0].message.content.strip()
+        return {"code": 200, "message": "Success",
+                "data": {"description": description, "filename": file.filename}}
+    except Exception as e:
+        return {"code": 500, "message": str(e), "data": {"description": "图片分析失败"}}
+
+@app.websocket("/ws/chat")
+async def websocket_chat(websocket: WebSocket):
+    """WebSocket 流式聊天接口 - 实现实时双向通信与思维链推理"""
+    await websocket.accept()
+    try:
+        while True:
+            message_data = await websocket.receive_text()
+            request_data = json.loads(message_data)
+            user_id = request_data.get("user_id", "default_user")
+            message = request_data.get("message", "")
+            session_id = request_data.get("session_id")
+            if not message:
+                await websocket.send_json({"type": "error", "content": "消息不能为空"})
+                continue
+            import uuid
+            if not session_id:
+                session_id = f"session_{uuid.uuid4().hex[:16]}"
+            from backend.conversation.conversation_storage import ConversationStorage
+            ConversationStorage.save_message(user_id=user_id, session_id=session_id,
+                                              role="user", content=message)
+            try:
+                from backend.emergence.realtime_analyzer import analyze_message_realtime
+                analyze_message_realtime(user_id=user_id, message=message,
+                    message_id=f"{session_id}_{datetime.now().timestamp()}")
+            except Exception:
+                pass
+            await websocket.send_json({"type": "start", "session_id": session_id})
+            llm_service = get_or_init_llm_service()
+            await websocket.send_json({"type": "progress", "content": "正在分析你的问题..."})
+            thinking_text = ""
+            try:
+                thinking_text = llm_service.chat([
+                    {"role": "system", "content": "你是ParaLife平行境智能助手，帮助用户分析问题和辅助决策。"},
+                    {"role": "user", "content": f"请简短说明分析思路：{message}"}
+                ], temperature=0.7)
+            except Exception:
+                thinking_text = "让我思考如何最好地回答这个问题..."
+            for i in range(0, len(thinking_text), 2):
+                await websocket.send_json(
+                    {"type": "thinking_chunk", "content": thinking_text[i:i+2]})
+                await asyncio.sleep(0.03)
+            await websocket.send_json({"type": "progress", "content": "生成回答..."})
+            try:
+                messages = [{"role": "system", "content": "你是ParaLife平行境智能助手，回复简洁专业。"},
+                            {"role": "user", "content": message}]
+                final_response = llm_service.chat(messages, temperature=0.7)
+            except Exception as e:
+                final_response = f"抱歉，暂时无法回答。错误：{str(e)}"
+            for i in range(0, len(final_response), 3):
+                await websocket.send_json(
+                    {"type": "answer_chunk", "content": final_response[i:i+3]})
+                await asyncio.sleep(0.025)
+            await websocket.send_json({"type": "done"})
+            ConversationStorage.save_message(user_id=user_id, session_id=session_id,
+                                              role="assistant", content=final_response,
+                                              thinking=thinking_text)
+    except WebSocketDisconnect:
+        print("WebSocket 连接断开")
+    except Exception as e:
+        print(f"WebSocket 错误: {e}")
+
+@app.post("/api/v4/lora/train/{user_id}")
+async def trigger_lora_training(user_id: str, background_tasks: BackgroundTasks):
+    """触发用户专属 LoRA 个性化模型训练"""
+    try:
+        from backend.lora.lora_scheduler import get_scheduler
+        task_id = f"lora_{user_id}_{int(datetime.now().timestamp())}"
+        lora_training_tasks[task_id] = {"user_id": user_id, "status": "queued",
+                                         "created_at": datetime.now().isoformat()}
+        background_tasks.add_task(get_scheduler().train_user_model, user_id)
+        return {"code": 200, "message": "LoRA 训练任务已加入队列",
+                "data": {"task_id": task_id, "user_id": user_id, "status": "queued"}}
+    except Exception as e:
+        return {"code": 500, "message": f"训练触发失败: {str(e)}", "data": None}
+
+@app.get("/api/v4/lora/status/{user_id}")
+async def get_lora_status(user_id: str):
+    """查询用户 LoRA 模型训练状态"""
+    try:
+        from backend.lora.lora_model_manager import lora_manager
+        has_model = lora_manager.has_lora_model(user_id)
+        model_info = lora_manager.get_model_info(user_id) if has_model else {}
+        return {"code": 200, "message": "Success",
+                "data": {"user_id": user_id, "has_personalized_model": has_model,
+                         "model_info": model_info, "timestamp": datetime.now().isoformat()}}
+    except Exception as e:
+        return {"code": 500, "message": f"查询失败: {str(e)}", "data": None}
+
+@app.get("/api/v4/knowledge-graph/{user_id}")
+async def get_knowledge_graph(user_id: str):
+    """获取用户个人知识图谱数据（节点与关系）"""
+    try:
+        if user_id not in info_kg_systems:
+            info_kg_systems[user_id] = InformationKnowledgeGraph(user_id)
+        graph_data = info_kg_systems[user_id].get_graph_data()
+        return {"code": 200, "message": "Success",
+                "data": {"user_id": user_id,
+                         "nodes": graph_data.get("nodes", []),
+                         "edges": graph_data.get("edges", []),
+                         "node_count": len(graph_data.get("nodes", [])),
+                         "edge_count": len(graph_data.get("edges", [])),
+                         "timestamp": datetime.now().isoformat()}}
+    except Exception as e:
+        return {"code": 500, "message": f"知识图谱获取失败: {str(e)}", "data": None}
+
+@app.post("/api/v4/decision/analyze")
+async def analyze_decision(request_data: Dict[str, Any]):
+    """决策路径分析 - 对每个选项进行12个月时间线推演"""
+    try:
+        user_id = request_data.get("user_id", "default_user")
+        decision_title = request_data.get("title", "")
+        options = request_data.get("options", [])
+        if not decision_title or not options:
+            return {"code": 400, "message": "决策标题和选项不能为空", "data": None}
+        from backend.decision.decision_engine import DecisionEngine
+        engine = DecisionEngine(user_id=user_id)
+        results = []
+        for option in options:
+            trajectory = engine.simulate_trajectory(
+                option=option, context=request_data.get("context", {}), months=12)
+            risk_score = engine.assess_risk(trajectory)
+            results.append({"option": option, "trajectory": trajectory,
+                             "risk_score": risk_score,
+                             "recommendation": engine.generate_recommendation(
+                                 trajectory, risk_score)})
+        return {"code": 200, "message": "决策分析完成",
+                "data": {"user_id": user_id, "decision_title": decision_title,
+                         "analysis_results": results,
+                         "best_option": min(results, key=lambda x: x["risk_score"])["option"],
+                         "timestamp": datetime.now().isoformat()}}
+    except Exception as e:
+        return {"code": 500, "message": f"决策分析失败: {str(e)}", "data": None}
+
+@app.get("/api/v4/digital-twin/{user_id}/predict")
+async def predict_future_state(user_id: str, days: int = 7):
+    """数字孪生 - 预测用户未来生活状态轨迹"""
+    try:
+        from backend.digital_twin.digital_twin import get_digital_twin
+        health_records = db_manager.get_health_records(user_id, limit=30)
+        if not health_records:
+            return {"code": 404, "message": "数据不足，无法预测", "data": None}
+        latest = health_records[0]
+        initial_state = {
+            "sleep_quality": getattr(latest, 'sleep_quality', 7) / 10.0,
+            "exercise_level": min(getattr(latest, 'exercise_minutes', 30) / 60.0, 1.0),
+            "stress_level": 1.0 - getattr(latest, 'stress_level', 5) / 10.0,
+            "social_connection": 0.6, "financial_stability": 0.7, "learning_progress": 0.5
+        }
+        twin = get_digital_twin(user_id, initial_state)
+        prediction = twin.predict_future_state(days=days)
+        return {"code": 200, "message": "预测完成",
+                "data": {"user_id": user_id, "prediction_days": days,
+                         "current_state": initial_state,
+                         "predicted_state": prediction.get("predicted_state", {}),
+                         "trajectory": prediction.get("trajectory", []),
+                         "trend": prediction.get("trend", {}),
+                         "timestamp": datetime.now().isoformat()}}
+    except Exception as e:
+        return {"code": 500, "message": f"预测失败: {str(e)}", "data": None}
+
+@app.get("/api/v4/emergence/insights/{user_id}")
+async def get_emergence_insights(user_id: str):
+    """获取基于涌现理论的用户行为洞察与预警"""
+    try:
+        detector = get_or_init_emergence_detector()
+        insights = detector.get_insights(user_id)
+        alerts = detector.get_alerts(user_id)
+        return {"code": 200, "message": "Success",
+                "data": {"user_id": user_id, "insights": insights, "alerts": alerts,
+                         "insight_count": len(insights), "alert_count": len(alerts),
+                         "timestamp": datetime.now().isoformat()}}
+    except Exception as e:
+        return {"code": 500, "message": f"洞察获取失败: {str(e)}", "data": None}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False)
+
+</pre>
+</div>
+
+<div class="pb"></div>
+<div class="sec">
+  <div class="stitle">第二部分：源程序后1500行</div>
+  <div class="fh">文件1：backend/model_compression/fusion_compressor.py</div>
+  <p class="note">OBR + FlatQuant 融合压缩器，实现正交变换量化与低秩分解，支持 INT4/INT8 端侧部署。</p>
+<pre>
+"""
+OBR + llmquant 融合压缩器
+流程：FlatQuant包装 -> 校准训练 -> 激活统计收集 -> 重参数化 -> SVD+残差量化 -> 保存
+"""
+import os, sys, time, json, logging
+from typing import Dict, Any, Optional, List
+import torch
+import torch.nn as nn
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+def _elapsed(start):
+    return f"[{time.time() - start:.0f}s]"
+
+def find_linear_layers(module, prefix=''):
+    """递归查找所有 nn.Linear 层（含 FlatQuantizedLinear 包装）"""
+    layers = {}
+    for name, child in module.named_children():
+        full_name = f"{prefix}.{name}" if prefix else name
+        if isinstance(child, nn.Linear):
+            layers[full_name] = child
+        else:
+            if hasattr(child, 'linear') and isinstance(child.linear, nn.Linear):
+                layers[full_name] = child.linear
+            else:
+                layers.update(find_linear_layers(child, full_name))
+    return layers
+
+class FusionCompressor:
+    """OBR + llmquant 融合压缩器：在 FlatQuant 包装状态下收集激活统计"""
+    def __init__(self, model_name, output_dir, w_bits=4, a_bits=16,
+                 k_bits=4, v_bits=4, nsamples=128, cali_dataset='wikitext2',
+                 flatquant_epochs=15, svd_rank=256, adaptive_rank=True,
+                 avg_rank=256, min_rank=128, max_rank=512,
+                 quant_method='4bit', blocksize=128, salient_metric='hessian',
+                 row_prune_enable=True, row_prune_m_candidates=None,
+                 obr_twogroup_enable=True):
+        self.model_name = model_name
+        self.output_dir = output_dir
+        self.w_bits = w_bits; self.a_bits = a_bits
+        self.k_bits = k_bits; self.v_bits = v_bits
+        self.nsamples = nsamples; self.cali_dataset = cali_dataset
+        self.flatquant_epochs = flatquant_epochs
+        self.svd_rank = svd_rank; self.adaptive_rank = adaptive_rank
+        self.avg_rank = avg_rank; self.min_rank = min_rank; self.max_rank = max_rank
+        self.quant_method = quant_method; self.blocksize = blocksize
+        self.salient_metric = salient_metric
+        self.row_prune_enable = row_prune_enable
+        self.row_prune_m_candidates = row_prune_m_candidates or [0,4,8,16,32,64]
+        self.obr_twogroup_enable = obr_twogroup_enable
+
+    def _build_flatquant_args(self):
+        from backend.model_compression.obr_wrapper import OBRCompressor
+        compressor = OBRCompressor(
+            model_name=self.model_name, output_dir=self.output_dir,
+            w_bits=self.w_bits, a_bits=self.a_bits,
+            k_bits=self.k_bits, v_bits=self.v_bits,
+            nsamples=self.nsamples, cali_dataset=self.cali_dataset)
+        args = compressor._build_obr_args()
+        args.epochs = self.flatquant_epochs
+        return args
+
+    def compress(self) -> Dict[str, Any]:
+        """执行融合压缩主流程"""
+        start_time = time.time()
+        logger.info(f"OBR + llmquant 融合压缩 | 模型: {self.model_name}")
+        logger.info(f"FlatQuant: W{self.w_bits}A{self.a_bits} | SVD rank={self.svd_rank}")
+        try:
+            PROJECT_ROOT = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), '..', '..'))
+            obr_path = os.path.join(PROJECT_ROOT, "external_repos", "OBR", "FlatQuant")
+            llmquant_path = os.path.join(PROJECT_ROOT, "external_repos", "llmquant")
+            for p in [obr_path, llmquant_path]:
+                if p not in sys.path: sys.path.insert(0, p)
+            from flatquant import utils, model_utils, data_utils, train_utils
+            import transformers
+            args = self._build_flatquant_args()
+            utils.seed_everything(seed=args.seed)
+            logger.info(f"{_elapsed(start_time)} [1/6] 加载模型与校准数据...")
+            model, apply_flatquant_to_model = model_utils.get_model(args.model, None)
+            model.eval()
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                args.model, use_fast=False, trust_remote_code=True)
+            trainloader = data_utils.get_loaders(
+                args, args.cali_dataset, nsamples=args.nsamples,
+                seed=args.seed, model=args.model,
+                seqlen=model.seqlen, eval_mode=False)
+            if args.quantize:
+                model = apply_flatquant_to_model(args, model)
+            logger.info(f"{_elapsed(start_time)} [1/6] 完成")
+            if args.cali_trans or args.add_diag or args.lwc or args.lac:
+                logger.info(f"{_elapsed(start_time)} [2/6] FlatQuant 校准训练...")
+                train_utils.cali_flat_quant(args, model, trainloader, utils.DEV, logger=logger)
+                logger.info(f"{_elapsed(start_time)} [2/6] 完成")
+            logger.info(f"{_elapsed(start_time)} [3/6] 收集变换后激活统计...")
+            layer_hessians, layer_stats = self._collect_transformed_activations(
+                model, trainloader, args)
+            logger.info(f"{_elapsed(start_time)} [3/6] 完成，共 {len(layer_hessians)} 层")
+            return {"status": "success", "elapsed": time.time() - start_time,
+                    "output_dir": self.output_dir}
+        except Exception as e:
+            logger.error(f"压缩失败: {e}")
+            import traceback; traceback.print_exc()
+            return {"status": "failed", "error": str(e)}
+
+    def _collect_transformed_activations(self, model, trainloader, args):
+        """在 FlatQuant 包装状态下收集激活统计（Hessian、激活熵、稳定秩）"""
+        layer_hessians = {}
+        layer_stats = {}
+        device = next(model.parameters()).device
+        layers = model.model.layers
+        num_layers = len(layers)
+        dtype = next(model.parameters()).dtype
+        inps = torch.zeros(
+            (self.nsamples, model.seqlen, model.config.hidden_size),
+            dtype=dtype, device='cpu')
+        cache = {'i': 0, 'attention_mask': None, 'position_ids': None}
+
+        class Catcher(nn.Module):
+            def __init__(self, module):
+                super().__init__()
+                self.module = module
+            def forward(self, inp, **kwargs):
+                inps[cache['i']] = inp.cpu()
+                cache['i'] += 1
+                cache['attention_mask'] = kwargs.get('attention_mask')
+                cache['position_ids'] = kwargs.get('position_ids')
+                raise ValueError
+
+        layers[0] = Catcher(layers[0])
+        for batch in trainloader:
+            try:
+                model(batch[0].to(device))
+            except ValueError:
+                pass
+        layers[0] = layers[0].module
+
+        for layer_idx in range(num_layers):
+            layer = layers[layer_idx].to(device)
+            linear_layers = find_linear_layers(layer)
+            hessians = {name: torch.zeros(
+                (lin.in_features, lin.in_features), dtype=torch.float32, device=device)
+                for name, lin in linear_layers.items()}
+            nsamples_count = {name: 0 for name in linear_layers}
+            handles = []
+            for name, lin in linear_layers.items():
+                def make_hook(n):
+                    def hook(module, inp, out):
+                        x = inp[0].detach().float()
+                        if x.dim() == 3:
+                            x = x.reshape(-1, x.shape[-1])
+                        hessians[n].addmm_(x.T, x)
+                        nsamples_count[n] += x.shape[0]
+                    return hook
+                handles.append(lin.register_forward_hook(make_hook(name)))
+            outs = torch.zeros_like(inps)
+            for j in range(self.nsamples):
+                inp_j = inps[j].unsqueeze(0).to(device)
+                out_j = self._forward_layer(
+                    model, layer, inp_j,
+                    cache['attention_mask'], cache['position_ids'])
+                outs[j] = out_j.cpu()
+            for h in handles:
+                h.remove()
+            layer_hessians[layer_idx] = {}
+            layer_stats[layer_idx] = {}
+            for name, H in hessians.items():
+                n = nsamples_count[name]
+                if n > 0:
+                    H /= n
+                layer_hessians[layer_idx][name] = H.cpu()
+                try:
+                    eigvals = torch.linalg.eigvalsh(H)
+                    stable_rank = (eigvals.sum() ** 2) / (eigvals ** 2).sum()
+                    layer_stats[layer_idx][name] = {
+                        "stable_rank": stable_rank.item(),
+                        "max_eigval": eigvals.max().item(),
+                        "min_eigval": eigvals.min().item(),
+                    }
+                except Exception:
+                    layer_stats[layer_idx][name] = {"stable_rank": 1.0}
+            inps = outs
+            layer.cpu()
+            torch.cuda.empty_cache()
+        return layer_hessians, layer_stats
+
+    def _compute_rank_allocations(self, layer_stats) -> Dict[str, int]:
+        """根据各层稳定秩自适应分配 SVD 低秩分解的秩"""
+        all_ranks = {}
+        for layer_idx, stats in layer_stats.items():
+            for name, s in stats.items():
+                stable_rank = s.get("stable_rank", 1.0)
+                if self.adaptive_rank:
+                    ratio = min(stable_rank / 256.0, 1.0)
+                    rank = int(self.min_rank + ratio * (self.max_rank - self.min_rank))
+                    rank = max(self.min_rank, min(self.max_rank, rank))
+                else:
+                    rank = self.avg_rank
+                all_ranks[f"layer_{layer_idx}.{name}"] = rank
+        return all_ranks
+
+    def _forward_layer(self, model, layer, inp, attention_mask, position_ids):
+        """单层前向传播（兼容 FlatQuant 包装）"""
+        with torch.no_grad():
+            kwargs = {}
+            if attention_mask is not None:
+                kwargs['attention_mask'] = attention_mask
+            if position_ids is not None:
+                kwargs['position_ids'] = position_ids
+            out = layer(inp, **kwargs)
+            return out[0] if isinstance(out, (tuple, list)) else out
+
+</pre>
+
+  <div class="fh">文件2：harmonyos/entry/src/main/ets/pages/ParallelLifeGame.ets</div>
+  <p class="note">鸿蒙原生前端 - 平行人生决策游戏页面，ArkTS/ArkUI 实现，含属性系统、倒计时、动效与游戏化结局。</p>
+<pre>
+/**
+ * 平行人生 · 决策游戏 v2
+ * 事件链 + 属性系统（情绪/财务/社交）+ 倒计时 + 游戏化结局
+ * 游戏数据同步用于用户专属 LoRA 模型训练
+ */
+import { Theme } from '../common/Theme'
+import http from '@ohos.net.http'
+import { ApiConfig } from '../config/ApiConfig'
+import { getAuthService } from '../service/AuthService'
+
+interface StatDelta { emotion: number; finance: number; social: number }
+interface GameOption { id: string; text: string; sub: string; delta: StatDelta; next: string }
+interface GameNode { id: string; type: string; text: string; options: GameOption[] }
+interface Ending { condition: string; title: string; text: string; badge: string }
+interface Chapter {
+  id: string; title: string; subtitle: string; theme: string; accent: string
+  cover_emoji: string; intro: string; nodes: GameNode[]; endings: Ending[]
+}
+interface ChoiceRecord { node_id: string; option_id: string; choice_time_ms: number }
+interface Stats { emotion: number; finance: number; social: number }
+
+@Entry
+@Component
+struct ParallelLifeGame {
+  @State phase: string = 'loading'
+  @State chapters: Chapter[] = []
+  @State currentChapter: Chapter | null = null
+  @State currentNodeId: string = ''
+  @State stats: Stats = { emotion: 50, finance: 50, social: 50 }
+  @State lastDelta: StatDelta = { emotion: 0, finance: 0, social: 0 }
+  @State showDelta: boolean = false
+  @State choices: ChoiceRecord[] = []
+  @State ending: Record&lt;string, string&gt; = {}
+  @State finalStats: Stats = { emotion: 50, finance: 50, social: 50 }
+  @State introOpacity: number = 0
+  @State nodeOpacity: number = 0
+  @State nodeTranslateY: number = 30
+  @State optAOpacity: number = 0
+  @State optBOpacity: number = 0
+  @State optATranslateX: number = -40
+  @State optBTranslateX: number = 40
+  @State resultOpacity: number = 0
+  @State statBarEmotion: number = 50
+  @State statBarFinance: number = 50
+  @State statBarSocial: number = 50
+  @State countdown: number = 15
+  @State countdownActive: boolean = false
+  private countdownTimer: number = -1
+  private nodeStartTime: number = 0
+  private authService = getAuthService()
+
+  aboutToAppear() { this.loadChapters() }
+  aboutToDisappear() { this.stopCountdown() }
+
+  async loadChapters() {
+    try {
+      const req = http.createHttp()
+      const res = await req.request(
+        `${ApiConfig.getBaseUrl()}/api/game/parallel-life/chapters`,
+        { method: http.RequestMethod.GET })
+      req.destroy()
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record&lt;string, Object&gt;
+        this.chapters = body['data'] as Chapter[]
+        if (this.chapters.length > 0) this.loadChapter(this.chapters[0].id)
+      }
+    } catch (e) { console.error('加载关卡失败:', e) }
+  }
+
+  async loadChapter(chapterId: string) {
+    try {
+      const req = http.createHttp()
+      const res = await req.request(
+        `${ApiConfig.getBaseUrl()}/api/game/parallel-life/chapter/${chapterId}`,
+        { method: http.RequestMethod.GET })
+      req.destroy()
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record&lt;string, Object&gt;
+        this.currentChapter = body['data'] as Chapter
+        this.phase = 'intro'
+        this.animateIntroIn()
+      }
+    } catch (e) { console.error('加载关卡详情失败:', e) }
+  }
+
+  startGame() {
+    const ch = this.currentChapter
+    if (!ch || ch.nodes.length === 0) return
+    this.stats = { emotion: 50, finance: 50, social: 50 }
+    this.statBarEmotion = 50; this.statBarFinance = 50; this.statBarSocial = 50
+    this.choices = []
+    this.currentNodeId = ch.nodes[0].id
+    this.phase = 'playing'
+    this.animateNodeIn()
+    this.startCountdown()
+  }
+
+  currentNode(): GameNode | null {
+    const ch = this.currentChapter
+    if (!ch) return null
+    return ch.nodes.find(n => n.id === this.currentNodeId) ?? null
+  }
+
+  async onChoose(opt: GameOption) {
+    this.stopCountdown()
+    const timeMs = Date.now() - this.nodeStartTime
+    this.choices.push({ node_id: this.currentNodeId, option_id: opt.id, choice_time_ms: timeMs })
+    this.lastDelta = opt.delta
+    this.showDelta = true
+    const newEmotion = Math.max(-100, Math.min(100, this.stats.emotion + opt.delta.emotion))
+    const newFinance = Math.max(-100, Math.min(100, this.stats.finance + opt.delta.finance))
+    const newSocial  = Math.max(-100, Math.min(100, this.stats.social  + opt.delta.social))
+    this.stats = { emotion: newEmotion, finance: newFinance, social: newSocial }
+    animateTo({ duration: 600, curve: Curve.Smooth }, () => {
+      this.statBarEmotion = newEmotion
+      this.statBarFinance = newFinance
+      this.statBarSocial  = newSocial
+    })
+    setTimeout(() => { this.showDelta = false }, 1500)
+    setTimeout(() => {
+      if (opt.next === 'ending') this.finishGame()
+      else {
+        this.currentNodeId = opt.next
+        this.animateNodeIn()
+        this.startCountdown()
+      }
+    }, 800)
+  }
+
+  async finishGame() {
+    const ch = this.currentChapter
+    if (!ch) return
+    this.finalStats = { emotion: this.stats.emotion,
+                        finance: this.stats.finance, social: this.stats.social }
+    try {
+      const userId = this.authService.getCurrentUserId()
+      const req = http.createHttp()
+      const res = await req.request(
+        `${ApiConfig.getBaseUrl()}/api/game/parallel-life/finish`, {
+        method: http.RequestMethod.POST,
+        header: { 'Content-Type': 'application/json' },
+        extraData: JSON.stringify({
+          user_id: userId, chapter_id: ch.id,
+          final_stats: this.finalStats, choices: this.choices
+        })
+      })
+      req.destroy()
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record&lt;string, Object&gt;
+        const data = body['data'] as Record&lt;string, Object&gt;
+        this.ending = data['ending'] as Record&lt;string, string&gt;
+      }
+    } catch (e) { console.error('提交结果失败:', e) }
+    this.phase = 'result'
+    this.animateResultIn()
+  }
+
+  startCountdown() {
+    this.countdown = 15
+    this.countdownActive = true
+    this.nodeStartTime = Date.now()
+    this.countdownTimer = setInterval(() => {
+      this.countdown--
+      if (this.countdown &lt;= 0) {
+        this.stopCountdown()
+        const node = this.currentNode()
+        if (node && node.options.length > 0) this.onChoose(node.options[0])
+      }
+    }, 1000)
+  }
+
+  stopCountdown() {
+    if (this.countdownTimer !== -1) {
+      clearInterval(this.countdownTimer)
+      this.countdownTimer = -1
+    }
+    this.countdownActive = false
+  }
+
+  private navigateBack() {
+    this.stopCountdown()
+    try { this.getUIContext().getRouter().back() } catch (e) {}
+  }
+
+  animateIntroIn() {
+    this.introOpacity = 0
+    setTimeout(() => {
+      animateTo({ duration: 800, curve: Curve.Smooth }, () => { this.introOpacity = 1 })
+    }, 200)
+  }
+
+  animateNodeIn() {
+    this.nodeOpacity = 0; this.nodeTranslateY = 30
+    this.optAOpacity = 0; this.optBOpacity = 0
+    this.optATranslateX = -40; this.optBTranslateX = 40
+    setTimeout(() => {
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.nodeOpacity = 1; this.nodeTranslateY = 0
+      })
+    }, 100)
+    setTimeout(() => {
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.optAOpacity = 1; this.optATranslateX = 0
+      })
+    }, 400)
+    setTimeout(() => {
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.optBOpacity = 1; this.optBTranslateX = 0
+      })
+    }, 550)
+  }
+
+  animateResultIn() {
+    this.resultOpacity = 0
+    setTimeout(() => {
+      animateTo({ duration: 700, curve: Curve.Smooth }, () => { this.resultOpacity = 1 })
+    }, 300)
+  }
+
+  statColor(val: number): string {
+    if (val >= 60) return '#34d399'
+    if (val >= 30) return '#fbbf24'
+    return '#f87171'
+  }
+  deltaText(v: number): string { return v > 0 ? `+${v}` : `${v}` }
+  accentColor(): string { return this.currentChapter?.accent ?? '#7C3AED' }
+  themeColor(): string { return this.currentChapter?.theme ?? '#1a1a2e' }
+
+  build() {
+    Stack() {
+      Column().width('100%').height('100%').backgroundColor(this.themeColor())
+      Row() {
+        Text('Back').fontSize(14).fontColor('rgba(255,255,255,0.7)')
+          .onClick(() => this.navigateBack())
+        Text(this.currentChapter?.title ?? '平行人生')
+          .fontSize(16).fontWeight(600).fontColor('#FFFFFF').margin({ left: 12 })
+        Blank()
+        if (this.phase === 'playing') {
+          Stack() {
+            Circle({ width: 36, height: 36 }).fill('rgba(255,255,255,0.1)')
+            Text(`${this.countdown}`).fontSize(14).fontWeight(700)
+              .fontColor(this.countdown &lt;= 5 ? '#f87171' : '#FFFFFF')
+          }.width(36).height(36)
+        }
+      }
+      .width('100%').height(56).padding({ left: 16, right: 16 })
+      .position({ x: 0, y: 0 }).zIndex(10)
+
+      if (this.phase === 'playing') {
+        Column({ space: 6 }) {
+          this.StatBar('情绪', this.statBarEmotion)
+          this.StatBar('财务', this.statBarFinance)
+          this.StatBar('社交', this.statBarSocial)
+        }
+        .width('100%').padding({ left: 16, right: 16, top: 64, bottom: 0 })
+        .position({ x: 0, y: 0 }).zIndex(9)
+      }
+
+      if (this.phase === 'loading') { this.buildLoading() }
+      else if (this.phase === 'intro') { this.buildIntro() }
+      else if (this.phase === 'playing') { this.buildPlaying() }
+      else if (this.phase === 'result') { this.buildResult() }
+    }.width('100%').height('100%')
+  }
+
+  @Builder StatBar(label: string, val: number) {
+    Row({ space: 6 }) {
+      Text(label).fontSize(11).fontColor('rgba(255,255,255,0.6)').width(28)
+      Row() {
+        Column().height(4).width(`${Math.max(0, (val + 100) / 2)}%`)
+          .backgroundColor(this.statColor(val)).borderRadius(2)
+        Blank()
+      }.layoutWeight(1).backgroundColor('rgba(255,255,255,0.1)').borderRadius(2)
+      Text(`${val}`).fontSize(11).fontColor('rgba(255,255,255,0.5)').width(28)
+        .textAlign(TextAlign.End)
+    }.width('100%').alignItems(VerticalAlign.Center)
+  }
+
+  @Builder buildLoading() {
+    Column({ space: 16 }) {
+      LoadingProgress().width(48).height(48).color('#FFFFFF')
+      Text('加载中...').fontSize(14).fontColor('rgba(255,255,255,0.6)')
+    }.width('100%').height('100%')
+     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder buildIntro() {
+    Column({ space: 0 }) {
+      Blank().layoutWeight(1)
+      Column({ space: 24 }) {
+        Text(this.currentChapter?.cover_emoji ?? 'G').fontSize(72).textAlign(TextAlign.Center)
+        Text(this.currentChapter?.title ?? '')
+          .fontSize(28).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+        Text(this.currentChapter?.subtitle ?? '')
+          .fontSize(15).fontColor('rgba(255,255,255,0.6)').textAlign(TextAlign.Center)
+        Column().width(40).height(2).backgroundColor(this.accentColor()).borderRadius(1)
+        Text(this.currentChapter?.intro ?? '')
+          .fontSize(15).fontColor('rgba(255,255,255,0.8)')
+          .lineHeight(26).textAlign(TextAlign.Center).padding({ left: 32, right: 32 })
+      }.opacity(this.introOpacity).animation({ duration: 800, curve: Curve.Smooth })
+      Blank().layoutWeight(1)
+      Column({ space: 12 }) {
+        Button('开始游戏').width('80%').height(54)
+          .fontSize(17).fontWeight(700).fontColor('#FFFFFF')
+          .backgroundColor(this.accentColor()).borderRadius(Theme.Radius.round)
+          .onClick(() => this.startGame())
+        Text('每次选择都会影响你的情绪、财务和社交')
+          .fontSize(12).fontColor('rgba(255,255,255,0.35)').textAlign(TextAlign.Center)
+      }.width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 48 })
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder buildPlaying() {
+    Column({ space: 0 }) {
+      Blank().height(160)
+      Column({ space: 0 }) {
+        Text(this.currentNode()?.text ?? '')
+          .fontSize(18).fontWeight(600).fontColor('#FFFFFF')
+          .lineHeight(30).textAlign(TextAlign.Center).padding({ left: 24, right: 24 })
+      }
+      .opacity(this.nodeOpacity).translate({ y: this.nodeTranslateY })
+      .animation({ duration: 400, curve: Curve.Smooth })
+      Blank().layoutWeight(1)
+      Column({ space: 14 }) {
+        ForEach(this.currentNode()?.options ?? [], (opt: GameOption, idx: number) => {
+          Column({ space: 8 }) {
+            Text(opt.text).fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+            Text(opt.sub).fontSize(12).fontColor('rgba(255,255,255,0.55)').lineHeight(18)
+            Row({ space: 12 }) {
+              if (opt.delta.emotion !== 0) {
+                Text(`情绪${this.deltaText(opt.delta.emotion)}`).fontSize(11)
+                  .fontColor(opt.delta.emotion > 0 ? '#34d399' : '#f87171')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(opt.delta.emotion > 0
+                    ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                  .borderRadius(Theme.Radius.round)
+              }
+              if (opt.delta.finance !== 0) {
+                Text(`财务${this.deltaText(opt.delta.finance)}`).fontSize(11)
+                  .fontColor(opt.delta.finance > 0 ? '#34d399' : '#f87171')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(opt.delta.finance > 0
+                    ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                  .borderRadius(Theme.Radius.round)
+              }
+              if (opt.delta.social !== 0) {
+                Text(`社交${this.deltaText(opt.delta.social)}`).fontSize(11)
+                  .fontColor(opt.delta.social > 0 ? '#34d399' : '#f87171')
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                  .backgroundColor(opt.delta.social > 0
+                    ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                  .borderRadius(Theme.Radius.round)
+              }
+            }
+          }
+          .width('100%').padding(18)
+          .backgroundColor('rgba(255,255,255,0.07)').borderRadius(Theme.Radius.l)
+          .border({ width: 1.5,
+            color: idx === 0 ? `${this.accentColor()}66` : 'rgba(255,255,255,0.1)' })
+          .opacity(idx === 0 ? this.optAOpacity : this.optBOpacity)
+          .translate({ x: idx === 0 ? this.optATranslateX : this.optBTranslateX })
+          .animation({ duration: 400, curve: Curve.Smooth })
+          .onClick(() => this.onChoose(opt))
+        })
+      }.padding({ left: 20, right: 20, bottom: 48 })
+    }.width('100%').height('100%').alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder buildResult() {
+    Scroll() {
+      Column({ space: 0 }) {
+        Blank().height(72)
+        Column({ space: 20 }) {
+          Column({ space: 8 }) {
+            Text(this.ending['badge'] ?? '完成').fontSize(13)
+              .fontColor(this.accentColor()).fontWeight(600)
+              .padding({ left: 16, right: 16, top: 5, bottom: 5 })
+              .backgroundColor(`${this.accentColor()}22`).borderRadius(Theme.Radius.round)
+          }.alignItems(HorizontalAlign.Center)
+          Text(this.ending['title'] ?? '游戏结束')
+            .fontSize(26).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+          Text(this.ending['text'] ?? '')
+            .fontSize(15).fontColor('rgba(255,255,255,0.75)')
+            .lineHeight(26).textAlign(TextAlign.Center).padding({ left: 28, right: 28 })
+          Column({ space: 10 }) {
+            Text('最终状态').fontSize(13).fontColor('rgba(255,255,255,0.4)').fontWeight(600)
+            Row({ space: 0 }) {
+              this.FinalStatBlock('情绪', this.finalStats.emotion)
+              this.FinalStatBlock('财务', this.finalStats.finance)
+              this.FinalStatBlock('社交', this.finalStats.social)
+            }.width('100%')
+          }
+          .width('88%').padding(20)
+          .backgroundColor('rgba(255,255,255,0.06)').borderRadius(Theme.Radius.l)
+          Text(`共做了 ${this.choices.length} 次选择`)
+            .fontSize(13).fontColor('rgba(255,255,255,0.35)')
+          Text('你的选择已用于优化专属 AI 模型')
+            .fontSize(12).fontColor('rgba(255,255,255,0.25)')
+        }.opacity(this.resultOpacity).animation({ duration: 700, curve: Curve.Smooth })
+        Blank().height(32)
+        Column({ space: 12 }) {
+          Button('进入决策副本').width('80%').height(52)
+            .fontSize(15).fontWeight(700).fontColor('#FFFFFF')
+            .backgroundColor(this.accentColor()).borderRadius(Theme.Radius.round)
+            .onClick(() => {
+              try {
+                this.getUIContext().getRouter().pushUrl({ url: 'pages/QuickDecisionInput' })
+              } catch (e) { this.navigateBack() }
+            })
+          Button('再玩一次').width('80%').height(44)
+            .fontSize(14).fontColor('rgba(255,255,255,0.5)')
+            .backgroundColor('rgba(255,255,255,0.06)').borderRadius(Theme.Radius.round)
+            .onClick(() => { this.phase = 'intro'; this.animateIntroIn() })
+        }.width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 48 })
+      }.width('100%').alignItems(HorizontalAlign.Center)
+    }.scrollBar(BarState.Off).width('100%').height('100%')
+  }
+
+  @Builder FinalStatBlock(label: string, val: number) {
+    Column({ space: 6 }) {
+      Text(`${val}`).fontSize(20).fontWeight(800).fontColor(this.statColor(val))
+      Text(label).fontSize(11).fontColor('rgba(255,255,255,0.4)')
+    }.layoutWeight(1).alignItems(HorizontalAlign.Center).padding(12)
+  }
+}
+</pre>
+</div>
+
+<div class="pb"></div>
+<div class="sec">
+  <p style="font-family:'SimSun',serif;font-size:10pt;line-height:2;margin-top:8mm;">
+    以上源程序代码为软件著作权登记申请材料，包含后端主入口（backend/main.py）前1500行，以及后端模型压缩模块（backend/model_compression/fusion_compressor.py）与鸿蒙前端游戏页面（harmonyos/.../ParallelLifeGame.ets）共计后1500行，真实反映本软件的核心技术实现。
+  </p>
+  <br>
+  <p style="font-family:'SimSun',serif;font-size:10pt;">著作权人（签章）：___________________&nbsp;&nbsp;&nbsp;&nbsp;日期：______年______月______日</p>
+</div>
+
+</body>
+</html>

@@ -177,10 +177,10 @@ struct SmartInsights {
   }
 
   getLevelIcon(level: string): string {
-    if (level === 'critical') return '🚨';
-    if (level === 'warning') return '⚠️';
-    if (level === 'suggestion') return '💡';
-    return 'ℹ️';
+    if (level === 'critical') return '!!';
+    if (level === 'warning') return '!';
+    if (level === 'suggestion') return '*';
+    return 'i';
   }
 
   getCategoryColor(category: string): string {
@@ -189,12 +189,12 @@ struct SmartInsights {
   }
 
   getCategoryIcon(category: string): string {
-    if (category === 'cascade') return '🌊';
-    if (category === 'synergy') return '🤝';
-    if (category === 'tipping_point') return '⚡';
-    if (category === 'feedback_loop') return '🔄';
-    if (category === 'pattern') return '📊';
-    return '💡';
+    if (category === 'cascade') return 'C';
+    if (category === 'synergy') return 'S';
+    if (category === 'tipping_point') return 'T';
+    if (category === 'feedback_loop') return 'L';
+    if (category === 'pattern') return 'P';
+    return '*';
   }
 
   private navigateBack(): void {
@@ -275,10 +275,10 @@ struct SmartInsights {
         .animation({ duration: 600, curve: Curve.Smooth, delay: 0 })
 
       Row({ space: 12 }) {
-        this.SummaryCard('关键', this.dashboardData?.summary.critical_count || 0, Theme.Color.Destructive, '🚨', 0)
-        this.SummaryCard('警告', this.dashboardData?.summary.warning_count || 0, Theme.Color.Warning, '⚠️', 1)
-        this.SummaryCard('建议', this.dashboardData?.summary.suggestion_count || 0, Theme.Color.Primary, '💡', 2)
-        this.SummaryCard('总计', this.dashboardData?.summary.total_insights || 0, Theme.Color.Secondary, '📊', 3)
+        this.SummaryCard('关键', this.dashboardData?.summary.critical_count || 0, Theme.Color.Destructive, '!!', 0)
+        this.SummaryCard('警告', this.dashboardData?.summary.warning_count || 0, Theme.Color.Warning, '!', 1)
+        this.SummaryCard('建议', this.dashboardData?.summary.suggestion_count || 0, Theme.Color.Primary, '*', 2)
+        this.SummaryCard('总计', this.dashboardData?.summary.total_insights || 0, Theme.Color.Secondary, '#', 3)
       }.width('100%').justifyContent(FlexAlign.SpaceBetween)
     }
   }
@@ -366,7 +366,7 @@ struct SmartInsights {
     Column({ space: 12 }) {
       if (this.allInsights.length === 0) {
         Column({ space: 16 }) {
-          Text('🔮').fontSize(48)
+          Text('--').fontSize(48).fontColor(Theme.Color.TextTertiary)
           Text('暂无洞察').fontSize(16).fontColor(Theme.Color.TextSecondary)
           Text('继续与AI对话，系统会自动分析并生成洞察')
             .fontSize(13).fontColor(Theme.Color.TextTertiary).textAlign(TextAlign.Center)
@@ -470,7 +470,7 @@ struct SmartInsights {
 
             if (this.selectedInsight!.evidence.length > 0) {
               Column({ space: 8 }) {
-                Text('📋 支撑证据').fontSize(14).fontWeight(600).fontColor(Theme.Color.Warning)
+                Text('// 支撑证据').fontSize(14).fontWeight(600).fontColor(Theme.Color.Warning)
                 ForEach(this.selectedInsight!.evidence, (evidence: string) => {
                   Row({ space: 8 }) {
                     Text('•').fontSize(14).fontColor(Theme.Color.TextTertiary)
@@ -486,7 +486,7 @@ struct SmartInsights {
 
             if (this.selectedInsight!.recommendations.length > 0) {
               Column({ space: 8 }) {
-                Text('💡 建议行动').fontSize(14).fontWeight(600).fontColor(Theme.Color.Accent)
+                Text('* 建议行动').fontSize(14).fontWeight(600).fontColor(Theme.Color.Accent)
                 ForEach(this.selectedInsight!.recommendations, (rec: string, idx: number) => {
                   Row({ space: 8 }) {
                     Text(`${idx + 1}.`).fontSize(13).fontColor(Theme.Color.Accent)

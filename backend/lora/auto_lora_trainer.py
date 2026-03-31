@@ -104,7 +104,6 @@ class AutoLoRATrainer:
 
         self.training_config = {
             "min_data_size": 20,
-            "train_interval_days": 7,
             "num_epochs": 1,
             "batch_size": 1,
             "learning_rate": 2e-4,
@@ -148,11 +147,6 @@ class AutoLoRATrainer:
         if len(conversations) < self.training_config["min_data_size"]:
             print(f"❌ 数据不足: {len(conversations)}/{self.training_config['min_data_size']}")
             return False
-        if self.status["last_train_time"]:
-            days_since_last = (datetime.now() - self.status["last_train_time"]).days
-            if days_since_last < self.training_config["train_interval_days"]:
-                print(f"⏰ 距离上次训练仅 {days_since_last} 天")
-                return False
         if self.status["is_training"]:
             print("⚠️ 已有训练任务在进行中")
             return False
@@ -210,41 +204,257 @@ class AutoLoRATrainer:
                 else:
                     i += 1
 
-            # 分层
-            game_convs     = []
-            decision_convs = []
-            general_convs  = []
+            # 分层（LoRA 只学长期稳定的偏好和风格，不学短期事实）
+            game_convs     = []   # 游戏选择 → LoRA（决策偏好模式）
+            preference_convs = [] # 价值观/偏好表达 → LoRA
+            general_convs  = []   # 普通对话 → LoRA（语言风格）
+            # 以下不进 LoRA：
+            # - collect_ 开头的决策收集对话（特定于单次决策，应去 Prompt）
+            # - feedback_ 开头的反馈对话（已单独处理）
+
+            PREFERENCE_KEYWORDS = [
+                '我觉得', '我认为', '我喜欢', '我讨厌', '我害怕', '我希望',
+                '对我来说', '我看重', '我在意', '我不在乎', '我倾向',
+                '我的原则', '我一直', '我从来', '我习惯', '我性格',
+                '家人觉得', '朋友说我', '别人评价我'
+            ]
 
             for conv in raw_pairs:
                 sid  = conv.get('session_id', '')
                 text = conv['user'] + conv['assistant']
+
+                # 决策收集对话 → 不进 LoRA（去 Prompt）
+                if sid.startswith('collect_') or sid.startswith('feedback_'):
+                    continue
+
+                # 游戏数据 → LoRA（决策偏好）
                 if sid.startswith('game_'):
                     game_convs.append(conv)
+                # 价值观/偏好表达 → LoRA（长期性格）
+                elif any(kw in text for kw in PREFERENCE_KEYWORDS):
+                    preference_convs.append(conv)
+                # 决策关键词但不是收集对话 → LoRA（决策思维模式）
                 elif any(kw in text for kw in DECISION_KEYWORDS):
-                    decision_convs.append(conv)
+                    preference_convs.append(conv)
                 else:
                     general_convs.append(conv)
+
+            # ── 用 LLM 对不确定的对话做二次分类 ──
+            # 从 general_convs 中识别出隐含的偏好表达
+            if general_convs:
+                reclassified = self._llm_classify_conversations(general_convs)
+                extra_preference = [c for c in reclassified if c.get("_class") == "preference"]
+                remaining_general = [c for c in reclassified if c.get("_class") != "preference"]
+                preference_convs.extend(extra_preference)
+                general_convs = remaining_general
+                if extra_preference:
+                    print(f"[LLM分类] 从通用对话中识别出 {len(extra_preference)} 条偏好表达")
 
             # 游戏数据加权（复制一份，强化决策偏好信号）
             weighted_game = game_convs * 2
 
-            # 通用数据采样（最多占决策+游戏数据量的50%）
-            decision_total = len(decision_convs) + len(game_convs)
-            max_general    = max(10, decision_total // 2)
+            # 通用数据采样（保留语言风格，但不占主导）
+            preference_total = len(preference_convs) + len(game_convs)
+            max_general = max(10, preference_total // 2)
             sampled_general = random.sample(general_convs, min(len(general_convs), max_general))
 
-            result = weighted_game + decision_convs + sampled_general
+            result = weighted_game + preference_convs + sampled_general
             random.shuffle(result)
 
             print(
-                f"[LoRA训练数据] 游戏:{len(game_convs)}×2  决策:{len(decision_convs)}"
-                f"  通用采样:{len(sampled_general)}/{len(general_convs)}  合计:{len(result)}"
+                f"[LoRA训练数据] 游戏:{len(game_convs)}x2  偏好:{len(preference_convs)}"
+                f"  通用采样:{len(sampled_general)}/{len(general_convs)}"
+                f"  排除:collect/feedback  合计:{len(result)}"
             )
+
+            # ── 合成决策推演格式的训练样本（训练-推理格式对齐）──
+            synthetic = self._synthesize_decision_training_data(preference_convs + game_convs)
+            if synthetic:
+                result.extend(synthetic)
+                print(f"[LoRA训练数据] 合成推演格式样本: {len(synthetic)} 条")
+
+            random.shuffle(result)
             return result
 
         except Exception as e:
             print(f"从数据库获取对话失败: {e}")
             return []
+
+    def _llm_classify_conversations(self, convs: List[Dict]) -> List[Dict]:
+        """
+        用 LLM 批量分类对话：区分"长期偏好表达"和"短期闲聊"。
+        只在 LoRA 训练触发时调用一次，不影响实时性能。
+        """
+        if not convs:
+            return convs
+
+        try:
+            from backend.llm.llm_service import get_llm_service
+            llm = get_llm_service()
+            if not llm or not llm.enabled:
+                # LLM 不可用，全部标记为 general
+                for c in convs:
+                    c["_class"] = "general"
+                return convs
+
+            # 批量分类（每批最多 10 条，避免 prompt 过长）
+            batch_size = 10
+            for i in range(0, len(convs), batch_size):
+                batch = convs[i:i + batch_size]
+                texts = []
+                for idx, c in enumerate(batch):
+                    texts.append(f"{idx}. {c['user'][:80]}")
+
+                prompt = (
+                    "请判断以下每条用户发言属于哪个类别：\n"
+                    "A = 长期偏好/价值观/性格表达（如：我比较保守、我很看重家人意见、我不喜欢冒险）\n"
+                    "B = 短期状态/具体事件/闲聊（如：今天加班了、帮我写段代码、天气不错）\n\n"
+                    + "\n".join(texts) + "\n\n"
+                    "请只输出每条的编号和类别，格式如：0:A 1:B 2:A"
+                )
+
+                try:
+                    response = llm.chat([
+                        {"role": "system", "content": "你是文本分类助手，只输出分类结果。"},
+                        {"role": "user", "content": prompt}
+                    ], temperature=0.0)
+
+                    if response:
+                        # 解析 "0:A 1:B 2:A" 格式
+                        import re
+                        matches = re.findall(r'(\d+)\s*[:：]\s*([ABab])', response)
+                        for num_str, label in matches:
+                            num = int(num_str)
+                            if 0 <= num < len(batch):
+                                batch[num]["_class"] = "preference" if label.upper() == "A" else "general"
+
+                except Exception as e:
+                    print(f"[LLM分类] 批次分类失败: {e}")
+
+            # 未被分类的默认为 general
+            for c in convs:
+                if "_class" not in c:
+                    c["_class"] = "general"
+
+            return convs
+
+        except Exception as e:
+            print(f"[LLM分类] 整体失败: {e}")
+            for c in convs:
+                c["_class"] = "general"
+            return convs
+
+    def _synthesize_decision_training_data(self, decision_convs: List[Dict]) -> List[Dict]:
+        """
+        训练-推理格式对齐：把用户的决策对话转换成和推演 prompt 一致的格式。
+        
+        这样 LoRA 学到的不是"怎么聊天"，而是"怎么为这个用户做决策推演"。
+        训练样本的 user 部分 = 推演 prompt 格式
+        训练样本的 assistant 部分 = 符合该用户风格的推演事件 JSON
+        """
+        if not decision_convs:
+            return []
+
+        synthetic = []
+
+        try:
+            # 1. 用 PKF-DS 抽取个人事实
+            from backend.decision.personal_knowledge_fusion import PersonalFactExtractor
+            extractor = PersonalFactExtractor(self.user_id)
+            facts = extractor.extract_all()
+            facts_text = "\n".join([f"- {f.to_text()}" for f in facts[:8]])
+
+            if not facts_text.strip():
+                facts_text = "- 暂无详细个人事实"
+
+            # 2. 从决策对话中提取决策问题
+            decision_questions = []
+            for conv in decision_convs[:5]:
+                text = conv.get("user", "")
+                if len(text) > 10:
+                    decision_questions.append(text[:100])
+
+            if not decision_questions:
+                return []
+
+            # 3. 用通义千问 API 为每个决策问题生成"标准答案"
+            from backend.llm.llm_service import get_llm_service
+            llm = get_llm_service()
+            if not llm or not llm.enabled:
+                return self._synthesize_fallback(decision_questions, facts_text)
+
+            for q in decision_questions[:3]:  # 最多 3 个，避免 API 调用过多
+                # 构造和推演时一致的 prompt 格式
+                user_prompt = (
+                    f"<|im_start|>system\n"
+                    f"你是用户的未来决策推演引擎。请根据用户问题、选项和个性化特征，"
+                    f"生成真实、具体、实用的未来事件。输出必须是 JSON 数组。<|im_end|>\n"
+                    f"<|im_start|>user\n"
+                    f"决策问题：{q}\n"
+                    f"决策选项：{q.split('还是')[-1].strip() if '还是' in q else '当前倾向'}\n"
+                    f"用户个人事实：\n{facts_text}\n"
+                    f"请输出 4 个按时间递进的关键事件，每个事件都要贴近用户的真实生活。\n"
+                    f"输出格式：[{{\"month\":1,\"event\":\"具体事件\",\"impact\":{{\"健康\":0.0,\"财务\":0.0,"
+                    f"\"社交\":0.0,\"情绪\":0.0,\"学习\":0.0,\"时间\":0.0}},\"probability\":0.8}}]\n"
+                    f"<|im_end|>\n<|im_start|>assistant\n"
+                )
+
+                # 用通义千问生成标准答案（不是 LoRA，是云端 API）
+                gen_prompt = (
+                    f"为以下用户生成 4 个决策推演事件（JSON 数组），"
+                    f"事件必须引用用户的个人事实，贴近真实生活：\n\n"
+                    f"决策问题：{q}\n"
+                    f"用户个人事实：\n{facts_text}\n\n"
+                    f"输出 JSON 数组，每个元素包含 month, event, impact, probability。"
+                    f"event 必须具体，引用用户的真实信息。"
+                )
+
+                try:
+                    response = llm.chat([
+                        {"role": "system", "content": "你是决策推演专家，只输出 JSON 数组。"},
+                        {"role": "user", "content": gen_prompt}
+                    ], temperature=0.3)
+
+                    if response and response.strip():
+                        import re
+                        response = re.sub(r"```json\s*", "", response)
+                        response = re.sub(r"```\s*", "", response)
+                        # 验证是合法 JSON
+                        json.loads(response.strip())
+                        # 合成训练样本：user = 推演 prompt，assistant = JSON 结果
+                        synthetic.append({
+                            "user": user_prompt,
+                            "assistant": response.strip()
+                        })
+                except Exception as e:
+                    print(f"[合成训练数据] 生成失败: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"[合成训练数据] 整体失败: {e}")
+
+        return synthetic
+
+    def _synthesize_fallback(self, questions: List[str], facts_text: str) -> List[Dict]:
+        """LLM 不可用时的兜底合成"""
+        synthetic = []
+        for q in questions[:2]:
+            user_prompt = (
+                f"<|im_start|>system\n你是用户的未来决策推演引擎。输出必须是 JSON 数组。<|im_end|>\n"
+                f"<|im_start|>user\n决策问题：{q}\n"
+                f"用户个人事实：\n{facts_text}\n"
+                f"请输出 2 个按时间递进的关键事件。<|im_end|>\n<|im_start|>assistant\n"
+            )
+            fallback_answer = json.dumps([
+                {"month": 1, "event": f"开始认真评估{q[:20]}的各方面影响", 
+                 "impact": {"健康": 0.0, "财务": 0.0, "社交": 0.0, "情绪": -0.1, "学习": 0.1, "时间": -0.1},
+                 "probability": 0.85},
+                {"month": 3, "event": f"经过两个月的准备和调研，对{q[:20]}有了更清晰的判断",
+                 "impact": {"健康": 0.0, "财务": 0.05, "社交": 0.05, "情绪": 0.1, "学习": 0.15, "时间": -0.05},
+                 "probability": 0.75}
+            ], ensure_ascii=False)
+            synthetic.append({"user": user_prompt, "assistant": fallback_answer})
+        return synthetic
 
     def prepare_dataset(self, conversations: List[Dict]) -> Dataset:
         tokenizer = AutoTokenizer.from_pretrained(

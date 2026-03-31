@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>软件说明手册 - ParaLife · 平行境 V1.0</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:"SimSun","宋体",serif; font-size:11pt; color:#000; background:#fff; line-height:1.8; }
+@media print { .pb { page-break-before:always; } }
+.page { width:210mm; margin:0 auto; padding:20mm 22mm 15mm 25mm; }
+h1 { font-family:"SimHei","黑体",sans-serif; font-size:20pt; text-align:center; letter-spacing:3px; margin-bottom:5mm; }
+h2 { font-family:"SimHei","黑体",sans-serif; font-size:13pt; text-align:center; margin-bottom:3mm; }
+h3 { font-family:"SimHei","黑体",sans-serif; font-size:12pt; border-left:4px solid #000; padding-left:8px; margin:6mm 0 3mm 0; }
+h4 { font-family:"SimHei","黑体",sans-serif; font-size:11pt; margin:4mm 0 2mm 0; }
+p { text-indent:2em; margin-bottom:2mm; }
+ul, ol { margin-left:4em; margin-bottom:3mm; }
+li { margin-bottom:1mm; }
+table { width:100%; border-collapse:collapse; margin:3mm 0 5mm 0; font-size:10.5pt; }
+table, th, td { border:1px solid #000; }
+th { background:#f0f0f0; font-weight:bold; padding:4px 8px; text-align:center; font-family:"SimHei","黑体",sans-serif; }
+td { padding:4px 8px; vertical-align:top; }
+.center { text-align:center; }
+.cover-info { margin-top:15mm; }
+.cover-info table { width:140mm; margin:0 auto; }
+.cover-info td:first-child { background:#f8f8f8; font-weight:bold; width:38%; }
+.toc-item { display:flex; justify-content:space-between; padding:1px 0; }
+.toc-dot { flex:1; border-bottom:1px dotted #999; margin:0 4px; position:relative; top:-3px; }
+code { font-family:"Courier New",monospace; font-size:9.5pt; background:#f5f5f5; padding:1px 4px; border:1px solid #ddd; }
+.note-box { border:1px solid #ccc; background:#f9f9f9; padding:6px 10px; margin:3mm 0; font-size:10pt; }
+</style>
+</head>
+<body>
+
+<!-- 封面 -->
+<div class="page">
+  <br><br><br>
+  <h1>软件说明手册</h1>
+  <h2>ParaLife · 平行境</h2>
+  <p class="center" style="font-size:12pt;text-indent:0;">基于AI智能体架构的鸿蒙原生个性化生活决策助手</p>
+  <p class="center" style="font-size:11pt;text-indent:0;margin-top:2mm;">版本号：V1.0</p>
+
+  <div class="cover-info">
+    <table>
+      <tr><td>软件名称</td><td>ParaLife · 平行境</td></tr>
+      <tr><td>版本号</td><td>V1.0</td></tr>
+      <tr><td>运行平台</td><td>HarmonyOS NEXT / Ubuntu 22.04.5 LTS</td></tr>
+      <tr><td>编程语言</td><td>Python 3.12.3 / ArkTS</td></tr>
+      <tr><td>文档版本</td><td>V1.0</td></tr>
+    </table>
+  </div>
+
+  <br><br>
+  <p class="center" style="text-indent:0;font-size:10pt;color:#555;">本手册依据《计算机软件著作权登记办法》编写，用于软件著作权登记申请。</p>
+</div>
+
+<div class="pb"></div>
+
+<!-- 目录 -->
+<div class="page">
+  <h3 style="border:none;padding:0;font-size:14pt;text-align:center;margin-bottom:8mm;">目  录</h3>
+  <div class="toc-item"><span>第一章 软件概述</span><div class="toc-dot"></div><span>3</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;1.1 软件简介</span><div class="toc-dot"></div><span>3</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;1.2 开发背景与目的</span><div class="toc-dot"></div><span>3</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;1.3 面向用户</span><div class="toc-dot"></div><span>3</span></div>
+  <div class="toc-item"><span>第二章 系统架构</span><div class="toc-dot"></div><span>4</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;2.1 整体架构</span><div class="toc-dot"></div><span>4</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;2.2 模块组成</span><div class="toc-dot"></div><span>4</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;2.3 技术栈</span><div class="toc-dot"></div><span>5</span></div>
+  <div class="toc-item"><span>第三章 功能说明</span><div class="toc-dot"></div><span>5</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.1 个性化知识图谱构建</span><div class="toc-dot"></div><span>5</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.2 专属AI模型训练（LoRA）</span><div class="toc-dot"></div><span>6</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.3 决策路径推演</span><div class="toc-dot"></div><span>6</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.4 平行人生决策游戏</span><div class="toc-dot"></div><span>7</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.5 涌现行为分析与预警</span><div class="toc-dot"></div><span>7</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.6 多模态数据采集</span><div class="toc-dot"></div><span>7</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;3.7 数字孪生预测</span><div class="toc-dot"></div><span>8</span></div>
+  <div class="toc-item"><span>第四章 技术实现</span><div class="toc-dot"></div><span>8</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;4.1 LoRA个性化微调</span><div class="toc-dot"></div><span>8</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;4.2 融合模型压缩</span><div class="toc-dot"></div><span>9</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;4.3 Neo4j知识图谱</span><div class="toc-dot"></div><span>9</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;4.4 涌现理论分析</span><div class="toc-dot"></div><span>10</span></div>
+  <div class="toc-item"><span>第五章 安装与运行</span><div class="toc-dot"></div><span>10</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;5.1 环境要求</span><div class="toc-dot"></div><span>10</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;5.2 后端部署</span><div class="toc-dot"></div><span>11</span></div>
+  <div class="toc-item"><span>&nbsp;&nbsp;5.3 前端部署</span><div class="toc-dot"></div><span>11</span></div>
+  <div class="toc-item"><span>第六章 接口说明</span><div class="toc-dot"></div><span>12</span></div>
+  <div class="toc-item"><span>第七章 数据库设计</span><div class="toc-dot"></div><span>13</span></div>
+  <div class="toc-item"><span>第八章 安全说明</span><div class="toc-dot"></div><span>14</span></div>
+</div>
+
+<div class="pb"></div>
+
+<!-- 第一章 -->
+<div class="page">
+  <h3>第一章 软件概述</h3>
+
+  <h4>1.1 软件简介</h4>
+  <p>ParaLife · 平行境（以下简称"本软件"）是一款基于AI智能体架构的鸿蒙原生个性化生活决策助手。软件名称"平行境"寓意：对于用户面临的每一个重要决策，系统都会为其推演出一条平行的人生轨迹，帮助用户在做出选择之前，看清每条路径的可能走向。</p>
+  <p>本软件运行于华为鸿蒙（HarmonyOS NEXT）操作系统，后端采用Python/FastAPI构建AI服务，前端采用ArkTS/ArkUI实现原生界面。系统集成了大语言模型个性化微调、知识图谱、检索增强生成、数字孪生等前沿AI技术，为用户提供真正"千人千面"的智能决策辅助体验。</p>
+
+  <h4>1.2 开发背景与目的</h4>
+  <p>当前市场上的AI助手产品普遍存在"千人一面"的问题——无论用户是谁，系统给出的回答和建议都大同小异，无法深度理解个体的价值观、生活习惯、人际关系和情绪状态。这一局限在用户面临人生重大抉择时尤为突出。</p>
+  <p>本软件的开发目的在于：通过持续学习用户的个性特征，构建专属的个人知识图谱，并以此为基础训练专属AI模型，使系统能够真正理解"这个人"，而非泛化的"所有人"。当用户面临职业转换、升学选择、城市迁移等重大决策时，系统基于对用户的深度理解，对每个决策选项进行12个月的时间线推演，量化评估各路径的风险与收益。</p>
+
+  <h4>1.3 面向用户</h4>
+  <p>本软件主要面向18-35岁、正处于人生关键节点的青年群体，具体包括：</p>
+  <ul>
+    <li>面临职业选择或转型的应届毕业生与职场人士</li>
+    <li>考虑升学深造（考研、出国）的在校学生</li>
+    <li>面临城市迁移、置业等重大生活决策的青年</li>
+    <li>希望通过AI辅助进行自我认知与成长规划的用户</li>
+  </ul>
+</div>
+
+<div class="pb"></div>
+
+<!-- 第二章 -->
+<div class="page">
+  <h3>第二章 系统架构</h3>
+
+  <h4>2.1 整体架构</h4>
+  <p>本软件采用前后端分离的三层架构，由鸿蒙原生客户端、Python AI后端服务和数据存储层组成。三层之间通过RESTful API和WebSocket协议进行通信。</p>
+  <table>
+    <tr><th>层次</th><th>组件</th><th>技术实现</th></tr>
+    <tr><td>表现层（客户端）</td><td>鸿蒙原生App</td><td>HarmonyOS NEXT / ArkTS / ArkUI</td></tr>
+    <tr><td>业务逻辑层（后端）</td><td>AI服务 / API网关</td><td>Python 3.12.3 / FastAPI 0.135.1 / WebSocket</td></tr>
+    <tr><td>数据存储层</td><td>关系库 / 图数据库 / 向量库</td><td>MySQL 8.0.45 / Neo4j 5.26.23 / FAISS</td></tr>
+  </table>
+
+  <h4>2.2 模块组成</h4>
+  <p>后端服务由以下核心模块构成：</p>
+  <table>
+    <tr><th>模块目录</th><th>功能描述</th></tr>
+    <tr><td>backend/llm/</td><td>大语言模型服务，负责对话生成与推理</td></tr>
+    <tr><td>backend/lora/</td><td>LoRA个性化微调调度器与模型管理器</td></tr>
+    <tr><td>backend/model_compression/</td><td>FlatQuant+OBR融合模型压缩，支持端侧部署</td></tr>
+    <tr><td>backend/knowledge/</td><td>个人知识图谱构建与信息提取</td></tr>
+    <tr><td>backend/learning/</td><td>RAG记忆系统与强化学习模块</td></tr>
+    <tr><td>backend/digital_twin/</td><td>数字孪生模型与生活状态预测</td></tr>
+    <tr><td>backend/decision/</td><td>决策引擎与12个月路径推演</td></tr>
+    <tr><td>backend/emergence/</td><td>涌现行为检测与实时洞察分析</td></tr>
+    <tr><td>backend/analysis/</td><td>六大领域（健康/时间/情绪/社交/财务/学习）综合分析</td></tr>
+    <tr><td>backend/conversation/</td><td>对话管理与流式输出</td></tr>
+    <tr><td>backend/auth/</td><td>用户认证与权限管理</td></tr>
+    <tr><td>backend/database/</td><td>数据库连接、模型定义与缓存管理</td></tr>
+    <tr><td>backend/game/</td><td>平行人生决策游戏API</td></tr>
+    <tr><td>harmonyos/</td><td>鸿蒙原生前端，含全部页面与组件</td></tr>
+  </table>
+
+  <h4>2.3 技术栈</h4>
+  <table>
+    <tr><th>类别</th><th>技术选型</th><th>版本</th></tr>
+    <tr><td>前端框架</td><td>HarmonyOS ArkTS / ArkUI</td><td>API 12</td></tr>
+    <tr><td>后端框架</td><td>FastAPI</td><td>0.135.1</td></tr>
+    <tr><td>大语言模型</td><td>Qwen3.5-9B（通义千问）</td><td>3.5-9B</td></tr>
+    <tr><td>模型微调</td><td>PEFT / LoRA</td><td>0.18.1</td></tr>
+    <tr><td>深度学习框架</td><td>PyTorch</td><td>2.9.1</td></tr>
+    <tr><td>图数据库</td><td>Neo4j</td><td>5.26.23</td></tr>
+    <tr><td>向量检索</td><td>FAISS</td><td>1.7+</td></tr>
+    <tr><td>关系数据库</td><td>MySQL 8.0（PyMySQL 1.1.2）</td><td>8.0.45</td></tr>
+    <tr><td>实时通信</td><td>WebSocket</td><td>-</td></tr>
+    <tr><td>ORM框架</td><td>SQLAlchemy</td><td>2.0.48</td></tr>
+    <tr><td>视觉模型</td><td>Qwen-VL-Plus（通义千问视觉）</td><td>-</td></tr>
+    <tr><td>语音识别</td><td>Paraformer-realtime-v2（达摩院）</td><td>-</td></tr>
+  </table>
+</div>
+
+<div class="pb"></div>
+
+<!-- 第三章 -->
+<div class="page">
+  <h3>第三章 功能说明</h3>
+
+  <h4>3.1 个性化知识图谱构建</h4>
+  <p>本软件在用户日常对话过程中，通过 LLM 智能提取（优先）与正则规则匹配（降级）相结合的方式，从对话文本中识别用户提及的人物实体，自动构建并更新个人人际关系知识图谱。</p>
+  <p>人物关系分为五类：family（家人）、close_friends（好友/闺蜜）、colleagues（同事/领导）、friends（朋友/同学）、weak_ties（弱关系）。每个人物节点包含姓名、关系类别、置信度及描述属性。</p>
+  <p>知识图谱以 Neo4j 图数据库为存储后端，节点类型为人物（Person），边类型表示人际关系。前端以 3D 星图形式可视化展示，用户可交互探索自己的人际关系网络。</p>
+  <p>主要操作流程：</p>
+  <ol>
+    <li>用户发送对话消息</li>
+    <li>信息提取器（InformationExtractor）优先调用 LLM（qwen-turbo）从文本中识别人物，失败时降级为正则匹配</li>
+    <li>知识图谱系统（InformationKnowledgeGraph）将提取结果写入 Neo4j</li>
+    <li>前端 KnowledgeStarMap 页面实时渲染更新后的人际关系图谱</li>
+  </ol>
+
+  <h4>3.2 专属AI模型训练（LoRA）</h4>
+  <p>本软件为每位用户维护一个独立的LoRA适配层，叠加在Qwen3.5-9B基座模型之上，形成专属的个性化AI模型。</p>
+  <p>训练数据来源：用户对话历史、决策记录、平行人生游戏选择行为、用户反馈等。LoRA调度器（LoRAScheduler）根据配置文件定期触发增量训练，每次训练完成后自动更新用户的LoRA权重文件。</p>
+  <p>用户可在前端LoRATraining页面查看训练状态、触发手动训练，并通过对比测试感受个性化模型与通用模型的差异。</p>
+  <p>技术参数：LoRA rank=16，alpha=32，目标模块为q_proj/v_proj/k_proj/o_proj，训练轮次根据数据量自适应调整。</p>
+
+  <h4>3.3 决策路径推演</h4>
+  <p>当用户面临重要决策时，可在"决策副本"功能中输入决策标题与各备选方案。系统基于用户的个人知识图谱与历史数据，对每个选项进行12个月的时间线推演。</p>
+  <p>推演维度包括：职业发展轨迹、经济状况变化、社交关系影响、心理健康风险、学习成长机会等。系统为每条路径生成量化的风险评分与收益预测，并以可视化图表形式呈现对比结果。</p>
+  <p>决策推演流程：</p>
+  <ol>
+    <li>用户在QuickDecisionInput页面输入决策信息</li>
+    <li>后端DecisionEngine调用用户专属LoRA模型进行路径模拟</li>
+    <li>RiskAssessmentEngine对各路径进行风险量化评估</li>
+    <li>EnhancedDecisionResult页面展示多维度对比分析报告</li>
+    <li>用户可保存决策记录，系统持续跟踪实际结果与预测的偏差</li>
+  </ol>
+
+  <h4>3.4 平行人生决策游戏</h4>
+  <p>平行人生游戏是本软件的特色功能，以沉浸式叙事游戏的形式帮助用户探索不同人生选择的后果。游戏采用事件链结构，玩家扮演主角，在职场、情感、财务等场景中连续做出4-5个决策，每次选择实时影响情绪值、财务值、社交值三个属性，最终走向不同结局。</p>
+  <p>游戏设计特点：每个选项均标注属性变化预览（如"情绪+10，财务-5"），帮助用户理性权衡；15秒倒计时机制模拟真实决策压力；游戏结束后生成决策画像，分析用户的风险偏好与价值倾向。</p>
+  <p>游戏数据价值：用户的每次游戏选择都会转化为高质量的对话训练样本，自动存入数据库，用于后续LoRA模型的增量训练，形成"游戏-学习-个性化"的正向循环。</p>
+
+  <h4>3.5 涌现行为分析与预警</h4>
+  <p>本软件引入复杂系统涌现理论，对用户多维行为数据进行时序分析。涌现检测器（EmergenceDetector）持续监测用户的对话频率、情绪波动、睡眠质量、社交活跃度等指标，识别局部行为模式向全局特征的涌现过程。</p>
+  <p>当系统检测到潜在的负面涌现（如持续情绪低落、社交退缩的协同出现）时，会主动向用户推送洞察提示，建议关注相关领域。前端EmergenceDashboard页面以可视化方式展示涌现模式与历史趋势。</p>
+
+  <h4>3.6 多模态数据采集</h4>
+  <p>本软件支持多种数据输入方式，构建全面的用户数字画像：</p>
+  <table>
+    <tr><th>数据类型</th><th>采集方式</th><th>用途</th></tr>
+    <tr><td>文本对话</td><td>用户主动输入</td><td>知识图谱构建、LoRA训练</td></tr>
+    <tr><td>图片</td><td>相机拍摄/相册上传</td><td>场景识别、生活记录</td></tr>
+    <tr><td>语音</td><td>麦克风录音</td><td>语音转文字后处理</td></tr>
+    <tr><td>传感器数据</td><td>设备传感器（步数、心率）</td><td>健康分析</td></tr>
+    <tr><td>健康数据</td><td>用户手动填写</td><td>六大领域综合分析</td></tr>
+    <tr><td>游戏行为</td><td>平行人生游戏</td><td>决策偏好分析、LoRA训练</td></tr>
+  </table>
+  <p>所有数据经多模态融合系统（MultimodalFusion）处理后，分别存入RAG记忆系统、知识图谱和关系数据库，形成完整的用户数字档案。</p>
+
+  <h4>3.7 数字孪生预测</h4>
+  <p>本软件为每位用户构建数字孪生模型（DigitalTwin），基于历史数据建立状态转移方程，对用户未来7-30天的生活状态进行轨迹预测。预测维度包括睡眠质量、运动水平、压力指数、社交活跃度、财务稳定性、学习进度等。</p>
+  <p>用户还可通过"干预模拟"功能，输入计划中的生活改变（如"每天增加30分钟运动"），系统模拟该干预方案的预期效果，与基线轨迹进行对比，帮助用户评估行动计划的可行性。</p>
+</div>
+
+<div class="pb"></div>
+td>
+
+<!-- 第四章 -->
+<div class="page">
+  <h3>第四章 技术实现</h3>
+
+  <h4>4.1 LoRA个性化微调技术</h4>
+  <p>LoRA（Low-Rank Adaptation）是一种参数高效的大模型微调方法。其核心思想是：在预训练模型的权重矩阵旁边添加一个低秩分解矩阵，训练时只更新低秩矩阵的参数，而冻结原始权重。</p>
+  <p>本软件的LoRA实现方案如下：</p>
+  <ul>
+    <li>基座模型：Qwen3.5-9B（通义千问3.5，90亿参数）</li>
+    <li>微调框架：HuggingFace PEFT 0.18.1</li>
+    <li>目标模块：注意力层的q_proj、k_proj、v_proj、o_proj</li>
+    <li>LoRA超参数：rank=16，alpha=32，dropout=0.05</li>
+    <li>训练数据：用户对话历史（自动收集，最少50条触发训练）</li>
+    <li>训练方式：增量训练，每次训练在上一版本基础上继续优化</li>
+    <li>模型存储：每用户独立目录，支持量化版本（INT4）节省存储</li>
+  </ul>
+  <p>LoRA调度器（LoRAScheduler）读取配置文件（backend/data/scheduler_config.json），支持定时触发和手动触发两种模式。训练完成后，新模型自动替换旧版本，下次对话即生效。</p>
+
+  <h4>4.2 融合模型压缩技术（FlatQuant + OBR）</h4>
+  <p>为支持模型在资源受限的移动端高效运行，本软件实现了FlatQuant与OBR（Outlier-Based Rounding）的融合压缩方案。</p>
+  <p>FlatQuant技术：通过可学习的正交变换矩阵，将权重分布"拉平"，使其更适合低比特量化。在校准训练阶段，系统对每一层的变换矩阵进行优化，最小化量化误差。</p>
+  <p>OBR技术：针对权重中的离群值（Outlier）进行特殊处理，采用两组残差量化策略，在保持量化精度的同时降低比特宽度。</p>
+  <p>融合压缩流程（FusionCompressor）：</p>
+  <ol>
+    <li>加载基座模型并应用FlatQuant包装</li>
+    <li>在FlatQuant包装状态下进行校准训练（15 epochs）</li>
+    <li>收集变换后的激活统计（Hessian矩阵、激活熵、稳定秩）</li>
+    <li>执行FlatQuant重参数化，将变换矩阵融合进权重</li>
+    <li>基于Hessian统计执行llmquant SVD低秩分解与残差量化</li>
+    <li>保存压缩后的模型（INT4精度，体积约为原始的25%）</li>
+  </ol>
+  <p>压缩效果：模型体积从约18GB压缩至约4.5GB，推理速度提升约3倍，生成质量损失控制在可接受范围内（困惑度增加小于5%）。</p>
+
+  <h4>4.3 Neo4j知识图谱技术</h4>
+  <p>本软件采用Neo4j图数据库存储用户的个人知识图谱，利用图数据库天然的关系表达能力，高效存储和查询复杂的实体关系网络。</p>
+  <p>图谱节点类型：</p>
+  <table>
+    <tr><th>节点类型</th><th>属性</th><th>示例</th></tr>
+    <tr><td>Person（人物）</td><td>name, category, confidence, description</td><td>爸爸（family）、张伟（friends）、李经理（colleagues）</td></tr>
+  </table>
+  <p>人际关系分类：family（家人）、close_friends（好友）、colleagues（同事/领导）、friends（朋友/同学）、weak_ties（弱关系）。</p>
+  <p>信息提取器（InformationExtractor）优先调用 LLM（qwen-turbo）进行智能提取，失败时降级为正则规则匹配（称谓模式 + 姓名模式 + "叫XX"模式）。提取结果通过 Cypher 查询语言写入 Neo4j，前端通过 3D 星图可视化，节点大小反映关系重要性。</p>
+
+  <h4>4.4 涌现理论分析技术</h4>
+  <p>涌现（Emergence）是复杂系统理论中的核心概念，指系统整体表现出各部分单独不具备的新特性。本软件将涌现理论应用于用户行为分析：将用户的多维生活数据视为一个复杂系统，通过检测各维度指标的协同变化，识别潜在的行为模式涌现。</p>
+  <p>涌现检测算法（OptimizedEmergenceDetector）采用滑动窗口时序分析，计算各维度指标的互相关系数与趋势一致性，当多个负面指标同步降低时触发涌现预警。实时分析器（RealtimeAnalyzer）在每次对话后自动运行，提取情绪、话题、意图等特征，持续更新用户的行为模式画像。</p>
+</div>
+
+<div class="pb"></div>
+
+<!-- 第五章 -->
+<div class="page">
+  <h3>第五章 安装与运行</h3>
+
+  <h4>5.1 环境要求</h4>
+  <table>
+    <tr><th>类别</th><th>最低要求</th><th>推荐配置</th></tr>
+    <tr><td>服务端操作系统</td><td>Ubuntu 20.04 / Windows 10</td><td>Ubuntu 22.04.5 LTS</td></tr>
+    <tr><td>服务端CPU</td><td>4核 x86_64</td><td>Intel Xeon Platinum 8358P 及以上</td></tr>
+    <tr><td>服务端内存</td><td>16GB</td><td>503GB（实际部署环境）</td></tr>
+    <tr><td>服务端GPU</td><td>NVIDIA 8GB显存（CUDA 11.8+）</td><td>NVIDIA GeForce RTX 4080 SUPER</td></tr>
+    <tr><td>服务端存储</td><td>100GB SSD</td><td>500GB SSD</td></tr>
+    <tr><td>Python版本</td><td>3.12.3</td><td>3.12.3</td></tr>
+    <tr><td>客户端设备</td><td>HarmonyOS NEXT 手机/平板</td><td>华为Mate/P系列旗舰机</td></tr>
+    <tr><td>客户端内存</td><td>4GB RAM</td><td>8GB RAM</td></tr>
+    <tr><td>网络</td><td>客户端与服务端可互通</td><td>局域网或公网部署</td></tr>
+  </table>
+
+  <h4>5.2 后端部署步骤</h4>
+  <p>第一步：克隆代码仓库并进入项目目录。</p>
+  <p>第二步：创建Python虚拟环境并安装依赖。执行命令：<code>pip install -r requirements.txt</code></p>
+  <p>第三步：配置环境变量。复制 <code>backend/.env.example</code> 为 <code>backend/.env</code>，填写以下关键配置项：</p>
+  <ul>
+    <li><code>MODEL_PATH</code>：本地Qwen3.5-9B模型路径</li>
+    <li><code>LORA_MODELS_DIR</code>：LoRA模型存储目录</li>
+    <li><code>NEO4J_URI</code>：Neo4j数据库连接地址</li>
+    <li><code>NEO4J_PASSWORD</code>：Neo4j数据库密码</li>
+    <li><code>DASHSCOPE_API_KEY</code>：阿里云灵积API密钥（用于视觉/语音模型）</li>
+    <li><code>DATABASE_URL</code>：关系数据库连接字符串</li>
+  </ul>
+  <p>第四步：初始化数据库。执行命令：<code>python backend/database/init_db.py</code></p>
+  <p>第五步：启动后端服务。执行命令：<code>uvicorn backend.main:app --host 0.0.0.0 --port 8000</code></p>
+  <p>第六步：验证服务状态。访问 <code>http://服务器IP:8000/health</code>，返回 <code>status: healthy</code> 表示启动成功。</p>
+
+  <h4>5.3 前端部署步骤</h4>
+  <p>第一步：安装DevEco Studio 5.0及以上版本，配置HarmonyOS SDK API 12。</p>
+  <p>第二步：打开 <code>harmonyos/</code> 目录作为项目根目录。</p>
+  <p>第三步：修改 <code>harmonyos/entry/src/main/ets/config/ApiConfig.ets</code> 中的服务器地址，填写后端服务的实际IP和端口（开发时使用 VS Code 1.111.0 通过 SSH 远程连接服务器进行调试）。</p>
+  <p>第四步：连接华为鸿蒙设备（开启开发者模式），点击DevEco Studio的"Run"按钮编译并安装到设备。</p>
+  <p>第五步：首次启动App，在注册页面创建账号，即可开始使用。</p>
+
+  <div class="note-box">
+    注意：首次启动后端服务时，系统会自动加载Qwen3.5-9B基座模型，该过程需要约2-5分钟，请耐心等待。模型加载完成后，健康检查接口的llm字段将显示"ready"状态。
+  </div>
+</div>
+
+<div class="pb"></div>
+
+<!-- 第六章 -->
+<div class="page">
+  <h3>第六章 接口说明</h3>
+  <p>本软件后端提供RESTful API和WebSocket两类接口，主要接口说明如下：</p>
+
+  <h4>6.1 系统接口</h4>
+  <table>
+    <tr><th>接口路径</th><th>方法</th><th>功能描述</th></tr>
+    <tr><td>/health</td><td>GET</td><td>系统健康检查，返回各子系统状态</td></tr>
+    <tr><td>/ws/chat</td><td>WebSocket</td><td>流式聊天接口，支持思维链推理与逐字输出</td></tr>
+  </table>
+
+  <h4>6.2 用户认证接口</h4>
+  <table>
+    <tr><th>接口路径</th><th>方法</th><th>功能描述</th></tr>
+    <tr><td>/api/auth/register</td><td>POST</td><td>用户注册，返回用户ID与Token</td></tr>
+    <tr><td>/api/auth/login</td><td>POST</td><td>用户登录，支持用户名或邮箱</td></tr>
+    <tr><td>/api/auth/logout</td><td>POST</td><td>用户登出，使Token失效</td></tr>
+    <tr><td>/api/auth/user/{user_id}</td><td>GET/PUT</td><td>获取/更新用户信息</td></tr>
+    <tr><td>/api/auth/verify-token</td><td>POST</td><td>验证Token有效性</td></tr>
+  </table>
+
+  <h4>6.3 数据与分析接口</h4>
+  <table>
+    <tr><th>接口路径</th><th>方法</th><th>功能描述</th></tr>
+    <tr><td>/api/v4/multimodal/data</td><td>POST</td><td>上传多模态数据（文本/图片/传感器）</td></tr>
+    <tr><td>/api/v4/analysis/{user_id}</td><td>GET</td><td>获取7天健康分析结果</td></tr>
+    <tr><td>/api/v4/life-analysis/{user_id}</td><td>GET</td><td>获取六大领域综合生活分析</td></tr>
+    <tr><td>/api/v4/domain-analysis/{user_id}/{domain}</td><td>GET</td><td>获取特定领域详细分析</td></tr>
+    <tr><td>/api/chat/upload-image</td><td>POST</td><td>上传图片并调用视觉模型分析</td></tr>
+    <tr><td>/api/chat/speech-to-text</td><td>POST</td><td>语音文件转文字</td></tr>
+  </table>
+
+  <h4>6.4 AI核心功能接口</h4>
+  <table>
+    <tr><th>接口路径</th><th>方法</th><th>功能描述</th></tr>
+    <tr><td>/api/v4/lora/train/{user_id}</td><td>POST</td><td>触发用户专属LoRA模型训练</td></tr>
+    <tr><td>/api/v4/lora/status/{user_id}</td><td>GET</td><td>查询LoRA模型训练状态</td></tr>
+    <tr><td>/api/v4/knowledge-graph/{user_id}</td><td>GET</td><td>获取用户个人知识图谱数据</td></tr>
+    <tr><td>/api/v4/decision/analyze</td><td>POST</td><td>决策路径推演（12个月时间线）</td></tr>
+    <tr><td>/api/v4/emergence/insights/{user_id}</td><td>GET</td><td>获取涌现行为洞察与预警</td></tr>
+    <tr><td>/api/v4/digital-twin/{user_id}/predict</td><td>GET</td><td>数字孪生未来状态预测</td></tr>
+    <tr><td>/api/v4/digital-twin/{user_id}/simulate</td><td>POST</td><td>干预方案效果模拟对比</td></tr>
+    <tr><td>/api/v4/rag/memories/{user_id}</td><td>GET</td><td>获取RAG记忆系统历史记忆</td></tr>
+  </table>
+
+  <h4>6.5 游戏接口</h4>
+  <table>
+    <tr><th>接口路径</th><th>方法</th><th>功能描述</th></tr>
+    <tr><td>/api/game/parallel-life/chapters</td><td>GET</td><td>获取所有游戏关卡列表</td></tr>
+    <tr><td>/api/game/parallel-life/chapter/{id}</td><td>GET</td><td>获取关卡完整数据（含节点）</td></tr>
+    <tr><td>/api/game/parallel-life/choice</td><td>POST</td><td>记录单次选择，返回属性变化</td></tr>
+    <tr><td>/api/game/parallel-life/finish</td><td>POST</td><td>完成关卡，返回结局与决策画像</td></tr>
+  </table>
+</div>
+
+<div class="pb"></div>
+
+<!-- 第七章 -->
+<div class="page">
+  <h3>第七章 数据库设计</h3>
+
+  <h4>7.1 关系数据库（MySQL 8.0）</h4>
+  <p>关系数据库采用 MySQL 8.0，通过 PyMySQL 驱动连接，使用 SQLAlchemy ORM 进行对象关系映射，存储用户账户信息、健康记录、对话历史等结构化数据，主要数据表如下：</p>
+  <table>
+    <tr><th>表名</th><th>主要字段</th><th>说明</th></tr>
+    <tr><td>users</td><td>user_id, username, email, password_hash, nickname, created_at</td><td>用户账户信息</td></tr>
+    <tr><td>health_records</td><td>id, user_id, sleep_hours, sleep_quality, steps, heart_rate, exercise_minutes, stress_level, health_score, timestamp</td><td>每日健康数据记录</td></tr>
+    <tr><td>conversation_history</td><td>id, user_id, session_id, role, content, thinking, timestamp</td><td>对话历史（含思维链）</td></tr>
+    <tr><td>decision_records</td><td>id, user_id, title, options, analysis_result, chosen_option, timestamp</td><td>决策记录与推演结果</td></tr>
+    <tr><td>lora_training_logs</td><td>id, user_id, task_id, status, data_count, started_at, completed_at</td><td>LoRA训练任务日志</td></tr>
+    <tr><td>user_feedback</td><td>id, user_id, message_id, feedback_type, content, timestamp</td><td>用户反馈数据</td></tr>
+  </table>
+
+  <h4>7.2 图数据库（Neo4j）</h4>
+  <p>Neo4j图数据库存储用户个人知识图谱，采用属性图模型。每个用户的图谱数据通过user_id进行隔离，确保数据安全。</p>
+  <p>主要节点标签：Person、Event、Concept、Place、Skill、Emotion</p>
+  <p>主要关系类型：KNOWS（认识）、PARTICIPATED_IN（参与）、RELATED_TO（相关）、LOCATED_AT（位于）、HAS_SKILL（具备技能）、FEELS（情绪关联）</p>
+  <p>查询示例（Cypher）：获取用户的所有重要人际关系节点，按重要性排序，返回前10个。</p>
+
+  <h4>7.3 向量数据库（FAISS）</h4>
+  <p>FAISS向量数据库用于RAG记忆系统的语义检索。用户的每条记忆（对话、图片描述、传感器摘要等）经文本嵌入模型转换为向量后存入FAISS索引。</p>
+  <p>记忆类型分类：CONVERSATION（对话记忆）、PHOTO（图片记忆）、SENSOR_DATA（传感器数据）、DECISION（决策记忆）、INSIGHT（洞察记忆）</p>
+  <p>检索时，系统将用户当前输入转换为查询向量，在FAISS中进行近似最近邻搜索，返回最相关的历史记忆，注入LLM上下文，提升回答的个性化程度。</p>
+
+  <h3>第八章 安全说明</h3>
+
+  <h4>8.1 用户数据安全</h4>
+  <ul>
+    <li>用户密码采用bcrypt算法加密存储，不保存明文密码</li>
+    <li>用户登录采用Token机制（JWT），Token有效期可配置</li>
+    <li>不同用户的知识图谱数据通过user_id严格隔离，不同用户间无法互相访问</li>
+    <li>不同用户的LoRA模型文件存储在独立目录，权限隔离</li>
+    <li>API接口支持Token验证，敏感接口需携带有效Token才能访问</li>
+  </ul>
+
+  <h4>8.2 数据传输安全</h4>
+  <ul>
+    <li>生产环境建议启用HTTPS/WSS加密传输</li>
+    <li>API接口支持CORS配置，可限制允许访问的域名</li>
+    <li>图片、语音等多媒体数据在服务端处理后不长期保存原始文件</li>
+  </ul>
+
+  <h4>8.3 隐私保护</h4>
+  <ul>
+    <li>用户个人知识图谱数据仅用于为该用户提供个性化服务，不用于其他目的</li>
+    <li>LoRA训练数据来源于用户自身的对话历史，不与其他用户共享</li>
+    <li>用户可随时通过账户管理功能删除个人数据</li>
+    <li>系统不收集设备标识符等敏感隐私信息</li>
+  </ul>
+
+  <h4>8.4 系统稳定性</h4>
+  <ul>
+    <li>所有AI模块采用延迟初始化策略，避免启动时阻塞</li>
+    <li>各模块均有异常捕获机制，单个模块故障不影响整体服务</li>
+    <li>LoRA训练任务在后台异步执行，不影响前台对话服务</li>
+    <li>数据库操作均有事务保护，确保数据一致性</li>
+  </ul>
+
+  <br><br>
+  <p style="text-indent:0;font-size:10pt;color:#555;border-top:1px solid #ccc;padding-top:4mm;">
+    本说明手册版本：V1.0 &nbsp;&nbsp;|&nbsp;&nbsp; 软件名称：ParaLife · 平行境 &nbsp;&nbsp;|&nbsp;&nbsp; 软件版本：V1.0
+  </p>
+  <p style="text-indent:0;font-size:10pt;margin-top:3mm;">著作权人（签章）：___________________&nbsp;&nbsp;&nbsp;&nbsp;日期：______年______月______日</p>
+</div>
+
+</body>
+</html>

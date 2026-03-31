@@ -22,6 +22,7 @@ interface GameNode {
   type: string
   text: string
   options: GameOption[]
+  next: string  // free_input 节点的下一节点
 }
 
 interface Ending {
@@ -55,7 +56,7 @@ interface Stats { emotion: number; finance: number; social: number }
 @Component
 struct ParallelLifeGame {
   // ── 状态 ──────────────────────────────────────────────────────────────
-  @State phase: string = 'loading'   // loading | intro | playing | result
+  @State phase: string = 'loading'   // loading | chapters | intro | playing | result
   @State chapters: Chapter[] = []
   @State currentChapter: Chapter | null = null
   @State currentNodeId: string = ''
@@ -65,6 +66,7 @@ struct ParallelLifeGame {
   @State choices: ChoiceRecord[] = []
   @State ending: Record<string, string> = {}
   @State finalStats: Stats = { emotion: 50, finance: 50, social: 50 }
+  @State freeInputText: string = ''
 
   // 动效
   @State introOpacity: number = 0
@@ -103,7 +105,7 @@ struct ParallelLifeGame {
         const body = JSON.parse(res.result as string) as Record<string, Object>
         this.chapters = body['data'] as Chapter[]
         if (this.chapters.length > 0) {
-          this.loadChapter(this.chapters[0].id)
+          this.phase = 'chapters'
         }
       }
     } catch (e) { console.error('加载关卡失败:', e) }
@@ -122,6 +124,21 @@ struct ParallelLifeGame {
         this.animateIntroIn()
       }
     } catch (e) { console.error('加载关卡详情失败:', e) }
+  }
+
+  async loadRandomChapter() {
+    try {
+      const req = http.createHttp()
+      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/random`,
+        { method: http.RequestMethod.GET })
+      req.destroy()
+      if (res.responseCode === 200) {
+        const body = JSON.parse(res.result as string) as Record<string, Object>
+        this.currentChapter = body['data'] as Chapter
+        this.phase = 'intro'
+        this.animateIntroIn()
+      }
+    } catch (e) { console.error('加载随机关卡失败:', e) }
   }
 
   // ── 游戏逻辑 ──────────────────────────────────────────────────────────
@@ -172,15 +189,43 @@ struct ParallelLifeGame {
       } else {
         this.currentNodeId = opt.next
         this.animateNodeIn()
-        this.startCountdown()
+        if (this.currentNode()?.type !== 'free_input') {
+          this.startCountdown()
+        }
       }
     }, 800)
+  }
+
+  async submitFreeInput() {
+    const text = this.freeInputText.trim()
+    if (!text) return
+    const ch = this.currentChapter
+    const node = this.currentNode()
+    if (!ch || !node) return
+    this.choices.push({ node_id: this.currentNodeId, option_id: 'free', choice_time_ms: Date.now() - this.nodeStartTime })
+    try {
+      const userId = this.authService.getCurrentUserId()
+      const req = http.createHttp()
+      await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/free-input`, {
+        method: http.RequestMethod.POST,
+        header: { 'Content-Type': 'application/json' },
+        extraData: JSON.stringify({
+          user_id: userId, chapter_id: ch.id, node_id: node.id,
+          user_text: text, current_stats: this.stats
+        })
+      })
+      req.destroy()
+    } catch (e) { console.error('提交自由输入失败:', e) }
+    this.freeInputText = ''
+    const nextId = node.next ?? 'ending'
+    if (nextId === 'ending') { this.finishGame() }
+    else { this.currentNodeId = nextId; this.animateNodeIn(); this.startCountdown() }
   }
 
   async finishGame() {
     const ch = this.currentChapter
     if (!ch) return
-    this.finalStats = { ...this.stats }
+    this.finalStats = { emotion: this.stats.emotion, finance: this.stats.finance, social: this.stats.social }
     try {
       const userId = this.authService.getCurrentUserId()
       const req = http.createHttp()
@@ -319,9 +364,9 @@ struct ParallelLifeGame {
       // 属性条（游戏中显示）
       if (this.phase === 'playing') {
         Column({ space: 6 }) {
-          this.StatBar('情绪', this.statBarEmotion, '😊')
-          this.StatBar('财务', this.statBarFinance, '💰')
-          this.StatBar('社交', this.statBarSocial, '👥')
+          this.StatBar('情绪', this.statBarEmotion, 'E')
+          this.StatBar('财务', this.statBarFinance, 'F')
+          this.StatBar('社交', this.statBarSocial, 'S')
         }
         .width('100%').padding({ left: 16, right: 16, top: 64, bottom: 0 })
         .position({ x: 0, y: 0 }).zIndex(9)
@@ -352,6 +397,7 @@ struct ParallelLifeGame {
 
       // 内容区
       if (this.phase === 'loading') { this.buildLoading() }
+      else if (this.phase === 'chapters') { this.buildChapterSelect() }
       else if (this.phase === 'intro') { this.buildIntro() }
       else if (this.phase === 'playing') { this.buildPlaying() }
       else if (this.phase === 'result') { this.buildResult() }
@@ -360,9 +406,12 @@ struct ParallelLifeGame {
   }
 
   @Builder
-  StatBar(label: string, val: number, emoji: string) {
+  StatBar(label: string, val: number, icon: string) {
     Row({ space: 6 }) {
-      Text(emoji).fontSize(12)
+      Stack() {
+        Circle({ width: 16, height: 16 }).fill(this.statColor(val)).opacity(0.2)
+        Text(icon).fontSize(9).fontWeight(700).fontColor(this.statColor(val))
+      }.width(16).height(16)
       Text(label).fontSize(11).fontColor('rgba(255,255,255,0.6)').width(28)
       Row() {
         Column()
@@ -386,12 +435,62 @@ struct ParallelLifeGame {
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
+  @Builder buildChapterSelect() {
+    Scroll() {
+      Column({ space: 20 }) {
+        Column({ space: 8 }) {
+          Text('平行人生').fontSize(28).fontWeight(800).fontColor('#FFFFFF')
+          Text('每一个选择，都通向不同的人生')
+            .fontSize(14).fontColor('rgba(255,255,255,0.5)')
+        }
+        .width('100%').padding({ top: 80, bottom: 8 }).alignItems(HorizontalAlign.Center)
+
+        // 随机开始按钮
+        Button('随机开始')
+          .width('80%').height(50)
+          .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+          .backgroundColor('rgba(255,255,255,0.12)')
+          .borderRadius(Theme.Radius.round)
+          .border({ width: 1, color: 'rgba(255,255,255,0.2)' })
+          .onClick(() => this.loadRandomChapter())
+
+        Text('或选择一个关卡').fontSize(12).fontColor('rgba(255,255,255,0.35)')
+
+        ForEach(this.chapters, (ch: Chapter) => {
+          Column({ space: 10 }) {
+            Text(ch.cover_emoji || '').fontSize(36)
+            Text(ch.title).fontSize(18).fontWeight(700).fontColor('#FFFFFF')
+            Text(ch.subtitle).fontSize(13).fontColor('rgba(255,255,255,0.6)')
+          }
+          .width('100%').padding(24)
+          .backgroundColor('rgba(255,255,255,0.06)')
+          .borderRadius(Theme.Radius.xl)
+          .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
+          .alignItems(HorizontalAlign.Center)
+          .onClick(() => this.loadChapter(ch.id))
+          .stateStyles({
+            pressed: { .scale({ x: 0.97, y: 0.97 }).backgroundColor('rgba(255,255,255,0.12)') },
+            normal:  { .scale({ x: 1, y: 1 }).backgroundColor('rgba(255,255,255,0.06)') }
+          })
+        })
+
+        Column().height(40)
+      }
+      .padding({ left: 20, right: 20 })
+    }
+    .scrollBar(BarState.Off).width('100%').height('100%')
+  }
+
   @Builder buildIntro() {
     Column({ space: 0 }) {
       Blank().layoutWeight(1)
       Column({ space: 24 }) {
-        Text(this.currentChapter?.cover_emoji ?? '🎮')
-          .fontSize(72).textAlign(TextAlign.Center)
+        Stack() {
+          Circle({ width: 80, height: 80 }).fill(this.accentColor()).opacity(0.12)
+          Circle({ width: 60, height: 60 }).fill(this.accentColor()).opacity(0.08)
+          Text(this.currentChapter?.cover_emoji ?? 'P')
+            .fontSize(28).fontWeight(800).fontColor(this.accentColor())
+        }.width(80).height(80)
         Text(this.currentChapter?.title ?? '')
           .fontSize(28).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
         Text(this.currentChapter?.subtitle ?? '')
@@ -441,6 +540,27 @@ struct ParallelLifeGame {
 
       Blank().layoutWeight(1)
 
+      // 自由输入节点
+      if (this.currentNode()?.type === 'free_input') {
+        Column({ space: 16 }) {
+          TextArea({ placeholder: '写下你的真实想法...' })
+            .width('100%').height(100)
+            .fontSize(15).fontColor('#FFFFFF')
+            .backgroundColor('rgba(255,255,255,0.08)')
+            .borderRadius(Theme.Radius.l)
+            .placeholderColor('rgba(255,255,255,0.3)')
+            .onChange((val: string) => { this.freeInputText = val })
+
+          Button('继续')
+            .width('100%').height(48)
+            .fontSize(15).fontWeight(600).fontColor('#FFFFFF')
+            .backgroundColor(this.accentColor())
+            .borderRadius(Theme.Radius.round)
+            .enabled(this.freeInputText.trim().length > 0)
+            .onClick(() => this.submitFreeInput())
+        }
+        .padding({ left: 20, right: 20, bottom: 48 })
+      } else {
       // 选项卡片
       Column({ space: 14 }) {
         ForEach(this.currentNode()?.options ?? [], (opt: GameOption, idx: number) => {
@@ -489,6 +609,7 @@ struct ParallelLifeGame {
         })
       }
       .padding({ left: 20, right: 20, bottom: 48 })
+      } // end else (choice nodes)
     }
     .width('100%').height('100%').alignItems(HorizontalAlign.Center)
   }
@@ -500,7 +621,11 @@ struct ParallelLifeGame {
         Column({ space: 20 }) {
           // 徽章
           Column({ space: 8 }) {
-            Text('🏆').fontSize(56).textAlign(TextAlign.Center)
+            Stack() {
+              Circle({ width: 56, height: 56 })
+                .fill(this.accentColor()).opacity(0.15)
+              Text('P').fontSize(24).fontWeight(800).fontColor(this.accentColor())
+            }.width(56).height(56)
             Text(this.ending['badge'] ?? '完成')
               .fontSize(13).fontColor(this.accentColor()).fontWeight(600)
               .padding({ left: 16, right: 16, top: 5, bottom: 5 })
@@ -520,9 +645,9 @@ struct ParallelLifeGame {
           Column({ space: 10 }) {
             Text('最终状态').fontSize(13).fontColor('rgba(255,255,255,0.4)').fontWeight(600)
             Row({ space: 0 }) {
-              this.FinalStatBlock('情绪', this.finalStats.emotion, '😊')
-              this.FinalStatBlock('财务', this.finalStats.finance, '💰')
-              this.FinalStatBlock('社交', this.finalStats.social, '👥')
+              this.FinalStatBlock('情绪', this.finalStats.emotion, 'E')
+              this.FinalStatBlock('财务', this.finalStats.finance, 'F')
+              this.FinalStatBlock('社交', this.finalStats.social, 'S')
             }.width('100%')
           }
           .width('88%').padding(20)
@@ -569,9 +694,12 @@ struct ParallelLifeGame {
   }
 
   @Builder
-  FinalStatBlock(label: string, val: number, emoji: string) {
+  FinalStatBlock(label: string, val: number, icon: string) {
     Column({ space: 6 }) {
-      Text(emoji).fontSize(22)
+      Stack() {
+        Circle({ width: 32, height: 32 }).fill(this.statColor(val)).opacity(0.15)
+        Text(icon).fontSize(14).fontWeight(800).fontColor(this.statColor(val))
+      }.width(32).height(32)
       Text(`${val}`).fontSize(20).fontWeight(800).fontColor(this.statColor(val))
       Text(label).fontSize(11).fontColor('rgba(255,255,255,0.4)')
     }

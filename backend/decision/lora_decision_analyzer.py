@@ -60,8 +60,12 @@ class LoRADecisionAnalyzer:
         # 查询知识图谱中的相关人物，注入 prompt
         kg_context = self._query_relevant_persons(user_id, question)
 
+        # 从 RAG 记忆中检索与决策问题相关的生活细节
+        life_context = self._retrieve_life_context(user_id, question)
+
         prompt = self._build_timeline_prompt(question, option, profile, num_events,
-                                             strict=False, kg_context=kg_context)
+                                             strict=False, kg_context=kg_context,
+                                             life_context=life_context)
         response = await asyncio.to_thread(
             self.lora_manager.generate,
             user_id,
@@ -75,7 +79,8 @@ class LoRADecisionAnalyzer:
 
         if not timeline:
             retry_prompt = self._build_timeline_prompt(question, option, profile, num_events,
-                                                       strict=True, kg_context=kg_context)
+                                                       strict=True, kg_context=kg_context,
+                                                       life_context=life_context)
             retry_response = await asyncio.to_thread(
                 self.lora_manager.generate,
                 user_id,
@@ -123,11 +128,48 @@ class LoRADecisionAnalyzer:
         question: str,
         option: Dict[str, str],
         profile: Any,
-        num_events: int = 8
+        num_events: int = 12
     ):
-        prompt = self._build_timeline_prompt(question, option, profile, num_events, strict=False)
-        for chunk in self.lora_manager.generate_stream(user_id, prompt, 320, 0.25):
-            yield chunk
+        """分批流式生成时间线：每批 4 个节点，共 3 批，后续批次带上前面的结果作为上下文"""
+        kg_context = self._query_relevant_persons(user_id, question)
+        life_context = self._retrieve_life_context(user_id, question)
+
+        batch_size = 4
+        generated_so_far: List[Dict] = []
+
+        for batch_idx in range(0, num_events, batch_size):
+            batch_count = min(batch_size, num_events - batch_idx)
+            start_month = batch_idx + 1
+            end_month = batch_idx + batch_count
+
+            # 构建带上下文的 prompt
+            context_prefix = ""
+            if generated_so_far:
+                context_prefix = "已推演的事件（请在此基础上继续，不要重复）：\n"
+                for e in generated_so_far:
+                    context_prefix += f"- 第{e.get('month',0)}月：{e.get('event','')}\n"
+                context_prefix += f"\n请继续生成第{start_month}到第{end_month}月的事件。\n"
+
+            prompt = self._build_timeline_prompt(
+                question, option, profile, batch_count,
+                strict=False, kg_context=kg_context,
+                life_context=life_context
+            )
+            # 在 prompt 的 user 部分插入上下文
+            if context_prefix:
+                prompt = prompt.replace(
+                    f"请输出 {batch_count} 个按时间递进的关键事件",
+                    context_prefix + f"请输出 {batch_count} 个按时间递进的关键事件"
+                )
+
+            batch_buffer = ""
+            for chunk in self.lora_manager.generate_stream(user_id, prompt, 400, 0.25):
+                batch_buffer += chunk
+                yield chunk
+
+            # 解析本批次结果，加入上下文
+            batch_events = self._parse_timeline_json(batch_buffer)
+            generated_so_far.extend(batch_events)
 
     async def stream_recommendation_generation(
         self,
@@ -287,9 +329,89 @@ class LoRADecisionAnalyzer:
             print(f"[知识图谱] 查询相关人物失败: {e}")
             return ""
 
+    def _retrieve_life_context(self, user_id: str, question: str) -> str:
+        """从 RAG 记忆系统中检索与决策问题相关的用户生活细节
+        
+        优先使用 PKF-DS 框架抽取的结构化个人事实（如果可用）
+        同时覆盖两个数据来源：
+        1. AI 核心对话（日常聊天中透露的生活信息）
+        2. 决策信息收集对话（针对本次决策的详细背景）
+        """
+        # 优先使用 PKF-DS 注入的上下文
+        pkf_ctx = getattr(self, '_pkf_context', '')
+        if pkf_ctx:
+            return pkf_ctx
+        try:
+            from backend.learning.unified_rag_system import MemorySystemManager
+            rag = MemorySystemManager.get_system(user_id)
+            results = rag.search(question, top_k=8)
+            if not results:
+                return ""
+
+            lines = []
+            for mem in results:
+                content = ""
+                if hasattr(mem, 'content'):
+                    content = mem.content
+                elif isinstance(mem, dict):
+                    content = mem.get('content', '')
+                if content and len(content) > 10:
+                    lines.append(f"- {content[:150]}")
+
+            # 额外从数据库检索最近的决策收集对话（session_id 以 collect_ 开头）
+            try:
+                from backend.database.connection import db_connection
+                from backend.database.models import ConversationHistory
+                from sqlalchemy import and_
+
+                db = db_connection.get_session()
+                recent_collect = db.query(ConversationHistory).filter(
+                    and_(
+                        ConversationHistory.user_id == user_id,
+                        ConversationHistory.session_id.like('collect_%'),
+                        ConversationHistory.role == 'user'
+                    )
+                ).order_by(ConversationHistory.timestamp.desc()).limit(10).all()
+                db.close()
+
+                for row in recent_collect:
+                    if row.content and len(row.content) > 10:
+                        lines.append(f"- [收集] {row.content[:150]}")
+            except Exception:
+                pass
+
+            # 额外检索游戏数据对话（session_id 以 game_ 开头）
+            try:
+                db = db_connection.get_session()
+                game_data = db.query(ConversationHistory).filter(
+                    and_(
+                        ConversationHistory.user_id == user_id,
+                        ConversationHistory.session_id.like('game_%')
+                    )
+                ).order_by(ConversationHistory.timestamp.desc()).limit(5).all()
+                db.close()
+
+                for row in game_data:
+                    if row.content and len(row.content) > 10:
+                        lines.append(f"- [游戏] {row.content[:150]}")
+            except Exception:
+                pass
+
+            if not lines:
+                return ""
+
+            result = "\n".join(lines[:10])
+            print(f"[生活细节] 注入 {len(lines)} 条（RAG+收集+游戏）到决策 prompt")
+            return result
+        except Exception as e:
+            print(f"[生活细节] 检索失败: {e}")
+            return ""
+
     def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any,
                                 num_events: int, strict: bool = False,
-                                kg_context: str = "") -> str:
+                                kg_context: str = "",
+                                user_feedback: List[Dict[str, str]] = None,
+                                life_context: str = "") -> str:
         if strict:
             prompt = "<|im_start|>system\n你是用户的未来决策推演引擎。只输出合法 JSON 数组，不要解释，不要代码块，不要思考过程，不要额外文本。<|im_end|>\n"
         else:
@@ -304,6 +426,20 @@ class LoRADecisionAnalyzer:
             prompt += f"用户生活优先级：{getattr(profile, 'life_priority', '未知')}\n"
         if kg_context:
             prompt += f"用户相关人物背景（可在事件中具体提及）：\n{kg_context}\n"
+        if user_feedback:
+            prompt += "用户对之前推演的反馈（请据此调整后续事件的方向和概率）：\n"
+            for fb in user_feedback:
+                event_text = fb.get("event", "")
+                feedback_type = fb.get("type", "")
+                comment = fb.get("comment", "")
+                if feedback_type == "unlikely":
+                    prompt += f"- 用户认为[{event_text}]不太可能发生\n"
+                elif feedback_type == "accurate":
+                    prompt += f"- 用户认为[{event_text}]很准确\n"
+                elif comment:
+                    prompt += f"- 关于[{event_text}]，用户说：{comment}\n"
+        if life_context:
+            prompt += f"用户的真实生活细节（请在事件中引用具体信息，让推演贴近用户实际情况）：\n{life_context}\n"
         prompt += (
             f"请输出 {num_events} 个按时间递进的关键事件，每个事件都要贴近真实生活路径。\n"
             "要求：\n"

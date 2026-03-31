@@ -23,7 +23,7 @@ CHAPTERS = [
         "subtitle": "你刚刚毕业，站在人生的第一个岔路口",
         "theme": "#1a1a3e",
         "accent": "#7C3AED",
-        "cover_emoji": "🏢",
+        "cover_emoji": "W",
         "intro": "大学毕业，你拿到了两个 offer。\n一个是大厂，稳定但压力大；\n一个是创业公司，自由但充满未知。\n\n接下来的每一个选择，都将改变你的人生轨迹。",
         "nodes": [
             {
@@ -225,6 +225,97 @@ CHAPTERS = [
                 "badge": "均衡发展"
             }
         ]
+    },
+    {
+        "id": "ch_relationship",
+        "title": "感情抉择",
+        "subtitle": "爱情与现实之间，你会怎么选",
+        "theme": "#1a0a1e",
+        "accent": "#FF6B9D",
+        "cover_emoji": "",
+        "intro": "你和伴侣在一起两年了。\n最近你拿到了一个很好的工作机会，\n但在另一个城市。\n\n接下来的每一个选择，\n都会影响你们的关系走向。",
+        "nodes": [
+            {"id": "r1", "type": "choice", "text": "你拿到了梦想中的 offer，但公司在另一个城市。伴侣说不想异地。你怎么选？",
+             "options": [
+                {"id": "A", "text": "接受 offer，试试异地", "sub": "追求事业，但感情面临考验", "delta": {"emotion": -10, "finance": 20, "social": -15}, "next": "r2a"},
+                {"id": "B", "text": "放弃 offer，留下来", "sub": "感情第一，但可能会遗憾", "delta": {"emotion": 5, "finance": -5, "social": 15}, "next": "r2b"}
+            ]},
+            {"id": "r2a", "type": "choice", "text": "异地第一个月，你们约定每天视频。但你加班越来越多，有两天没联系。伴侣发消息说：'你是不是不在乎我了？'",
+             "options": [
+                {"id": "A", "text": "立刻打电话解释，承诺调整时间", "sub": "牺牲一些工作时间维护感情", "delta": {"emotion": 10, "finance": -5, "social": 15}, "next": "r3"},
+                {"id": "B", "text": "回消息说最近真的很忙，希望理解", "sub": "坦诚但可能让对方失望", "delta": {"emotion": -5, "finance": 5, "social": -10}, "next": "r3"}
+            ]},
+            {"id": "r2b", "type": "choice", "text": "你留下来了，在本地找了一份还行的工作。但偶尔会想起那个 offer。一天晚上伴侣问你：'你后悔吗？'",
+             "options": [
+                {"id": "A", "text": "说实话：有时候会想，但不后悔", "sub": "坦诚面对，但可能让对方有压力", "delta": {"emotion": 5, "finance": 0, "social": 5}, "next": "r3"},
+                {"id": "B", "text": "说不后悔，你比什么都重要", "sub": "让对方安心，但压抑了自己", "delta": {"emotion": -10, "finance": 0, "social": 10}, "next": "r3"}
+            ]},
+            {"id": "r3", "type": "free_input", "text": "回想一下你自己的感情经历，你觉得在感情和事业之间，最难的是什么？", "options": [], "next": "r4"},
+            {"id": "r4", "type": "choice", "text": "半年过去了。你的一个朋友说：'我觉得你最近状态不太好，是不是该好好想想自己到底要什么？'",
+             "options": [
+                {"id": "A", "text": "认真反思，和伴侣深谈一次", "sub": "直面问题，可能会有转机", "delta": {"emotion": 15, "finance": 0, "social": 10}, "next": "r5"},
+                {"id": "B", "text": "觉得朋友多管闲事，继续现状", "sub": "回避问题，但内心不安", "delta": {"emotion": -15, "finance": 5, "social": -10}, "next": "r5"}
+            ]},
+            {"id": "r5", "type": "choice", "text": "一年了。你和伴侣坐下来，认真聊了一次未来。",
+             "options": [
+                {"id": "A", "text": "一起制定一个两年计划，互相妥协", "sub": "成熟的选择，但需要双方都付出", "delta": {"emotion": 20, "finance": 5, "social": 20}, "next": "ending"},
+                {"id": "B", "text": "承认彼此想要的不一样，和平分开", "sub": "痛苦但诚实的选择", "delta": {"emotion": -10, "finance": 10, "social": -5}, "next": "ending"}
+            ]}
+        ],
+        "endings": [
+            {"condition": "emotion_high", "threshold": {"emotion": 40}, "title": "感情守护者", "text": "你选择了用心经营感情，虽然事业上有些妥协，但你拥有一段真实而深厚的关系。", "badge": "真心守护"},
+            {"condition": "finance_high", "threshold": {"finance": 40}, "title": "独立前行", "text": "你选择了事业优先，虽然感情上有遗憾，但你对自己的未来更有掌控感。", "badge": "独立自主"},
+            {"condition": "social_high", "threshold": {"social": 40}, "title": "关系达人", "text": "你善于维护各种关系，在感情和社交之间找到了平衡。", "badge": "情商高手"},
+            {"condition": "balanced", "threshold": {}, "title": "在路上", "text": "感情的事没有标准答案，你在慢慢找到属于自己的方式。", "badge": "成长中"}
+        ]
+    },
+    {
+        "id": "ch_growth",
+        "title": "自我突破",
+        "subtitle": "舒适区之外，是恐惧还是自由",
+        "theme": "#0a1a0e",
+        "accent": "#34d399",
+        "cover_emoji": "",
+        "intro": "你在一个稳定但无聊的岗位上待了两年。\n最近你开始思考：\n这真的是我想要的生活吗？\n\n改变，还是继续？",
+        "nodes": [
+            {"id": "g1", "type": "choice", "text": "周末，你刷到一个线下课程，主题是你一直感兴趣但从没尝试过的领域。报名费 3000 元。",
+             "options": [
+                {"id": "A", "text": "报名，给自己一个机会", "sub": "花钱但可能打开新世界", "delta": {"emotion": 15, "finance": -15, "social": 5}, "next": "g2a"},
+                {"id": "B", "text": "算了，看看网上免费的就行", "sub": "省钱但可能又拖延了", "delta": {"emotion": -5, "finance": 5, "social": 0}, "next": "g2b"}
+            ]},
+            {"id": "g2a", "type": "choice", "text": "课程第一天，你发现班上的人都比你有经验。老师布置了一个作业，你完全不会做。",
+             "options": [
+                {"id": "A", "text": "硬着头皮问旁边的同学", "sub": "有点丢脸，但可能交到朋友", "delta": {"emotion": -5, "finance": 0, "social": 20}, "next": "g3"},
+                {"id": "B", "text": "自己回去查资料，熬夜搞定", "sub": "独立解决，但很累", "delta": {"emotion": -10, "finance": 0, "social": -5}, "next": "g3"}
+            ]},
+            {"id": "g2b", "type": "choice", "text": "你在网上找了一堆免费教程，看了两天就没动力了。一个月后，你又回到了刷手机的日常。一天你的同事说：'你最近好像不太开心。'",
+             "options": [
+                {"id": "A", "text": "承认自己有点迷茫，想做点改变", "sub": "坦诚面对，可能得到支持", "delta": {"emotion": 5, "finance": 0, "social": 10}, "next": "g3"},
+                {"id": "B", "text": "说没事，就是最近有点累", "sub": "掩饰真实感受", "delta": {"emotion": -10, "finance": 0, "social": -5}, "next": "g3"}
+            ]},
+            {"id": "g3", "type": "free_input", "text": "你有没有过想做但一直没做的事？是什么阻止了你？", "options": [], "next": "g4"},
+            {"id": "g4", "type": "choice", "text": "三个月后，你有了一个小小的副业想法。但要启动它，你需要每天下班后花 2 小时。",
+             "options": [
+                {"id": "A", "text": "开始做，哪怕每天只推进一点", "sub": "辛苦但有方向感", "delta": {"emotion": 10, "finance": -5, "social": -10}, "next": "g5"},
+                {"id": "B", "text": "等周末再说，平时太累了", "sub": "合理但可能又拖了", "delta": {"emotion": -5, "finance": 5, "social": 5}, "next": "g5"}
+            ]},
+            {"id": "g5", "type": "choice", "text": "半年过去了。你的生活和半年前相比，有了一些变化。你的家人问你：'你最近在忙什么？'",
+             "options": [
+                {"id": "A", "text": "兴奋地分享你的新尝试", "sub": "可能得到支持，也可能被泼冷水", "delta": {"emotion": 10, "finance": 0, "social": 15}, "next": "g6"},
+                {"id": "B", "text": "轻描淡写地说没什么", "sub": "保护自己，但也错过了支持", "delta": {"emotion": -5, "finance": 0, "social": -5}, "next": "g6"}
+            ]},
+            {"id": "g6", "type": "choice", "text": "一年了。回头看，你觉得这一年最大的收获是什么？",
+             "options": [
+                {"id": "A", "text": "我学会了行动比想象重要", "sub": "成长型思维", "delta": {"emotion": 20, "finance": 5, "social": 10}, "next": "ending"},
+                {"id": "B", "text": "我更了解自己想要什么了", "sub": "自我认知提升", "delta": {"emotion": 15, "finance": 0, "social": 5}, "next": "ending"}
+            ]}
+        ],
+        "endings": [
+            {"condition": "emotion_high", "threshold": {"emotion": 40}, "title": "内心富足", "text": "你选择了面对自己的真实需求，虽然过程不容易，但你的内心比一年前强大了很多。", "badge": "勇敢者"},
+            {"condition": "finance_high", "threshold": {"finance": 40}, "title": "务实主义", "text": "你在稳定和探索之间找到了平衡，没有冲动，但也没有停下脚步。", "badge": "稳中求进"},
+            {"condition": "social_high", "threshold": {"social": 40}, "title": "连接者", "text": "你在探索的过程中认识了很多新朋友，你的世界变大了。", "badge": "破圈达人"},
+            {"condition": "balanced", "threshold": {}, "title": "探索中", "text": "改变不是一蹴而就的，你已经迈出了第一步，这就够了。", "badge": "起步者"}
+        ]
     }
 ]
 
@@ -264,6 +355,14 @@ async def get_chapters():
     return {"success": True, "data": preview}
 
 
+@router.get("/random")
+async def get_random_chapter():
+    """随机返回一个关卡的完整数据"""
+    import random
+    ch = random.choice(CHAPTERS)
+    return {"success": True, "data": ch}
+
+
 @router.get("/chapter/{chapter_id}")
 async def get_chapter(chapter_id: str):
     """获取关卡完整数据（含所有节点）"""
@@ -300,6 +399,57 @@ async def record_choice(req: ChoiceRequest):
             "delta": option["delta"],
             "new_stats": new_stats,
             "option_text": option["text"]
+        }
+    }
+
+
+class FreeInputRequest(BaseModel):
+    user_id: str
+    chapter_id: str
+    node_id: str
+    user_text: str
+    current_stats: Dict[str, int]
+
+
+@router.post("/free-input")
+async def record_free_input(req: FreeInputRequest):
+    """记录自由文本输入，保存为高质量训练数据"""
+    ch = next((c for c in CHAPTERS if c["id"] == req.chapter_id), None)
+    if not ch:
+        return {"success": False, "message": "关卡不存在"}
+
+    node = next((n for n in ch["nodes"] if n["id"] == req.node_id), None)
+    if not node or node.get("type") != "free_input":
+        return {"success": False, "message": "节点不存在或类型不匹配"}
+
+    # 保存为训练数据（自由表达是最高质量的个人偏好数据）
+    try:
+        from backend.database.connection import db_connection
+        from backend.database.models import ConversationHistory
+
+        db = db_connection.get_session()
+        now = datetime.utcnow()
+        db.add(ConversationHistory(
+            user_id=req.user_id, role="user",
+            content=f"[游戏自由表达] 问题：{node['text']} 回答：{req.user_text}",
+            timestamp=now, session_id=f"game_{req.chapter_id}"
+        ))
+        db.add(ConversationHistory(
+            user_id=req.user_id, role="assistant",
+            content=f"感谢你的分享，这让我更了解你的想法和价值观。",
+            timestamp=now, session_id=f"game_{req.chapter_id}"
+        ))
+        db.commit()
+        db.close()
+    except Exception as e:
+        print(f"[游戏] 保存自由输入失败: {e}")
+
+    return {
+        "success": True,
+        "data": {
+            "next_node_id": node.get("next", "ending"),
+            "delta": {"emotion": 0, "finance": 0, "social": 0},
+            "new_stats": dict(req.current_stats)
         }
     }
 

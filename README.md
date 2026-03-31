@@ -8,6 +8,8 @@ git commit -m "优化"
 git push origin main
 # clone 仓库
  git pull origin main
+
+ python start_system.py
 git clone https://github.com/next06786-ux/aiagent.git aiagent
 
 # 进入项目目录

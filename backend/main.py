@@ -7396,3 +7396,15 @@ from backend.game.parallel_life_api import router as game_router
 app.include_router(game_router)
 print('平行人生游戏 API 已加载')
 
+# Agent 状态查询接口
+@app.get("/api/agent/status/{user_id}")
+async def get_agent_status(user_id: str):
+    """获取用户的个性化决策 Agent 状态（四层架构快照）"""
+    try:
+        from backend.agent.personal_agent import get_personal_agent
+        agent = get_personal_agent(user_id)
+        state = agent.refresh_state()
+        return {"code": 200, "data": state.to_dict()}
+    except Exception as e:
+        return {"code": 500, "message": str(e)}
+
