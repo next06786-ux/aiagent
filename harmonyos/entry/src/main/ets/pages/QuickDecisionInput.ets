@@ -222,46 +222,84 @@ struct QuickDecisionInput {
   }
 
   build() {
-    Column() {
-      // 顶部导航栏
-      Row() {
-        Text('←')
-          .fontSize(24)
-          .fontColor(Theme.Color.Primary)
-          .onClick(() => router.back())
+    Stack({ alignContent: Alignment.BottomEnd }) {
+      Column() {
+        // 顶部导航栏
+        Row() {
+          Text('←')
+            .fontSize(24)
+            .fontColor(Theme.Color.Primary)
+            .onClick(() => router.back())
 
-        Text('智能决策助手')
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Theme.Color.TextPrimary)
-          .layoutWeight(1)
-          .margin({ left: 12 })
-      }
-      .width('100%')
-      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-      .backgroundColor(Theme.Color.BackgroundPrimary)
-
-      Scroll() {
-        Column({ space: 20 }) {
-          // Hero 区域
-          this.buildHeroCard()
-          // 决策历史记录（始终显示区域，有数据才展示内容）
-          this.buildDecisionHistory()
-          // LoRA 模型卡片
-          this.buildLoraCard()
-          // 语音输入
-          this.buildVoiceSection()
-          // 文字输入
-          this.buildTextInput()
-          // 快速模板
-          this.buildTemplateSection()
+          Text('智能决策助手')
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Theme.Color.TextPrimary)
+            .layoutWeight(1)
+            .margin({ left: 12 })
         }
         .width('100%')
-        .padding({ left: 16, right: 16, bottom: 60 })
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .backgroundColor(Theme.Color.BackgroundPrimary)
+
+        Scroll() {
+          Column({ space: 20 }) {
+            // Hero 区域
+            this.buildHeroCard()
+            // 决策历史记录
+            this.buildDecisionHistory()
+            // LoRA 模型卡片
+            this.buildLoraCard()
+            // 语音输入
+            this.buildVoiceSection()
+            // 文字输入
+            this.buildTextInput()
+            // 快速模板
+            this.buildTemplateSection()
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 60 })
+        }
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
+        .layoutWeight(1)
       }
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
-      .layoutWeight(1)
+      .width('100%').height('100%')
+
+      // 推演中悬浮导航球 — 当有最近的推演记录时显示
+      if (this.decisionHistory.length > 0) {
+        Column({ space: 4 }) {
+          Stack() {
+            Circle({ width: 56, height: 56 })
+              .linearGradient({ angle: 135, colors: [['#6B48FF', 0], ['#0A59F7', 1]] })
+              .shadow({ radius: 12, color: 'rgba(107,72,255,0.3)', offsetX: 0, offsetY: 4 })
+            SimpleIcon({ iconName: 'comparison', iconSize: 24, color: '#FFFFFF' })
+          }.width(56).height(56)
+          Text('推演').fontSize(10).fontColor(Theme.Color.TextTertiary)
+        }
+        .alignItems(HorizontalAlign.Center)
+        .margin({ right: 16, bottom: 80 })
+        .onClick(() => {
+          // 跳转到最近一次推演
+          if (this.decisionHistory.length > 0) {
+            const latest = this.decisionHistory[0]
+            router.pushUrl({
+              url: 'pages/DecisionDungeon2DMap',
+              params: {
+                dungeonId: latest.session_id,
+                userId: this.userId,
+                question: latest.question,
+                recommendation: latest.recommendation,
+                isHistory: 'true'
+              }
+            })
+          }
+        })
+        .stateStyles({
+          pressed: { .scale({ x: 0.9, y: 0.9 }) },
+          normal: { .scale({ x: 1, y: 1 }) }
+        })
+      }
     }
     .width('100%')
     .height('100%')

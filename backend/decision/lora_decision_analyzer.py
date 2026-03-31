@@ -128,10 +128,10 @@ class LoRADecisionAnalyzer:
         question: str,
         option: Dict[str, str],
         profile: Any,
-        num_events: int = 12
+        num_events: int = 12,
+        all_option_titles: List[str] = None
     ):
-        """分批流式生成时间线：每批 4 个节点，共 3 批，后续批次带上前面的结果作为上下文"""
-        # 在线程中执行可能阻塞的知识图谱查询
+        """分批流式生成时间线：每批 4 个节点，后续批次带上前面的结果作为上下文"""
         kg_context = await asyncio.to_thread(self._query_relevant_persons, user_id, question)
         life_context = await asyncio.to_thread(self._retrieve_life_context, user_id, question)
 
@@ -158,7 +158,8 @@ class LoRADecisionAnalyzer:
             prompt = self._build_timeline_prompt(
                 question, option, profile, batch_count,
                 strict=False, kg_context=kg_context,
-                life_context=life_context
+                life_context=life_context,
+                other_options=all_option_titles
             )
             # 在 prompt 的 user 部分插入上下文
             if context_prefix:
@@ -168,10 +169,9 @@ class LoRADecisionAnalyzer:
                 )
 
             batch_buffer = ""
-            for chunk in self.lora_manager.generate_stream(user_id, prompt, 600, 0.45):
+            for chunk in self.lora_manager.generate_stream(user_id, prompt, 450, 0.45):
                 batch_buffer += chunk
                 yield chunk
-                # 让出事件循环，防止长时间阻塞导致 WebSocket 超时断开
                 await asyncio.sleep(0)
 
             # 解析本批次结果，加入上下文
@@ -212,24 +212,41 @@ class LoRADecisionAnalyzer:
         return branches[:2]
 
     def extract_incremental_events(self, response: str, emitted_months: List[int]) -> List[Dict[str, Any]]:
+        """从流式输出中增量提取已完成的事件 JSON 对象"""
         events: List[Dict[str, Any]] = []
         try:
             cleaned = re.sub(r'```json\s*', '', response)
             cleaned = re.sub(r'```\s*', '', cleaned)
-            for match in re.finditer(r'\{\s*"month"\s*:\s*\d+.*?\}', cleaned, re.DOTALL):
-                raw = match.group(0)
-                try:
-                    item = json.loads(raw)
-                except Exception:
-                    continue
-                parsed = self._extract_events([item])
-                if not parsed:
-                    continue
-                event = parsed[0]
-                if event['month'] in emitted_months:
-                    continue
-                emitted_months.append(event['month'])
-                events.append(event)
+            
+            # 用括号匹配法找完整的 JSON 对象，而不是简单的 .*?
+            depth = 0
+            start = -1
+            for pos in range(len(cleaned)):
+                ch = cleaned[pos]
+                if ch == '{':
+                    if depth == 0:
+                        start = pos
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0 and start >= 0:
+                        raw = cleaned[start:pos + 1]
+                        start = -1
+                        # 检查是否包含 month 字段
+                        if '"month"' not in raw:
+                            continue
+                        try:
+                            item = json.loads(raw)
+                        except Exception:
+                            continue
+                        parsed = self._extract_events([item])
+                        if not parsed:
+                            continue
+                        event = parsed[0]
+                        if event['month'] in emitted_months:
+                            continue
+                        emitted_months.append(event['month'])
+                        events.append(event)
         except Exception:
             pass
         return events
@@ -419,62 +436,76 @@ class LoRADecisionAnalyzer:
                                 num_events: int, strict: bool = False,
                                 kg_context: str = "",
                                 user_feedback: List[Dict[str, str]] = None,
-                                life_context: str = "") -> str:
+                                life_context: str = "",
+                                other_options: List[str] = None) -> str:
+        option_title = option['title']
+        option_desc = option.get('description', '')
+        
         system_msg = (
-            "你是一个决策推演引擎。你的任务是为用户模拟选择某个方向后，未来几个月会发生的具体事件。\n"
+            f"你是一个决策推演引擎。用户选择了「{option_title}」这个方向。\n"
+            f"你必须完全围绕「{option_title}」来推演，所有事件都必须和这个具体方向直接相关。\n"
             "核心原则：\n"
-            "1. 每个事件必须是具体的、可感知的场景，不能是空洞的总结或书面语废话\n"
-            "2. 好的事件示例：'面试了3家公司，拿到1个offer但薪资比预期低20%'\n"
-            "3. 坏的事件示例：'开始积极探索职业发展方向'（太空洞）\n"
-            "4. 事件要有因果递进关系，后面的事件是前面事件的自然结果\n"
-            "5. 必须包含正面和负面事件，不能全是好事或全是坏事\n"
-            "6. 只输出 JSON 数组，不要任何解释"
+            "1. 每个事件必须是具体的、可感知的场景，包含数字、人名、地点等细节\n"
+            "2. 所有事件必须紧扣「" + option_title + "」这个方向，不能写通用的生活流水账\n"
+            "3. 必须包含正面和负面事件，不能全是好事\n"
+            "4. 只输出 JSON 数组"
         )
         prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n"
         prompt += f"<|im_start|>user\n"
-        prompt += f"## 用户的决策问题\n{question}\n\n"
-        prompt += f"## 用户选择的方向\n{option['title']}"
-        if option.get('description'):
-            prompt += f" — {option['description']}"
+        prompt += f"## 决策问题\n{question}\n\n"
+        prompt += f"## 用户选择的方向（所有事件必须围绕这个方向）\n"
+        prompt += f"**{option_title}**"
+        if option_desc:
+            prompt += f"\n说明：{option_desc}"
         prompt += "\n\n"
+        
+        # 告诉模型其他选项是什么，强调不要混淆
+        if other_options:
+            others = [o for o in other_options if o != option_title]
+            if others:
+                prompt += f"## 注意：用户没有选择以下方向，不要写这些方向的事件\n"
+                for o in others:
+                    prompt += f"- {o}（未选择）\n"
+                prompt += "\n"
 
-        # 注入用户真实背景
         if life_context:
-            prompt += f"## 用户的真实情况（必须在事件中引用这些具体信息）\n{life_context}\n\n"
+            prompt += f"## 用户背景\n{life_context}\n\n"
         if kg_context:
-            prompt += f"## 用户身边的人（事件中可以提到这些人的反应和影响）\n{kg_context}\n\n"
+            prompt += f"## 相关人物\n{kg_context}\n\n"
         if profile:
             style = getattr(profile, 'decision_style', '')
             risk = getattr(profile, 'risk_preference', '')
             priority = getattr(profile, 'life_priority', '')
             if style or risk or priority:
-                prompt += f"## 用户特征\n决策风格: {style}，风险偏好: {risk}，生活优先级: {priority}\n\n"
+                prompt += f"## 用户特征\n决策风格: {style}，风险偏好: {risk}，优先级: {priority}\n\n"
 
         if user_feedback:
-            prompt += "## 用户对之前推演的反馈\n"
+            prompt += "## 用户反馈\n"
             for fb in user_feedback:
                 event_text = fb.get("event", "")
                 feedback_type = fb.get("type", "")
                 comment = fb.get("comment", "")
                 if feedback_type == "unlikely":
-                    prompt += f"- 用户认为'{event_text}'不太可能发生，请调整\n"
+                    prompt += f"- '{event_text}'不太可能\n"
                 elif feedback_type == "accurate":
-                    prompt += f"- 用户认为'{event_text}'很准确\n"
+                    prompt += f"- '{event_text}'很准确\n"
                 elif comment:
-                    prompt += f"- 关于'{event_text}'，用户说：{comment}\n"
+                    prompt += f"- 关于'{event_text}'：{comment}\n"
             prompt += "\n"
 
         prompt += (
             f"## 输出要求\n"
-            f"生成 {num_events} 个事件，模拟选择「{option['title']}」后未来 {num_events} 个月的真实经历。\n"
-            "每个事件要求：\n"
-            "- event: 用第二人称'你'描述，像在讲故事，要有具体的数字、人名、地点、行动\n"
-            "- 不同月份的事件要有明显的递进和变化，不能重复类似的内容\n"
-            "- 前3个月侧重行动和初期反馈，中间侧重遇到的困难和调整，后期侧重结果和转折\n"
-            "- impact 的值要有区分度，不能全是 0.1/-0.1 这种小幅波动\n"
-            "- probability 要根据事件的现实可能性合理设置，不能全是 0.7-0.8\n\n"
-            "输出格式（只输出 JSON 数组）：\n"
-            '[{"month":1,"event":"你开始...","impact":{"健康":-0.1,"财务":0.2,"社交":0.0,"情绪":0.1,"学习":0.3,"时间":-0.3},"probability":0.85}]\n'
+            f"生成 {num_events} 个事件，模拟选择「{option_title}」后未来 {num_events} 个月会发生什么。\n\n"
+            f"重要：每个事件都必须和「{option_title}」直接相关，不能写和选择无关的日常琐事。\n\n"
+            "event 写法示例：\n"
+            '- "你花了两周准备简历，投了8家公司，收到3个面试邀请"\n'
+            '- "房租到期要续约，房东涨了300块，你犹豫要不要搬家"\n'
+            '- "第一个月工资到账，扣完五险一金到手4800，比预期少了不少"\n'
+            '- "周末和老同学聚餐，他说你的选择挺冒险的，让你有点动摇"\n\n'
+            "绝对不要写这种废话：\n"
+            '- "开始适应新环境"、"逐步提升能力"、"社交圈有所变化"\n\n'
+            "输出 JSON 数组：\n"
+            '[{"month":1,"event":"你...具体事件","impact":{"健康":0,"财务":0.2,"社交":0,"情绪":0.1,"学习":0.3,"时间":-0.3},"probability":0.85}]\n'
             f"<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt

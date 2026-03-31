@@ -923,12 +923,14 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     risk_level: float
                     risk_assessment: Optional[Dict] = None
 
+                all_titles = [o.get("title", "") for o in options]
                 async for chunk in simulator.lora_analyzer.stream_timeline_generation(
                     user_id=user_id,
                     question=question,
                     option=option,
                     profile=profile,
-                    num_events=12
+                    num_events=12,
+                    all_option_titles=all_titles
                 ):
                     stream_buffer += chunk
                     await websocket.send_json({
