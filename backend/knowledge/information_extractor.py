@@ -208,13 +208,21 @@ class InformationExtractor:
             
             prompt = f"""从以下对话中提取提到的所有人物。只提取人物，不要提取地点、事件等。
 
+重要规则：
+1. "父母"不是一个人，要拆成"爸爸"和"妈妈"两个人
+2. "对方"、"他"、"她"、"那个人"等代词，如果上下文能确定是谁，就用那个人的名字，不要单独作为一个人物
+3. 同一个人的不同称呼要合并（如"小雨"和"对方"是同一个人，只保留"小雨"）
+4. "爸爸"和"父亲"是同一个人，只保留一个
+5. 不要提取"我"、"用户"、"AI"、"助手"
+
 对话内容：
 {text[:2000]}
 
 请以JSON数组格式返回，每个人物包含：
-- name: 人物称呼（如"爸爸"、"张伟"、"李老师"）
+- name: 人物称呼（用最具体的名字，如有真名用真名）
 - category: 关系类别，只能是以下之一：family（家人）、close_friends（好友）、colleagues（同事）、friends（朋友）、weak_ties（弱关系）
 - description: 一句话描述这个人物在对话中的角色或提到的事情
+- aliases: 这个人在对话中的其他称呼（数组，如 ["对方", "她"]）
 
 如果对话中没有提到任何人物，返回空数组 []
 只返回JSON，不要其他文字。"""
@@ -241,11 +249,35 @@ class InformationExtractor:
             seen = set()
             valid_categories = {'family', 'close_friends', 'colleagues', 'friends', 'weak_ties'}
             
+            # 代词/泛称黑名单 — 不应作为独立人物
+            PRONOUN_BLACKLIST = {
+                '对方', '他', '她', '它', '他们', '她们', '那个人', '这个人',
+                '别人', '某人', '大家', '人家', '自己', '本人',
+                '我', '用户', 'AI', '助手', '你', '您'
+            }
+            
+            # 别名合并映射
+            ALIAS_MAP = {
+                '父亲': '爸爸', '老爸': '爸爸', '爸': '爸爸',
+                '母亲': '妈妈', '老妈': '妈妈', '妈': '妈妈',
+                '老婆': '妻子', '媳妇': '妻子', '爱人': '妻子',
+                '老公': '丈夫',
+                '闺女': '女儿',
+            }
+            
             for p in persons_data:
                 name = p.get('name', '').strip()
-                if not name or name in seen or name in ('我', '用户', 'AI', '助手'):
+                if not name or name in PRONOUN_BLACKLIST:
+                    continue
+                # 别名标准化
+                name = ALIAS_MAP.get(name, name)
+                if name in seen:
                     continue
                 seen.add(name)
+                # 也把 aliases 里的名字加入 seen 防止重复
+                aliases = p.get('aliases', [])
+                for alias in aliases:
+                    seen.add(alias.strip())
                 category = p.get('category', 'friends')
                 if category not in valid_categories:
                     category = 'friends'
@@ -276,6 +308,10 @@ class InformationExtractor:
         seen_names = set()
         
         if not text:
+            return persons
+
+        # 预处理：把"父母"拆成"爸爸"和"妈妈"
+        text_processed = text.replace('父母', '爸爸和妈妈').replace('爸妈', '爸爸和妈妈')
             return persons
         
         # 1. 称谓模式匹配 - 提取带称谓的人物

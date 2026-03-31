@@ -674,22 +674,28 @@ class AutoLoRATrainer:
     def auto_train_workflow(self):
         """自动训练工作流"""
         print(f"\n{'='*60}")
-        print(f"🤖 LoRA 自动训练检查")
-        print(f"👤 用户: {self.user_id}")
-        print(f"⏰ 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"LoRA 自动训练检查")
+        print(f"用户: {self.user_id}")
         print(f"{'='*60}\n")
 
+        _training_progress[self.user_id] = {
+            "is_training": True, "progress": 0, "stage": "检查训练条件...", "error": None
+        }
+
         if not self.check_training_trigger():
-            print("⏭️  跳过本次训练\n")
+            _training_progress[self.user_id] = {
+                "is_training": False, "progress": 0, "stage": "", "error": None
+            }
             return
 
-        print("📚 收集训练数据...")
+        _training_progress[self.user_id]["stage"] = "收集训练数据（对话分类中）..."
+        _training_progress[self.user_id]["progress"] = 1
         conversations = self.get_user_conversations()
-        print(f"✅ 收集到 {len(conversations)} 条对话\n")
+        print(f"收集到 {len(conversations)} 条对话")
 
-        print("🔄 准备数据集...")
+        _training_progress[self.user_id]["stage"] = "准备数据集..."
+        _training_progress[self.user_id]["progress"] = 2
         dataset = self.prepare_dataset(conversations)
-        print("✅ 数据集准备完成\n")
 
         self.status["is_training"] = True
         self.save_status()
@@ -702,19 +708,13 @@ class AutoLoRATrainer:
                 self.status["model_version"] += 1
                 self.status["is_training"] = False
                 self.save_status()
-                print(f"📊 训练统计:")
-                print(f"   - 总训练次数: {self.status['total_trainings']}")
-                print(f"   - 当前版本: v{self.status['model_version']}")
-                print(f"   - 数据量: {len(conversations)}")
-                print(f"   - 下次训练: {self.training_config['train_interval_days']} 天后\n")
             else:
                 self.status["is_training"] = False
                 self.save_status()
-                print("❌ 训练失败\n")
         except Exception as e:
             self.status["is_training"] = False
             self.save_status()
-            print(f"❌ 训练异常: {e}\n")
+            print(f"训练异常: {e}")
             import traceback
             traceback.print_exc()
 

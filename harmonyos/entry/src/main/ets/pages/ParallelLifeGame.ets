@@ -349,13 +349,17 @@ struct ParallelLifeGame {
           .fontSize(16).fontWeight(600).fontColor('#FFFFFF').margin({ left: 12 })
         Blank()
         if (this.phase === 'playing') {
-          // 倒计时圆圈
+          // 倒计时球体
           Stack() {
-            Circle({ width: 36, height: 36 }).fill('rgba(255,255,255,0.1)')
+            Circle({ width: 40, height: 40 }).fill(this.countdown <= 5 ? '#f87171' : 'rgba(255,255,255,0.06)').opacity(0.08).blur(8)
+            Circle({ width: 36, height: 36 })
+              .linearGradient({ angle: 145, colors: [[this.countdown <= 5 ? '#f87171' : 'rgba(255,255,255,0.15)', 0], ['rgba(0,0,0,0.05)', 1]] })
+            Circle({ width: 30, height: 30 })
+              .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.15)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
             Text(`${this.countdown}`)
               .fontSize(14).fontWeight(700)
               .fontColor(this.countdown <= 5 ? '#f87171' : '#FFFFFF')
-          }.width(36).height(36)
+          }.width(40).height(40)
         }
       }
       .width('100%').height(56).padding({ left: 16, right: 16 })
@@ -408,10 +412,15 @@ struct ParallelLifeGame {
   @Builder
   StatBar(label: string, val: number, icon: string) {
     Row({ space: 6 }) {
+      // 球体风格属性图标
       Stack() {
-        Circle({ width: 16, height: 16 }).fill(this.statColor(val)).opacity(0.2)
-        Text(icon).fontSize(9).fontWeight(700).fontColor(this.statColor(val))
-      }.width(16).height(16)
+        Circle({ width: 20, height: 20 })
+          .linearGradient({ angle: 145, colors: [[this.statColor(val), 0], ['rgba(0,0,0,0.1)', 1]] })
+          .shadow({ radius: 6, color: this.statColor(val), offsetX: 0, offsetY: 2 })
+        Circle({ width: 16, height: 16 })
+          .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.2)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
+        Text(icon).fontSize(8).fontWeight(700).fontColor('#FFFFFF')
+      }.width(20).height(20)
       Text(label).fontSize(11).fontColor('rgba(255,255,255,0.6)').width(28)
       Row() {
         Column()
@@ -419,6 +428,7 @@ struct ParallelLifeGame {
           .width(`${Math.max(0, (val + 100) / 2)}%`)
           .backgroundColor(this.statColor(val))
           .borderRadius(2)
+          .shadow({ radius: 4, color: this.statColor(val), offsetX: 0, offsetY: 0 })
         Blank()
       }
       .layoutWeight(1).backgroundColor('rgba(255,255,255,0.1)').borderRadius(2)
@@ -428,7 +438,14 @@ struct ParallelLifeGame {
 
   @Builder buildLoading() {
     Column({ space: 16 }) {
-      LoadingProgress().width(48).height(48).color('#FFFFFF')
+      // 加载球体动画
+      Stack() {
+        Circle({ width: 60, height: 60 }).fill('#FF6B9D').opacity(0.04).blur(16)
+        Circle({ width: 48, height: 48 })
+          .linearGradient({ angle: 145, colors: [['#FF6B9D', 0], ['rgba(0,0,0,0.08)', 1]] })
+          .opacity(0.3)
+        LoadingProgress().width(28).height(28).color('#FFFFFF')
+      }.width(60).height(60)
       Text('加载中...').fontSize(14).fontColor('rgba(255,255,255,0.6)')
     }
     .width('100%').height('100%')
@@ -438,35 +455,64 @@ struct ParallelLifeGame {
   @Builder buildChapterSelect() {
     Scroll() {
       Column({ space: 20 }) {
-        Column({ space: 8 }) {
+        // 标题区 - 球体风格
+        Column({ space: 12 }) {
+          Stack() {
+            Circle({ width: 80, height: 80 }).fill('#FF6B9D').opacity(0.06).blur(18)
+            Circle({ width: 66, height: 66 }).fill('transparent')
+              .border({ width: 0.8, color: '#FF6B9D' }).opacity(0.18)
+            Circle({ width: 56, height: 56 }).fill('#FF6B9D').opacity(0.12)
+            Circle({ width: 56, height: 56 })
+              .linearGradient({ angle: 145, colors: [['#FF6B9D', 0], ['rgba(0,0,0,0.08)', 1]] })
+              .shadow({ radius: 14, color: '#FF6B9D', offsetX: 0, offsetY: 5 })
+            Circle({ width: 48, height: 48 })
+              .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
+            Text('∞').fontSize(22).fontWeight(700).fontColor('rgba(255,255,255,0.85)')
+          }.width(80).height(80)
           Text('平行人生').fontSize(28).fontWeight(800).fontColor('#FFFFFF')
           Text('每一个选择，都通向不同的人生')
             .fontSize(14).fontColor('rgba(255,255,255,0.5)')
         }
         .width('100%').padding({ top: 80, bottom: 8 }).alignItems(HorizontalAlign.Center)
 
-        // 随机开始按钮
-        Button('随机开始')
-          .width('80%').height(50)
-          .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
-          .backgroundColor('rgba(255,255,255,0.12)')
-          .borderRadius(Theme.Radius.round)
-          .border({ width: 1, color: 'rgba(255,255,255,0.2)' })
-          .onClick(() => this.loadRandomChapter())
+        // 随机开始按钮 - 球体光晕风格
+        Stack() {
+          Circle({ width: 200, height: 50 }).fill('rgba(255,255,255,0.04)').blur(10)
+          Button('随机开始')
+            .width('80%').height(50)
+            .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+            .backgroundColor('rgba(255,255,255,0.12)')
+            .borderRadius(Theme.Radius.round)
+            .border({ width: 1, color: 'rgba(255,255,255,0.2)' })
+            .shadow({ radius: 16, color: 'rgba(255,107,157,0.3)', offsetX: 0, offsetY: 4 })
+            .onClick(() => this.loadRandomChapter())
+        }
 
         Text('或选择一个关卡').fontSize(12).fontColor('rgba(255,255,255,0.35)')
 
-        ForEach(this.chapters, (ch: Chapter) => {
-          Column({ space: 10 }) {
-            Text(ch.cover_emoji || '').fontSize(36)
-            Text(ch.title).fontSize(18).fontWeight(700).fontColor('#FFFFFF')
-            Text(ch.subtitle).fontSize(13).fontColor('rgba(255,255,255,0.6)')
+        ForEach(this.chapters, (ch: Chapter, idx: number) => {
+          Row({ space: 16 }) {
+            // 关卡球体图标
+            Stack() {
+              Circle({ width: 60, height: 60 }).fill(ch.accent || '#7C3AED').opacity(0.06).blur(12)
+              Circle({ width: 50, height: 50 }).fill('transparent')
+                .border({ width: 0.8, color: ch.accent || '#7C3AED' }).opacity(0.2)
+              Circle({ width: 42, height: 42 })
+                .linearGradient({ angle: 145, colors: [[ch.accent || '#7C3AED', 0], ['rgba(0,0,0,0.08)', 1]] })
+                .shadow({ radius: 10, color: ch.accent || '#7C3AED', offsetX: 0, offsetY: 4 })
+              Circle({ width: 36, height: 36 })
+                .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
+              Text(ch.cover_emoji || '').fontSize(18)
+            }.width(60).height(60)
+            Column({ space: 4 }) {
+              Text(ch.title).fontSize(18).fontWeight(700).fontColor('#FFFFFF')
+              Text(ch.subtitle).fontSize(13).fontColor('rgba(255,255,255,0.6)')
+            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           }
-          .width('100%').padding(24)
+          .width('100%').padding({ left: 20, right: 20, top: 18, bottom: 18 })
           .backgroundColor('rgba(255,255,255,0.06)')
           .borderRadius(Theme.Radius.xl)
           .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
-          .alignItems(HorizontalAlign.Center)
           .onClick(() => this.loadChapter(ch.id))
           .stateStyles({
             pressed: { .scale({ x: 0.97, y: 0.97 }).backgroundColor('rgba(255,255,255,0.12)') },
@@ -485,12 +531,20 @@ struct ParallelLifeGame {
     Column({ space: 0 }) {
       Blank().layoutWeight(1)
       Column({ space: 24 }) {
+        // 球体风格封面图标 - 多层光晕
         Stack() {
-          Circle({ width: 80, height: 80 }).fill(this.accentColor()).opacity(0.12)
-          Circle({ width: 60, height: 60 }).fill(this.accentColor()).opacity(0.08)
+          Circle({ width: 100, height: 100 }).fill(this.accentColor()).opacity(0.04).blur(20)
+          Circle({ width: 86, height: 86 }).fill('transparent')
+            .border({ width: 0.8, color: this.accentColor() }).opacity(0.15)
+          Circle({ width: 72, height: 72 }).fill(this.accentColor()).opacity(0.1)
+          Circle({ width: 72, height: 72 })
+            .linearGradient({ angle: 145, colors: [[this.accentColor(), 0], ['rgba(0,0,0,0.08)', 1]] })
+            .shadow({ radius: 18, color: this.accentColor(), offsetX: 0, offsetY: 6 })
+          Circle({ width: 62, height: 62 })
+            .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
           Text(this.currentChapter?.cover_emoji ?? 'P')
-            .fontSize(28).fontWeight(800).fontColor(this.accentColor())
-        }.width(80).height(80)
+            .fontSize(28).fontWeight(800).fontColor('rgba(255,255,255,0.9)')
+        }.width(100).height(100)
         Text(this.currentChapter?.title ?? '')
           .fontSize(28).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
         Text(this.currentChapter?.subtitle ?? '')
@@ -561,38 +615,50 @@ struct ParallelLifeGame {
         }
         .padding({ left: 20, right: 20, bottom: 48 })
       } else {
-      // 选项卡片
+      // 选项卡片 - 球体风格
       Column({ space: 14 }) {
         ForEach(this.currentNode()?.options ?? [], (opt: GameOption, idx: number) => {
-          Column({ space: 8 }) {
-            Text(opt.text)
-              .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
-            Text(opt.sub)
-              .fontSize(12).fontColor('rgba(255,255,255,0.55)').lineHeight(18)
-            // 属性预览
-            Row({ space: 12 }) {
-              if (opt.delta.emotion !== 0) {
-                Text(`情绪${this.deltaText(opt.delta.emotion)}`)
-                  .fontSize(11).fontColor(opt.delta.emotion > 0 ? '#34d399' : '#f87171')
-                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(opt.delta.emotion > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
-                  .borderRadius(Theme.Radius.round)
+          Row({ space: 14 }) {
+            // 选项球体图标
+            Stack() {
+              Circle({ width: 44, height: 44 }).fill(idx === 0 ? this.accentColor() : 'rgba(255,255,255,0.15)').opacity(0.08).blur(10)
+              Circle({ width: 36, height: 36 })
+                .linearGradient({ angle: 145, colors: [[idx === 0 ? this.accentColor() : 'rgba(255,255,255,0.2)', 0], ['rgba(0,0,0,0.06)', 1]] })
+                .shadow({ radius: 8, color: idx === 0 ? this.accentColor() : 'rgba(255,255,255,0.1)', offsetX: 0, offsetY: 3 })
+              Circle({ width: 30, height: 30 })
+                .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.2)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
+              Text(`${idx + 1}`).fontSize(14).fontWeight(700).fontColor('#FFFFFF')
+            }.width(44).height(44)
+            Column({ space: 6 }) {
+              Text(opt.text)
+                .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+              Text(opt.sub)
+                .fontSize(12).fontColor('rgba(255,255,255,0.55)').lineHeight(18)
+              // 属性预览
+              Row({ space: 10 }) {
+                if (opt.delta.emotion !== 0) {
+                  Text(`情绪${this.deltaText(opt.delta.emotion)}`)
+                    .fontSize(11).fontColor(opt.delta.emotion > 0 ? '#34d399' : '#f87171')
+                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                    .backgroundColor(opt.delta.emotion > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                    .borderRadius(Theme.Radius.round)
+                }
+                if (opt.delta.finance !== 0) {
+                  Text(`财务${this.deltaText(opt.delta.finance)}`)
+                    .fontSize(11).fontColor(opt.delta.finance > 0 ? '#34d399' : '#f87171')
+                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                    .backgroundColor(opt.delta.finance > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                    .borderRadius(Theme.Radius.round)
+                }
+                if (opt.delta.social !== 0) {
+                  Text(`社交${this.deltaText(opt.delta.social)}`)
+                    .fontSize(11).fontColor(opt.delta.social > 0 ? '#34d399' : '#f87171')
+                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                    .backgroundColor(opt.delta.social > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
+                    .borderRadius(Theme.Radius.round)
+                }
               }
-              if (opt.delta.finance !== 0) {
-                Text(`财务${this.deltaText(opt.delta.finance)}`)
-                  .fontSize(11).fontColor(opt.delta.finance > 0 ? '#34d399' : '#f87171')
-                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(opt.delta.finance > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
-                  .borderRadius(Theme.Radius.round)
-              }
-              if (opt.delta.social !== 0) {
-                Text(`社交${this.deltaText(opt.delta.social)}`)
-                  .fontSize(11).fontColor(opt.delta.social > 0 ? '#34d399' : '#f87171')
-                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor(opt.delta.social > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
-                  .borderRadius(Theme.Radius.round)
-              }
-            }
+            }.layoutWeight(1)
           }
           .width('100%').padding(18)
           .backgroundColor('rgba(255,255,255,0.07)')
@@ -619,13 +685,19 @@ struct ParallelLifeGame {
       Column({ space: 0 }) {
         Blank().height(72)
         Column({ space: 20 }) {
-          // 徽章
+          // 徽章 - 球体风格
           Column({ space: 8 }) {
             Stack() {
-              Circle({ width: 56, height: 56 })
-                .fill(this.accentColor()).opacity(0.15)
-              Text('P').fontSize(24).fontWeight(800).fontColor(this.accentColor())
-            }.width(56).height(56)
+              Circle({ width: 74, height: 74 }).fill(this.accentColor()).opacity(0.04).blur(16)
+              Circle({ width: 62, height: 62 }).fill('transparent')
+                .border({ width: 0.8, color: this.accentColor() }).opacity(0.18)
+              Circle({ width: 52, height: 52 })
+                .linearGradient({ angle: 145, colors: [[this.accentColor(), 0], ['rgba(0,0,0,0.08)', 1]] })
+                .shadow({ radius: 14, color: this.accentColor(), offsetX: 0, offsetY: 5 })
+              Circle({ width: 44, height: 44 })
+                .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
+              Text('✦').fontSize(20).fontWeight(800).fontColor('rgba(255,255,255,0.9)')
+            }.width(74).height(74)
             Text(this.ending['badge'] ?? '完成')
               .fontSize(13).fontColor(this.accentColor()).fontWeight(600)
               .padding({ left: 16, right: 16, top: 5, bottom: 5 })
@@ -696,10 +768,18 @@ struct ParallelLifeGame {
   @Builder
   FinalStatBlock(label: string, val: number, icon: string) {
     Column({ space: 6 }) {
+      // 球体风格属性图标
       Stack() {
-        Circle({ width: 32, height: 32 }).fill(this.statColor(val)).opacity(0.15)
-        Text(icon).fontSize(14).fontWeight(800).fontColor(this.statColor(val))
-      }.width(32).height(32)
+        Circle({ width: 44, height: 44 }).fill(this.statColor(val)).opacity(0.06).blur(10)
+        Circle({ width: 36, height: 36 }).fill('transparent')
+          .border({ width: 0.8, color: this.statColor(val) }).opacity(0.2)
+        Circle({ width: 30, height: 30 })
+          .linearGradient({ angle: 145, colors: [[this.statColor(val), 0], ['rgba(0,0,0,0.08)', 1]] })
+          .shadow({ radius: 10, color: this.statColor(val), offsetX: 0, offsetY: 3 })
+        Circle({ width: 24, height: 24 })
+          .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
+        Text(icon).fontSize(12).fontWeight(800).fontColor('#FFFFFF')
+      }.width(44).height(44)
       Text(`${val}`).fontSize(20).fontWeight(800).fontColor(this.statColor(val))
       Text(label).fontSize(11).fontColor('rgba(255,255,255,0.4)')
     }

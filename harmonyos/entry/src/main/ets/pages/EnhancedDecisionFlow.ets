@@ -153,7 +153,7 @@ struct EnhancedDecisionFlow {
         {
           method: http.RequestMethod.POST,
           header: { 'Content-Type': 'application/json' },
-          extraData: `{"user_id":"${this.userId}","initial_question":"${this.initialQuestion.replace(/"/g, '\\"')}"}`,
+          extraData: JSON.stringify({ user_id: this.userId, initial_question: this.initialQuestion }),
           connectTimeout: 30000,
           readTimeout: 30000
         }

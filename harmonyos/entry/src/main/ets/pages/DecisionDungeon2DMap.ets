@@ -444,15 +444,20 @@ struct DecisionDungeon2DMap {
           const simData = data as Record<string, Object>
           simData.simulation_id = simulationId
           simData.user_id = this.userId
+          const options = (simData.options as DungeonOption[]) || []
           this.dungeonData = {
             dungeon_id: simulationId, user_id: this.userId,
             title: question, description: '',
-            options: (simData.options as DungeonOption[]) || [],
+            options: options,
             recommendation: recommendation,
             created_at: (simData.created_at as string) || ''
           }
-          if (this.dungeonData.options.length > 0) {
+          if (options.length > 0 && options[0].timeline && options[0].timeline.length > 0) {
             this.buildFromExisting()
+          } else {
+            // 后端未存储推演节点数据，构建摘要视图让用户看到历史结论
+            const optCount = (simData.options_count as number) || options.length || 0
+            this.buildHistorySummaryView(question, recommendation, optCount)
           }
           if (recommendation) {
             try {
@@ -468,13 +473,35 @@ struct DecisionDungeon2DMap {
     } catch (err) {
       console.error('加载历史记录失败:', err)
     }
-    // 加载失败时显示基本信息
-    this.dungeonData = {
-      dungeon_id: simulationId, user_id: this.userId,
+    // 加载失败时也构建摘要视图
+    this.buildHistorySummaryView(question, recommendation, 0)
+    this.streamStatus = '历史推演已加载'
+  }
+
+  private buildHistorySummaryView(question: string, recommendation: string, optCount: number) {
+    // 即使后端没有存储完整的推演节点，也构建一个可展示的摘要
+    // 确保 optionSummaries 不为空，避免 UI 卡在"等待推演数据"
+    this.dungeonData = this.dungeonData || {
+      dungeon_id: this.dungeonId, user_id: this.userId,
       title: question, description: '历史推演记录',
       options: [], recommendation: recommendation, created_at: ''
     }
-    this.streamStatus = '历史数据加载失败'
+    // 创建一个虚拟的摘要选项，让 UI 能正常渲染
+    const summaryCount = Math.max(optCount, 1)
+    const summaries: OptionSummary[] = []
+    for (let i = 0; i < summaryCount; i++) {
+      summaries.push({
+        index: i,
+        title: `选项 ${i + 1}`,
+        color: this.optColor(i),
+        finalScore: 0,
+        riskLevel: 0,
+        status: '历史记录',
+        progress: 1
+      })
+    }
+    this.optionSummaries = summaries
+    this.showContent = true
   }
 
   private async triggerModelUpdate() {

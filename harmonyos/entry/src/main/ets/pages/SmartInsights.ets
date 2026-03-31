@@ -177,9 +177,16 @@ struct SmartInsights {
   }
 
   getLevelIcon(level: string): string {
-    if (level === 'critical') return '!!';
-    if (level === 'warning') return '!';
-    if (level === 'suggestion') return '*';
+    if (level === 'critical') return '🔴';
+    if (level === 'warning') return '🟠';
+    if (level === 'suggestion') return '🔵';
+    return '⚪';
+  }
+
+  getLevelSymbol(level: string): string {
+    if (level === 'critical') return '‼';
+    if (level === 'warning') return '⚠';
+    if (level === 'suggestion') return '✦';
     return 'i';
   }
 
@@ -188,13 +195,13 @@ struct SmartInsights {
     return config?.color || '#6B48FF';
   }
 
-  getCategoryIcon(category: string): string {
-    if (category === 'cascade') return 'C';
-    if (category === 'synergy') return 'S';
-    if (category === 'tipping_point') return 'T';
-    if (category === 'feedback_loop') return 'L';
-    if (category === 'pattern') return 'P';
-    return '*';
+  getCategorySymbol(category: string): string {
+    if (category === 'cascade') return '⟁';
+    if (category === 'synergy') return '⊕';
+    if (category === 'tipping_point') return '◈';
+    if (category === 'feedback_loop') return '↻';
+    if (category === 'pattern') return '◎';
+    return '✦';
   }
 
   private navigateBack(): void {
@@ -275,10 +282,10 @@ struct SmartInsights {
         .animation({ duration: 600, curve: Curve.Smooth, delay: 0 })
 
       Row({ space: 12 }) {
-        this.SummaryCard('关键', this.dashboardData?.summary.critical_count || 0, Theme.Color.Destructive, '!!', 0)
-        this.SummaryCard('警告', this.dashboardData?.summary.warning_count || 0, Theme.Color.Warning, '!', 1)
-        this.SummaryCard('建议', this.dashboardData?.summary.suggestion_count || 0, Theme.Color.Primary, '*', 2)
-        this.SummaryCard('总计', this.dashboardData?.summary.total_insights || 0, Theme.Color.Secondary, '#', 3)
+        this.SummaryCard('关键', this.dashboardData?.summary.critical_count || 0, Theme.Color.Destructive, '‼', 0)
+        this.SummaryCard('警告', this.dashboardData?.summary.warning_count || 0, Theme.Color.Warning, '⚠', 1)
+        this.SummaryCard('建议', this.dashboardData?.summary.suggestion_count || 0, Theme.Color.Primary, '✦', 2)
+        this.SummaryCard('总计', this.dashboardData?.summary.total_insights || 0, Theme.Color.Secondary, '∑', 3)
       }.width('100%').justifyContent(FlexAlign.SpaceBetween)
     }
   }
@@ -286,7 +293,18 @@ struct SmartInsights {
   @Builder
   SummaryCard(title: string, count: number, color: string, icon: string, index: number) {
     Column({ space: 6 }) {
-      Text(icon).fontSize(22)
+      // 球体风格图标
+      Stack() {
+        Circle({ width: 40, height: 40 }).fill(color).opacity(0.08)
+        Circle({ width: 32, height: 32 }).fill('transparent')
+          .border({ width: 0.8, color: color }).opacity(0.2)
+        Circle({ width: 28, height: 28 })
+          .linearGradient({ angle: 145, colors: [[color, 0], ['rgba(0,0,0,0.06)', 1]] })
+          .shadow({ radius: 10, color: color, offsetX: 0, offsetY: 3 })
+        Circle({ width: 24, height: 24 })
+          .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.25)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.03)', 1]] })
+        Text(icon).fontSize(12).fontWeight(700).fontColor('#FFFFFF')
+      }.width(40).height(40)
       Text(count.toString())
         .fontSize(22).fontWeight(700).fontColor(color)
       Text(title)
@@ -366,7 +384,18 @@ struct SmartInsights {
     Column({ space: 12 }) {
       if (this.allInsights.length === 0) {
         Column({ space: 16 }) {
-          Text('--').fontSize(48).fontColor(Theme.Color.TextTertiary)
+          // 空状态球体图标
+          Stack() {
+            Circle({ width: 64, height: 64 }).fill(Theme.Color.Secondary).opacity(0.06)
+            Circle({ width: 48, height: 48 }).fill('transparent')
+              .border({ width: 0.8, color: Theme.Color.Secondary }).opacity(0.15)
+            Circle({ width: 40, height: 40 })
+              .linearGradient({ angle: 145, colors: [[Theme.Color.Secondary, 0], ['rgba(0,0,0,0.06)', 1]] })
+              .opacity(0.3)
+            Circle({ width: 34, height: 34 })
+              .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.2)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
+            Text('✦').fontSize(18).fontColor('#FFFFFF').opacity(0.6)
+          }.width(64).height(64)
           Text('暂无洞察').fontSize(16).fontColor(Theme.Color.TextSecondary)
           Text('继续与AI对话，系统会自动分析并生成洞察')
             .fontSize(13).fontColor(Theme.Color.TextTertiary).textAlign(TextAlign.Center)
@@ -388,11 +417,28 @@ struct SmartInsights {
   InsightCard(insight: SmartInsight, index: number) {
     Column({ space: 10 }) {
       Row() {
-        Text(this.getLevelIcon(insight.level)).fontSize(20)
+        // 球体风格级别图标
+        Stack() {
+          Circle({ width: 38, height: 38 }).fill(this.getLevelColor(insight.level)).opacity(0.08)
+          Circle({ width: 30, height: 30 })
+            .linearGradient({ angle: 145, colors: [[this.getLevelColor(insight.level), 0], ['rgba(0,0,0,0.06)', 1]] })
+            .shadow({ radius: 8, color: this.getLevelColor(insight.level), offsetX: 0, offsetY: 3 })
+          Circle({ width: 26, height: 26 })
+            .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.03)', 1]] })
+          Text(this.getLevelSymbol(insight.level)).fontSize(12).fontWeight(700).fontColor('#FFFFFF')
+        }.width(38).height(38)
         Column({ space: 2 }) {
           Text(insight.title).fontSize(15).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-          Text(this.getCategoryIcon(insight.category) + ' ' + insight.category)
-            .fontSize(11).fontColor(this.getCategoryColor(insight.category))
+          Row({ space: 6 }) {
+            // 球体风格分类图标
+            Stack() {
+              Circle({ width: 18, height: 18 })
+                .linearGradient({ angle: 145, colors: [[this.getCategoryColor(insight.category), 0], ['rgba(0,0,0,0.08)', 1]] })
+              Text(this.getCategorySymbol(insight.category)).fontSize(9).fontWeight(700).fontColor('#FFFFFF')
+            }.width(18).height(18)
+            Text(insight.category)
+              .fontSize(11).fontColor(this.getCategoryColor(insight.category))
+          }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start).margin({ left: 10 })
         Column() {
           Text(Math.round(insight.impact_score).toString())
@@ -406,8 +452,19 @@ struct SmartInsights {
         .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
 
       Row() {
-        Text(`置信度: ${Math.round(insight.confidence * 100)}%`)
-          .fontSize(11).fontColor(Theme.Color.TextTertiary)
+        // 置信度进度条
+        Row({ space: 6 }) {
+          Text('置信度').fontSize(11).fontColor(Theme.Color.TextTertiary)
+          Row() {
+            Column()
+              .width(`${Math.round(insight.confidence * 100)}%`)
+              .height(4)
+              .backgroundColor(this.getLevelColor(insight.level))
+              .borderRadius(2)
+          }.width(60).height(4).backgroundColor(Theme.Color.BorderLight).borderRadius(2)
+          Text(`${Math.round(insight.confidence * 100)}%`)
+            .fontSize(11).fontWeight(600).fontColor(this.getLevelColor(insight.level))
+        }
         Blank()
         Text('查看详情 →').fontSize(12).fontColor(Theme.Color.Primary)
       }.width('100%')
@@ -443,12 +500,25 @@ struct SmartInsights {
 
       Column({ space: 16 }) {
         Row() {
-          Text(this.getLevelIcon(this.selectedInsight!.level)).fontSize(28)
+          // 球体风格级别图标
+          Stack() {
+            Circle({ width: 46, height: 46 }).fill(this.getLevelColor(this.selectedInsight!.level)).opacity(0.08)
+            Circle({ width: 38, height: 38 })
+              .linearGradient({ angle: 145, colors: [[this.getLevelColor(this.selectedInsight!.level), 0], ['rgba(0,0,0,0.06)', 1]] })
+              .shadow({ radius: 12, color: this.getLevelColor(this.selectedInsight!.level), offsetX: 0, offsetY: 4 })
+            Circle({ width: 32, height: 32 })
+              .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.03)', 1]] })
+            Text(this.getLevelSymbol(this.selectedInsight!.level)).fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+          }.width(46).height(46)
           Column({ space: 4 }) {
             Text(this.selectedInsight!.title)
               .fontSize(18).fontWeight(700).fontColor(Theme.Color.TextPrimary)
             Row({ space: 8 }) {
-              Text(this.getCategoryIcon(this.selectedInsight!.category)).fontSize(14)
+              Stack() {
+                Circle({ width: 20, height: 20 })
+                  .linearGradient({ angle: 145, colors: [[this.getCategoryColor(this.selectedInsight!.category), 0], ['rgba(0,0,0,0.08)', 1]] })
+                Text(this.getCategorySymbol(this.selectedInsight!.category)).fontSize(10).fontWeight(700).fontColor('#FFFFFF')
+              }.width(20).height(20)
               Text(this.selectedInsight!.category)
                 .fontSize(12).fontColor(this.getCategoryColor(this.selectedInsight!.category))
             }
@@ -470,7 +540,7 @@ struct SmartInsights {
 
             if (this.selectedInsight!.evidence.length > 0) {
               Column({ space: 8 }) {
-                Text('// 支撑证据').fontSize(14).fontWeight(600).fontColor(Theme.Color.Warning)
+                Text('⚡ 支撑证据').fontSize(14).fontWeight(600).fontColor(Theme.Color.Warning)
                 ForEach(this.selectedInsight!.evidence, (evidence: string) => {
                   Row({ space: 8 }) {
                     Text('•').fontSize(14).fontColor(Theme.Color.TextTertiary)
@@ -486,7 +556,7 @@ struct SmartInsights {
 
             if (this.selectedInsight!.recommendations.length > 0) {
               Column({ space: 8 }) {
-                Text('* 建议行动').fontSize(14).fontWeight(600).fontColor(Theme.Color.Accent)
+                Text('✦ 建议行动').fontSize(14).fontWeight(600).fontColor(Theme.Color.Accent)
                 ForEach(this.selectedInsight!.recommendations, (rec: string, idx: number) => {
                   Row({ space: 8 }) {
                     Text(`${idx + 1}.`).fontSize(13).fontColor(Theme.Color.Accent)
