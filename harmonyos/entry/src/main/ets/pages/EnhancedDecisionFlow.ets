@@ -337,18 +337,34 @@ struct EnhancedDecisionFlow {
           const aiOptions = data.ai_options as OptionInput[]
           this.aiSuggestedOptions = aiOptions
 
-          // 合并所有选项
+          // 合并所有选项，优先用户选项，总数不超过4个
           this.allOptions = []
           
-          // 添加用户选项
+          // 添加用户选项（优先）
           for (const userOpt of this.userOptions) {
+            if (this.allOptions.length >= 4) break
             const opt: OptionInput = { title: userOpt, description: `你提出的选择` }
             this.allOptions.push(opt)
           }
           
-          // 添加 AI 建议
+          // 添加 AI 建议（补充到4个以内）
           for (const aiOpt of this.aiSuggestedOptions) {
+            if (this.allOptions.length >= 4) break
             this.allOptions.push(aiOpt)
+          }
+
+          // 也检查信息收集阶段提取到的选项
+          if (this.collectedInfo && this.collectedInfo.options_mentioned.length > 0 && this.userOptions.length === 0) {
+            // 用户没有明确给选项，但信息收集阶段提取到了
+            const existingTitles = this.allOptions.map(o => o.title)
+            for (const mentioned of this.collectedInfo.options_mentioned) {
+              if (this.allOptions.length >= 4) break
+              if (!existingTitles.includes(mentioned)) {
+                this.allOptions.unshift({ title: mentioned, description: '信息收集中提到的选项' })
+              }
+            }
+            // 再次限制到4个
+            this.allOptions = this.allOptions.slice(0, 4)
           }
 
           // 显示选项确认
@@ -616,8 +632,9 @@ struct EnhancedDecisionFlow {
           Row({ space: 8 }) {
             // 左：拍照
             Button({ type: ButtonType.Circle }) {
-              Text('📷')
+              Text('+')
                 .fontSize(18)
+                .fontColor('#666')
             }
             .width(38).height(38)
             .backgroundColor('#F2F2F7')
@@ -630,7 +647,7 @@ struct EnhancedDecisionFlow {
             // 中：输入框 或 按住说话
             if (this.isVoiceMode) {
               Column() {
-                Text(this.isRecording ? '●' : '◎')
+                Text(this.isRecording ? '●' : '~')
                   .fontSize(16)
                   .fontColor(this.isRecording ? '#FF3B30' : '#666')
                 Text(this.isRecording ? '松开发送' : '按住说话')
@@ -662,8 +679,8 @@ struct EnhancedDecisionFlow {
 
             // 右1：语音/文本切换
             Button({ type: ButtonType.Circle }) {
-              Text(this.isVoiceMode ? '⌨' : '◎')
-                .fontSize(18)
+              Text(this.isVoiceMode ? 'Aa' : '~')
+                .fontSize(this.isVoiceMode ? 14 : 18)
                 .fontColor(this.isVoiceMode ? '#007AFF' : '#666')
             }
             .width(38).height(38)
@@ -678,7 +695,7 @@ struct EnhancedDecisionFlow {
             // 右2：加号按钮 或 发送按钮（文本模式有内容时变发送）
             if (!this.isVoiceMode && this.userInput.trim().length > 0) {
               Button({ type: ButtonType.Circle }) {
-                Text('▶')
+                Text('>')
                   .fontSize(16)
                   .fontColor('#FFFFFF')
               }
@@ -707,8 +724,9 @@ struct EnhancedDecisionFlow {
               // 相册
               Column({ space: 6 }) {
                 Button({ type: ButtonType.Circle }) {
-                  Text('🖼')
-                    .fontSize(22)
+                  Text('Pic')
+                    .fontSize(13)
+                    .fontColor('#007AFF')
                 }
                 .width(52).height(52)
                 .backgroundColor('rgba(0,122,255,0.08)')
@@ -720,8 +738,8 @@ struct EnhancedDecisionFlow {
               // 通话
               Column({ space: 6 }) {
                 Button({ type: ButtonType.Circle }) {
-                  Text(this.isInCall ? '✕' : '✆')
-                    .fontSize(22)
+                  Text(this.isInCall ? 'x' : 'Tel')
+                    .fontSize(this.isInCall ? 18 : 13)
                     .fontColor(this.isInCall ? '#FFFFFF' : '#00C853')
                 }
                 .width(52).height(52)

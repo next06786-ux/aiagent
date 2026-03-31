@@ -1,11 +1,14 @@
 ﻿/**
- * 平行人生 · 决策游戏 v2
+ * 平行人生 · 决策游戏 v3
+ * HarmonyOS 6 流体设计 · 模仿"我的账号"鸿蒙化UI
  * 事件链 + 属性系统 + 倒计时 + 游戏化结局
  */
 import { Theme } from '../common/Theme'
+import { SimpleIcon } from '../components/IconRenderer'
 import http from '@ohos.net.http'
 import { ApiConfig } from '../config/ApiConfig'
 import { getAuthService } from '../service/AuthService'
+import router from '@ohos.router'
 
 interface StatDelta { emotion: number; finance: number; social: number }
 
@@ -22,7 +25,7 @@ interface GameNode {
   type: string
   text: string
   options: GameOption[]
-  next: string  // free_input 节点的下一节点
+  next: string
 }
 
 interface Ending {
@@ -56,7 +59,7 @@ interface Stats { emotion: number; finance: number; social: number }
 @Component
 struct ParallelLifeGame {
   // ── 状态 ──────────────────────────────────────────────────────────────
-  @State phase: string = 'loading'   // loading | chapters | intro | playing | result
+  @State phase: string = 'loading'
   @State chapters: Chapter[] = []
   @State currentChapter: Chapter | null = null
   @State currentNodeId: string = ''
@@ -67,9 +70,9 @@ struct ParallelLifeGame {
   @State ending: Record<string, string> = {}
   @State finalStats: Stats = { emotion: 50, finance: 50, social: 50 }
   @State freeInputText: string = ''
+  @State showContent: boolean = false
 
   // 动效
-  @State introOpacity: number = 0
   @State nodeOpacity: number = 0
   @State nodeTranslateY: number = 30
   @State optAOpacity: number = 0
@@ -85,13 +88,14 @@ struct ParallelLifeGame {
   @State countdown: number = 15
   @State countdownActive: boolean = false
   private countdownTimer: number = -1
-
-  // 选择时间记录
   private nodeStartTime: number = 0
 
   private authService = getAuthService()
 
-  aboutToAppear() { this.loadChapters() }
+  aboutToAppear() {
+    this.loadChapters()
+    setTimeout(() => { this.showContent = true }, 50)
+  }
   aboutToDisappear() { this.stopCountdown() }
 
   // ── 数据加载 ──────────────────────────────────────────────────────────
@@ -104,9 +108,7 @@ struct ParallelLifeGame {
       if (res.responseCode === 200) {
         const body = JSON.parse(res.result as string) as Record<string, Object>
         this.chapters = body['data'] as Chapter[]
-        if (this.chapters.length > 0) {
-          this.phase = 'chapters'
-        }
+        if (this.chapters.length > 0) { this.phase = 'chapters' }
       }
     } catch (e) { console.error('加载关卡失败:', e) }
   }
@@ -121,7 +123,6 @@ struct ParallelLifeGame {
         const body = JSON.parse(res.result as string) as Record<string, Object>
         this.currentChapter = body['data'] as Chapter
         this.phase = 'intro'
-        this.animateIntroIn()
       }
     } catch (e) { console.error('加载关卡详情失败:', e) }
   }
@@ -136,7 +137,6 @@ struct ParallelLifeGame {
         const body = JSON.parse(res.result as string) as Record<string, Object>
         this.currentChapter = body['data'] as Chapter
         this.phase = 'intro'
-        this.animateIntroIn()
       }
     } catch (e) { console.error('加载随机关卡失败:', e) }
   }
@@ -164,12 +164,8 @@ struct ParallelLifeGame {
     this.stopCountdown()
     const timeMs = Date.now() - this.nodeStartTime
     this.choices.push({ node_id: this.currentNodeId, option_id: opt.id, choice_time_ms: timeMs })
-
-    // 显示属性变化
     this.lastDelta = opt.delta
     this.showDelta = true
-
-    // 更新属性值
     const newEmotion = Math.max(-100, Math.min(100, this.stats.emotion + opt.delta.emotion))
     const newFinance = Math.max(-100, Math.min(100, this.stats.finance + opt.delta.finance))
     const newSocial  = Math.max(-100, Math.min(100, this.stats.social  + opt.delta.social))
@@ -179,19 +175,13 @@ struct ParallelLifeGame {
       this.statBarFinance = newFinance
       this.statBarSocial  = newSocial
     })
-
     setTimeout(() => { this.showDelta = false }, 1500)
-
-    // 跳转下一节点
     setTimeout(() => {
-      if (opt.next === 'ending') {
-        this.finishGame()
-      } else {
+      if (opt.next === 'ending') { this.finishGame() }
+      else {
         this.currentNodeId = opt.next
         this.animateNodeIn()
-        if (this.currentNode()?.type !== 'free_input') {
-          this.startCountdown()
-        }
+        if (this.currentNode()?.type !== 'free_input') { this.startCountdown() }
       }
     }, 800)
   }
@@ -209,10 +199,7 @@ struct ParallelLifeGame {
       await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/free-input`, {
         method: http.RequestMethod.POST,
         header: { 'Content-Type': 'application/json' },
-        extraData: JSON.stringify({
-          user_id: userId, chapter_id: ch.id, node_id: node.id,
-          user_text: text, current_stats: this.stats
-        })
+        extraData: JSON.stringify({ user_id: userId, chapter_id: ch.id, node_id: node.id, user_text: text, current_stats: this.stats })
       })
       req.destroy()
     } catch (e) { console.error('提交自由输入失败:', e) }
@@ -232,12 +219,7 @@ struct ParallelLifeGame {
       const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/finish`, {
         method: http.RequestMethod.POST,
         header: { 'Content-Type': 'application/json' },
-        extraData: JSON.stringify({
-          user_id: userId,
-          chapter_id: ch.id,
-          final_stats: this.finalStats,
-          choices: this.choices
-        })
+        extraData: JSON.stringify({ user_id: userId, chapter_id: ch.id, final_stats: this.finalStats, choices: this.choices })
       })
       req.destroy()
       if (res.responseCode === 200) {
@@ -247,10 +229,12 @@ struct ParallelLifeGame {
       }
     } catch (e) { console.error('提交结果失败:', e) }
     this.phase = 'result'
-    this.animateResultIn()
+    this.resultOpacity = 0
+    setTimeout(() => {
+      animateTo({ duration: 700, curve: Curve.Smooth }, () => { this.resultOpacity = 1 })
+    }, 300)
   }
 
-  // 倒计时超时自动选第一个选项
   startCountdown() {
     this.countdown = 15
     this.countdownActive = true
@@ -260,529 +244,555 @@ struct ParallelLifeGame {
       if (this.countdown <= 0) {
         this.stopCountdown()
         const node = this.currentNode()
-        if (node && node.options.length > 0) {
-          this.onChoose(node.options[0])
-        }
+        if (node && node.options.length > 0) { this.onChoose(node.options[0]) }
       }
     }, 1000)
   }
 
   stopCountdown() {
-    if (this.countdownTimer !== -1) {
-      clearInterval(this.countdownTimer)
-      this.countdownTimer = -1
-    }
+    if (this.countdownTimer !== -1) { clearInterval(this.countdownTimer); this.countdownTimer = -1 }
     this.countdownActive = false
   }
 
   private navigateBack() {
     this.stopCountdown()
-    try { this.getUIContext().getRouter().back() } catch (e) {}
-  }
-
-  // ── 动效 ──────────────────────────────────────────────────────────────
-  animateIntroIn() {
-    this.introOpacity = 0
-    setTimeout(() => {
-      animateTo({ duration: 800, curve: Curve.Smooth }, () => { this.introOpacity = 1 })
-    }, 200)
+    try { router.back() } catch (e) {}
   }
 
   animateNodeIn() {
     this.nodeOpacity = 0; this.nodeTranslateY = 30
     this.optAOpacity = 0; this.optBOpacity = 0
     this.optATranslateX = -40; this.optBTranslateX = 40
-    setTimeout(() => {
-      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
-        this.nodeOpacity = 1; this.nodeTranslateY = 0
-      })
-    }, 100)
-    setTimeout(() => {
-      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
-        this.optAOpacity = 1; this.optATranslateX = 0
-      })
-    }, 400)
-    setTimeout(() => {
-      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
-        this.optBOpacity = 1; this.optBTranslateX = 0
-      })
-    }, 550)
+    setTimeout(() => { animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.nodeOpacity = 1; this.nodeTranslateY = 0 }) }, 100)
+    setTimeout(() => { animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.optAOpacity = 1; this.optATranslateX = 0 }) }, 400)
+    setTimeout(() => { animateTo({ duration: 400, curve: Curve.Smooth }, () => { this.optBOpacity = 1; this.optBTranslateX = 0 }) }, 550)
   }
 
-  animateResultIn() {
-    this.resultOpacity = 0
-    setTimeout(() => {
-      animateTo({ duration: 700, curve: Curve.Smooth }, () => { this.resultOpacity = 1 })
-    }, 300)
-  }
-
-  // ── 辅助 ──────────────────────────────────────────────────────────────
   statColor(val: number): string {
-    if (val >= 60) return '#34d399'
-    if (val >= 30) return '#fbbf24'
-    return '#f87171'
+    if (val >= 60) return '#00C853'
+    if (val >= 30) return '#FF9500'
+    return '#FF3B30'
   }
-
-  deltaText(v: number): string {
-    return v > 0 ? `+${v}` : `${v}`
-  }
-
-  accentColor(): string {
-    return this.currentChapter?.accent ?? '#7C3AED'
-  }
-
-  themeColor(): string {
-    return this.currentChapter?.theme ?? '#1a1a2e'
-  }
+  deltaText(v: number): string { return v > 0 ? `+${v}` : `${v}` }
+  accentColor(): string { return this.currentChapter?.accent ?? '#6B48FF' }
 
   // ── build ──────────────────────────────────────────────────────────────
   build() {
     Stack() {
-      // 背景
-      Column().width('100%').height('100%').backgroundColor(this.themeColor())
+      Column().width('100%').height('100%').backgroundColor(Theme.Color.BackgroundPrimary)
 
-      // 顶部栏
-      Row() {
-        Text('←').fontSize(22).fontColor('rgba(255,255,255,0.7)')
-          .onClick(() => this.navigateBack())
-        Text(this.currentChapter?.title ?? '平行人生')
-          .fontSize(16).fontWeight(600).fontColor('#FFFFFF').margin({ left: 12 })
-        Blank()
+      Column() {
+        // 顶部导航栏 - 与UserProfile一致
+        Row() {
+          Text('<-')
+            .fontSize(24)
+            .fontColor(Theme.Color.Primary)
+            .onClick(() => this.navigateBack())
+
+          Text(this.currentChapter?.title ?? '平行人生')
+            .fontSize(18)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(Theme.Color.TextPrimary)
+            .layoutWeight(1)
+            .margin({ left: 12 })
+
+          if (this.phase === 'playing') {
+            // 倒计时
+            Stack() {
+              Circle({ width: 40, height: 40 })
+                .fill(this.countdown <= 5 ? 'rgba(255,59,48,0.1)' : Theme.Color.GlassMedium)
+              Text(`${this.countdown}`)
+                .fontSize(16).fontWeight(700)
+                .fontColor(this.countdown <= 5 ? Theme.Color.Destructive : Theme.Color.TextSecondary)
+            }.width(40).height(40)
+          }
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .backgroundColor(Theme.Color.BackgroundPrimary)
+
+        // 属性条（游戏中显示）
         if (this.phase === 'playing') {
-          // 倒计时球体
-          Stack() {
-            Circle({ width: 40, height: 40 }).fill(this.countdown <= 5 ? '#f87171' : 'rgba(255,255,255,0.06)').opacity(0.08).blur(8)
-            Circle({ width: 36, height: 36 })
-              .linearGradient({ angle: 145, colors: [[this.countdown <= 5 ? '#f87171' : 'rgba(255,255,255,0.15)', 0], ['rgba(0,0,0,0.05)', 1]] })
-            Circle({ width: 30, height: 30 })
-              .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.15)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
-            Text(`${this.countdown}`)
-              .fontSize(14).fontWeight(700)
-              .fontColor(this.countdown <= 5 ? '#f87171' : '#FFFFFF')
-          }.width(40).height(40)
-        }
-      }
-      .width('100%').height(56).padding({ left: 16, right: 16 })
-      .position({ x: 0, y: 0 }).zIndex(10)
-
-      // 属性条（游戏中显示）
-      if (this.phase === 'playing') {
-        Column({ space: 6 }) {
-          this.StatBar('情绪', this.statBarEmotion, 'E')
-          this.StatBar('财务', this.statBarFinance, 'F')
-          this.StatBar('社交', this.statBarSocial, 'S')
-        }
-        .width('100%').padding({ left: 16, right: 16, top: 64, bottom: 0 })
-        .position({ x: 0, y: 0 }).zIndex(9)
-      }
-
-      // 属性变化浮层
-      if (this.showDelta) {
-        Column({ space: 4 }) {
-          if (this.lastDelta.emotion !== 0) {
-            Text(`情绪 ${this.deltaText(this.lastDelta.emotion)}`)
-              .fontSize(14).fontWeight(700)
-              .fontColor(this.lastDelta.emotion > 0 ? '#34d399' : '#f87171')
+          Column({ space: 8 }) {
+            this.StatBar('情绪', this.statBarEmotion, 'heart')
+            this.StatBar('财务', this.statBarFinance, 'chart')
+            this.StatBar('社交', this.statBarSocial, 'user')
           }
-          if (this.lastDelta.finance !== 0) {
-            Text(`财务 ${this.deltaText(this.lastDelta.finance)}`)
-              .fontSize(14).fontWeight(700)
-              .fontColor(this.lastDelta.finance > 0 ? '#34d399' : '#f87171')
-          }
-          if (this.lastDelta.social !== 0) {
-            Text(`社交 ${this.deltaText(this.lastDelta.social)}`)
-              .fontSize(14).fontWeight(700)
-              .fontColor(this.lastDelta.social > 0 ? '#34d399' : '#f87171')
-          }
+          .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 12 })
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .border({ width: { bottom: 0.5 }, color: Theme.Color.BorderLight })
         }
-        .position({ x: 0, y: 160 }).width('100%')
-        .alignItems(HorizontalAlign.Center).zIndex(20)
-      }
 
-      // 内容区
-      if (this.phase === 'loading') { this.buildLoading() }
-      else if (this.phase === 'chapters') { this.buildChapterSelect() }
-      else if (this.phase === 'intro') { this.buildIntro() }
-      else if (this.phase === 'playing') { this.buildPlaying() }
-      else if (this.phase === 'result') { this.buildResult() }
+        // 属性变化浮层
+        if (this.showDelta) {
+          Row({ space: 12 }) {
+            if (this.lastDelta.emotion !== 0) {
+              Text(`情绪 ${this.deltaText(this.lastDelta.emotion)}`)
+                .fontSize(13).fontWeight(600)
+                .fontColor(this.lastDelta.emotion > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                .backgroundColor(this.lastDelta.emotion > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                .borderRadius(Theme.Radius.round)
+            }
+            if (this.lastDelta.finance !== 0) {
+              Text(`财务 ${this.deltaText(this.lastDelta.finance)}`)
+                .fontSize(13).fontWeight(600)
+                .fontColor(this.lastDelta.finance > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                .backgroundColor(this.lastDelta.finance > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                .borderRadius(Theme.Radius.round)
+            }
+            if (this.lastDelta.social !== 0) {
+              Text(`社交 ${this.deltaText(this.lastDelta.social)}`)
+                .fontSize(13).fontWeight(600)
+                .fontColor(this.lastDelta.social > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                .backgroundColor(this.lastDelta.social > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                .borderRadius(Theme.Radius.round)
+            }
+          }.width('100%').justifyContent(FlexAlign.Center).padding(8)
+        }
+
+        // 内容区
+        if (this.phase === 'loading') { this.buildLoading() }
+        else if (this.phase === 'chapters') { this.buildChapterSelect() }
+        else if (this.phase === 'intro') { this.buildIntro() }
+        else if (this.phase === 'playing') { this.buildPlaying() }
+        else if (this.phase === 'result') { this.buildResult() }
+      }
+      .width('100%').height('100%')
     }
     .width('100%').height('100%')
   }
 
   @Builder
-  StatBar(label: string, val: number, icon: string) {
-    Row({ space: 6 }) {
-      // 球体风格属性图标
+  StatBar(label: string, val: number, iconName: string) {
+    Row({ space: 8 }) {
       Stack() {
-        Circle({ width: 20, height: 20 })
-          .linearGradient({ angle: 145, colors: [[this.statColor(val), 0], ['rgba(0,0,0,0.1)', 1]] })
-          .shadow({ radius: 6, color: this.statColor(val), offsetX: 0, offsetY: 2 })
-        Circle({ width: 16, height: 16 })
-          .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.2)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
-        Text(icon).fontSize(8).fontWeight(700).fontColor('#FFFFFF')
-      }.width(20).height(20)
-      Text(label).fontSize(11).fontColor('rgba(255,255,255,0.6)').width(28)
+        Circle({ width: 28, height: 28 }).fill(this.statColor(val)).opacity(0.15)
+        SimpleIcon({ iconName: iconName, iconSize: 14, color: this.statColor(val) })
+      }.width(28).height(28)
+      Text(label).fontSize(12).fontColor(Theme.Color.TextSecondary).width(28)
       Row() {
         Column()
-          .height(4)
+          .height(6)
           .width(`${Math.max(0, (val + 100) / 2)}%`)
           .backgroundColor(this.statColor(val))
-          .borderRadius(2)
-          .shadow({ radius: 4, color: this.statColor(val), offsetX: 0, offsetY: 0 })
+          .borderRadius(3)
         Blank()
-      }
-      .layoutWeight(1).backgroundColor('rgba(255,255,255,0.1)').borderRadius(2)
-      Text(`${val}`).fontSize(11).fontColor('rgba(255,255,255,0.5)').width(28).textAlign(TextAlign.End)
+      }.layoutWeight(1).height(6).backgroundColor(Theme.Color.BorderLight).borderRadius(3)
+      Text(`${val}`).fontSize(12).fontWeight(600).fontColor(this.statColor(val)).width(32).textAlign(TextAlign.End)
     }.width('100%').alignItems(VerticalAlign.Center)
   }
 
   @Builder buildLoading() {
     Column({ space: 16 }) {
-      // 加载球体动画
-      Stack() {
-        Circle({ width: 60, height: 60 }).fill('#FF6B9D').opacity(0.04).blur(16)
-        Circle({ width: 48, height: 48 })
-          .linearGradient({ angle: 145, colors: [['#FF6B9D', 0], ['rgba(0,0,0,0.08)', 1]] })
-          .opacity(0.3)
-        LoadingProgress().width(28).height(28).color('#FFFFFF')
-      }.width(60).height(60)
-      Text('加载中...').fontSize(14).fontColor('rgba(255,255,255,0.6)')
+      LoadingProgress().width(48).height(48).color(Theme.Color.Primary)
+      Text('加载中...').fontSize(14).fontColor(Theme.Color.TextTertiary)
     }
-    .width('100%').height('100%')
+    .width('100%').layoutWeight(1)
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
   @Builder buildChapterSelect() {
     Scroll() {
       Column({ space: 20 }) {
-        // 标题区 - 球体风格
-        Column({ space: 12 }) {
-          Stack() {
-            Circle({ width: 80, height: 80 }).fill('#FF6B9D').opacity(0.06).blur(18)
-            Circle({ width: 66, height: 66 }).fill('transparent')
-              .border({ width: 0.8, color: '#FF6B9D' }).opacity(0.18)
-            Circle({ width: 56, height: 56 }).fill('#FF6B9D').opacity(0.12)
-            Circle({ width: 56, height: 56 })
-              .linearGradient({ angle: 145, colors: [['#FF6B9D', 0], ['rgba(0,0,0,0.08)', 1]] })
-              .shadow({ radius: 14, color: '#FF6B9D', offsetX: 0, offsetY: 5 })
-            Circle({ width: 48, height: 48 })
-              .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
-            Text('∞').fontSize(22).fontWeight(700).fontColor('rgba(255,255,255,0.85)')
-          }.width(80).height(80)
-          Text('平行人生').fontSize(28).fontWeight(800).fontColor('#FFFFFF')
-          Text('每一个选择，都通向不同的人生')
-            .fontSize(14).fontColor('rgba(255,255,255,0.5)')
-        }
-        .width('100%').padding({ top: 80, bottom: 8 }).alignItems(HorizontalAlign.Center)
-
-        // 随机开始按钮 - 球体光晕风格
-        Stack() {
-          Circle({ width: 200, height: 50 }).fill('rgba(255,255,255,0.04)').blur(10)
-          Button('随机开始')
-            .width('80%').height(50)
-            .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
-            .backgroundColor('rgba(255,255,255,0.12)')
-            .borderRadius(Theme.Radius.round)
-            .border({ width: 1, color: 'rgba(255,255,255,0.2)' })
-            .shadow({ radius: 16, color: 'rgba(255,107,157,0.3)', offsetX: 0, offsetY: 4 })
-            .onClick(() => this.loadRandomChapter())
-        }
-
-        Text('或选择一个关卡').fontSize(12).fontColor('rgba(255,255,255,0.35)')
-
-        ForEach(this.chapters, (ch: Chapter, idx: number) => {
-          Row({ space: 16 }) {
-            // 关卡球体图标
+        // Hero卡片 - 与UserProfile的buildUserCard一致
+        Stack({ alignContent: Alignment.BottomStart }) {
+          Column().width('100%').height('100%')
+            .linearGradient({ angle: 135, colors: [['#FF6B9D', 0], ['#6B48FF', 1]] })
+            .opacity(0.12)
+          Circle({ width: 150, height: 150 }).fill('#FF6B9D').opacity(0.2).blur(60)
+            .position({ x: -40, y: -40 })
+          Circle({ width: 100, height: 100 }).fill('#6B48FF').opacity(0.15).blur(50)
+            .position({ x: '80%', y: '60%' })
+          Column({ space: 10 }) {
             Stack() {
-              Circle({ width: 60, height: 60 }).fill(ch.accent || '#7C3AED').opacity(0.06).blur(12)
-              Circle({ width: 50, height: 50 }).fill('transparent')
-                .border({ width: 0.8, color: ch.accent || '#7C3AED' }).opacity(0.2)
-              Circle({ width: 42, height: 42 })
-                .linearGradient({ angle: 145, colors: [[ch.accent || '#7C3AED', 0], ['rgba(0,0,0,0.08)', 1]] })
-                .shadow({ radius: 10, color: ch.accent || '#7C3AED', offsetX: 0, offsetY: 4 })
-              Circle({ width: 36, height: 36 })
-                .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
-              Text(ch.cover_emoji || '').fontSize(18)
-            }.width(60).height(60)
+              Circle({ width: 64, height: 64 }).fill('#FF6B9D').opacity(0.15)
+              SimpleIcon({ iconName: 'life', iconSize: 32, color: '#FF6B9D' })
+            }.width(64).height(64)
+            Text('平行人生').fontSize(24).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+            Text('每一个选择，都通向不同的人生').fontSize(14).fontColor(Theme.Color.TextSecondary)
+          }.padding(24).width('100%').alignItems(HorizontalAlign.Start)
+        }
+        .width('100%').height(180)
+        .backgroundColor(Theme.Color.GlassHeavy)
+        .backdropBlur(Theme.Blur.Heavy)
+        .borderRadius(Theme.Radius.xl)
+        .border({ width: 1, color: Theme.Color.BorderLight })
+        .shadow(Theme.Shadow.Medium)
+        .opacity(this.showContent ? 1 : 0)
+        .scale({ x: this.showContent ? 1 : 0.95, y: this.showContent ? 1 : 0.95 })
+        .animation({ duration: 700, curve: Curve.Smooth, delay: 0 })
+
+        // 随机开始按钮
+        Button('随机开始')
+          .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
+          .backgroundColor(Theme.Color.Secondary)
+          .borderRadius(Theme.Radius.l)
+          .shadow(Theme.Shadow.GlowPrimary)
+          .onClick(() => this.loadRandomChapter())
+          .opacity(this.showContent ? 1 : 0)
+          .translate({ y: this.showContent ? 0 : 20 })
+          .animation({ duration: 600, curve: Curve.Smooth, delay: 100 })
+
+        // 关卡列表标题
+        Text('选择关卡')
+          .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+          .padding({ left: 8 })
+          .opacity(this.showContent ? 1 : 0)
+          .translate({ x: this.showContent ? 0 : -20 })
+          .animation({ duration: 600, curve: Curve.Smooth, delay: 200 })
+
+        // 关卡列表 - 与UserProfile的buildMenuItem一致
+        ForEach(this.chapters, (ch: Chapter, index: number) => {
+          Row({ space: 12 }) {
+            Stack() {
+              Circle({ width: 48, height: 48 }).fill(ch.accent || '#6B48FF').opacity(0.15)
+              SimpleIcon({ iconName: 'life', iconSize: 24, color: ch.accent || '#6B48FF' })
+            }.width(48).height(48)
             Column({ space: 4 }) {
-              Text(ch.title).fontSize(18).fontWeight(700).fontColor('#FFFFFF')
-              Text(ch.subtitle).fontSize(13).fontColor('rgba(255,255,255,0.6)')
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              Text(ch.title).fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+              Text(ch.subtitle).fontSize(12).fontColor(Theme.Color.TextTertiary)
+            }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+            Text('->')
+              .fontSize(20).fontColor(Theme.Color.TextTertiary)
           }
-          .width('100%').padding({ left: 20, right: 20, top: 18, bottom: 18 })
-          .backgroundColor('rgba(255,255,255,0.06)')
-          .borderRadius(Theme.Radius.xl)
-          .border({ width: 1, color: 'rgba(255,255,255,0.1)' })
+          .width('100%').padding(16)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
           .onClick(() => this.loadChapter(ch.id))
+          .opacity(this.showContent ? 1 : 0)
+          .translate({ x: this.showContent ? 0 : -30 })
+          .animation({ duration: 600, curve: Curve.Smooth, delay: 300 + index * 80 })
           .stateStyles({
-            pressed: { .scale({ x: 0.97, y: 0.97 }).backgroundColor('rgba(255,255,255,0.12)') },
-            normal:  { .scale({ x: 1, y: 1 }).backgroundColor('rgba(255,255,255,0.06)') }
+            pressed: { .scale({ x: 0.98, y: 0.98 }).backgroundColor('#F8F9FA') },
+            normal:  { .scale({ x: 1, y: 1 }).backgroundColor(Theme.Color.BackgroundSecondary) }
           })
         })
 
         Column().height(40)
-      }
-      .padding({ left: 20, right: 20 })
-    }
-    .scrollBar(BarState.Off).width('100%').height('100%')
+      }.padding({ left: 16, right: 16, bottom: 60 })
+    }.scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).layoutWeight(1)
   }
 
   @Builder buildIntro() {
     Column({ space: 0 }) {
-      Blank().layoutWeight(1)
-      Column({ space: 24 }) {
-        // 球体风格封面图标 - 多层光晕
-        Stack() {
-          Circle({ width: 100, height: 100 }).fill(this.accentColor()).opacity(0.04).blur(20)
-          Circle({ width: 86, height: 86 }).fill('transparent')
-            .border({ width: 0.8, color: this.accentColor() }).opacity(0.15)
-          Circle({ width: 72, height: 72 }).fill(this.accentColor()).opacity(0.1)
-          Circle({ width: 72, height: 72 })
-            .linearGradient({ angle: 145, colors: [[this.accentColor(), 0], ['rgba(0,0,0,0.08)', 1]] })
-            .shadow({ radius: 18, color: this.accentColor(), offsetX: 0, offsetY: 6 })
-          Circle({ width: 62, height: 62 })
-            .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
-          Text(this.currentChapter?.cover_emoji ?? 'P')
-            .fontSize(28).fontWeight(800).fontColor('rgba(255,255,255,0.9)')
-        }.width(100).height(100)
-        Text(this.currentChapter?.title ?? '')
-          .fontSize(28).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
-        Text(this.currentChapter?.subtitle ?? '')
-          .fontSize(15).fontColor('rgba(255,255,255,0.6)').textAlign(TextAlign.Center)
-        Column()
-          .width(40).height(2)
-          .backgroundColor(this.accentColor())
-          .borderRadius(1)
-        Text(this.currentChapter?.intro ?? '')
-          .fontSize(15).fontColor('rgba(255,255,255,0.8)')
-          .lineHeight(26).textAlign(TextAlign.Center)
-          .padding({ left: 32, right: 32 })
+      Scroll() {
+        Column({ space: 24 }) {
+          // 关卡Hero卡片
+          Stack({ alignContent: Alignment.BottomStart }) {
+            Column().width('100%').height('100%')
+              .linearGradient({ angle: 135, colors: [[this.accentColor(), 0], ['#764ba2', 1]] })
+              .opacity(0.12)
+            Circle({ width: 120, height: 120 }).fill(this.accentColor()).opacity(0.18).blur(50)
+              .position({ x: -30, y: -30 })
+            Column({ space: 12 }) {
+              Stack() {
+                Circle({ width: 64, height: 64 }).fill(this.accentColor()).opacity(0.15)
+                SimpleIcon({ iconName: 'life', iconSize: 32, color: this.accentColor() })
+              }.width(64).height(64)
+              Text(this.currentChapter?.title ?? '').fontSize(24).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+              Text(this.currentChapter?.subtitle ?? '').fontSize(14).fontColor(Theme.Color.TextSecondary)
+            }.padding(24).width('100%').alignItems(HorizontalAlign.Start)
+          }
+          .width('100%').height(180)
+          .backgroundColor(Theme.Color.GlassHeavy)
+          .backdropBlur(Theme.Blur.Heavy)
+          .borderRadius(Theme.Radius.xl)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Medium)
+
+          // 简介卡片
+          Column({ space: 12 }) {
+            Text('关卡简介').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+            Text(this.currentChapter?.intro ?? '')
+              .fontSize(15).fontColor(Theme.Color.TextSecondary).lineHeight(24)
+          }
+          .width('100%').padding(20)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+
+          // 属性说明
+          Row({ space: 12 }) {
+            this.buildStatPreview('情绪', 'heart', '#00C853')
+            this.buildStatPreview('财务', 'chart', '#FF9500')
+            this.buildStatPreview('社交', 'user', '#0A59F7')
+          }.width('100%')
+
+          // 提示
+          Text('每次选择都会影响你的情绪、财务和社交')
+            .fontSize(13).fontColor(Theme.Color.TextTertiary).textAlign(TextAlign.Center)
+            .width('100%')
+        }
+        .padding({ left: 16, right: 16, bottom: 120 })
       }
-      .opacity(this.introOpacity)
-      .animation({ duration: 800, curve: Curve.Smooth })
-      Blank().layoutWeight(1)
-      Column({ space: 12 }) {
+      .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).layoutWeight(1)
+
+      // 底部按钮
+      Column() {
         Button('开始游戏')
-          .width('80%').height(54)
-          .fontSize(17).fontWeight(700).fontColor('#FFFFFF')
+          .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
           .backgroundColor(this.accentColor())
-          .borderRadius(Theme.Radius.round)
-          .shadow({ radius: 20, color: this.accentColor(), offsetY: 6, offsetX: 0 })
+          .borderRadius(Theme.Radius.l)
+          .shadow({ radius: 16, color: this.accentColor(), offsetY: 4, offsetX: 0 })
           .onClick(() => this.startGame())
-        Text('每次选择都会影响你的情绪、财务和社交')
-          .fontSize(12).fontColor('rgba(255,255,255,0.35)').textAlign(TextAlign.Center)
       }
-      .width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 48 })
+      .width('100%').padding({ left: 16, right: 16, bottom: 32, top: 12 })
+      .backgroundColor(Theme.Color.BackgroundPrimary)
     }
-    .width('100%').height('100%').alignItems(HorizontalAlign.Center)
+    .width('100%').layoutWeight(1)
+  }
+
+  @Builder
+  buildStatPreview(label: string, iconName: string, color: string) {
+    Column({ space: 8 }) {
+      Stack() {
+        Circle({ width: 40, height: 40 }).fill(color).opacity(0.15)
+        SimpleIcon({ iconName: iconName, iconSize: 20, color: color })
+      }.width(40).height(40)
+      Text(label).fontSize(12).fontColor(Theme.Color.TextTertiary)
+    }
+    .layoutWeight(1).padding(16)
+    .backgroundColor(Theme.Color.BackgroundSecondary)
+    .borderRadius(Theme.Radius.l)
+    .border({ width: 1, color: Theme.Color.BorderLight })
+    .alignItems(HorizontalAlign.Center)
   }
 
   @Builder buildPlaying() {
     Column({ space: 0 }) {
-      Blank().height(160)
-
-      // 事件文字
-      Column({ space: 0 }) {
-        Text(this.currentNode()?.text ?? '')
-          .fontSize(18).fontWeight(600).fontColor('#FFFFFF')
-          .lineHeight(30).textAlign(TextAlign.Center)
-          .padding({ left: 24, right: 24 })
-      }
-      .opacity(this.nodeOpacity)
-      .translate({ y: this.nodeTranslateY })
-      .animation({ duration: 400, curve: Curve.Smooth })
-
-      Blank().layoutWeight(1)
-
-      // 自由输入节点
-      if (this.currentNode()?.type === 'free_input') {
-        Column({ space: 16 }) {
-          TextArea({ placeholder: '写下你的真实想法...' })
-            .width('100%').height(100)
-            .fontSize(15).fontColor('#FFFFFF')
-            .backgroundColor('rgba(255,255,255,0.08)')
-            .borderRadius(Theme.Radius.l)
-            .placeholderColor('rgba(255,255,255,0.3)')
-            .onChange((val: string) => { this.freeInputText = val })
-
-          Button('继续')
-            .width('100%').height(48)
-            .fontSize(15).fontWeight(600).fontColor('#FFFFFF')
-            .backgroundColor(this.accentColor())
-            .borderRadius(Theme.Radius.round)
-            .enabled(this.freeInputText.trim().length > 0)
-            .onClick(() => this.submitFreeInput())
-        }
-        .padding({ left: 20, right: 20, bottom: 48 })
-      } else {
-      // 选项卡片 - 球体风格
-      Column({ space: 14 }) {
-        ForEach(this.currentNode()?.options ?? [], (opt: GameOption, idx: number) => {
-          Row({ space: 14 }) {
-            // 选项球体图标
-            Stack() {
-              Circle({ width: 44, height: 44 }).fill(idx === 0 ? this.accentColor() : 'rgba(255,255,255,0.15)').opacity(0.08).blur(10)
-              Circle({ width: 36, height: 36 })
-                .linearGradient({ angle: 145, colors: [[idx === 0 ? this.accentColor() : 'rgba(255,255,255,0.2)', 0], ['rgba(0,0,0,0.06)', 1]] })
-                .shadow({ radius: 8, color: idx === 0 ? this.accentColor() : 'rgba(255,255,255,0.1)', offsetX: 0, offsetY: 3 })
-              Circle({ width: 30, height: 30 })
-                .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.2)', 0], ['rgba(255,255,255,0.02)', 0.5]] })
-              Text(`${idx + 1}`).fontSize(14).fontWeight(700).fontColor('#FFFFFF')
-            }.width(44).height(44)
-            Column({ space: 6 }) {
-              Text(opt.text)
-                .fontSize(16).fontWeight(700).fontColor('#FFFFFF')
-              Text(opt.sub)
-                .fontSize(12).fontColor('rgba(255,255,255,0.55)').lineHeight(18)
-              // 属性预览
-              Row({ space: 10 }) {
-                if (opt.delta.emotion !== 0) {
-                  Text(`情绪${this.deltaText(opt.delta.emotion)}`)
-                    .fontSize(11).fontColor(opt.delta.emotion > 0 ? '#34d399' : '#f87171')
-                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                    .backgroundColor(opt.delta.emotion > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
-                    .borderRadius(Theme.Radius.round)
-                }
-                if (opt.delta.finance !== 0) {
-                  Text(`财务${this.deltaText(opt.delta.finance)}`)
-                    .fontSize(11).fontColor(opt.delta.finance > 0 ? '#34d399' : '#f87171')
-                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                    .backgroundColor(opt.delta.finance > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
-                    .borderRadius(Theme.Radius.round)
-                }
-                if (opt.delta.social !== 0) {
-                  Text(`社交${this.deltaText(opt.delta.social)}`)
-                    .fontSize(11).fontColor(opt.delta.social > 0 ? '#34d399' : '#f87171')
-                    .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                    .backgroundColor(opt.delta.social > 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)')
-                    .borderRadius(Theme.Radius.round)
-                }
-              }
-            }.layoutWeight(1)
+      Scroll() {
+        Column({ space: 20 }) {
+          // 事件卡片
+          Column({ space: 12 }) {
+            Row({ space: 10 }) {
+              Stack() {
+                Circle({ width: 40, height: 40 }).fill(this.accentColor()).opacity(0.15)
+                SimpleIcon({ iconName: 'comparison', iconSize: 20, color: this.accentColor() })
+              }.width(40).height(40)
+              Text('当前事件').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+            }
+            Text(this.currentNode()?.text ?? '')
+              .fontSize(17).fontWeight(500).fontColor(Theme.Color.TextPrimary)
+              .lineHeight(28)
           }
-          .width('100%').padding(18)
-          .backgroundColor('rgba(255,255,255,0.07)')
+          .width('100%').padding(20)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
           .borderRadius(Theme.Radius.l)
-          .border({ width: 1.5, color: idx === 0 ? `${this.accentColor()}66` : 'rgba(255,255,255,0.1)' })
-          .opacity(idx === 0 ? this.optAOpacity : this.optBOpacity)
-          .translate({ x: idx === 0 ? this.optATranslateX : this.optBTranslateX })
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+          .opacity(this.nodeOpacity)
+          .translate({ y: this.nodeTranslateY })
           .animation({ duration: 400, curve: Curve.Smooth })
-          .onClick(() => this.onChoose(opt))
-          .stateStyles({
-            pressed: { .scale({ x: 0.97, y: 0.97 }).backgroundColor('rgba(255,255,255,0.13)') },
-            normal:  { .scale({ x: 1, y: 1 }).backgroundColor('rgba(255,255,255,0.07)') }
-          })
-        })
+
+          // 自由输入节点
+          if (this.currentNode()?.type === 'free_input') {
+            Column({ space: 16 }) {
+              TextArea({ placeholder: '写下你的真实想法...' })
+                .width('100%').height(100).fontSize(15)
+                .fontColor(Theme.Color.TextPrimary)
+                .backgroundColor(Theme.Color.BackgroundTertiary)
+                .borderRadius(Theme.Radius.l)
+                .placeholderColor(Theme.Color.TextTertiary)
+                .onChange((val: string) => { this.freeInputText = val })
+              Button('继续')
+                .width('100%').height(48).fontSize(15).fontWeight(600).fontColor('#FFFFFF')
+                .backgroundColor(this.accentColor())
+                .borderRadius(Theme.Radius.l)
+                .enabled(this.freeInputText.trim().length > 0)
+                .onClick(() => this.submitFreeInput())
+            }
+          } else {
+            // 选项列表 - 与UserProfile菜单项风格一致
+            Column({ space: 12 }) {
+              Text('做出你的选择').fontSize(14).fontWeight(600).fontColor(Theme.Color.TextTertiary)
+                .padding({ left: 4 })
+
+              ForEach(this.currentNode()?.options ?? [], (opt: GameOption, idx: number) => {
+                Row({ space: 12 }) {
+                  Stack() {
+                    Circle({ width: 48, height: 48 }).fill(this.accentColor()).opacity(0.15)
+                    Text(`${idx + 1}`).fontSize(18).fontWeight(700).fontColor(this.accentColor())
+                  }.width(48).height(48)
+                  Column({ space: 4 }) {
+                    Text(opt.text).fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                    Text(opt.sub).fontSize(12).fontColor(Theme.Color.TextTertiary).maxLines(2)
+                    // 属性预览标签
+                    Row({ space: 8 }) {
+                      if (opt.delta.emotion !== 0) {
+                        Text(`情绪${this.deltaText(opt.delta.emotion)}`)
+                          .fontSize(11).fontColor(opt.delta.emotion > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                          .backgroundColor(opt.delta.emotion > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                          .borderRadius(Theme.Radius.round)
+                      }
+                      if (opt.delta.finance !== 0) {
+                        Text(`财务${this.deltaText(opt.delta.finance)}`)
+                          .fontSize(11).fontColor(opt.delta.finance > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                          .backgroundColor(opt.delta.finance > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                          .borderRadius(Theme.Radius.round)
+                      }
+                      if (opt.delta.social !== 0) {
+                        Text(`社交${this.deltaText(opt.delta.social)}`)
+                          .fontSize(11).fontColor(opt.delta.social > 0 ? Theme.Color.Accent : Theme.Color.Destructive)
+                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                          .backgroundColor(opt.delta.social > 0 ? 'rgba(0,200,83,0.08)' : 'rgba(255,59,48,0.08)')
+                          .borderRadius(Theme.Radius.round)
+                      }
+                    }.margin({ top: 4 })
+                  }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                  Text('->')
+                    .fontSize(20).fontColor(Theme.Color.TextTertiary)
+                }
+                .width('100%').padding(16)
+                .backgroundColor(Theme.Color.BackgroundSecondary)
+                .borderRadius(Theme.Radius.l)
+                .border({ width: 1, color: Theme.Color.BorderLight })
+                .shadow(Theme.Shadow.Soft)
+                .onClick(() => this.onChoose(opt))
+                .opacity(idx === 0 ? this.optAOpacity : this.optBOpacity)
+                .translate({ x: idx === 0 ? this.optATranslateX : this.optBTranslateX })
+                .animation({ duration: 400, curve: Curve.Smooth })
+                .stateStyles({
+                  pressed: { .scale({ x: 0.98, y: 0.98 }).backgroundColor('#F8F9FA') },
+                  normal:  { .scale({ x: 1, y: 1 }).backgroundColor(Theme.Color.BackgroundSecondary) }
+                })
+              })
+            }
+          }
+        }
+        .padding({ left: 16, right: 16, bottom: 60 })
       }
-      .padding({ left: 20, right: 20, bottom: 48 })
-      } // end else (choice nodes)
+      .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).layoutWeight(1)
     }
-    .width('100%').height('100%').alignItems(HorizontalAlign.Center)
+    .width('100%').layoutWeight(1)
   }
 
   @Builder buildResult() {
     Scroll() {
-      Column({ space: 0 }) {
-        Blank().height(72)
-        Column({ space: 20 }) {
-          // 徽章 - 球体风格
-          Column({ space: 8 }) {
+      Column({ space: 24 }) {
+        // 结果Hero卡片
+        Stack({ alignContent: Alignment.BottomStart }) {
+          Column().width('100%').height('100%')
+            .linearGradient({ angle: 135, colors: [[this.accentColor(), 0], ['#764ba2', 1]] })
+            .opacity(0.12)
+          Circle({ width: 150, height: 150 }).fill(this.accentColor()).opacity(0.2).blur(60)
+            .position({ x: -40, y: -40 })
+          Column({ space: 10 }) {
             Stack() {
-              Circle({ width: 74, height: 74 }).fill(this.accentColor()).opacity(0.04).blur(16)
-              Circle({ width: 62, height: 62 }).fill('transparent')
-                .border({ width: 0.8, color: this.accentColor() }).opacity(0.18)
-              Circle({ width: 52, height: 52 })
-                .linearGradient({ angle: 145, colors: [[this.accentColor(), 0], ['rgba(0,0,0,0.08)', 1]] })
-                .shadow({ radius: 14, color: this.accentColor(), offsetX: 0, offsetY: 5 })
-              Circle({ width: 44, height: 44 })
-                .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
-              Text('✦').fontSize(20).fontWeight(800).fontColor('rgba(255,255,255,0.9)')
-            }.width(74).height(74)
+              Circle({ width: 64, height: 64 }).fill(this.accentColor()).opacity(0.15)
+              SimpleIcon({ iconName: 'life', iconSize: 32, color: this.accentColor() })
+            }.width(64).height(64)
+            Text(this.ending['title'] ?? '游戏结束')
+              .fontSize(24).fontWeight(700).fontColor(Theme.Color.TextPrimary)
             Text(this.ending['badge'] ?? '完成')
               .fontSize(13).fontColor(this.accentColor()).fontWeight(600)
               .padding({ left: 16, right: 16, top: 5, bottom: 5 })
-              .backgroundColor(`${this.accentColor()}22`)
+              .backgroundColor(`${this.accentColor()}18`)
               .borderRadius(Theme.Radius.round)
-          }.alignItems(HorizontalAlign.Center)
-
-          Text(this.ending['title'] ?? '游戏结束')
-            .fontSize(26).fontWeight(800).fontColor('#FFFFFF').textAlign(TextAlign.Center)
-
-          Text(this.ending['text'] ?? '')
-            .fontSize(15).fontColor('rgba(255,255,255,0.75)')
-            .lineHeight(26).textAlign(TextAlign.Center)
-            .padding({ left: 28, right: 28 })
-
-          // 最终属性
-          Column({ space: 10 }) {
-            Text('最终状态').fontSize(13).fontColor('rgba(255,255,255,0.4)').fontWeight(600)
-            Row({ space: 0 }) {
-              this.FinalStatBlock('情绪', this.finalStats.emotion, 'E')
-              this.FinalStatBlock('财务', this.finalStats.finance, 'F')
-              this.FinalStatBlock('社交', this.finalStats.social, 'S')
-            }.width('100%')
-          }
-          .width('88%').padding(20)
-          .backgroundColor('rgba(255,255,255,0.06)')
-          .borderRadius(Theme.Radius.l)
-
-          // 选择统计
-          Text(`共做了 ${this.choices.length} 次选择`)
-            .fontSize(13).fontColor('rgba(255,255,255,0.35)')
-
-          Text('你的选择已用于优化专属 AI 模型')
-            .fontSize(12).fontColor('rgba(255,255,255,0.25)')
+          }.padding(24).width('100%').alignItems(HorizontalAlign.Start)
         }
+        .width('100%').height(200)
+        .backgroundColor(Theme.Color.GlassHeavy)
+        .backdropBlur(Theme.Blur.Heavy)
+        .borderRadius(Theme.Radius.xl)
+        .border({ width: 1, color: Theme.Color.BorderLight })
+        .shadow(Theme.Shadow.Medium)
         .opacity(this.resultOpacity)
         .animation({ duration: 700, curve: Curve.Smooth })
 
-        Blank().height(32)
+        // 结局描述
+        if (this.ending['text']) {
+          Column({ space: 8 }) {
+            Text('结局').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+            Text(this.ending['text'] ?? '')
+              .fontSize(15).fontColor(Theme.Color.TextSecondary).lineHeight(24)
+          }
+          .width('100%').padding(20)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+          .opacity(this.resultOpacity)
+          .animation({ duration: 700, curve: Curve.Smooth })
+        }
 
+        // 最终属性 - 与UserProfile的buildStatsSection一致
+        Row({ space: 12 }) {
+          this.FinalStatItem('情绪', this.finalStats.emotion, 'heart')
+          this.FinalStatItem('财务', this.finalStats.finance, 'chart')
+          this.FinalStatItem('社交', this.finalStats.social, 'user')
+        }
+        .width('100%')
+        .opacity(this.resultOpacity)
+        .animation({ duration: 700, curve: Curve.Smooth })
+
+        // 选择统计
+        Column({ space: 8 }) {
+          Text(`共做了 ${this.choices.length} 次选择`)
+            .fontSize(14).fontColor(Theme.Color.TextSecondary)
+          Text('你的选择已用于优化专属 AI 模型')
+            .fontSize(12).fontColor(Theme.Color.TextTertiary)
+        }
+        .width('100%').padding(16)
+        .backgroundColor(Theme.Color.BackgroundSecondary)
+        .borderRadius(Theme.Radius.l)
+        .border({ width: 1, color: Theme.Color.BorderLight })
+        .alignItems(HorizontalAlign.Center)
+
+        // 操作按钮
         Column({ space: 12 }) {
           Button('进入决策副本')
-            .width('80%').height(52)
-            .fontSize(15).fontWeight(700).fontColor('#FFFFFF')
+            .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
             .backgroundColor(this.accentColor())
-            .borderRadius(Theme.Radius.round)
+            .borderRadius(Theme.Radius.l)
+            .shadow({ radius: 16, color: this.accentColor(), offsetY: 4, offsetX: 0 })
             .onClick(() => {
-              try { this.getUIContext().getRouter().pushUrl({ url: 'pages/QuickDecisionInput' }) }
+              try { router.pushUrl({ url: 'pages/QuickDecisionInput' }) }
               catch (e) { this.navigateBack() }
             })
           Button('再玩一次')
-            .width('80%').height(44)
-            .fontSize(14).fontColor('rgba(255,255,255,0.5)')
-            .backgroundColor('rgba(255,255,255,0.06)')
-            .borderRadius(Theme.Radius.round)
-            .onClick(() => {
-              this.phase = 'intro'
-              this.animateIntroIn()
-            })
+            .width('100%').height(44).fontSize(14).fontWeight(600)
+            .fontColor(Theme.Color.TextSecondary)
+            .backgroundColor(Theme.Color.BackgroundSecondary)
+            .borderRadius(Theme.Radius.l)
+            .border({ width: 1, color: Theme.Color.BorderLight })
+            .onClick(() => { this.phase = 'intro' })
         }
-        .width('100%').alignItems(HorizontalAlign.Center).margin({ bottom: 48 })
+        .width('100%')
+
+        // 版本信息
+        Text('ParaLife v1.0.0')
+          .fontSize(12).fontColor(Theme.Color.TextTertiary)
+          .width('100%').textAlign(TextAlign.Center)
+
+        Column().height(40)
       }
-      .width('100%').alignItems(HorizontalAlign.Center)
+      .padding({ left: 16, right: 16, bottom: 60 })
     }
-    .scrollBar(BarState.Off).width('100%').height('100%')
+    .scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).layoutWeight(1)
   }
 
   @Builder
-  FinalStatBlock(label: string, val: number, icon: string) {
-    Column({ space: 6 }) {
-      // 球体风格属性图标
+  FinalStatItem(label: string, val: number, iconName: string) {
+    Column({ space: 8 }) {
       Stack() {
-        Circle({ width: 44, height: 44 }).fill(this.statColor(val)).opacity(0.06).blur(10)
-        Circle({ width: 36, height: 36 }).fill('transparent')
-          .border({ width: 0.8, color: this.statColor(val) }).opacity(0.2)
-        Circle({ width: 30, height: 30 })
-          .linearGradient({ angle: 145, colors: [[this.statColor(val), 0], ['rgba(0,0,0,0.08)', 1]] })
-          .shadow({ radius: 10, color: this.statColor(val), offsetX: 0, offsetY: 3 })
-        Circle({ width: 24, height: 24 })
-          .linearGradient({ angle: 145, colors: [['rgba(255,255,255,0.22)', 0], ['rgba(255,255,255,0.02)', 0.5], ['rgba(0,0,0,0.04)', 1]] })
-        Text(icon).fontSize(12).fontWeight(800).fontColor('#FFFFFF')
-      }.width(44).height(44)
-      Text(`${val}`).fontSize(20).fontWeight(800).fontColor(this.statColor(val))
-      Text(label).fontSize(11).fontColor('rgba(255,255,255,0.4)')
+        Circle({ width: 40, height: 40 }).fill(this.statColor(val)).opacity(0.15)
+        SimpleIcon({ iconName: iconName, iconSize: 20, color: this.statColor(val) })
+      }.width(40).height(40)
+      Text(`${val}`).fontSize(20).fontWeight(700).fontColor(this.statColor(val))
+      Text(label).fontSize(12).fontColor(Theme.Color.TextTertiary)
     }
-    .layoutWeight(1).alignItems(HorizontalAlign.Center).padding(12)
+    .layoutWeight(1).padding(16)
+    .backgroundColor(Theme.Color.BackgroundSecondary)
+    .borderRadius(Theme.Radius.l)
+    .border({ width: 1, color: Theme.Color.BorderLight })
+    .alignItems(HorizontalAlign.Center)
   }
 }

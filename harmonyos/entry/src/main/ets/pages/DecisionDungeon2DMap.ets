@@ -240,63 +240,99 @@ struct DecisionDungeon2DMap {
     if (!this.dungeonId) { this.streamStatus = '缺少会话信息'; return }
     this.streamStatus = '正在准备推演...'
     this.showContent = true
-    try {
-      this.ws = new WebSocketUtil()
-      this.ws.onMessage((data: string) => {
-        setTimeout(() => {
-          try {
-            const ev = JSON.parse(data) as Record<string, Object>
-            const type = ev.type as string
-            if (type === 'start') { this.streamStatus = '推演已启动' }
-            else if (type === 'thinking_chunk') {
-              this.liveThinkingText = (this.liveThinkingText + ((ev.content as string) || '')).slice(-800)
-              this.streamStatus = '模型推演中...'
-            }
-            else if (type === 'status' || type === 'thinking') { this.streamStatus = (ev.content as string) || '' }
-            else if (type === 'option_start') {
-              const title = ev.title as string
-              const idx = this.findOptIdx(title)
-              if (idx >= 0) {
-                this.activeOptionIndex = idx
-                this.updateStatus(idx, '推演中...')
-                this.addRootNode(idx, title)
-                this.processingNodeId = `root_${idx}`
+
+    // 限制选项数量不超过4个
+    const opts: StreamRequestOption[] = this.dungeonData
+      ? this.dungeonData.options.slice(0, 4).map((o: DungeonOption): StreamRequestOption => ({ title: o.title, description: o.description }))
+      : []
+
+    if (opts.length === 0) {
+      this.streamStatus = '没有可推演的选项'
+      return
+    }
+
+    // 尝试 WebSocket 连接，失败后自动重试一次
+    let retryCount = 0
+    const maxRetries = 1
+
+    const attemptConnect = async (): Promise<void> => {
+      try {
+        this.ws = new WebSocketUtil()
+        this.ws.onMessage((data: string) => {
+          setTimeout(() => {
+            try {
+              const ev = JSON.parse(data) as Record<string, Object>
+              const type = ev.type as string
+              if (type === 'start') { this.streamStatus = '推演已启动' }
+              else if (type === 'thinking_chunk') {
+                this.liveThinkingText = (this.liveThinkingText + ((ev.content as string) || '')).slice(-800)
+                this.streamStatus = '模型推演中...'
               }
-            }
-            else if (type === 'node') { this.handleNode(ev) }
-            else if (type === 'option_complete') {
-              const title = ev.title as string
-              const idx = this.findOptIdx(title)
-              if (idx >= 0) {
-                this.updateScore(idx, ev.final_score as number, ev.risk_level as number)
-                this.updateStatus(idx, '推演完成')
-                this.processingNodeId = ''
+              else if (type === 'status' || type === 'thinking') { this.streamStatus = (ev.content as string) || '' }
+              else if (type === 'option_start') {
+                const title = ev.title as string
+                const idx = this.findOptIdx(title)
+                if (idx >= 0) {
+                  this.activeOptionIndex = idx
+                  this.updateStatus(idx, '推演中...')
+                  this.addRootNode(idx, title)
+                  this.processingNodeId = `root_${idx}`
+                }
               }
-            }
-            else if (type === 'recommendation') {
-              try { this.structuredRecommendation = JSON.parse((ev.content as string) || '') as RecommendationData }
-              catch (_) { this.structuredRecommendation = null }
-              this.streamStatus = '推演完成'
-            }
-            else if (type === 'done') {
-              this.streamStatus = '全部推演完成'
-              if (this.ws) { this.ws.close(); this.ws = null }
-            }
-            else if (type === 'error') {
-              this.streamStatus = '推演失败'
-              promptAction.showToast({ message: ev.content as string })
-              if (this.ws) { this.ws.close(); this.ws = null }
-            }
-          } catch (err) { console.error('事件解析失败') }
-        }, 0)
-      })
-      this.ws.onError(() => { this.streamStatus = '连接失败' })
-      this.ws.onClose(() => {})
-      await this.ws.connect('/api/decision/enhanced/ws/simulate')
-      this.streamStatus = '等待模型响应...'
-      const opts: StreamRequestOption[] = this.dungeonData ? this.dungeonData.options.map((o: DungeonOption): StreamRequestOption => ({ title: o.title, description: o.description })) : []
-      this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
-    } catch (e) { this.streamStatus = '推演启动失败' }
+              else if (type === 'node') { this.handleNode(ev) }
+              else if (type === 'option_complete') {
+                const title = ev.title as string
+                const idx = this.findOptIdx(title)
+                if (idx >= 0) {
+                  this.updateScore(idx, ev.final_score as number, ev.risk_level as number)
+                  this.updateStatus(idx, '推演完成')
+                  this.processingNodeId = ''
+                }
+              }
+              else if (type === 'recommendation') {
+                try { this.structuredRecommendation = JSON.parse((ev.content as string) || '') as RecommendationData }
+                catch (_) { this.structuredRecommendation = null }
+                this.streamStatus = '推演完成'
+              }
+              else if (type === 'done') {
+                this.streamStatus = '全部推演完成'
+                if (this.ws) { this.ws.close(); this.ws = null }
+              }
+              else if (type === 'error') {
+                this.streamStatus = `推演出错: ${(ev.content as string) || '未知错误'}`
+                promptAction.showToast({ message: (ev.content as string) || '推演失败' })
+                if (this.ws) { this.ws.close(); this.ws = null }
+              }
+            } catch (err) { console.error('事件解析失败') }
+          }, 0)
+        })
+        this.ws.onError(() => {
+          if (retryCount < maxRetries) {
+            retryCount++
+            this.streamStatus = `连接失败，正在重试(${retryCount}/${maxRetries})...`
+            if (this.ws) { this.ws.close(); this.ws = null }
+            setTimeout(() => { attemptConnect() }, 2000)
+          } else {
+            this.streamStatus = '连接失败，请检查网络后重试'
+          }
+        })
+        this.ws.onClose(() => {})
+        await this.ws.connect('/api/decision/enhanced/ws/simulate')
+        this.streamStatus = '等待模型响应...'
+        this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
+      } catch (e) {
+        if (retryCount < maxRetries) {
+          retryCount++
+          this.streamStatus = `连接失败，正在重试(${retryCount}/${maxRetries})...`
+          if (this.ws) { this.ws.close(); this.ws = null }
+          setTimeout(() => { attemptConnect() }, 2000)
+        } else {
+          this.streamStatus = '推演连接失败，请检查网络后返回重试'
+        }
+      }
+    }
+
+    await attemptConnect()
   }
 
   private handleNode(ev: Record<string, Object>) {

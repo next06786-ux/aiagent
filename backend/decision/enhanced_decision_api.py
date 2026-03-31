@@ -487,9 +487,14 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
                     {"title": "小规模试错", "description": "先做低成本试验，再决定是否全面投入"}
                 ]
             else:
+                # 用户已有足够选项，最多补充1个
                 ai_options = [
                     {"title": "综合方案", "description": "结合多个选项的优势，先做阶段性组合尝试"}
                 ]
+        
+        # 限制总选项数：用户选项 + AI选项 合计不超过4个
+        max_ai = max(0, 4 - len(request.user_options))
+        ai_options = ai_options[:max_ai]
         
         return {
             "code": 200,
