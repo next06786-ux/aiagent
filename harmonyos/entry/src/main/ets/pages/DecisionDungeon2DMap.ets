@@ -122,12 +122,13 @@ struct DecisionDungeon2DMap {
   @State isUpdatingModel: boolean = false
   @State showContent: boolean = false
   @State zoomScale: number = 1
+  private zoomScaleBase: number = 1
 
   private dungeonId: string = ''
   private userId: string = ''
   private ws: WebSocketUtil | null = null
-  private canvasWidth: number = 3600
-  private canvasHeight: number = 1600
+  private canvasWidth: number = 2800
+  private canvasHeight: number = 800
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
   aboutToAppear() {
@@ -199,15 +200,15 @@ struct DecisionDungeon2DMap {
         finalScore: opt.final_score, riskLevel: opt.risk_level, status: '推演完成', progress: 1 })
       const rootId = `root_${oi}`
       allNodes.push({ id: rootId, parentId: '', title: opt.title, description: '起点',
-        month: 0, probability: 1, position: { x: 120, y: 400 },
+        month: 0, probability: 1, position: { x: 60, y: 300 },
         color: this.optColor(oi), riskTag: 'medium', eventType: 'origin',
         impact: {}, isBranch: false, optionIndex: oi, optionTitle: opt.title })
       let prevId = rootId
       opt.timeline.forEach((ev: TimelineEvent, ei: number) => {
         const nodeId = ev.event_id || `opt${oi}_${ei}`
         const isBranch = !!(ev.branch_group && ev.branch_group.includes('fork'))
-        const x = 360 + ei * 340
-        const y = isBranch ? (400 + (ei % 2 === 0 ? -220 : 220)) : (400 + (ei % 2 === 0 ? -120 : 120))
+        const x = 200 + ei * 280
+        const y = isBranch ? (300 + (ei % 2 === 0 ? -180 : 180)) : (300 + (ei % 2 === 0 ? -80 : 80))
         const color = isBranch ? (ev.risk_tag === 'low' ? '#10B981' : '#EF4444') : this.optColor(oi)
         allNodes.push({ id: nodeId, parentId: prevId, title: this.shortTitle(ev.event),
           description: ev.event, month: ev.month, probability: ev.probability,
@@ -253,21 +254,10 @@ struct DecisionDungeon2DMap {
 
     this.streamStatus = `准备推演 ${opts.length} 个决策方向，正在建立连接...`
 
-    // 先尝试 WebSocket，失败后自动降级到 HTTP
-    let httpFallbackTriggered = false
-    let wsEverReceivedMessage = false  // 是否曾经收到过消息
-
-    const triggerHttpFallback = () => {
-      if (httpFallbackTriggered) return
-      httpFallbackTriggered = true
-      if (this.ws) { try { this.ws.close() } catch (_) {} this.ws = null }
-      this.fallbackToHttp(opts)
-    }
-
+    // 纯 WebSocket 模式
     try {
       this.ws = new WebSocketUtil()
       this.ws.onMessage((data: string) => {
-        wsEverReceivedMessage = true
         setTimeout(() => {
           try {
             const ev = JSON.parse(data) as Record<string, Object>
@@ -315,118 +305,18 @@ struct DecisionDungeon2DMap {
         }, 0)
       })
       this.ws.onError(() => {
-        if (!wsEverReceivedMessage) {
-          console.info('[DecisionMap] WebSocket 连接阶段失败，降级到 HTTP')
-          triggerHttpFallback()
-        } else {
-          // 已经收到过消息，中途断开
-          console.info('[DecisionMap] WebSocket 推演中途断开，尝试HTTP继续')
-          // 如果已经有节点数据，说明部分推演成功了，用HTTP补完剩余
-          if (this.nodes.length > 0) {
-            this.streamStatus = '连接中断，正在用HTTP补完推演...'
-            triggerHttpFallback()
-          } else {
-            this.streamStatus = '推演连接中断，正在重试...'
-            triggerHttpFallback()
-          }
-        }
+        this.streamStatus = '推演连接出错，请返回重试'
       })
       this.ws.onClose(() => {
-        // WebSocket 正常关闭（非 done 触发的关闭）也尝试 HTTP 补完
-        if (wsEverReceivedMessage && this.streamStatus !== '全部推演完成' && this.streamStatus !== '推演完成') {
-          console.info('[DecisionMap] WebSocket 意外关闭，HTTP补完')
-          if (this.nodes.length > 0) {
-            this.streamStatus = '连接关闭，正在用HTTP补完...'
-          }
-          triggerHttpFallback()
+        if (this.streamStatus !== '全部推演完成' && this.streamStatus !== '推演完成') {
+          this.streamStatus = '推演连接已断开'
         }
       })
       await this.ws.connect('/ws/decision-simulate')
       this.streamStatus = '连接成功，正在加载LoRA模型和用户画像...'
       this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
     } catch (e) {
-      console.info('[DecisionMap] WebSocket 连接异常，降级到 HTTP:', (e as Error).message)
-      triggerHttpFallback()
-    }
-  }
-
-  // HTTP 降级方案：当 WebSocket 不可用时（如云平台不支持 WS），使用 HTTP 接口完成推演
-  private async fallbackToHttp(opts: StreamRequestOption[]) {
-    this.streamStatus = '正在切换到HTTP模式...'
-    promptAction.showToast({ message: 'WebSocket不可用，已切换HTTP模式' })
-
-    // 模拟进度提示
-    const statusMessages = [
-      '正在加载LoRA个性化模型...',
-      '正在分析用户画像和决策上下文...',
-      '正在为各选项生成12个月推演时间线...',
-      '模型推演中，请耐心等待（约1-3分钟）...'
-    ]
-    let msgIdx = 0
-    const progressTimer = setInterval(() => {
-      if (msgIdx < statusMessages.length) {
-        this.streamStatus = statusMessages[msgIdx]
-        msgIdx++
-      }
-    }, 8000)
-    this.streamStatus = statusMessages[0]
-    msgIdx = 1
-    try {
-      const httpRequest = http.createHttp()
-      const response = await httpRequest.request(
-        `${ApiConfig.getBaseUrl()}/api/decision/enhanced/simulate/with-collection`,
-        {
-          method: http.RequestMethod.POST,
-          header: { 'Content-Type': 'application/json' },
-          extraData: JSON.stringify({
-            session_id: this.dungeonId,
-            options: opts,
-            use_lora: true
-          }),
-          connectTimeout: 120000,
-          readTimeout: 300000
-        }
-      )
-      httpRequest.destroy()
-
-      if (response.responseCode === 200) {
-        const result = JSON.parse(response.result as string) as Record<string, Object>
-        if ((result.code as number) === 200 && result.data) {
-          clearInterval(progressTimer)
-          this.streamStatus = '推演完成，正在渲染时间线...'
-          const data = result.data as Record<string, Object>
-          // 用 HTTP 返回的完整数据构建地图
-          this.dungeonData = {
-            dungeon_id: (data.simulation_id as string) || this.dungeonId,
-            user_id: (data.user_id as string) || this.userId,
-            title: this.dungeonData?.title || '决策推演',
-            description: '',
-            options: (data.options as DungeonOption[]) || [],
-            recommendation: (data.recommendation as string) || '',
-            created_at: (data.created_at as string) || new Date().toISOString()
-          }
-          if (this.dungeonData.options.length > 0) {
-            this.buildFromExisting()
-          }
-          // 解析推荐
-          const rec = data.recommendation as string
-          if (rec) {
-            try { this.structuredRecommendation = JSON.parse(rec) as RecommendationData }
-            catch (_) { this.structuredRecommendation = null }
-          }
-          this.streamStatus = '全部推演完成'
-          return
-        }
-      }
-      // HTTP 也失败了
-      clearInterval(progressTimer)
-      const errBody = response.result ? (response.result as string).substring(0, 200) : '无响应'
-      this.streamStatus = `推演失败(HTTP ${response.responseCode})`
-      console.error('[DecisionMap] HTTP 推演失败:', errBody)
-    } catch (e) {
-      clearInterval(progressTimer)
-      this.streamStatus = '推演失败，请检查网络后返回重试'
-      console.error('[DecisionMap] HTTP 推演异常:', (e as Error).message)
+      this.streamStatus = '推演连接失败，请返回重试'
     }
   }
 
@@ -445,11 +335,15 @@ struct DecisionDungeon2DMap {
     let x: number
     let y: number
     if (isBranch && parentNode) {
-      x = parentNode.position.x + 300
-      y = parentNode.position.y + (((node.risk_tag as string) === 'low') ? -(200 + count * 60) : (200 + count * 60))
+      x = parentNode.position.x + 280
+      y = parentNode.position.y + (((node.risk_tag as string) === 'low') ? -180 : 180)
     } else {
-      x = 360 + month * 320
-      y = 400 + ((month % 2 === 0) ? -130 : 130)
+      // 主链节点：水平递增，垂直交错排列避免重叠
+      const mainNodes = this.nodes.filter((n: MapNode) => n.optionIndex === oi && !n.isBranch && !n.id.startsWith('root_'))
+      const seq = mainNodes.length  // 当前是第几个主链节点
+      x = 200 + seq * 280
+      // 蛇形排列：奇数行偏上，偶数行偏下，间距递增避免重叠
+      y = 300 + (seq % 2 === 0 ? -80 : 80)
     }
 
     const color = isBranch ? (((node.risk_tag as string) === 'low') ? '#10B981' : '#EF4444') : this.optColor(oi)
@@ -517,7 +411,7 @@ struct DecisionDungeon2DMap {
     if (this.nodes.some((n: MapNode) => n.id === rootId)) return
     this.nodes = this.nodes.concat([{
       id: rootId, parentId: '', title, description: '推演起点',
-      month: 0, probability: 1, position: { x: 120, y: 400 },
+      month: 0, probability: 1, position: { x: 60, y: 300 },
       color: this.optColor(optionIndex), riskTag: 'medium', eventType: 'origin',
       impact: {}, isBranch: false, optionIndex, optionTitle: title
     }])
@@ -850,8 +744,11 @@ struct DecisionDungeon2DMap {
         .height(this.canvasHeight * this.zoomScale)
         .gesture(
           PinchGesture({ fingers: 2 })
+            .onActionStart(() => {
+              this.zoomScaleBase = this.zoomScale
+            })
             .onActionUpdate((event: GestureEvent) => {
-              const newScale = Math.max(0.3, Math.min(2.5, this.zoomScale * event.scale))
+              const newScale = Math.max(0.4, Math.min(2.0, this.zoomScaleBase * event.scale))
               this.zoomScale = newScale
               this.drawCanvas()
             })
@@ -865,72 +762,72 @@ struct DecisionDungeon2DMap {
 
   @Builder
   buildDetailPanel() {
-    Column() {
-      Blank().layoutWeight(1)
-        .onClick(() => { this.showDetail = false; this.selectedNodeId = '' })
-
-      Column({ space: 12 }) {
-        // 拖拽条
+    // 底部弹出详情面板 - 固定在屏幕底部
+    Column({ space: 12 }) {
+      // 拖拽条
+      Row() {
         Row().width(40).height(4).backgroundColor(Theme.Color.BorderMedium).borderRadius(2)
+      }.width('100%').justifyContent(FlexAlign.Center).padding({ top: 8 })
 
-        if (this.getSelectedNode()) {
-          // 标题行
-          Row() {
-            Circle({ width: 12, height: 12 }).fill(this.getSelectedNode()!.color).margin({ right: 10 })
-            Text(this.getSelectedNode()!.title)
-              .fontSize(17).fontWeight(700).fontColor(Theme.Color.TextPrimary).layoutWeight(1)
-            Text('关闭').fontSize(12).fontColor(Theme.Color.TextTertiary)
-              .onClick(() => { this.showDetail = false; this.selectedNodeId = '' })
-          }.width('100%')
+      if (this.getSelectedNode()) {
+        Scroll() {
+          Column({ space: 12 }) {
+            // 标题行
+            Row() {
+              Circle({ width: 12, height: 12 }).fill(this.getSelectedNode()!.color).margin({ right: 10 })
+              Text(this.getSelectedNode()!.title)
+                .fontSize(17).fontWeight(700).fontColor(Theme.Color.TextPrimary).layoutWeight(1)
+              Text('关闭').fontSize(12).fontColor(Theme.Color.TextTertiary)
+                .onClick(() => { this.showDetail = false; this.selectedNodeId = '' })
+            }.width('100%')
 
-          // 描述
-          Text(this.getSelectedNode()!.description)
-            .fontSize(14).fontColor(Theme.Color.TextSecondary).lineHeight(22)
+            // 描述
+            Text(this.getSelectedNode()!.description)
+              .fontSize(14).fontColor(Theme.Color.TextSecondary).lineHeight(22)
 
-          // 指标
-          Row({ space: 16 }) {
-            Column({ space: 2 }) {
-              Text('概率').fontSize(11).fontColor(Theme.Color.TextTertiary)
-              Text(`${(this.getSelectedNode()!.probability * 100).toFixed(0)}%`)
-                .fontSize(16).fontWeight(600).fontColor(Theme.Color.Primary)
-            }.alignItems(HorizontalAlign.Center)
-            Column({ space: 2 }) {
-              Text('月份').fontSize(11).fontColor(Theme.Color.TextTertiary)
-              Text(`第${this.getSelectedNode()!.month}月`)
-                .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-            }.alignItems(HorizontalAlign.Center)
-            Column({ space: 2 }) {
-              Text('影响').fontSize(11).fontColor(Theme.Color.TextTertiary)
-              Text(this.getImpactText(this.getSelectedNode()!))
-                .fontSize(13).fontColor(Theme.Color.Warning)
-            }.alignItems(HorizontalAlign.Center)
-          }
-          .width('100%').justifyContent(FlexAlign.SpaceAround)
-          .padding(14).backgroundColor(Theme.Color.BackgroundTertiary)
-          .borderRadius(Theme.Radius.m)
+            // 指标
+            Row({ space: 16 }) {
+              Column({ space: 2 }) {
+                Text('概率').fontSize(11).fontColor(Theme.Color.TextTertiary)
+                Text(`${(this.getSelectedNode()!.probability * 100).toFixed(0)}%`)
+                  .fontSize(16).fontWeight(600).fontColor(Theme.Color.Primary)
+              }.alignItems(HorizontalAlign.Center)
+              Column({ space: 2 }) {
+                Text('月份').fontSize(11).fontColor(Theme.Color.TextTertiary)
+                Text(`第${this.getSelectedNode()!.month}月`)
+                  .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+              }.alignItems(HorizontalAlign.Center)
+              Column({ space: 2 }) {
+                Text('影响').fontSize(11).fontColor(Theme.Color.TextTertiary)
+                Text(this.getImpactText(this.getSelectedNode()!))
+                  .fontSize(13).fontColor(Theme.Color.Warning)
+              }.alignItems(HorizontalAlign.Center)
+            }
+            .width('100%').justifyContent(FlexAlign.SpaceAround)
+            .padding(14).backgroundColor(Theme.Color.BackgroundTertiary)
+            .borderRadius(Theme.Radius.m)
 
-          // 类型标签
-          Row({ space: 8 }) {
-            Text(this.getSelectedNode()!.isBranch ? '分支事件' : '主链事件')
-              .fontSize(11).fontColor(this.getSelectedNode()!.isBranch ? '#B45309' : '#2563EB')
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .backgroundColor(this.getSelectedNode()!.isBranch ? '#FEF3C7' : '#DBEAFE')
-              .borderRadius(Theme.Radius.round)
-            Text(this.getSelectedNode()!.riskTag === 'high' ? '高风险' : this.getSelectedNode()!.riskTag === 'low' ? '低风险' : '中等风险')
-              .fontSize(11).fontColor(this.getSelectedNode()!.riskTag === 'high' ? Theme.Color.Destructive : Theme.Color.Accent)
-              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-              .backgroundColor(this.getSelectedNode()!.riskTag === 'high' ? 'rgba(255,59,48,0.08)' : 'rgba(0,200,83,0.08)')
-              .borderRadius(Theme.Radius.round)
-          }
-        }
+            // 类型标签
+            Row({ space: 8 }) {
+              Text(this.getSelectedNode()!.isBranch ? '分支事件' : '主链事件')
+                .fontSize(11).fontColor(this.getSelectedNode()!.isBranch ? '#B45309' : '#2563EB')
+                .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                .backgroundColor(this.getSelectedNode()!.isBranch ? '#FEF3C7' : '#DBEAFE')
+                .borderRadius(Theme.Radius.round)
+              Text(this.getSelectedNode()!.riskTag === 'high' ? '高风险' : this.getSelectedNode()!.riskTag === 'low' ? '低风险' : '中等风险')
+                .fontSize(11).fontColor(this.getSelectedNode()!.riskTag === 'high' ? Theme.Color.Destructive : Theme.Color.Accent)
+                .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                .backgroundColor(this.getSelectedNode()!.riskTag === 'high' ? 'rgba(255,59,48,0.08)' : 'rgba(0,200,83,0.08)')
+                .borderRadius(Theme.Radius.round)
+            }
+          }.padding({ left: 20, right: 20, bottom: 20 })
+        }.constraintSize({ maxHeight: 250 }).scrollBar(BarState.Off)
       }
-      .width('100%')
-      .padding(20)
-      .backgroundColor(Theme.Color.BackgroundSecondary)
-      .borderRadius({ topLeft: Theme.Radius.xl, topRight: Theme.Radius.xl })
-      .border({ width: { top: 0.5 }, color: Theme.Color.BorderLight })
-      .shadow(Theme.Shadow.Floating)
     }
-    .width('100%').height('100%')
+    .width('100%')
+    .backgroundColor(Theme.Color.BackgroundSecondary)
+    .borderRadius({ topLeft: Theme.Radius.xl, topRight: Theme.Radius.xl })
+    .border({ width: { top: 0.5 }, color: Theme.Color.BorderLight })
+    .shadow(Theme.Shadow.Floating)
   }
 }

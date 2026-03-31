@@ -146,10 +146,14 @@ class LoRADecisionAnalyzer:
             # 构建带上下文的 prompt
             context_prefix = ""
             if generated_so_far:
-                context_prefix = "已推演的事件（请在此基础上继续，不要重复）：\n"
+                context_prefix = "## 已推演的事件（在此基础上继续，不要重复类似内容）\n"
                 for e in generated_so_far:
                     context_prefix += f"- 第{e.get('month',0)}月：{e.get('event','')}\n"
-                context_prefix += f"\n请继续生成第{start_month}到第{end_month}月的事件。\n"
+                context_prefix += (
+                    f"\n请继续生成第{start_month}到第{end_month}月的事件。\n"
+                    "要求：后续事件必须是前面事件的因果结果，不能重复前面的主题。\n"
+                    "如果前面都是正面事件，这批要出现困难或转折。\n\n"
+                )
 
             prompt = self._build_timeline_prompt(
                 question, option, profile, batch_count,
@@ -164,7 +168,7 @@ class LoRADecisionAnalyzer:
                 )
 
             batch_buffer = ""
-            for chunk in self.lora_manager.generate_stream(user_id, prompt, 400, 0.25):
+            for chunk in self.lora_manager.generate_stream(user_id, prompt, 600, 0.45):
                 batch_buffer += chunk
                 yield chunk
                 # 让出事件循环，防止长时间阻塞导致 WebSocket 超时断开
@@ -182,7 +186,7 @@ class LoRADecisionAnalyzer:
         profile: Any
     ):
         prompt = self._build_recommendation_prompt(question, options, profile)
-        for chunk in self.lora_manager.generate_stream(user_id, prompt, 140, 0.35):
+        for chunk in self.lora_manager.generate_stream(user_id, prompt, 300, 0.4):
             yield chunk
             await asyncio.sleep(0)
 
@@ -416,64 +420,85 @@ class LoRADecisionAnalyzer:
                                 kg_context: str = "",
                                 user_feedback: List[Dict[str, str]] = None,
                                 life_context: str = "") -> str:
-        if strict:
-            prompt = "<|im_start|>system\n你是用户的未来决策推演引擎。只输出合法 JSON 数组，不要解释，不要代码块，不要思考过程，不要额外文本。<|im_end|>\n"
-        else:
-            prompt = "<|im_start|>system\n你是用户的未来决策推演引擎。请根据用户问题、选项和个性化特征，生成真实、具体、实用的未来事件。输出必须是 JSON 数组。<|im_end|>\n"
-        prompt += f"<|im_start|>user\n决策问题：{question}\n"
-        prompt += f"决策选项：{option['title']}\n"
+        system_msg = (
+            "你是一个决策推演引擎。你的任务是为用户模拟选择某个方向后，未来几个月会发生的具体事件。\n"
+            "核心原则：\n"
+            "1. 每个事件必须是具体的、可感知的场景，不能是空洞的总结或书面语废话\n"
+            "2. 好的事件示例：'面试了3家公司，拿到1个offer但薪资比预期低20%'\n"
+            "3. 坏的事件示例：'开始积极探索职业发展方向'（太空洞）\n"
+            "4. 事件要有因果递进关系，后面的事件是前面事件的自然结果\n"
+            "5. 必须包含正面和负面事件，不能全是好事或全是坏事\n"
+            "6. 只输出 JSON 数组，不要任何解释"
+        )
+        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n"
+        prompt += f"<|im_start|>user\n"
+        prompt += f"## 用户的决策问题\n{question}\n\n"
+        prompt += f"## 用户选择的方向\n{option['title']}"
         if option.get('description'):
-            prompt += f"选项说明：{option['description']}\n"
-        if profile:
-            prompt += f"用户决策风格：{getattr(profile, 'decision_style', '未知')}\n"
-            prompt += f"用户风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
-            prompt += f"用户生活优先级：{getattr(profile, 'life_priority', '未知')}\n"
+            prompt += f" — {option['description']}"
+        prompt += "\n\n"
+
+        # 注入用户真实背景
+        if life_context:
+            prompt += f"## 用户的真实情况（必须在事件中引用这些具体信息）\n{life_context}\n\n"
         if kg_context:
-            prompt += f"用户相关人物背景（可在事件中具体提及）：\n{kg_context}\n"
+            prompt += f"## 用户身边的人（事件中可以提到这些人的反应和影响）\n{kg_context}\n\n"
+        if profile:
+            style = getattr(profile, 'decision_style', '')
+            risk = getattr(profile, 'risk_preference', '')
+            priority = getattr(profile, 'life_priority', '')
+            if style or risk or priority:
+                prompt += f"## 用户特征\n决策风格: {style}，风险偏好: {risk}，生活优先级: {priority}\n\n"
+
         if user_feedback:
-            prompt += "用户对之前推演的反馈（请据此调整后续事件的方向和概率）：\n"
+            prompt += "## 用户对之前推演的反馈\n"
             for fb in user_feedback:
                 event_text = fb.get("event", "")
                 feedback_type = fb.get("type", "")
                 comment = fb.get("comment", "")
                 if feedback_type == "unlikely":
-                    prompt += f"- 用户认为[{event_text}]不太可能发生\n"
+                    prompt += f"- 用户认为'{event_text}'不太可能发生，请调整\n"
                 elif feedback_type == "accurate":
-                    prompt += f"- 用户认为[{event_text}]很准确\n"
+                    prompt += f"- 用户认为'{event_text}'很准确\n"
                 elif comment:
-                    prompt += f"- 关于[{event_text}]，用户说：{comment}\n"
-        if life_context:
-            prompt += f"用户的真实生活细节（请在事件中引用具体信息，让推演贴近用户实际情况）：\n{life_context}\n"
+                    prompt += f"- 关于'{event_text}'，用户说：{comment}\n"
+            prompt += "\n"
+
         prompt += (
-            f"请输出 {num_events} 个按时间递进的关键事件，每个事件都要贴近真实生活路径。\n"
-            "要求：\n"
-            "1. event 字段必须是给用户看的自然语言短句，不能像代码、变量名、JSON说明或系统提示。\n"
-            "2. month 必须递增，表示未来第几个月。\n"
-            "3. 每个事件都要体现这个选项在现实中的推进、反馈、阻碍、调整或结果。\n"
-            "4. 不要输出伪代码、标签、markdown、注释、前后解释。\n"
-            "5. 影响维度只使用：健康、财务、社交、情绪、学习、时间。\n"
-            "6. 概率 probability 取 0 到 1 之间的小数。\n"
-            "输出格式示例："
-            "[{\"month\":1,\"event\":\"开始接触目标方向的真实机会，时间安排变得更紧\",\"impact\":{\"健康\":-0.1,\"财务\":0.1,\"社交\":0.0,\"情绪\":0.1,\"学习\":0.3,\"时间\":-0.2},\"probability\":0.82}]"
+            f"## 输出要求\n"
+            f"生成 {num_events} 个事件，模拟选择「{option['title']}」后未来 {num_events} 个月的真实经历。\n"
+            "每个事件要求：\n"
+            "- event: 用第二人称'你'描述，像在讲故事，要有具体的数字、人名、地点、行动\n"
+            "- 不同月份的事件要有明显的递进和变化，不能重复类似的内容\n"
+            "- 前3个月侧重行动和初期反馈，中间侧重遇到的困难和调整，后期侧重结果和转折\n"
+            "- impact 的值要有区分度，不能全是 0.1/-0.1 这种小幅波动\n"
+            "- probability 要根据事件的现实可能性合理设置，不能全是 0.7-0.8\n\n"
+            "输出格式（只输出 JSON 数组）：\n"
+            '[{"month":1,"event":"你开始...","impact":{"健康":-0.1,"财务":0.2,"社交":0.0,"情绪":0.1,"学习":0.3,"时间":-0.3},"probability":0.85}]\n'
             f"<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt
 
     def _build_recommendation_prompt(self, question: str, options: List[Dict], profile: Any) -> str:
-        prompt = f"<|im_start|>system\n你是用户的个人决策顾问。请只输出 JSON 对象，不要输出解释性文本。<|im_end|>\n"
-        prompt += f"<|im_start|>user\n我面临的决策：{question}\n\n"
+        prompt = (
+            "<|im_start|>system\n"
+            "你是用户的决策顾问。根据推演结果给出真诚、实用的建议。\n"
+            "不要说空话套话，要像一个有经验的朋友在给建议。只输出 JSON。\n"
+            "<|im_end|>\n"
+        )
+        prompt += f"<|im_start|>user\n我的决策问题：{question}\n\n"
+        prompt += "各选项的推演结果：\n"
         for opt in options:
-            prompt += f"选项：{opt['title']}\n"
-            prompt += f"综合得分：{opt.get('final_score', 0):.1f}/100\n"
-            prompt += f"风险等级：{opt.get('risk_level', 0):.2f}\n"
-            prompt += f"时间线摘要：{opt.get('timeline_summary', '')}\n\n"
-        if profile:
-            prompt += f"决策风格：{getattr(profile, 'decision_style', '未知')}\n"
-            prompt += f"风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
-            prompt += f"生活优先级：{getattr(profile, 'life_priority', '未知')}\n\n"
+            prompt += f"\n【{opt['title']}】得分 {opt.get('final_score', 0):.0f}/100，风险 {opt.get('risk_level', 0):.0%}\n"
+            prompt += f"  关键事件：{opt.get('timeline_summary', '暂无')}\n"
         prompt += (
-            '请输出 JSON：{"summary":"一句话总结","recommended_option":"建议选项","reasons":["原因1","原因2"],"risks":["风险1","风险2"],"actions":["行动1","行动2"]}'
-            "<|im_end|>\n<|im_start|>assistant\n"
+            '\n请给出你的建议，JSON 格式：\n'
+            '{"summary":"用大白话说你的核心建议（不超过30字）",'
+            '"recommended_option":"你推荐的选项名",'
+            '"reasons":["推荐理由1（要具体）","推荐理由2"],'
+            '"risks":["最大的风险是什么","如何规避"],'
+            '"actions":["第一步该做什么","第二步该做什么"]}'
+            "\n<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt
 

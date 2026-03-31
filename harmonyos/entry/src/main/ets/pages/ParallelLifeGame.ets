@@ -72,6 +72,17 @@ struct ParallelLifeGame {
   @State freeInputText: string = ''
   @State showContent: boolean = false
 
+  // 塔罗牌抽卡动画状态
+  @State tarotDrawn: boolean = false          // 是否已抽牌
+  @State tarotSelectedIdx: number = -1        // 选中的牌索引
+  @State tarotFlipped: boolean = false        // 是否已翻转
+  @State tarotCardScales: number[] = []       // 每张牌的缩放
+  @State tarotCardOpacities: number[] = []    // 每张牌的透明度
+  @State tarotSelectedY: number = 0           // 选中牌的Y偏移
+  @State tarotSelectedScale: number = 1       // 选中牌的放大
+  @State tarotRotateY: number = 0             // 翻转角度 0=背面 180=正面
+  @State tarotGlowOpacity: number = 0         // 光效透明度
+
   // 动效
   @State nodeOpacity: number = 0
   @State nodeTranslateY: number = 30
@@ -108,7 +119,10 @@ struct ParallelLifeGame {
       if (res.responseCode === 200) {
         const body = JSON.parse(res.result as string) as Record<string, Object>
         this.chapters = body['data'] as Chapter[]
-        if (this.chapters.length > 0) { this.phase = 'chapters' }
+        if (this.chapters.length > 0) {
+          this.initTarotCards()
+          this.phase = 'chapters'
+        }
       }
     } catch (e) { console.error('加载关卡失败:', e) }
   }
@@ -394,104 +408,263 @@ struct ParallelLifeGame {
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
-  // 塔罗牌分类颜色
-  tarotCategoryColor(category: string): string {
-    if (category === '命运' || category === 'fate') return '#6B48FF'
-    if (category === '爱情' || category === 'love') return '#FF6B9D'
-    if (category === '事业' || category === 'career') return '#0A59F7'
-    if (category === '财富' || category === 'wealth') return '#FF9500'
-    return '#00C853'
+  // 初始化塔罗牌状态
+  private initTarotCards() {
+    const count = this.chapters.length
+    this.tarotCardScales = new Array(count).fill(1)
+    this.tarotCardOpacities = new Array(count).fill(1)
+    this.tarotDrawn = false
+    this.tarotSelectedIdx = -1
+    this.tarotFlipped = false
+    this.tarotSelectedY = 0
+    this.tarotSelectedScale = 1
+    this.tarotRotateY = 0
+    this.tarotGlowOpacity = 0
+  }
+
+  // 抽牌动画序列
+  private drawTarotCard(index: number) {
+    if (this.tarotDrawn) return
+    this.tarotDrawn = true
+    this.tarotSelectedIdx = index
+
+    // 第1步：其他牌淡出 + 缩小
+    const newScales = [...this.tarotCardScales]
+    const newOpacities = [...this.tarotCardOpacities]
+    for (let i = 0; i < this.chapters.length; i++) {
+      if (i !== index) { newScales[i] = 0.8; newOpacities[i] = 0 }
+    }
+    animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+      this.tarotCardScales = newScales
+      this.tarotCardOpacities = newOpacities
+    })
+
+    // 第2步：选中牌上移 + 放大
+    setTimeout(() => {
+      animateTo({ duration: 500, curve: Curve.Smooth }, () => {
+        this.tarotSelectedY = -120
+        this.tarotSelectedScale = 1.3
+      })
+    }, 350)
+
+    // 第3步：翻转 + 光效
+    setTimeout(() => {
+      animateTo({ duration: 600, curve: Curve.Smooth }, () => {
+        this.tarotRotateY = 180
+        this.tarotGlowOpacity = 0.6
+      })
+    }, 900)
+
+    // 第4步：光效消退 + 标记翻转完成
+    setTimeout(() => {
+      this.tarotFlipped = true
+      animateTo({ duration: 400, curve: Curve.Smooth }, () => {
+        this.tarotGlowOpacity = 0
+      })
+    }, 1500)
+
+    // 第5步：加载关卡
+    setTimeout(() => {
+      this.loadChapter(this.chapters[index].id)
+    }, 2200)
+  }
+
+  // 随机抽牌
+  private drawRandomTarot() {
+    if (this.chapters.length === 0) return
+    const idx = Math.floor(Math.random() * this.chapters.length)
+    this.drawTarotCard(idx)
   }
 
   @Builder buildChapterSelect() {
-    Scroll() {
-      Column({ space: 20 }) {
-        // Hero卡片 - 塔罗牌主题
-        Stack({ alignContent: Alignment.BottomStart }) {
-          Column().width('100%').height('100%')
-            .linearGradient({ angle: 135, colors: [['#1a1a2e', 0], ['#16213e', 0.5], ['#0f3460', 1]] })
-          Circle({ width: 150, height: 150 }).fill('#6B48FF').opacity(0.08).blur(60)
-            .position({ x: -40, y: -40 })
-          Circle({ width: 100, height: 100 }).fill('#FF6B9D').opacity(0.06).blur(50)
-            .position({ x: '80%', y: '60%' })
-          Column({ space: 10 }) {
-            Text('*').fontSize(36).fontColor('rgba(255,255,255,0.6)')
-            Text('平行人生').fontSize(24).fontWeight(700).fontColor('#FFFFFF')
-            Text('抽取一张命运之牌，开启你的平行旅程').fontSize(13).fontColor('rgba(255,255,255,0.5)')
-          }.padding(24).width('100%').alignItems(HorizontalAlign.Center)
-        }
-        .width('100%').height(180)
-        .borderRadius(Theme.Radius.xl)
-        .border({ width: 1, color: 'rgba(107,72,255,0.2)' })
-        .shadow(Theme.Shadow.Medium)
-        .opacity(this.showContent ? 1 : 0)
-        .scale({ x: this.showContent ? 1 : 0.95, y: this.showContent ? 1 : 0.95 })
-        .animation({ duration: 700, curve: Curve.Smooth, delay: 0 })
+    Column() {
+      // 深色神秘背景
+      Stack() {
+        Column().width('100%').height('100%')
+          .linearGradient({ angle: 180, colors: [['#0a0a1a', 0], ['#1a1a2e', 0.4], ['#16213e', 1]] })
 
-        // 随机抽牌按钮
-        Button('随机抽取命运之牌')
-          .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
-          .linearGradient({ angle: 135, colors: [['#6B48FF', 0], ['#FF6B9D', 1]] })
-          .borderRadius(Theme.Radius.l)
-          .shadow({ radius: 16, color: 'rgba(107,72,255,0.3)', offsetX: 0, offsetY: 4 })
-          .onClick(() => this.loadRandomChapter())
-          .opacity(this.showContent ? 1 : 0)
-          .translate({ y: this.showContent ? 0 : 20 })
-          .animation({ duration: 600, curve: Curve.Smooth, delay: 100 })
+        // 星空粒子装饰
+        Circle({ width: 3, height: 3 }).fill('#FFFFFF').opacity(0.3)
+          .position({ x: '15%', y: '10%' })
+        Circle({ width: 2, height: 2 }).fill('#FFFFFF').opacity(0.2)
+          .position({ x: '75%', y: '15%' })
+        Circle({ width: 2, height: 2 }).fill('#FFFFFF').opacity(0.25)
+          .position({ x: '45%', y: '8%' })
+        Circle({ width: 3, height: 3 }).fill('#FFFFFF').opacity(0.15)
+          .position({ x: '85%', y: '25%' })
 
-        // 塔罗牌关卡列表
-        Text('命运牌组')
-          .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-          .padding({ left: 8 })
-          .opacity(this.showContent ? 1 : 0)
-          .translate({ x: this.showContent ? 0 : -20 })
-          .animation({ duration: 600, curve: Curve.Smooth, delay: 200 })
+        Column({ space: 0 }) {
+          // 标题区
+          Column({ space: 8 }) {
+            Text('命运之牌').fontSize(28).fontWeight(800).fontColor('#FFFFFF')
+              .opacity(this.tarotDrawn ? 0.3 : 1)
+              .animation({ duration: 400, curve: Curve.Smooth })
+            Text(this.tarotDrawn ? '命运已定...' : '选择一张牌，揭示你的平行旅程')
+              .fontSize(14).fontColor('rgba(255,255,255,0.5)')
+              .animation({ duration: 400, curve: Curve.Smooth })
+          }
+          .width('100%').alignItems(HorizontalAlign.Center)
+          .padding({ top: 20, bottom: 24 })
 
-        // 塔罗牌网格 - 每行2张
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.chapters, (ch: Chapter, index: number) => {
-            Column({ space: 8 }) {
-              // 塔罗牌正面
-              Stack() {
-                // 牌面背景
-                Column().width('100%').height('100%')
-                  .linearGradient({ angle: 180, colors: [[ch.accent || '#6B48FF', 0], ['#1a1a2e', 1]] })
-                  .borderRadius(Theme.Radius.l)
-                // 牌面装饰
-                Column().width('100%').height('100%')
-                  .border({ width: 1.5, color: 'rgba(255,255,255,0.15)' })
-                  .borderRadius(Theme.Radius.l)
-                // 内框
-                Column().width('85%').height('85%')
-                  .border({ width: 0.5, color: 'rgba(255,255,255,0.1)' })
-                  .borderRadius(Theme.Radius.m)
-                // 牌面内容
-                Column({ space: 6 }) {
-                  Text(ch.cover_emoji || '*').fontSize(28)
-                  Text(ch.title).fontSize(14).fontWeight(700).fontColor('#FFFFFF').textAlign(TextAlign.Center)
-                  Text(ch.subtitle).fontSize(11).fontColor('rgba(255,255,255,0.5)').textAlign(TextAlign.Center)
-                }.justifyContent(FlexAlign.Center)
+          // 抽牌光效
+          if (this.tarotGlowOpacity > 0) {
+            Circle({ width: 200, height: 200 })
+              .fill('#6B48FF')
+              .opacity(this.tarotGlowOpacity * 0.15)
+              .blur(60)
+              .position({ x: '50%', y: '40%' })
+              .translate({ x: -100, y: -100 })
+          }
+
+          // 塔罗牌区域
+          if (!this.tarotDrawn) {
+            // 未抽牌：扇形排列的牌背
+            Column({ space: 16 }) {
+              // 牌组 - 水平排列，微微扇形
+              Row({ space: -20 }) {
+                ForEach(this.chapters, (ch: Chapter, index: number) => {
+                  this.TarotCardBack(ch, index)
+                })
               }
-              .width('100%').height(140)
-              .borderRadius(Theme.Radius.l)
-              .shadow({ radius: 12, color: `${ch.accent || '#6B48FF'}33`, offsetX: 0, offsetY: 6 })
-            }
-            .width('47%')
-            .margin({ bottom: 14 })
-            .onClick(() => this.loadChapter(ch.id))
-            .opacity(this.showContent ? 1 : 0)
-            .scale({ x: this.showContent ? 1 : 0.9, y: this.showContent ? 1 : 0.9 })
-            .animation({ duration: 600, curve: Curve.Smooth, delay: 300 + index * 100 })
-            .stateStyles({
-              pressed: { .scale({ x: 0.95, y: 0.95 }) },
-              normal:  { .scale({ x: 1, y: 1 }) }
-            })
-          })
-        }.width('100%')
+              .width('100%')
+              .justifyContent(FlexAlign.Center)
+              .padding({ left: 20, right: 20 })
 
-        Column().height(40)
-      }.padding({ left: 16, right: 16, bottom: 60 })
-    }.scrollBar(BarState.Off).edgeEffect(EdgeEffect.Spring).layoutWeight(1)
+              // 随机抽牌按钮
+              Button('随机抽取')
+                .width(160).height(44).fontSize(15).fontWeight(600).fontColor('#FFFFFF')
+                .backgroundColor('transparent')
+                .border({ width: 1, color: 'rgba(107,72,255,0.4)' })
+                .borderRadius(Theme.Radius.round)
+                .onClick(() => this.drawRandomTarot())
+                .margin({ top: 20 })
+
+              Text('或点击任意一张牌').fontSize(12).fontColor('rgba(255,255,255,0.3)')
+            }
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+          } else {
+            // 已抽牌：显示选中的牌
+            Column() {
+              Blank().layoutWeight(1)
+              if (this.tarotSelectedIdx >= 0 && this.tarotSelectedIdx < this.chapters.length) {
+                this.TarotCardDrawn(this.chapters[this.tarotSelectedIdx])
+              }
+              Blank().layoutWeight(1)
+
+              if (this.tarotFlipped) {
+                Text('即将进入关卡...')
+                  .fontSize(14).fontColor('rgba(255,255,255,0.4)')
+                  .margin({ bottom: 40 })
+              }
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Center)
+          }
+        }
+        .width('100%').height('100%')
+      }
+      .width('100%').layoutWeight(1)
+    }
+    .width('100%').layoutWeight(1)
+  }
+
+  // 牌背（未翻转）
+  @Builder
+  TarotCardBack(ch: Chapter, index: number) {
+    Stack() {
+      // 牌背主体
+      Column()
+        .width(75).height(110)
+        .linearGradient({ angle: 180, colors: [['#2a1a4e', 0], ['#1a0a3e', 1]] })
+        .borderRadius(8)
+        .border({ width: 1.5, color: 'rgba(107,72,255,0.3)' })
+        .shadow({ radius: 8, color: 'rgba(107,72,255,0.2)', offsetX: 0, offsetY: 4 })
+
+      // 牌背花纹 - 内框
+      Column()
+        .width(63).height(98)
+        .border({ width: 0.5, color: 'rgba(255,255,255,0.08)' })
+        .borderRadius(5)
+
+      // 牌背中心图案
+      Column()
+        .width(30).height(30)
+        .border({ width: 0.5, color: 'rgba(107,72,255,0.25)' })
+        .borderRadius(15)
+        .rotate({ angle: 45 })
+
+      // 牌背中心点
+      Circle({ width: 8, height: 8 })
+        .fill('#6B48FF').opacity(0.4)
+    }
+    .width(75).height(110)
+    .scale({ x: this.tarotCardScales[index] || 1, y: this.tarotCardScales[index] || 1 })
+    .opacity(this.tarotCardOpacities[index] ?? 1)
+    .rotate({ angle: (index - Math.floor(this.chapters.length / 2)) * 6 })
+    .animation({ duration: 400, curve: Curve.Smooth })
+    .onClick(() => this.drawTarotCard(index))
+    .stateStyles({
+      pressed: { .translate({ y: -8 }).scale({ x: 1.05, y: 1.05 }) },
+      normal: { .translate({ y: 0 }).scale({ x: this.tarotCardScales[index] || 1, y: this.tarotCardScales[index] || 1 }) }
+    })
+  }
+
+  // 抽出的牌（翻转动画）
+  @Builder
+  TarotCardDrawn(ch: Chapter) {
+    Stack() {
+      // 牌背面（rotateY 0-90 可见）
+      if (this.tarotRotateY < 90) {
+        Stack() {
+          Column()
+            .width(140).height(210)
+            .linearGradient({ angle: 180, colors: [['#2a1a4e', 0], ['#1a0a3e', 1]] })
+            .borderRadius(12)
+            .border({ width: 2, color: 'rgba(107,72,255,0.4)' })
+          Column()
+            .width(120).height(190)
+            .border({ width: 0.5, color: 'rgba(255,255,255,0.1)' })
+            .borderRadius(9)
+          Column()
+            .width(50).height(50)
+            .border({ width: 0.5, color: 'rgba(107,72,255,0.3)' })
+            .borderRadius(25)
+            .rotate({ angle: 45 })
+          Circle({ width: 14, height: 14 }).fill('#6B48FF').opacity(0.5)
+        }.width(140).height(210)
+      }
+
+      // 牌正面（rotateY 90-180 可见）
+      if (this.tarotRotateY >= 90) {
+        Stack() {
+          // 牌面背景
+          Column()
+            .width(140).height(210)
+            .linearGradient({ angle: 180, colors: [[ch.accent || '#6B48FF', 0], ['#1a1a2e', 1]] })
+            .borderRadius(12)
+            .border({ width: 2, color: 'rgba(255,255,255,0.2)' })
+            .shadow({ radius: 16, color: `${ch.accent || '#6B48FF'}44`, offsetX: 0, offsetY: 8 })
+          // 内框
+          Column()
+            .width(120).height(190)
+            .border({ width: 0.5, color: 'rgba(255,255,255,0.12)' })
+            .borderRadius(9)
+          // 牌面内容
+          Column({ space: 8 }) {
+            Text(ch.cover_emoji || '').fontSize(36)
+            Text(ch.title).fontSize(16).fontWeight(700).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+            Text(ch.subtitle).fontSize(12).fontColor('rgba(255,255,255,0.6)').textAlign(TextAlign.Center)
+          }.justifyContent(FlexAlign.Center)
+        }.width(140).height(210)
+      }
+    }
+    .width(140).height(210)
+    .translate({ y: this.tarotSelectedY })
+    .scale({ x: this.tarotSelectedScale, y: this.tarotSelectedScale })
+    .rotate({ y: 1, angle: this.tarotRotateY })
+    .animation({ duration: 500, curve: Curve.Smooth })
   }
 
   @Builder buildIntro() {
