@@ -251,88 +251,136 @@ struct DecisionDungeon2DMap {
       return
     }
 
-    // 尝试 WebSocket 连接，失败后自动重试一次
-    let retryCount = 0
-    const maxRetries = 1
+    // 先尝试 WebSocket，失败后自动降级到 HTTP
+    let httpFallbackTriggered = false
 
-    const attemptConnect = async (): Promise<void> => {
-      try {
-        this.ws = new WebSocketUtil()
-        this.ws.onMessage((data: string) => {
-          setTimeout(() => {
-            try {
-              const ev = JSON.parse(data) as Record<string, Object>
-              const type = ev.type as string
-              if (type === 'start') { this.streamStatus = '推演已启动' }
-              else if (type === 'thinking_chunk') {
-                this.liveThinkingText = (this.liveThinkingText + ((ev.content as string) || '')).slice(-800)
-                this.streamStatus = '模型推演中...'
-              }
-              else if (type === 'status' || type === 'thinking') { this.streamStatus = (ev.content as string) || '' }
-              else if (type === 'option_start') {
-                const title = ev.title as string
-                const idx = this.findOptIdx(title)
-                if (idx >= 0) {
-                  this.activeOptionIndex = idx
-                  this.updateStatus(idx, '推演中...')
-                  this.addRootNode(idx, title)
-                  this.processingNodeId = `root_${idx}`
-                }
-              }
-              else if (type === 'node') { this.handleNode(ev) }
-              else if (type === 'option_complete') {
-                const title = ev.title as string
-                const idx = this.findOptIdx(title)
-                if (idx >= 0) {
-                  this.updateScore(idx, ev.final_score as number, ev.risk_level as number)
-                  this.updateStatus(idx, '推演完成')
-                  this.processingNodeId = ''
-                }
-              }
-              else if (type === 'recommendation') {
-                try { this.structuredRecommendation = JSON.parse((ev.content as string) || '') as RecommendationData }
-                catch (_) { this.structuredRecommendation = null }
-                this.streamStatus = '推演完成'
-              }
-              else if (type === 'done') {
-                this.streamStatus = '全部推演完成'
-                if (this.ws) { this.ws.close(); this.ws = null }
-              }
-              else if (type === 'error') {
-                this.streamStatus = `推演出错: ${(ev.content as string) || '未知错误'}`
-                promptAction.showToast({ message: (ev.content as string) || '推演失败' })
-                if (this.ws) { this.ws.close(); this.ws = null }
-              }
-            } catch (err) { console.error('事件解析失败') }
-          }, 0)
-        })
-        this.ws.onError(() => {
-          if (retryCount < maxRetries) {
-            retryCount++
-            this.streamStatus = `连接失败，正在重试(${retryCount}/${maxRetries})...`
-            if (this.ws) { this.ws.close(); this.ws = null }
-            setTimeout(() => { attemptConnect() }, 2000)
-          } else {
-            this.streamStatus = '连接失败，请检查网络后重试'
-          }
-        })
-        this.ws.onClose(() => {})
-        await this.ws.connect('/api/decision/enhanced/ws/simulate')
-        this.streamStatus = '等待模型响应...'
-        this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
-      } catch (e) {
-        if (retryCount < maxRetries) {
-          retryCount++
-          this.streamStatus = `连接失败，正在重试(${retryCount}/${maxRetries})...`
-          if (this.ws) { this.ws.close(); this.ws = null }
-          setTimeout(() => { attemptConnect() }, 2000)
-        } else {
-          this.streamStatus = '推演连接失败，请检查网络后返回重试'
-        }
-      }
+    const triggerHttpFallback = () => {
+      if (httpFallbackTriggered) return  // 防止重复触发
+      httpFallbackTriggered = true
+      if (this.ws) { try { this.ws.close() } catch (_) {} this.ws = null }
+      this.fallbackToHttp(opts)
     }
 
-    await attemptConnect()
+    try {
+      this.ws = new WebSocketUtil()
+      this.ws.onMessage((data: string) => {
+        setTimeout(() => {
+          try {
+            const ev = JSON.parse(data) as Record<string, Object>
+            const type = ev.type as string
+            if (type === 'start') { this.streamStatus = '推演已启动' }
+            else if (type === 'thinking_chunk') {
+              this.liveThinkingText = (this.liveThinkingText + ((ev.content as string) || '')).slice(-800)
+              this.streamStatus = '模型推演中...'
+            }
+            else if (type === 'status' || type === 'thinking') { this.streamStatus = (ev.content as string) || '' }
+            else if (type === 'option_start') {
+              const title = ev.title as string
+              const idx = this.findOptIdx(title)
+              if (idx >= 0) {
+                this.activeOptionIndex = idx
+                this.updateStatus(idx, '推演中...')
+                this.addRootNode(idx, title)
+                this.processingNodeId = `root_${idx}`
+              }
+            }
+            else if (type === 'node') { this.handleNode(ev) }
+            else if (type === 'option_complete') {
+              const title = ev.title as string
+              const idx = this.findOptIdx(title)
+              if (idx >= 0) {
+                this.updateScore(idx, ev.final_score as number, ev.risk_level as number)
+                this.updateStatus(idx, '推演完成')
+                this.processingNodeId = ''
+              }
+            }
+            else if (type === 'recommendation') {
+              try { this.structuredRecommendation = JSON.parse((ev.content as string) || '') as RecommendationData }
+              catch (_) { this.structuredRecommendation = null }
+              this.streamStatus = '推演完成'
+            }
+            else if (type === 'done') {
+              this.streamStatus = '全部推演完成'
+              if (this.ws) { this.ws.close(); this.ws = null }
+            }
+            else if (type === 'error') {
+              this.streamStatus = `推演出错: ${(ev.content as string) || '未知错误'}`
+              if (this.ws) { this.ws.close(); this.ws = null }
+            }
+          } catch (err) { console.error('事件解析失败') }
+        }, 0)
+      })
+      this.ws.onError(() => {
+        console.info('[DecisionMap] WebSocket 错误，降级到 HTTP')
+        triggerHttpFallback()
+      })
+      this.ws.onClose(() => {})
+      await this.ws.connect('/api/decision/enhanced/ws/simulate')
+      this.streamStatus = '等待模型响应...'
+      this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
+    } catch (e) {
+      console.info('[DecisionMap] WebSocket 连接异常，降级到 HTTP:', (e as Error).message)
+      triggerHttpFallback()
+    }
+  }
+
+  // HTTP 降级方案：当 WebSocket 不可用时（如云平台不支持 WS），使用 HTTP 接口完成推演
+  private async fallbackToHttp(opts: StreamRequestOption[]) {
+    this.streamStatus = 'WebSocket不可用，正在通过HTTP推演...'
+    promptAction.showToast({ message: '已切换到HTTP模式推演' })
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/decision/enhanced/simulate/with-collection`,
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({
+            session_id: this.dungeonId,
+            options: opts,
+            use_lora: true
+          }),
+          connectTimeout: 120000,
+          readTimeout: 300000
+        }
+      )
+      httpRequest.destroy()
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if ((result.code as number) === 200 && result.data) {
+          const data = result.data as Record<string, Object>
+          // 用 HTTP 返回的完整数据构建地图
+          this.dungeonData = {
+            dungeon_id: (data.simulation_id as string) || this.dungeonId,
+            user_id: (data.user_id as string) || this.userId,
+            title: this.dungeonData?.title || '决策推演',
+            description: '',
+            options: (data.options as DungeonOption[]) || [],
+            recommendation: (data.recommendation as string) || '',
+            created_at: (data.created_at as string) || new Date().toISOString()
+          }
+          if (this.dungeonData.options.length > 0) {
+            this.buildFromExisting()
+          }
+          // 解析推荐
+          const rec = data.recommendation as string
+          if (rec) {
+            try { this.structuredRecommendation = JSON.parse(rec) as RecommendationData }
+            catch (_) { this.structuredRecommendation = null }
+          }
+          this.streamStatus = '推演完成'
+          return
+        }
+      }
+      // HTTP 也失败了
+      const errBody = response.result ? (response.result as string).substring(0, 200) : '无响应'
+      this.streamStatus = `推演失败(HTTP ${response.responseCode})`
+      console.error('[DecisionMap] HTTP 推演失败:', errBody)
+    } catch (e) {
+      this.streamStatus = '推演失败，请检查网络后返回重试'
+      console.error('[DecisionMap] HTTP 推演异常:', (e as Error).message)
+    }
   }
 
   private handleNode(ev: Record<string, Object>) {
