@@ -537,6 +537,111 @@ class LoRADecisionAnalyzer:
             print(f"[生活细节] 检索失败: {e}")
             return ""
 
+    def _get_behavioral_dna(self, user_id: str) -> str:
+        """
+        从游戏对话记录中实时提取用户行为DNA，直接注入推理prompt。
+        第1局起就能用，不需要等LoRA训练完成。
+        """
+        try:
+            from backend.database.connection import db_connection
+            from backend.database.models import ConversationHistory
+            from sqlalchemy import and_
+            from collections import Counter
+
+            db = db_connection.get_session()
+            rows = db.query(ConversationHistory).filter(
+                and_(
+                    ConversationHistory.user_id == user_id,
+                    ConversationHistory.session_id.like('game_%')
+                )
+            ).order_by(ConversationHistory.timestamp.asc()).all()
+            db.close()
+
+            if not rows:
+                return ""
+
+            # 构建对话对
+            game_pairs = []
+            for i in range(len(rows) - 1):
+                if rows[i].role == 'user' and rows[i + 1].role == 'assistant':
+                    game_pairs.append({
+                        'user': rows[i].content or '',
+                        'assistant': rows[i + 1].content or ''
+                    })
+
+            if not game_pairs:
+                return ""
+
+            RISK_SIGNALS    = ['冒险', '赌一把', '拼一下', '放手一搏', '大胆', '尝试', '挑战', '去闯']
+            SAFE_SIGNALS    = ['稳妥', '保守', '安全', '稳定', '踏实', '谨慎', '保险', '不冒险', '求稳']
+            PRIORITY_WORDS  = ['家人', '家庭', '父母', '孩子', '收入', '薪资', '健康', '身体',
+                               '朋友', '感情', '事业', '自由', '时间', '稳定', '发展']
+            PERSIST_SIGNALS = ['坚持', '继续', '再试试', '撑下去', '不放弃', '还有希望']
+            RETREAT_SIGNALS = ['算了', '放弃', '不想了', '太累了', '不值得', '还是算了', '退出']
+
+            risk_count = safe_count = persist_count = retreat_count = 0
+            priority_kws = []
+            sample_choices = []
+
+            for pair in game_pairs:
+                text = pair['user'] + pair['assistant']
+                for kw in RISK_SIGNALS:
+                    if kw in text: risk_count += 1
+                for kw in SAFE_SIGNALS:
+                    if kw in text: safe_count += 1
+                for kw in PRIORITY_WORDS:
+                    if kw in text: priority_kws.append(kw)
+                for kw in PERSIST_SIGNALS:
+                    if kw in text: persist_count += 1
+                for kw in RETREAT_SIGNALS:
+                    if kw in text: retreat_count += 1
+                if len(pair['user']) > 15:
+                    sample_choices.append(pair['user'][:100])
+
+            total_risk = risk_count + safe_count
+            risk_rate = risk_count / total_risk if total_risk > 0 else None
+            total_persist = persist_count + retreat_count
+            persist_rate = persist_count / total_persist if total_persist > 0 else None
+
+            kw_counter = Counter(priority_kws)
+            top_prios = [kw for kw, _ in kw_counter.most_common(3)]
+
+            lines = [f"## 用户历史决策行为（从 {len(game_pairs)} 局游戏实测，非猜测）"]
+
+            if risk_rate is not None:
+                risk_label = (
+                    "明显偏向冒险" if risk_rate > 0.65 else
+                    "明显偏向保守" if risk_rate < 0.35 else
+                    "风险中性、倾向稳健"
+                )
+                lines.append(f"- 风险偏好：{risk_label}（冒险信号占{risk_rate*100:.0f}%）")
+
+            if persist_rate is not None:
+                persist_label = (
+                    "执行力强，遇阻不轻易放弃" if persist_rate > 0.65 else
+                    "容易在遇到压力后动摇退出" if persist_rate < 0.35 else
+                    "执行意志中等，压力大时有退出倾向"
+                )
+                lines.append(f"- 执行特征：{persist_label}（坚持信号占{persist_rate*100:.0f}%）")
+
+            if top_prios:
+                lines.append(f"- 最在意的事：{'、'.join(top_prios)}")
+
+            if sample_choices:
+                lines.append("- 过去面对类似情境时的真实选择：")
+                for sc in sample_choices[-3:]:  # 最近3条
+                    lines.append(f"  · {sc}")
+
+            lines.append("（推演事件必须与以上行为特征保持一致，不要与用户一贯风格相矛盾）")
+
+            result = "\n".join(lines)
+            print(f"[行为DNA] 基于{len(game_pairs)}局游戏注入行为特征到决策prompt")
+            return result
+
+        except Exception as e:
+            print(f"[行为DNA] 提取失败: {e}")
+            return ""
+
     def _build_timeline_prompt(self, question: str, option: Dict[str, str], profile: Any,
                                 num_events: int, strict: bool = False,
                                 kg_context: str = "",
@@ -545,7 +650,8 @@ class LoRADecisionAnalyzer:
                                 other_options: List[str] = None,
                                 generated_so_far: List[Dict] = None,
                                 start_month: int = 1,
-                                cumulative_state: Dict[str, float] = None) -> str:
+                                cumulative_state: Dict[str, float] = None,
+                                behavioral_dna: str = "") -> str:
         option_title = option['title']
         option_desc = option.get('description', '')
         end_month = start_month + num_events - 1
@@ -595,6 +701,8 @@ class LoRADecisionAnalyzer:
             prompt += f"## 用户个人背景（务必让事件与这些细节挂钩）\n{life_context}\n\n"
         if kg_context:
             prompt += f"## 用户身边的人（只在与决策直接相关时才提及）\n{kg_context}\n\n"
+        if behavioral_dna:
+            prompt += f"{behavioral_dna}\n\n"
         if profile:
             style = getattr(profile, 'decision_style', '')
             risk = getattr(profile, 'risk_preference', '')
