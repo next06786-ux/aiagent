@@ -1,6 +1,6 @@
 /**
- * LoRA 个性化训练页面 - HarmonyOS 6 流体设计
- * 显示训练状态、触发训练、查看模型信息
+ * 个性模型训练页面 - HarmonyOS 6 流体设计
+ * 显示储备模型状态、触发训练、查看模型信息
  */
 import router from '@ohos.router'
 import http from '@ohos.net.http'
@@ -45,7 +45,7 @@ struct LoRATraining {
           .fontSize(24).fontColor(Theme.Color.Primary)
           .onClick(() => { router.back() })
 
-        Text('个性化模型训练')
+        Text('个性模型训练')
           .fontSize(18).fontWeight(FontWeight.Medium).fontColor(Theme.Color.TextPrimary)
           .layoutWeight(1).margin({ left: 12 })
 
@@ -106,7 +106,7 @@ struct LoRATraining {
             Circle({ width: 48, height: 48 }).fill(Theme.Color.Secondary).opacity(0.15)
             SimpleIcon({ iconName: 'brain', iconSize: 24, color: Theme.Color.Secondary })
           }.width(48).height(48)
-          Text('模型状态').fontSize(18).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+          Text('储备模型状态').fontSize(18).fontWeight(700).fontColor(Theme.Color.TextPrimary)
         }
 
         Row() {
@@ -155,7 +155,7 @@ struct LoRATraining {
   @Builder
   buildTrainingDataCard() {
     Column({ space: 14 }) {
-      Text('训练数据').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+      Text('训练样本').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
       Row() {
         Column({ space: 4 }) {
           Text('当前数据量').fontSize(12).fontColor(Theme.Color.TextTertiary)
@@ -173,7 +173,7 @@ struct LoRATraining {
       Progress({ value: this.trainingStatus?.current_data_size || 0, total: this.trainingStatus?.min_data_size || 20, type: ProgressType.Linear })
         .width('100%').color(Theme.Color.Primary)
 
-      Text(this.trainingStatus?.can_train ? '✅ 数据充足，可以开始训练' : `⚠️ 还需要 ${(this.trainingStatus?.min_data_size || 20) - (this.trainingStatus?.current_data_size || 0)} 条对话`)
+      Text(this.trainingStatus?.can_train ? '✅ 样本充足，可以开始训练储备模型' : `⚠️ 还需要 ${(this.trainingStatus?.min_data_size || 20) - (this.trainingStatus?.current_data_size || 0)} 条对话样本`)
         .fontSize(12).fontColor(this.trainingStatus?.can_train ? Theme.Color.Accent : Theme.Color.Warning)
     }
     .width('100%').padding(20)
@@ -190,14 +190,14 @@ struct LoRATraining {
   buildTrainingInfoCard() {
     Column({ space: 14 }) {
       Text('训练说明').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-      Text('个性化模型会根据你的对话习惯自动训练，让 AI 更懂你。')
+      Text('这里保留个性模型训练能力，当前决策推演默认走云端/API 主链；训练完成后可作为后续可切换的储备能力。')
         .fontSize(14).fontColor(Theme.Color.TextSecondary).lineHeight(22)
       Divider().color(Theme.Color.BorderLight)
 
       Column({ space: 10 }) {
-        this.buildInfoRow('🎯', '训练条件：至少 20 条对话')
-        this.buildInfoRow('⏰', '训练频率：每 7 天自动训练一次')
-        this.buildInfoRow('⚡', '训练时长：约 3-5 分钟')
+        this.buildInfoRow('🎯', '训练条件：至少 20 条对话样本')
+        this.buildInfoRow('☁️', '当前推演主链：云端/API 推理')
+        this.buildInfoRow('⚡', '训练执行：后台 GPU 服务器，约 3-5 分钟')
       }
     }
     .width('100%').padding(20)
@@ -221,7 +221,7 @@ struct LoRATraining {
   @Builder
   buildActionButtons() {
     Column({ space: 14 }) {
-      Button(this.trainingStatus?.is_training ? '训练中...' : '立即训练')
+      Button(this.trainingStatus?.is_training ? '训练中...' : '训练储备模型')
         .width('100%').height(52).fontSize(16).fontWeight(600)
         .fontColor('#FFFFFF')
         .backgroundColor(this.trainingStatus?.can_train && !this.trainingStatus?.is_training ? Theme.Color.Primary : '#CCCCCC')
@@ -278,7 +278,7 @@ struct LoRATraining {
       if (response.responseCode === 200) {
         const result = JSON.parse(response.result as string) as Record<string, Object>
         if ((result.code as number) === 200) {
-          promptAction.showToast({ message: '模型训练已启动，约需3-5分钟' })
+          promptAction.showToast({ message: '储备模型训练已启动，约需3-5分钟' })
           this.loadTrainingStatus()
         } else {
           promptAction.showToast({ message: (result.message as string) || '训练失败' })

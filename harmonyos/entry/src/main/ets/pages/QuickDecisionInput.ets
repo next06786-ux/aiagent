@@ -1,6 +1,6 @@
 /**
  * 快速决策输入 - HarmonyOS 6 流体设计
- * 让用户更轻松地创建决策副本
+ * 让用户更轻松地进入增强决策推演
  */
 import router from '@ohos.router'
 import http from '@ohos.net.http'
@@ -363,7 +363,7 @@ struct QuickDecisionInput {
         Column({ space: 4 }) {
           Text('个性化决策模型')
             .fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
-          Text('LoRA微调 · 让AI更懂你的决策风格')
+          Text('当前推演默认走云端推理，下方保留个性模型训练能力')
             .fontSize(12).fontColor(Theme.Color.TextTertiary)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }
@@ -376,14 +376,14 @@ struct QuickDecisionInput {
       } else if (this.loraStatus) {
         Row() {
           Column({ space: 4 }) {
-            Text('模型状态').fontSize(11).fontColor(Theme.Color.TextTertiary)
+            Text('储备模型').fontSize(11).fontColor(Theme.Color.TextTertiary)
             Text(this.loraStatus.has_lora ? `v${this.loraStatus.model_version}` : '未训练')
               .fontSize(16).fontWeight(600)
               .fontColor(this.loraStatus.has_lora ? Theme.Color.Accent : Theme.Color.TextTertiary)
           }.alignItems(HorizontalAlign.Start)
           Blank()
           Column({ space: 4 }) {
-            Text('对话数据').fontSize(11).fontColor(Theme.Color.TextTertiary)
+            Text('训练样本').fontSize(11).fontColor(Theme.Color.TextTertiary)
             Text(`${this.loraStatus.training_data_size || 0} / 20`)
               .fontSize(16).fontWeight(600)
               .fontColor((this.loraStatus.training_data_size || 0) >= 20 ? Theme.Color.Primary : Theme.Color.Warning)
@@ -394,7 +394,7 @@ struct QuickDecisionInput {
           .width('100%')
           .color((this.loraStatus.training_data_size || 0) >= 20 ? Theme.Color.Primary : Theme.Color.Warning)
 
-        Button(this.isTrainingLora ? '训练中...' : '更新模型')
+        Button(this.isTrainingLora ? '训练中...' : '训练储备模型')
           .width('100%').height(44).fontSize(15).fontWeight(600).fontColor('#FFFFFF')
           .backgroundColor((this.loraStatus.training_data_size || 0) >= 20 && !this.isTrainingLora ? Theme.Color.Secondary : '#CCCCCC')
           .borderRadius(Theme.Radius.l)
@@ -419,7 +419,7 @@ struct QuickDecisionInput {
         }
 
         if ((this.loraStatus.training_data_size || 0) < 20) {
-          Text(`还需 ${20 - (this.loraStatus.training_data_size || 0)} 条对话数据才能训练`)
+          Text(`还需 ${20 - (this.loraStatus.training_data_size || 0)} 条对话数据才能启动储备模型训练`)
             .fontSize(12).fontColor(Theme.Color.Warning)
         }
       } else {

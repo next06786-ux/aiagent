@@ -24,13 +24,13 @@ class Neo4jKnowledgeGraph:
         
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
-            # 测试连接
             self.driver.verify_connectivity()
+            self.available = True
             print(f"✅ Neo4j 连接成功: {uri}")
         except Exception as e:
-            print(f"❌ Neo4j 连接失败: {e}")
-            print("提示: 请确保 Neo4j 已启动，或运行 'python backend/setup_neo4j.py' 初始化")
-            raise
+            self.driver = None
+            self.available = False
+            raise RuntimeError(f"Neo4j 连接失败: {e}\n请确保 Neo4j 已启动并配置正确")
     
     def close(self):
         """关闭连接"""

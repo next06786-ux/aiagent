@@ -17,8 +17,9 @@ def main():
     print(f"📁 工作目录: {os.getcwd()}")
     print()
     
-    # 加载环境变量
-    load_dotenv()
+    # 显式加载 backend/.env，避免和项目根目录其他 .env 混淆
+    backend_env = os.path.join(script_dir, ".env")
+    load_dotenv(backend_env)
     
     print("=" * 60)
     print("  LifeSwarm Backend Server")
@@ -28,10 +29,12 @@ def main():
     # 检查环境变量
     llm_provider = os.getenv("LLM_PROVIDER")
     api_key = os.getenv("DASHSCOPE_API_KEY")
+    decision_inference_mode = os.getenv("DECISION_INFERENCE_MODE", "api")
     
     print("📋 环境配置:")
     print(f"   LLM_PROVIDER: {llm_provider or '未设置'}")
     print(f"   DASHSCOPE_API_KEY: {'已设置 ✅' if api_key else '未设置 ❌'}")
+    print(f"   DECISION_INFERENCE_MODE: {decision_inference_mode}")
     print()
     
     if not api_key:

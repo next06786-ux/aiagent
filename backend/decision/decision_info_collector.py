@@ -41,11 +41,24 @@ class DecisionInfoCollector:
         session_id = f"collect_{user_id}_{int(datetime.now().timestamp())}"
         
         # 初始化会话
+        first_prompt = "请详细描述你的情况，包括背景、考虑因素等。"
+
         session = {
             "session_id": session_id,
             "user_id": user_id,
             "initial_question": initial_question,
-            "conversation_history": [],
+            "conversation_history": [
+                {
+                    "role": "user",
+                    "content": initial_question,
+                    "timestamp": datetime.now().isoformat()
+                },
+                {
+                    "role": "assistant",
+                    "content": first_prompt,
+                    "timestamp": datetime.now().isoformat()
+                }
+            ],
             "collected_info": {
                 "decision_context": {},  # 决策背景
                 "user_constraints": {},  # 用户约束条件
@@ -62,10 +75,12 @@ class DecisionInfoCollector:
         
         # 保存会话
         self._save_session(session)
+        self._persist_message(user_id, session_id, "user", initial_question, {"phase": "init"})
+        self._persist_message(user_id, session_id, "assistant", first_prompt, {"phase": "user_free_talk"})
         
         return {
             "session_id": session_id,
-            "message": "请详细描述你的情况，包括背景、考虑因素等。",
+            "message": first_prompt,
             "phase": "user_free_talk",
             "round": 0
         }
@@ -96,6 +111,13 @@ class DecisionInfoCollector:
             "content": user_response,
             "timestamp": datetime.now().isoformat()
         })
+        self._persist_message(
+            session["user_id"],
+            session_id,
+            "user",
+            user_response,
+            {"phase": session.get("phase", "unknown"), "round": session["current_round"] + 1}
+        )
         
         session["current_round"] += 1
         
@@ -119,6 +141,13 @@ class DecisionInfoCollector:
                     "content": next_question,
                     "timestamp": datetime.now().isoformat()
                 })
+                self._persist_message(
+                    session["user_id"],
+                    session_id,
+                    "assistant",
+                    next_question,
+                    {"phase": "ai_questioning", "round": session["current_round"] + 1}
+                )
                 
                 self._save_session(session)
                 
@@ -138,6 +167,13 @@ class DecisionInfoCollector:
                     "content": follow_up,
                     "timestamp": datetime.now().isoformat()
                 })
+                self._persist_message(
+                    session["user_id"],
+                    session_id,
+                    "assistant",
+                    follow_up,
+                    {"phase": "user_free_talk", "round": session["current_round"] + 1}
+                )
                 
                 self._save_session(session)
                 
@@ -184,6 +220,13 @@ class DecisionInfoCollector:
                 "content": next_question,
                 "timestamp": datetime.now().isoformat()
             })
+            self._persist_message(
+                session["user_id"],
+                session_id,
+                "assistant",
+                next_question,
+                {"phase": "ai_questioning", "round": session["current_round"] + 1}
+            )
             
             # 保存会话
             self._save_session(session)
@@ -592,6 +635,35 @@ class DecisionInfoCollector:
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(session, f, ensure_ascii=False, indent=2)
+
+    def _persist_message(
+        self,
+        user_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """将收集对话持久化到数据库，供后续 RAG / PKF / 复盘检索使用。"""
+        if not content:
+            return
+        try:
+            from backend.database.connection import db_connection
+            from backend.database.models import ConversationHistory
+
+            db = db_connection.get_session()
+            db.add(ConversationHistory(
+                user_id=user_id,
+                role=role,
+                content=content,
+                context=context or {},
+                timestamp=datetime.utcnow(),
+                session_id=session_id
+            ))
+            db.commit()
+            db.close()
+        except Exception as e:
+            print(f"⚠️ 收集会话持久化失败: {e}")
     
     def _load_session(self, session_id: str) -> Optional[Dict]:
         """加载会话"""

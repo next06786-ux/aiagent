@@ -39,13 +39,19 @@ class UnifiedMemory:
 
 
 class UnifiedRAGSystem:
-    """统一RAG记忆系统 - 系统核心"""
+    """统一RAG记忆系统 - 系统核心
+    
+    存储层优先级：
+    1. ChromaDB（持久化向量数据库，推荐）
+    2. 内存字典 + JSON 文件（ChromaDB 不可用时降级）
+    """
     
     def __init__(self, user_id: str, storage_path: str = "./data/unified_memory"):
         self.user_id = user_id
         self.storage_path = storage_path
-        self.memories: Dict[str, UnifiedMemory] = {}  # memory_id -> memory
-        self.embedding_dim = 384
+        self.memories: Dict[str, UnifiedMemory] = {}
+        # Qwen text-embedding-v3 输出 1024 维；降级哈希向量也用同一维度
+        self.embedding_dim = int(os.environ.get("EMBEDDING_DIM", "1024"))
         
         # 按类型索引
         self.type_index: Dict[MemoryType, List[str]] = {
@@ -56,7 +62,31 @@ class UnifiedRAGSystem:
         self.time_index: List[tuple] = []  # (timestamp, memory_id)
         
         os.makedirs(storage_path, exist_ok=True)
+        
+        # 初始化 ChromaDB（优先）
+        self._chroma_collection = None
+        self._init_chroma()
+        
         self.load_memories()
+    
+    def _init_chroma(self):
+        """初始化 ChromaDB，失败时静默降级到 JSON 文件"""
+        try:
+            import chromadb
+            chroma_path = os.path.join(self.storage_path, "chroma")
+            os.makedirs(chroma_path, exist_ok=True)
+            client = chromadb.PersistentClient(path=chroma_path)
+            # 每个用户独立 collection
+            collection_name = f"memories_{self.user_id}".replace("-", "_")
+            self._chroma_collection = client.get_or_create_collection(
+                name=collection_name,
+                metadata={"hnsw:space": "cosine"},
+            )
+            print(f"✅ ChromaDB 已连接（{self.user_id}，{self._chroma_collection.count()} 条记忆）")
+        except ImportError:
+            print("ℹ️  ChromaDB 未安装，使用 JSON 文件存储（pip install chromadb 可升级）")
+        except Exception as e:
+            print(f"⚠️  ChromaDB 初始化失败，降级到 JSON 文件: {e}")
     
     def add_memory(
         self,
@@ -84,7 +114,7 @@ class UnifiedRAGSystem:
             related_memories=[]
         )
         
-        # 存储记忆
+        # 存储到内存字典
         self.memories[memory_id] = memory
         
         # 更新索引
@@ -92,10 +122,32 @@ class UnifiedRAGSystem:
         self.time_index.append((memory.timestamp, memory_id))
         self.time_index.sort(key=lambda x: x[0], reverse=True)
         
+        # 写入 ChromaDB（如果可用）
+        if self._chroma_collection is not None:
+            try:
+                chroma_meta = {
+                    "user_id": self.user_id,
+                    "memory_type": memory_type.value,
+                    "importance": importance,
+                    "timestamp": memory.timestamp.isoformat(),
+                }
+                # ChromaDB metadata 只支持 str/int/float/bool
+                for k, v in metadata.items():
+                    if isinstance(v, (str, int, float, bool)):
+                        chroma_meta[k] = v
+                self._chroma_collection.upsert(
+                    ids=[memory_id],
+                    embeddings=[embedding.tolist()],
+                    documents=[content],
+                    metadatas=[chroma_meta],
+                )
+            except Exception as e:
+                print(f"⚠️  ChromaDB 写入失败: {e}")
+        
         # 自动关联相关记忆
         self._auto_link_memories(memory)
         
-        # 保存
+        # 保存 JSON 备份
         self.save_memories()
         
         return memory_id
@@ -107,42 +159,60 @@ class UnifiedRAGSystem:
         top_k: int = 10,
         min_importance: float = 0.0
     ) -> List[UnifiedMemory]:
-        """跨类型搜索记忆"""
-        query_embedding = self._generate_embedding(query)
+        """跨类型搜索记忆，优先使用 ChromaDB 向量检索"""
         
-        # 筛选候选记忆
+        # ── ChromaDB 路径（有真实语义向量）──────────────────────────────
+        if self._chroma_collection is not None and self._chroma_collection.count() > 0:
+            try:
+                query_embedding = self._generate_embedding(query)
+                where_filter = None
+                if memory_types:
+                    type_values = [mt.value for mt in memory_types]
+                    where_filter = {"memory_type": {"$in": type_values}}
+                
+                results = self._chroma_collection.query(
+                    query_embeddings=[query_embedding.tolist()],
+                    n_results=min(top_k * 2, self._chroma_collection.count()),
+                    where=where_filter,
+                )
+                
+                found: List[UnifiedMemory] = []
+                for mid in (results["ids"][0] if results["ids"] else []):
+                    mem = self.memories.get(mid)
+                    if mem and mem.importance >= min_importance:
+                        mem.access_count += 1
+                        mem.last_access = datetime.now()
+                        found.append(mem)
+                    if len(found) >= top_k:
+                        break
+                
+                if found:
+                    return found
+            except Exception as e:
+                print(f"⚠️  ChromaDB 检索失败，降级到内存检索: {e}")
+        
+        # ── 降级：内存字典余弦相似度检索 ────────────────────────────────
+        query_embedding = self._generate_embedding(query)
         candidates = []
         for memory_id, memory in self.memories.items():
-            # 类型过滤
             if memory_types and memory.memory_type not in memory_types:
                 continue
-            
-            # 重要性过滤
             if memory.importance < min_importance:
                 continue
-            
-            # 计算相似度
             similarity = self._cosine_similarity(query_embedding, memory.embedding)
-            
-            # 考虑重要性和访问频率的综合评分
             score = (
                 similarity * 0.6 +
                 memory.importance * 0.3 +
                 min(memory.access_count / 100, 0.1)
             )
-            
             candidates.append((memory, score))
         
-        # 排序并返回top_k
         candidates.sort(key=lambda x: x[1], reverse=True)
-        results = [mem for mem, _ in candidates[:top_k]]
-        
-        # 更新访问记录
-        for memory in results:
+        results_mem = [mem for mem, _ in candidates[:top_k]]
+        for memory in results_mem:
             memory.access_count += 1
             memory.last_access = datetime.now()
-        
-        return results
+        return results_mem
     
     def get_context_for_conversation(
         self,
@@ -318,9 +388,39 @@ class UnifiedRAGSystem:
         new_memory.related_memories = [m_id for m_id, _ in similar[:5]]
     
     def _generate_embedding(self, text: str) -> np.ndarray:
-        """生成文本embedding"""
+        """生成文本 embedding
+        
+        优先使用 Qwen text-embedding API（零内存，真实语义）。
+        API 不可用时降级为确定性哈希向量（保证同文本相同向量，但无语义）。
+        """
+        # 尝试 Qwen embedding API
+        api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+        if api_key:
+            try:
+                import dashscope
+                from dashscope import TextEmbedding
+                dashscope.api_key = api_key
+                resp = TextEmbedding.call(
+                    model=TextEmbedding.Models.text_embedding_v3,
+                    input=text[:2048],  # API 最大长度限制
+                )
+                if resp.status_code == 200:
+                    vec = np.array(resp.output["embeddings"][0]["embedding"], dtype=np.float32)
+                    # 统一归一化到 self.embedding_dim
+                    if len(vec) != self.embedding_dim:
+                        # 截断或补零对齐维度
+                        aligned = np.zeros(self.embedding_dim, dtype=np.float32)
+                        copy_len = min(len(vec), self.embedding_dim)
+                        aligned[:copy_len] = vec[:copy_len]
+                        vec = aligned
+                    norm = np.linalg.norm(vec)
+                    return vec / norm if norm > 0 else vec
+            except Exception:
+                pass  # 静默降级
+
+        # 降级：确定性哈希向量（同文本 → 同向量，但无语义相似性）
         np.random.seed(hash(text) % (2**32))
-        embedding = np.random.randn(self.embedding_dim)
+        embedding = np.random.randn(self.embedding_dim).astype(np.float32)
         embedding = embedding / np.linalg.norm(embedding)
         return embedding
     

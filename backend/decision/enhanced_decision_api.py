@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 import logging
 import json
 import asyncio
+import re
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
 from backend.decision.lora_decision_analyzer import LoRADecisionAnalyzer
@@ -90,17 +91,904 @@ class DecisionSimulator:
         events = [e.event for e in timeline[:3] if hasattr(e, 'event')]
         return ' → '.join(events) if events else '暂无推演数据'
 
+    def _main_chain(self, timeline) -> List[Any]:
+        return [
+            e for e in timeline
+            if not (hasattr(e, 'branch_group') and str(getattr(e, 'branch_group', '')).endswith('_fork'))
+        ]
+
+    def _event_text(self, event: Any) -> str:
+        if hasattr(event, 'event'):
+            return getattr(event, 'event', '') or ''
+        if isinstance(event, dict):
+            return str(event.get('event', '') or '')
+        return ''
+
+    def _is_specific_event(self, text: str) -> bool:
+        if not text:
+            return False
+        has_number = bool(re.search(r'\d', text))
+        anchors = ['你', '父母', '妈妈', '爸爸', '领导', '同事', '朋友', '面试', '工资', '房租', '项目', '客户', '学校', 'offer']
+        has_anchor = any(token in text for token in anchors)
+        return len(text) >= 18 and (has_number or has_anchor)
+
+    def _calculate_context_coverage(self, collected_info: Optional[Dict[str, Any]]) -> float:
+        if not collected_info:
+            return 0.0
+        checks = [
+            bool(collected_info.get("decision_context")),
+            bool(collected_info.get("user_constraints")),
+            bool(collected_info.get("priorities")),
+            bool(collected_info.get("concerns")),
+            len(collected_info.get("options_mentioned", [])) >= 2,
+        ]
+        return round(sum(1 for item in checks if item) / len(checks), 2)
+
+    def _serialize_risk_assessment(self, assessment: Any) -> Optional[Dict[str, Any]]:
+        if not assessment:
+            return None
+        dimensions = {}
+        ordered_dimensions = []
+        for key, dim in assessment.dimensions.items():
+            serialized = {
+                "name": dim.name,
+                "score": round(float(dim.score), 1),
+                "level": dim.level.value if hasattr(dim.level, "value") else str(dim.level),
+                "factors": list(dim.factors or []),
+                "mitigation": list(dim.mitigation or []),
+            }
+            dimensions[key] = serialized
+            ordered_dimensions.append((key, serialized["score"]))
+        ordered_dimensions.sort(key=lambda item: item[1], reverse=True)
+        return {
+            "option_title": assessment.option_title,
+            "overall_risk": round(float(assessment.overall_risk), 1),
+            "overall_level": assessment.overall_level.value if hasattr(assessment.overall_level, "value") else str(assessment.overall_level),
+            "high_risk_count": int(assessment.high_risk_count),
+            "top_dimensions": [name for name, _ in ordered_dimensions[:3]],
+            "dimensions": dimensions,
+            "recommendations": list(assessment.recommendations or []),
+        }
+
+    def _assess_option_risk(self, option_title: str, timeline: List[Any], profile: Any) -> Optional[Dict[str, Any]]:
+        if not self._risk_engine:
+            return None
+        try:
+            timeline_dicts = [
+                asdict(item) if hasattr(item, '__dataclass_fields__') else item
+                for item in timeline
+            ]
+            assessment = self._risk_engine.assess_option_risk(option_title, timeline_dicts, profile)
+            return self._serialize_risk_assessment(assessment)
+        except Exception as exc:
+            logger.warning(f"风险评估失败({option_title}): {exc}")
+            return None
+
+    def _build_prediction_trace(
+        self,
+        question: str,
+        option: Dict[str, str],
+        timeline: List[Any],
+        collected_info: Optional[Dict[str, Any]],
+        facts_count: int,
+        profile: Any,
+        calibration_profile: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        main_chain = self._main_chain(timeline) or timeline
+        main_event_count = len(main_chain)
+        specific_events = sum(1 for event in main_chain if self._is_specific_event(self._event_text(event)))
+        specificity = round(specific_events / max(main_event_count, 1), 2) if main_event_count else 0.0
+        coverage = self._calculate_context_coverage(collected_info)
+        fact_density = round(min(1.0, facts_count / 8), 2)
+        profile_bonus = 0.08 if profile is not None else 0.0
+        base_confidence = 0.25 + coverage * 0.35 + specificity * 0.22 + fact_density * 0.10 + profile_bonus
+        calibration_adjustment = 0.0
+        calibration_review_count = 0
+        calibration_bias = "insufficient_data"
+        calibration_note = ""
+        calibration_applied = False
+        if calibration_profile:
+            calibration_adjustment = float(calibration_profile.get("confidence_adjustment", 0.0) or 0.0)
+            calibration_review_count = int(calibration_profile.get("review_count", 0) or 0)
+            calibration_bias = str(calibration_profile.get("bias_tendency", "insufficient_data") or "insufficient_data")
+            calibration_note = str(calibration_profile.get("note", "") or "")
+            calibration_applied = calibration_review_count >= 2 and abs(calibration_adjustment) >= 0.01
+        confidence = round(min(0.95, max(0.15, base_confidence + calibration_adjustment)), 2)
+
+        assumptions: List[str] = []
+        if not collected_info or not collected_info.get("user_constraints"):
+            assumptions.append("缺少明确的现实约束，资源与时间压力按保守方式估计。")
+        if not collected_info or not collected_info.get("priorities"):
+            assumptions.append("缺少清晰优先级，推荐结论会更偏均衡而非强个性偏好。")
+        if not collected_info or not collected_info.get("concerns"):
+            assumptions.append("缺少用户明确担忧点，部分风险节点只能根据常见模式推断。")
+        if facts_count == 0:
+            assumptions.append("个人事实提取较少，事件与用户长期背景的绑定强度有限。")
+        if calibration_applied and calibration_note:
+            assumptions.append(f"历史回访校准已启用：{calibration_note}")
+
+        evidence_sources = ["user_lora" if self.lora_analyzer.is_lora_inference() else "api_llm"]
+        if collected_info:
+            evidence_sources.append("decision_collection")
+        if facts_count > 0:
+            evidence_sources.append("pkf_facts")
+        if profile is not None:
+            evidence_sources.append("personality_profile")
+        if calibration_review_count > 0:
+            evidence_sources.append("historical_calibration")
+
+        return {
+            "question": question,
+            "option_title": option.get("title", ""),
+            "prediction_confidence": confidence,
+            "base_prediction_confidence": round(min(0.95, max(0.15, base_confidence)), 2),
+            "confidence_level": "high" if confidence >= 0.75 else ("medium" if confidence >= 0.5 else "low"),
+            "context_coverage": coverage,
+            "event_specificity": specificity,
+            "facts_used": facts_count,
+            "main_event_count": main_event_count,
+            "evidence_sources": evidence_sources,
+            "assumptions": assumptions,
+            "calibration_review_count": calibration_review_count,
+            "calibration_adjustment": round(calibration_adjustment, 2),
+            "calibration_bias": calibration_bias,
+            "calibration_note": calibration_note,
+            "calibration_applied": calibration_applied,
+        }
+
+    def _compress_score_by_confidence(self, raw_score: float, prediction_confidence: float) -> float:
+        weight = 0.55 + 0.45 * prediction_confidence
+        return round(50 + (raw_score - 50) * weight, 1)
+
+    def _merge_risk_level(self, generated_risk: float, risk_assessment: Optional[Dict[str, Any]]) -> float:
+        if not risk_assessment:
+            return round(min(1.0, max(0.0, generated_risk)), 2)
+        engine_risk = min(1.0, max(0.0, float(risk_assessment.get("overall_risk", 5.0)) / 10.0))
+        return round(min(1.0, max(0.0, generated_risk * 0.4 + engine_risk * 0.6)), 2)
+
+    def _build_verifiability_report(
+        self,
+        options: List[Any],
+        collected_info: Optional[Dict[str, Any]],
+        calibration_profile: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        traces = [getattr(opt, "prediction_trace", None) for opt in options if getattr(opt, "prediction_trace", None)]
+        confidences = [trace["prediction_confidence"] for trace in traces]
+        coverage = self._calculate_context_coverage(collected_info)
+        avg_confidence = round(sum(confidences) / len(confidences), 2) if confidences else 0.0
+        missing = []
+        if not collected_info or not collected_info.get("user_constraints"):
+            missing.append("现实约束")
+        if not collected_info or not collected_info.get("priorities"):
+            missing.append("用户优先级")
+        if not collected_info or not collected_info.get("concerns"):
+            missing.append("关键顾虑")
+        calibration_profile = calibration_profile or self._empty_calibration_profile()
+        review_count = int(calibration_profile.get("review_count", 0) or 0)
+        calibration_note = str(calibration_profile.get("note", "") or "")
+        return {
+            "schema_version": 2,
+            "engine_mode": (
+                "evidence_grounded_calibrated_lora_simulation"
+                if self.lora_analyzer.is_lora_inference() and review_count > 0 else
+                "evidence_grounded_lora_simulation"
+                if self.lora_analyzer.is_lora_inference() else
+                "evidence_grounded_calibrated_api_simulation"
+                if review_count > 0 else
+                "evidence_grounded_api_simulation"
+            ),
+            "collected_info_coverage": coverage,
+            "average_prediction_confidence": avg_confidence,
+            "missing_key_inputs": missing,
+            "historical_review_count": review_count,
+            "calibration_bias": calibration_profile.get("bias_tendency", "insufficient_data"),
+            "confidence_adjustment": round(float(calibration_profile.get("confidence_adjustment", 0.0) or 0.0), 2),
+            "calibration_quality": calibration_profile.get("calibration_quality", "insufficient_data"),
+            "calibration_note": calibration_note,
+            "note": (
+                "推演结果是基于已知事实、用户画像与行为数据生成的情境预测，不等于确定性未来。"
+                if not calibration_note else
+                f"推演结果不是确定性未来；并且本次已结合历史回访做校准：{calibration_note}"
+            )
+        }
+
+    def _build_pkf_context(self, question: str, option_title: str, facts: List[Any]) -> str:
+        if not facts:
+            return ""
+        try:
+            from backend.decision.personal_knowledge_fusion import CausalReasoningGraph
+            causal_graph = CausalReasoningGraph(question, option_title, facts)
+            causal_graph.build()
+            causal_chains = causal_graph.get_chains()
+            pkf_context = "个人事实：\n"
+            for fact in facts[:8]:
+                pkf_context += f"- {fact.to_text()}\n"
+            pkf_context += "\n因果推理链：\n"
+            for chain in causal_chains[:4]:
+                chain_str = " -> ".join([edge.cause for edge in chain] + [chain[-1].effect])
+                pkf_context += f"- {chain_str}\n"
+            return pkf_context
+        except Exception as exc:
+            logger.warning(f"构建 PKF 上下文失败({option_title}): {exc}")
+            return ""
+
+    def _serialize_option(self, option: Any) -> Dict[str, Any]:
+        timeline = [
+            asdict(event) if hasattr(event, "__dataclass_fields__") else event
+            for event in getattr(option, "timeline", []) or []
+        ]
+        execution_confidence = getattr(option, "execution_confidence", None)
+        dropout_risk_month = getattr(option, "dropout_risk_month", None)
+        personal_note = getattr(option, "personal_note", "") or ""
+        return {
+            "option_id": getattr(option, "option_id", ""),
+            "title": getattr(option, "title", ""),
+            "description": getattr(option, "description", ""),
+            "timeline": timeline,
+            "final_score": getattr(option, "final_score", 50.0),
+            "risk_level": getattr(option, "risk_level", 0.5),
+            "risk_assessment": getattr(option, "risk_assessment", None),
+            "prediction_trace": getattr(option, "prediction_trace", None),
+            "execution_confidence": execution_confidence,
+            "dropout_risk_month": dropout_risk_month,
+            "personal_note": personal_note,
+            "self_prediction": {
+                "execution_confidence": execution_confidence,
+                "dropout_risk_month": dropout_risk_month,
+                "personal_note": personal_note,
+            }
+        }
+
+    def _build_record_payload(
+        self,
+        question: str,
+        options: List[Any],
+        collected_info: Optional[Dict[str, Any]],
+        verifiability_report: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        return {
+            "schema_version": 2,
+            "question": question,
+            "collected_info_summary": collected_info or {},
+            "verifiability_report": verifiability_report or {},
+            "options": [self._serialize_option(option) for option in options],
+        }
+
+    def _ensure_decision_records_table(self, db_session: Any) -> None:
+        import sqlalchemy
+
+        db_session.execute(sqlalchemy.text("""
+            CREATE TABLE IF NOT EXISTS decision_records (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                simulation_id VARCHAR(100) UNIQUE NOT NULL,
+                user_id VARCHAR(100) NOT NULL,
+                question TEXT,
+                options_count INT DEFAULT 0,
+                recommendation TEXT,
+                timeline_data LONGTEXT,
+                created_at VARCHAR(50),
+                INDEX idx_user_id (user_id),
+                INDEX idx_created_at (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """))
+        db_session.commit()
+
+        alter_statements = [
+            "ALTER TABLE decision_records ADD COLUMN timeline_data LONGTEXT",
+            "ALTER TABLE decision_records ADD COLUMN created_at VARCHAR(50)",
+            "ALTER TABLE decision_records ADD COLUMN recommendation TEXT",
+            "ALTER TABLE decision_records ADD COLUMN options_count INT DEFAULT 0",
+        ]
+        for statement in alter_statements:
+            try:
+                db_session.execute(sqlalchemy.text(statement))
+                db_session.commit()
+            except Exception:
+                db_session.rollback()
+
+    def _save_decision_record(
+        self,
+        simulation_id: str,
+        user_id: str,
+        question: str,
+        options: List[Any],
+        recommendation: str,
+        collected_info: Optional[Dict[str, Any]] = None,
+        verifiability_report: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        from datetime import datetime
+        import sqlalchemy
+
+        db = Database(DatabaseConfig.get_database_url())
+        db_session = db.get_session()
+        try:
+            self._ensure_decision_records_table(db_session)
+            timeline_json = json.dumps(
+                self._build_record_payload(question, options, collected_info, verifiability_report),
+                ensure_ascii=False
+            )
+            db_session.execute(
+                sqlalchemy.text("""
+                    INSERT INTO decision_records
+                    (simulation_id, user_id, question, options_count, recommendation, timeline_data, created_at)
+                    VALUES (:sid, :uid, :q, :oc, :rec, :td, :ca)
+                    ON DUPLICATE KEY UPDATE
+                    question = VALUES(question),
+                    options_count = VALUES(options_count),
+                    recommendation = VALUES(recommendation),
+                    timeline_data = VALUES(timeline_data),
+                    created_at = VALUES(created_at)
+                """),
+                {
+                    "sid": simulation_id,
+                    "uid": user_id,
+                    "q": (question or "")[:500],
+                    "oc": len(options),
+                    "rec": (recommendation or "")[:2000],
+                    "td": timeline_json,
+                    "ca": datetime.now().isoformat()
+                }
+            )
+            db_session.commit()
+        finally:
+            db_session.close()
+
+    def _load_record_payload(self, simulation_id: str) -> Optional[Dict[str, Any]]:
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        import sqlalchemy
+
+        db = Database(DatabaseConfig.get_database_url())
+        db_session = db.get_session()
+        try:
+            self._ensure_decision_records_table(db_session)
+            row = db_session.execute(
+                sqlalchemy.text("""
+                    SELECT question, timeline_data
+                    FROM decision_records
+                    WHERE simulation_id = :sid
+                """),
+                {"sid": simulation_id}
+            ).fetchone()
+            if not row:
+                return None
+            question = row[0] or ""
+            parsed: Dict[str, Any]
+            if row[1]:
+                try:
+                    raw_data = json.loads(row[1])
+                    if isinstance(raw_data, dict):
+                        parsed = raw_data
+                    elif isinstance(raw_data, list):
+                        parsed = {
+                            "schema_version": 1,
+                            "question": question,
+                            "options": raw_data,
+                            "collected_info_summary": {},
+                            "verifiability_report": {},
+                        }
+                    else:
+                        parsed = {
+                            "schema_version": 1,
+                            "question": question,
+                            "options": [],
+                            "collected_info_summary": {},
+                            "verifiability_report": {},
+                        }
+                except Exception:
+                    parsed = {
+                        "schema_version": 1,
+                        "question": question,
+                        "options": [],
+                        "collected_info_summary": {},
+                        "verifiability_report": {},
+                    }
+            else:
+                parsed = {
+                    "schema_version": 1,
+                    "question": question,
+                    "options": [],
+                    "collected_info_summary": {},
+                    "verifiability_report": {},
+                }
+            if not parsed.get("question"):
+                parsed["question"] = question
+            return parsed
+        finally:
+            db_session.close()
+
+    def _find_option_payload(
+        self,
+        record_payload: Optional[Dict[str, Any]],
+        option_id: str,
+        option_title: str
+    ) -> Optional[Dict[str, Any]]:
+        if not record_payload:
+            return None
+        options = record_payload.get("options", []) or []
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            if option_id and option.get("option_id") == option_id:
+                return option
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            if option_title and option.get("title") == option_title:
+                return option
+        return None
+
+    def _build_follow_up_insight(
+        self,
+        predicted_score: float,
+        actual_score: float,
+        predicted_confidence: float,
+        predicted_risk_level: float
+    ) -> Dict[str, Any]:
+        score_gap = round(actual_score - predicted_score, 1)
+        absolute_error = round(abs(score_gap), 1)
+        if score_gap >= 15:
+            bias_label = "too_conservative"
+            bias_note = "实际结果明显好于预测，这次推演偏保守。"
+        elif score_gap <= -15:
+            bias_label = "too_optimistic"
+            bias_note = "实际结果明显差于预测，这次推演偏乐观。"
+        else:
+            bias_label = "well_calibrated"
+            bias_note = "预测和真实结果大体接近。"
+
+        if predicted_confidence >= 0.75 and absolute_error >= 20:
+            confidence_alignment = "overconfident"
+        elif predicted_confidence <= 0.4 and absolute_error <= 10:
+            confidence_alignment = "underconfident"
+        else:
+            confidence_alignment = "roughly_aligned"
+
+        if predicted_risk_level >= 0.6 and actual_score >= 75:
+            risk_alignment = "risk_overstated"
+        elif predicted_risk_level <= 0.3 and actual_score <= 45:
+            risk_alignment = "risk_understated"
+        else:
+            risk_alignment = "roughly_aligned"
+
+        return {
+            "predicted_score": round(predicted_score, 1),
+            "actual_score": round(actual_score, 1),
+            "score_gap": score_gap,
+            "absolute_error": absolute_error,
+            "bias_label": bias_label,
+            "bias_note": bias_note,
+            "confidence_alignment": confidence_alignment,
+            "risk_alignment": risk_alignment,
+        }
+
+    def _empty_calibration_profile(self) -> Dict[str, Any]:
+        return {
+            "review_count": 0,
+            "average_absolute_error": 0.0,
+            "optimistic_rate": 0.0,
+            "conservative_rate": 0.0,
+            "calibrated_rate": 0.0,
+            "overconfident_rate": 0.0,
+            "bias_tendency": "insufficient_data",
+            "confidence_adjustment": 0.0,
+            "calibration_quality": "insufficient_data",
+            "note": "还没有足够的真实回访数据，本次预测置信度主要来自当前证据链。"
+        }
+
+    def get_user_calibration_profile(self, user_id: str) -> Dict[str, Any]:
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        import sqlalchemy
+
+        if not user_id:
+            return self._empty_calibration_profile()
+
+        db = Database(DatabaseConfig.get_database_url())
+        db_session = db.get_session()
+        try:
+            self._ensure_decision_followups_table(db_session)
+            rows = db_session.execute(
+                sqlalchemy.text("""
+                    SELECT absolute_error, bias_label, confidence_alignment
+                    FROM decision_followups
+                    WHERE user_id = :uid
+                    ORDER BY updated_at DESC
+                    LIMIT 50
+                """),
+                {"uid": user_id}
+            ).fetchall()
+        except Exception:
+            return self._empty_calibration_profile()
+        finally:
+            try:
+                db_session.close()
+            except Exception:
+                pass
+
+        if not rows:
+            return self._empty_calibration_profile()
+
+        review_count = len(rows)
+        absolute_errors = [float(row[0] or 0) for row in rows]
+        optimistic_count = sum(1 for row in rows if (row[1] or "") == "too_optimistic")
+        conservative_count = sum(1 for row in rows if (row[1] or "") == "too_conservative")
+        calibrated_count = sum(1 for row in rows if (row[1] or "") == "well_calibrated")
+        overconfident_count = sum(1 for row in rows if (row[2] or "") == "overconfident")
+
+        average_absolute_error = round(sum(absolute_errors) / review_count, 1)
+        optimistic_rate = round(optimistic_count / review_count, 2)
+        conservative_rate = round(conservative_count / review_count, 2)
+        calibrated_rate = round(calibrated_count / review_count, 2)
+        overconfident_rate = round(overconfident_count / review_count, 2)
+
+        if review_count < 2:
+            return {
+                **self._empty_calibration_profile(),
+                "review_count": review_count,
+                "average_absolute_error": average_absolute_error,
+                "optimistic_rate": optimistic_rate,
+                "conservative_rate": conservative_rate,
+                "calibrated_rate": calibrated_rate,
+                "overconfident_rate": overconfident_rate,
+                "note": f"目前只有{review_count}次真实回访，样本偏少，暂不按历史偏差大幅修正置信度。"
+            }
+
+        if optimistic_rate >= conservative_rate + 0.2 and optimistic_rate >= 0.4:
+            bias_tendency = "too_optimistic"
+        elif conservative_rate >= optimistic_rate + 0.2 and conservative_rate >= 0.4:
+            bias_tendency = "too_conservative"
+        else:
+            bias_tendency = "balanced"
+
+        if average_absolute_error <= 8 and calibrated_rate >= 0.6:
+            calibration_quality = "strong"
+        elif average_absolute_error <= 15:
+            calibration_quality = "moderate"
+        else:
+            calibration_quality = "weak"
+
+        confidence_adjustment = 0.0
+        if average_absolute_error >= 25:
+            confidence_adjustment -= 0.12
+        elif average_absolute_error >= 18:
+            confidence_adjustment -= 0.08
+        elif average_absolute_error >= 12:
+            confidence_adjustment -= 0.04
+        elif average_absolute_error <= 8 and calibrated_rate >= 0.6:
+            confidence_adjustment += 0.04
+
+        if bias_tendency == "too_optimistic":
+            confidence_adjustment -= 0.03
+        elif bias_tendency == "too_conservative" and average_absolute_error <= 14:
+            confidence_adjustment += 0.02
+
+        if overconfident_rate >= 0.4:
+            confidence_adjustment -= 0.03
+
+        confidence_adjustment = round(min(0.06, max(-0.18, confidence_adjustment)), 2)
+
+        if bias_tendency == "too_optimistic":
+            note = (
+                f"历史{review_count}次回访里，系统对你偏乐观，"
+                f"本次会自动下调约{abs(confidence_adjustment) * 100:.0f}%置信度。"
+            )
+        elif bias_tendency == "too_conservative":
+            direction = "上调" if confidence_adjustment > 0 else "微调"
+            note = (
+                f"历史{review_count}次回访里，系统对你偏保守，"
+                f"本次会{direction}约{abs(confidence_adjustment) * 100:.0f}%置信度。"
+            )
+        else:
+            note = (
+                f"历史{review_count}次回访整体较平衡，"
+                f"当前只做{abs(confidence_adjustment) * 100:.0f}%以内的轻微校准。"
+            )
+
+        return {
+            "review_count": review_count,
+            "average_absolute_error": average_absolute_error,
+            "optimistic_rate": optimistic_rate,
+            "conservative_rate": conservative_rate,
+            "calibrated_rate": calibrated_rate,
+            "overconfident_rate": overconfident_rate,
+            "bias_tendency": bias_tendency,
+            "confidence_adjustment": confidence_adjustment,
+            "calibration_quality": calibration_quality,
+            "note": note
+        }
+
+    def _ensure_decision_followups_table(self, db_session: Any) -> None:
+        import sqlalchemy
+
+        db_session.execute(sqlalchemy.text("""
+            CREATE TABLE IF NOT EXISTS decision_followups (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                simulation_id VARCHAR(100) NOT NULL,
+                user_id VARCHAR(100) NOT NULL,
+                option_id VARCHAR(100) NOT NULL,
+                option_title VARCHAR(255),
+                question TEXT,
+                predicted_score FLOAT DEFAULT 0,
+                predicted_risk_level FLOAT DEFAULT 0,
+                predicted_confidence FLOAT DEFAULT 0,
+                actual_score FLOAT DEFAULT 0,
+                elapsed_months INT DEFAULT 0,
+                bias_label VARCHAR(50),
+                bias_note TEXT,
+                score_gap FLOAT DEFAULT 0,
+                absolute_error FLOAT DEFAULT 0,
+                confidence_alignment VARCHAR(50),
+                risk_alignment VARCHAR(50),
+                actual_summary TEXT,
+                prediction_snapshot LONGTEXT,
+                created_at VARCHAR(50),
+                updated_at VARCHAR(50),
+                UNIQUE KEY uniq_simulation_option (simulation_id, option_id),
+                INDEX idx_followup_simulation_id (simulation_id),
+                INDEX idx_followup_user_id (user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """))
+        db_session.commit()
+
+    def _persist_follow_up_memory(
+        self,
+        user_id: str,
+        simulation_id: str,
+        option_title: str,
+        actual_summary: str,
+        insight: Dict[str, Any]
+    ) -> None:
+        try:
+            from backend.database.connection import db_connection
+            from backend.database.models import ConversationHistory
+            from datetime import datetime
+
+            user_text = (
+                f"我回访了决策推演《{option_title}》的真实结果。"
+                f"实际得分大约是{insight.get('actual_score', 0):.0f}分。"
+                f"{actual_summary}"
+            )
+            assistant_text = (
+                f"已记录这次回访。预测分数{insight.get('predicted_score', 0):.0f}分，"
+                f"实际分数{insight.get('actual_score', 0):.0f}分，"
+                f"结论：{insight.get('bias_note', '')}"
+            )
+
+            db = db_connection.get_session()
+            now = datetime.utcnow()
+            db.add(ConversationHistory(
+                user_id=user_id,
+                role="user",
+                content=user_text,
+                context={"type": "decision_follow_up", "simulation_id": simulation_id, "insight": insight},
+                timestamp=now,
+                session_id=f"followup_{simulation_id}"
+            ))
+            db.add(ConversationHistory(
+                user_id=user_id,
+                role="assistant",
+                content=assistant_text,
+                context={"type": "decision_follow_up", "simulation_id": simulation_id, "insight": insight},
+                timestamp=now,
+                session_id=f"followup_{simulation_id}"
+            ))
+            db.commit()
+            db.close()
+        except Exception as exc:
+            logger.warning(f"保存回访记忆失败: {exc}")
+
+    def save_follow_up_review(
+        self,
+        user_id: str,
+        simulation_id: str,
+        option_id: str,
+        option_title: str,
+        actual_score: float,
+        elapsed_months: int,
+        actual_summary: str
+    ) -> Dict[str, Any]:
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        from datetime import datetime
+        import sqlalchemy
+
+        record_payload = self._load_record_payload(simulation_id)
+        option_payload = self._find_option_payload(record_payload, option_id, option_title)
+        if not option_payload:
+            raise ValueError("找不到对应的推演选项，请先完成并保存该次推演。")
+
+        prediction_trace = option_payload.get("prediction_trace") or {}
+        insight = self._build_follow_up_insight(
+            predicted_score=float(option_payload.get("final_score", 0)),
+            actual_score=float(actual_score),
+            predicted_confidence=float(prediction_trace.get("prediction_confidence", 0)),
+            predicted_risk_level=float(option_payload.get("risk_level", 0)),
+        )
+
+        review = {
+            "simulation_id": simulation_id,
+            "user_id": user_id,
+            "option_id": option_payload.get("option_id") or option_id or option_title,
+            "option_title": option_payload.get("title") or option_title,
+            "question": (record_payload or {}).get("question", ""),
+            "predicted_score": insight["predicted_score"],
+            "predicted_risk_level": round(float(option_payload.get("risk_level", 0)), 2),
+            "predicted_confidence": round(float(prediction_trace.get("prediction_confidence", 0)), 2),
+            "actual_score": insight["actual_score"],
+            "elapsed_months": int(max(1, elapsed_months)),
+            "bias_label": insight["bias_label"],
+            "bias_note": insight["bias_note"],
+            "score_gap": insight["score_gap"],
+            "absolute_error": insight["absolute_error"],
+            "confidence_alignment": insight["confidence_alignment"],
+            "risk_alignment": insight["risk_alignment"],
+            "actual_summary": actual_summary.strip(),
+            "prediction_snapshot": {
+                "risk_assessment": option_payload.get("risk_assessment"),
+                "prediction_trace": option_payload.get("prediction_trace"),
+                "personal_note": option_payload.get("personal_note", ""),
+            },
+            "updated_at": datetime.now().isoformat(),
+        }
+
+        db = Database(DatabaseConfig.get_database_url())
+        db_session = db.get_session()
+        try:
+            self._ensure_decision_followups_table(db_session)
+            db_session.execute(
+                sqlalchemy.text("""
+                    INSERT INTO decision_followups (
+                        simulation_id, user_id, option_id, option_title, question,
+                        predicted_score, predicted_risk_level, predicted_confidence,
+                        actual_score, elapsed_months, bias_label, bias_note,
+                        score_gap, absolute_error, confidence_alignment, risk_alignment,
+                        actual_summary, prediction_snapshot, created_at, updated_at
+                    ) VALUES (
+                        :simulation_id, :user_id, :option_id, :option_title, :question,
+                        :predicted_score, :predicted_risk_level, :predicted_confidence,
+                        :actual_score, :elapsed_months, :bias_label, :bias_note,
+                        :score_gap, :absolute_error, :confidence_alignment, :risk_alignment,
+                        :actual_summary, :prediction_snapshot, :created_at, :updated_at
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        user_id = VALUES(user_id),
+                        option_title = VALUES(option_title),
+                        question = VALUES(question),
+                        predicted_score = VALUES(predicted_score),
+                        predicted_risk_level = VALUES(predicted_risk_level),
+                        predicted_confidence = VALUES(predicted_confidence),
+                        actual_score = VALUES(actual_score),
+                        elapsed_months = VALUES(elapsed_months),
+                        bias_label = VALUES(bias_label),
+                        bias_note = VALUES(bias_note),
+                        score_gap = VALUES(score_gap),
+                        absolute_error = VALUES(absolute_error),
+                        confidence_alignment = VALUES(confidence_alignment),
+                        risk_alignment = VALUES(risk_alignment),
+                        actual_summary = VALUES(actual_summary),
+                        prediction_snapshot = VALUES(prediction_snapshot),
+                        updated_at = VALUES(updated_at)
+                """),
+                {
+                    **review,
+                    "prediction_snapshot": json.dumps(review["prediction_snapshot"], ensure_ascii=False),
+                    "created_at": datetime.now().isoformat(),
+                }
+            )
+            db_session.commit()
+        finally:
+            db_session.close()
+
+        self._persist_follow_up_memory(
+            user_id=user_id,
+            simulation_id=simulation_id,
+            option_title=review["option_title"],
+            actual_summary=review["actual_summary"],
+            insight=insight
+        )
+
+        return review
+
+    def get_follow_up_summary(self, simulation_id: str) -> Dict[str, Any]:
+        from backend.database.models import Database
+        from backend.database.config import DatabaseConfig
+        import sqlalchemy
+
+        db = Database(DatabaseConfig.get_database_url())
+        db_session = db.get_session()
+        try:
+            self._ensure_decision_followups_table(db_session)
+            rows = db_session.execute(
+                sqlalchemy.text("""
+                    SELECT simulation_id, user_id, option_id, option_title, question,
+                           predicted_score, predicted_risk_level, predicted_confidence,
+                           actual_score, elapsed_months, bias_label, bias_note,
+                           score_gap, absolute_error, confidence_alignment, risk_alignment,
+                           actual_summary, prediction_snapshot, created_at, updated_at
+                    FROM decision_followups
+                    WHERE simulation_id = :sid
+                    ORDER BY updated_at DESC
+                """),
+                {"sid": simulation_id}
+            ).fetchall()
+        finally:
+            db_session.close()
+
+        reviews: List[Dict[str, Any]] = []
+        for row in rows:
+            snapshot_raw = row[17]
+            try:
+                snapshot = json.loads(snapshot_raw) if snapshot_raw else {}
+            except Exception:
+                snapshot = {}
+            reviews.append({
+                "simulation_id": row[0],
+                "user_id": row[1],
+                "option_id": row[2],
+                "option_title": row[3],
+                "question": row[4] or "",
+                "predicted_score": round(float(row[5] or 0), 1),
+                "predicted_risk_level": round(float(row[6] or 0), 2),
+                "predicted_confidence": round(float(row[7] or 0), 2),
+                "actual_score": round(float(row[8] or 0), 1),
+                "elapsed_months": int(row[9] or 0),
+                "bias_label": row[10] or "",
+                "bias_note": row[11] or "",
+                "score_gap": round(float(row[12] or 0), 1),
+                "absolute_error": round(float(row[13] or 0), 1),
+                "confidence_alignment": row[14] or "",
+                "risk_alignment": row[15] or "",
+                "actual_summary": row[16] or "",
+                "prediction_snapshot": snapshot,
+                "created_at": row[18] or "",
+                "updated_at": row[19] or "",
+            })
+
+        if not reviews:
+            return {
+                "review_count": 0,
+                "average_predicted_score": 0.0,
+                "average_actual_score": 0.0,
+                "average_absolute_error": 0.0,
+                "optimistic_count": 0,
+                "conservative_count": 0,
+                "calibrated_count": 0,
+                "user_calibration_profile": self._empty_calibration_profile(),
+                "reviews": [],
+            }
+
+        review_count = len(reviews)
+        optimistic_count = sum(1 for item in reviews if item["bias_label"] == "too_optimistic")
+        conservative_count = sum(1 for item in reviews if item["bias_label"] == "too_conservative")
+        calibrated_count = sum(1 for item in reviews if item["bias_label"] == "well_calibrated")
+        user_calibration_profile = self.get_user_calibration_profile(reviews[0]["user_id"])
+        return {
+            "review_count": review_count,
+            "average_predicted_score": round(sum(item["predicted_score"] for item in reviews) / review_count, 1),
+            "average_actual_score": round(sum(item["actual_score"] for item in reviews) / review_count, 1),
+            "average_absolute_error": round(sum(item["absolute_error"] for item in reviews) / review_count, 1),
+            "optimistic_count": optimistic_count,
+            "conservative_count": conservative_count,
+            "calibrated_count": calibrated_count,
+            "user_calibration_profile": user_calibration_profile,
+            "reviews": reviews,
+        }
+
     async def simulate_decision(
         self,
         user_id: str,
         question: str,
         options: List[Dict[str, str]],
+        collected_info: Optional[Dict[str, Any]] = None,
     ):
         """
         HTTP 模式的完整决策模拟（非流式）
         为每个选项生成时间线，然后生成推荐
         """
-        from dataclasses import dataclass, asdict as _asdict
+        from dataclasses import dataclass
 
         @dataclass
         class TimelineEvent:
@@ -126,6 +1014,10 @@ class DecisionSimulator:
             final_score: float
             risk_level: float
             risk_assessment: Optional[Dict] = None
+            prediction_trace: Optional[Dict[str, Any]] = None
+            execution_confidence: float = 0.7
+            dropout_risk_month: Optional[int] = None
+            personal_note: str = ""
 
         @dataclass
         class SimulationResult:
@@ -135,6 +1027,7 @@ class DecisionSimulator:
             options: list
             recommendation: str
             created_at: str
+            verifiability_report: Optional[Dict[str, Any]] = None
 
         profile = None
         if self.personality_test:
@@ -143,32 +1036,29 @@ class DecisionSimulator:
             except Exception:
                 profile = None
 
+        pkf_facts: List[Any] = []
+        try:
+            from backend.decision.personal_knowledge_fusion import PersonalFactExtractor
+            extractor = PersonalFactExtractor(user_id)
+            pkf_facts = extractor.extract_all()
+            self.lora_analyzer._pkf_facts = pkf_facts
+        except Exception as exc:
+            logger.warning(f"提取 PKF 事实失败: {exc}")
+            self.lora_analyzer._pkf_facts = []
+
+        calibration_profile = self.get_user_calibration_profile(user_id)
+
         simulated_options = []
 
         for i, option in enumerate(options):
             option_branch = option.get('title', f'option_{i}').lower().replace(' ', '_')
             logger.info(f"[HTTP推演] 开始推演选项 {i+1}: {option.get('title')}")
 
-            # 注入 PKF 上下文
-            try:
-                from backend.decision.personal_knowledge_fusion import (
-                    PersonalFactExtractor, CausalReasoningGraph
-                )
-                extractor = PersonalFactExtractor(user_id)
-                facts = extractor.extract_all()
-                causal_graph = CausalReasoningGraph(question, option.get("title", ""), facts)
-                causal_graph.build()
-                causal_chains = causal_graph.get_chains()
-                pkf_context = "个人事实：\n"
-                for f in facts[:8]:
-                    pkf_context += f"- {f.to_text()}\n"
-                pkf_context += "\n因果推理链：\n"
-                for chain in causal_chains[:4]:
-                    chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
-                    pkf_context += f"- {chain_str}\n"
-                self.lora_analyzer._pkf_context = pkf_context
-            except Exception:
-                self.lora_analyzer._pkf_context = ""
+            self.lora_analyzer._pkf_context = self._build_pkf_context(
+                question,
+                option.get("title", ""),
+                pkf_facts
+            )
 
             # 生成时间线
             timeline = []
@@ -177,7 +1067,8 @@ class DecisionSimulator:
                 question=question,
                 option=option,
                 profile=profile,
-                num_events=12
+                num_events=12,
+                collected_info=collected_info
             )
 
             previous_event_id = None
@@ -201,8 +1092,32 @@ class DecisionSimulator:
                 previous_event_id = node.event_id
                 timeline.append(node)
 
-            final_score = self._calculate_final_score(timeline, profile)
-            risk_level = self._calculate_risk_level(timeline)
+            raw_final_score = self._calculate_final_score(timeline, profile)
+            risk_assessment = self._assess_option_risk(option.get('title', f'选项{i+1}'), timeline, profile)
+            prediction_trace = self._build_prediction_trace(
+                question=question,
+                option=option,
+                timeline=timeline,
+                collected_info=collected_info,
+                facts_count=len(pkf_facts),
+                profile=profile,
+                calibration_profile=calibration_profile,
+            )
+            final_score = self._compress_score_by_confidence(
+                raw_final_score,
+                prediction_trace.get("prediction_confidence", 0.5)
+            )
+            risk_level = self._merge_risk_level(
+                self._calculate_risk_level(timeline),
+                risk_assessment
+            )
+            self_prediction = await self.lora_analyzer.generate_self_prediction(
+                user_id=user_id,
+                question=question,
+                option=option,
+                profile=profile,
+                collected_info=collected_info
+            )
 
             simulated_options.append(DecisionOption(
                 option_id=f"option_{i+1}",
@@ -211,7 +1126,11 @@ class DecisionSimulator:
                 timeline=timeline,
                 final_score=final_score,
                 risk_level=risk_level,
-                risk_assessment=None
+                risk_assessment=risk_assessment,
+                prediction_trace=prediction_trace,
+                execution_confidence=self_prediction.get("execution_confidence", 0.7),
+                dropout_risk_month=self_prediction.get("dropout_risk_month"),
+                personal_note=self_prediction.get("personal_note", "")
             ))
 
         # 生成推荐
@@ -221,7 +1140,13 @@ class DecisionSimulator:
                 "description": opt.description,
                 "final_score": opt.final_score,
                 "risk_level": opt.risk_level,
-                "timeline_summary": self._summarize_timeline(opt.timeline)
+                "timeline_summary": self._summarize_timeline(opt.timeline),
+                "risk_assessment": opt.risk_assessment,
+                "prediction_confidence": (opt.prediction_trace or {}).get("prediction_confidence"),
+                "calibration_review_count": (opt.prediction_trace or {}).get("calibration_review_count"),
+                "calibration_note": (opt.prediction_trace or {}).get("calibration_note"),
+                "execution_confidence": opt.execution_confidence,
+                "personal_note": opt.personal_note,
             }
             for opt in simulated_options
         ]
@@ -229,7 +1154,11 @@ class DecisionSimulator:
         try:
             rec_stream = ""
             async for chunk in self.lora_analyzer.stream_recommendation_generation(
-                user_id=user_id, question=question, options=options_for_rec, profile=profile
+                user_id=user_id,
+                question=question,
+                options=options_for_rec,
+                profile=profile,
+                collected_info=collected_info
             ):
                 rec_stream += chunk
             recommendation = self.lora_analyzer._clean_recommendation(rec_stream)
@@ -237,28 +1166,19 @@ class DecisionSimulator:
             logger.warning(f"推荐生成失败: {e}")
             recommendation = "暂无推荐"
 
+        verifiability_report = self._build_verifiability_report(simulated_options, collected_info, calibration_profile)
         simulation_id = f"sim_{user_id}_{int(__import__('time').time())}"
 
-        # 保存记录
         try:
-            from backend.database.models import Database
-            from backend.database.config import DatabaseConfig
-            from datetime import datetime
-            import sqlalchemy
-            db = Database(DatabaseConfig.get_database_url())
-            db_session = db.get_session()
-            db_session.execute(
-                sqlalchemy.text("""
-                    INSERT IGNORE INTO decision_records
-                    (simulation_id, user_id, question, options_count, recommendation, created_at)
-                    VALUES (:sid, :uid, :q, :oc, :rec, :ca)
-                """),
-                {"sid": simulation_id, "uid": user_id, "q": question[:500],
-                 "oc": len(options), "rec": recommendation[:1000],
-                 "ca": datetime.now().isoformat()}
+            self._save_decision_record(
+                simulation_id=simulation_id,
+                user_id=user_id,
+                question=question,
+                options=simulated_options,
+                recommendation=recommendation,
+                collected_info=collected_info,
+                verifiability_report=verifiability_report,
             )
-            db_session.commit()
-            db_session.close()
         except Exception as save_err:
             logger.warning(f"保存决策记录失败: {save_err}")
 
@@ -268,7 +1188,8 @@ class DecisionSimulator:
             question=question,
             options=simulated_options,
             recommendation=recommendation,
-            created_at=__import__('datetime').datetime.now().isoformat()
+            created_at=__import__('datetime').datetime.now().isoformat(),
+            verifiability_report=verifiability_report
         )
 
 
@@ -294,6 +1215,17 @@ class SimulateWithCollectedInfoRequest(BaseModel):
     use_lora: bool = True
 
 
+class SubmitDecisionFollowUpRequest(BaseModel):
+    """提交决策回访"""
+    user_id: str
+    simulation_id: str
+    option_id: str
+    option_title: str
+    actual_score: float
+    elapsed_months: int = 3
+    actual_summary: str = ""
+
+
 @router.get("/record/{simulation_id}")
 async def get_decision_record(simulation_id: str):
     """获取单条决策推演记录详情（含完整 timeline）"""
@@ -316,9 +1248,19 @@ async def get_decision_record(simulation_id: str):
 
         # 解析 timeline_data
         options = []
+        collected_info_summary = {}
+        verifiability_report = {}
+        schema_version = 1
         if row[5]:
             try:
-                options = json.loads(row[5])
+                parsed = json.loads(row[5])
+                if isinstance(parsed, dict):
+                    schema_version = parsed.get("schema_version", 2)
+                    options = parsed.get("options", [])
+                    collected_info_summary = parsed.get("collected_info_summary", {}) or {}
+                    verifiability_report = parsed.get("verifiability_report", {}) or {}
+                elif isinstance(parsed, list):
+                    options = parsed
             except Exception:
                 options = []
 
@@ -330,6 +1272,9 @@ async def get_decision_record(simulation_id: str):
                 "question": row[2] or "",
                 "options_count": row[3] or 0,
                 "recommendation": row[4] or "",
+                "schema_version": schema_version,
+                "collected_info_summary": collected_info_summary,
+                "verifiability_report": verifiability_report,
                 "options": options,
                 "created_at": row[6] or "",
             }
@@ -358,6 +1303,7 @@ async def get_decision_history(user_id: str):
                     question TEXT,
                     options_count INT DEFAULT 0,
                     recommendation TEXT,
+                    timeline_data LONGTEXT,
                     created_at VARCHAR(50),
                     INDEX idx_user_id (user_id),
                     INDEX idx_created_at (created_at)
@@ -392,6 +1338,50 @@ async def get_decision_history(user_id: str):
     except Exception as e:
         logger.warning(f"获取决策历史失败: {e}")
         return {"code": 200, "data": []}
+
+
+@router.get("/follow-up/{simulation_id}")
+async def get_decision_follow_up(simulation_id: str) -> Dict[str, Any]:
+    """获取某次决策推演的回访与校准摘要"""
+    try:
+        summary = simulator.get_follow_up_summary(simulation_id)
+        return {
+            "code": 200,
+            "message": "获取成功",
+            "data": summary
+        }
+    except Exception as e:
+        logger.warning(f"获取决策回访失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/follow-up")
+async def submit_decision_follow_up(request: SubmitDecisionFollowUpRequest) -> Dict[str, Any]:
+    """提交真实结果，用于预测校准与后续学习"""
+    try:
+        review = simulator.save_follow_up_review(
+            user_id=request.user_id,
+            simulation_id=request.simulation_id,
+            option_id=request.option_id,
+            option_title=request.option_title,
+            actual_score=request.actual_score,
+            elapsed_months=request.elapsed_months,
+            actual_summary=request.actual_summary,
+        )
+        summary = simulator.get_follow_up_summary(request.simulation_id)
+        return {
+            "code": 200,
+            "message": "回访已记录",
+            "data": {
+                "review": review,
+                "summary": summary
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"提交决策回访失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/collect/start")
@@ -487,7 +1477,7 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
     """
     使用收集的信息进行决策模拟
     
-    信息收集完成后，使用本地 Qwen3.5-9B + 用户 LoRA 进行个性化决策模拟
+    信息收集完成后，使用当前配置的推理引擎进行个性化决策模拟
     """
     try:
         logger.info(f"📥 收到决策模拟请求 - session_id: {request.session_id}")
@@ -503,15 +1493,14 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
         if not session["is_complete"]:
             raise HTTPException(status_code=400, detail="信息收集未完成")
         
-        # 2. 使用本地 Qwen3.5-9B + 用户 LoRA 进行决策模拟
+        # 2. 使用当前推理引擎进行决策模拟
         result = await simulator.simulate_decision(
             user_id=session["user_id"],
             question=session["initial_question"],
             options=request.options,
+            collected_info=session.get("collected_info", {}),
         )
-        
-        # 3. 转换为可序列化格式
-        from dataclasses import asdict as _safe_asdict
+
         response_data = {
             "code": 200,
             "message": "决策模拟完成",
@@ -520,21 +1509,12 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
                 "user_id": result.user_id,
                 "question": result.question,
                 "collected_info_summary": session["collected_info"],
-                "options": [
-                    {
-                        "option_id": opt.option_id,
-                        "title": opt.title,
-                        "description": opt.description,
-                        "timeline": [_safe_asdict(event) if hasattr(event, '__dataclass_fields__') else event for event in opt.timeline],
-                        "final_score": opt.final_score,
-                        "risk_level": opt.risk_level,
-                        "risk_assessment": opt.risk_assessment
-                    }
-                    for opt in result.options
-                ],
+                "verifiability_report": result.verifiability_report or {},
+                "options": [simulator._serialize_option(opt) for opt in result.options],
                 "recommendation": result.recommendation,
                 "created_at": result.created_at,
-                "used_lora": True
+                "used_lora": simulator.lora_analyzer.is_lora_inference(),
+                "inference_mode": simulator.lora_analyzer.get_inference_mode()
             }
         }
         
@@ -584,21 +1564,12 @@ async def full_decision_process(
                 "simulation_id": result.simulation_id,
                 "user_id": result.user_id,
                 "question": result.question,
-                "options": [
-                    {
-                        "option_id": opt.option_id,
-                        "title": opt.title,
-                        "description": opt.description,
-                        "timeline": [asdict(event) for event in opt.timeline],
-                        "final_score": opt.final_score,
-                        "risk_level": opt.risk_level,
-                        "risk_assessment": opt.risk_assessment
-                    }
-                    for opt in result.options
-                ],
+                "verifiability_report": result.verifiability_report or {},
+                "options": [simulator._serialize_option(opt) for opt in result.options],
                 "recommendation": result.recommendation,
                 "created_at": result.created_at,
-                "used_lora": True
+                "used_lora": simulator.lora_analyzer.is_lora_inference(),
+                "inference_mode": simulator.lora_analyzer.get_inference_mode()
             }
         }
         
@@ -801,6 +1772,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
 
             user_id = session["user_id"]
             question = session["initial_question"]
+            collected_info = session.get("collected_info", {})
             await websocket.send_json({
                 "type": "start",
                 "session_id": session_id,
@@ -831,8 +1803,20 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 "content": "用户画像已加载，准备提取个人知识..."
             })
 
+            calibration_profile = simulator.get_user_calibration_profile(user_id)
+            if int(calibration_profile.get("review_count", 0) or 0) > 0:
+                await websocket.send_json({
+                    "type": "status",
+                    "stage": "calibration_profile",
+                    "content": (
+                        f"已载入{calibration_profile.get('review_count', 0)}次真实回访校准，"
+                        "本次推演会自动参考历史偏差。"
+                    )
+                })
+
             # ── PKF 只做一次，缓存给所有选项复用 ──
             pkf_context_cached = ""
+            pkf_facts_cached: List[Any] = []
             await websocket.send_json({
                 "type": "status",
                 "stage": "pkf_knowledge",
@@ -863,9 +1847,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
 
             heartbeat_task = asyncio.create_task(send_pkf_heartbeat())
             try:
-                from backend.decision.personal_knowledge_fusion import (
-                    PersonalFactExtractor, CausalReasoningGraph
-                )
+                from backend.decision.personal_knowledge_fusion import PersonalFactExtractor
                 import concurrent.futures
                 loop = asyncio.get_event_loop()
 
@@ -889,6 +1871,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             except Exception as pkf_err:
                 logger.warning(f"PKF-DS 增强失败，降级为普通推演: {pkf_err}")
                 simulator.lora_analyzer._pkf_context = ""
+                simulator.lora_analyzer._pkf_facts = []
             finally:
                 heartbeat_active = False
                 heartbeat_task.cancel()
@@ -910,20 +1893,8 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 # 用本选项标题构建因果图（facts 复用缓存，causal graph 按选项单独构建）
                 try:
                     facts = getattr(simulator.lora_analyzer, '_pkf_facts', [])
-                    if facts:
-                        cg = CausalReasoningGraph(question, option.get("title", ""), facts)
-                        cg.build()
-                        chains = cg.get_chains()
-                        ctx = "个人事实：\n"
-                        for f in facts[:8]:
-                            ctx += f"- {f.to_text()}\n"
-                        ctx += "\n因果推理链：\n"
-                        for chain in chains[:4]:
-                            chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
-                            ctx += f"- {chain_str}\n"
-                        simulator.lora_analyzer._pkf_context = ctx
-                    else:
-                        simulator.lora_analyzer._pkf_context = pkf_context_cached
+                    built_context = simulator._build_pkf_context(question, option.get("title", ""), facts)
+                    simulator.lora_analyzer._pkf_context = built_context or pkf_context_cached
                 except Exception:
                     simulator.lora_analyzer._pkf_context = pkf_context_cached
 
@@ -966,6 +1937,10 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     final_score: float
                     risk_level: float
                     risk_assessment: Optional[Dict] = None
+                    prediction_trace: Optional[Dict[str, Any]] = None
+                    execution_confidence: float = 0.7
+                    dropout_risk_month: Optional[int] = None
+                    personal_note: str = ""
 
                 all_titles = [o.get("title", "") for o in options]
                 async for chunk in simulator.lora_analyzer.stream_timeline_generation(
@@ -974,7 +1949,8 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     option=option,
                     profile=profile,
                     num_events=12,
-                    all_option_titles=all_titles
+                    all_option_titles=all_titles,
+                    collected_info=collected_info
                 ):
                     stream_buffer += chunk
                     await websocket.send_json({
@@ -1050,7 +2026,12 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 elif not timeline:
                     # 完全没有数据，重试一次
                     retry_timeline = await simulator.lora_analyzer.generate_timeline_with_lora(
-                        user_id=user_id, question=question, option=option, profile=profile, num_events=12
+                        user_id=user_id,
+                        question=question,
+                        option=option,
+                        profile=profile,
+                        num_events=12,
+                        collected_info=collected_info
                     )
                     if retry_timeline:
                         previous_event_id = None
@@ -1075,8 +2056,25 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                             })
                 # 如果增量解析已经成功（timeline 不为空），不再重复发送节点
 
-                final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
-                risk_level = simulator._calculate_risk_level(timeline) if timeline else 0.5
+                raw_final_score = simulator._calculate_final_score(timeline, profile) if timeline else 50.0
+                risk_assessment = simulator._assess_option_risk(option['title'], timeline, profile) if timeline else None
+                prediction_trace = simulator._build_prediction_trace(
+                    question=question,
+                    option=option,
+                    timeline=timeline,
+                    collected_info=collected_info,
+                    facts_count=len(pkf_facts_cached),
+                    profile=profile,
+                    calibration_profile=calibration_profile,
+                )
+                final_score = simulator._compress_score_by_confidence(
+                    raw_final_score,
+                    prediction_trace.get("prediction_confidence", 0.5)
+                )
+                risk_level = simulator._merge_risk_level(
+                    simulator._calculate_risk_level(timeline) if timeline else 0.5,
+                    risk_assessment
+                )
 
                 # 生成分支事件并流式推送
                 await websocket.send_json({
@@ -1173,7 +2171,8 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     user_id=user_id,
                     question=question,
                     option=option,
-                    profile=profile
+                    profile=profile,
+                    collected_info=collected_info
                 )
 
                 await websocket.send_json({
@@ -1182,6 +2181,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "title": option['title'],
                     "final_score": final_score,
                     "risk_level": risk_level,
+                    "risk_assessment": risk_assessment,
+                    "prediction_trace": prediction_trace,
+                    "execution_confidence": self_prediction.get("execution_confidence"),
+                    "dropout_risk_month": self_prediction.get("dropout_risk_month"),
+                    "personal_note": self_prediction.get("personal_note", ""),
                     "self_prediction": self_prediction
                 })
 
@@ -1192,7 +2196,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     timeline=timeline,
                     final_score=final_score,
                     risk_level=risk_level,
-                    risk_assessment=None
+                    risk_assessment=risk_assessment,
+                    prediction_trace=prediction_trace,
+                    execution_confidence=self_prediction.get("execution_confidence", 0.7),
+                    dropout_risk_month=self_prediction.get("dropout_risk_month"),
+                    personal_note=self_prediction.get("personal_note", "")
                 )
 
             # 串行执行（共享同一个 LoRA 模型实例，并行会冲突）
@@ -1206,7 +2214,13 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "description": opt.description,
                     "final_score": opt.final_score,
                     "risk_level": opt.risk_level,
-                    "timeline_summary": simulator._summarize_timeline(opt.timeline)
+                    "timeline_summary": simulator._summarize_timeline(opt.timeline),
+                    "risk_assessment": opt.risk_assessment,
+                    "prediction_confidence": (opt.prediction_trace or {}).get("prediction_confidence"),
+                    "calibration_review_count": (opt.prediction_trace or {}).get("calibration_review_count"),
+                    "calibration_note": (opt.prediction_trace or {}).get("calibration_note"),
+                    "execution_confidence": opt.execution_confidence,
+                    "personal_note": opt.personal_note,
                 }
                 for opt in simulated_options
             ]
@@ -1220,7 +2234,8 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 user_id=user_id,
                 question=question,
                 options=options_for_rec,
-                profile=profile
+                profile=profile,
+                collected_info=collected_info
             ):
                 recommendation_stream += chunk
                 await websocket.send_json({
@@ -1228,6 +2243,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "content": chunk
                 })
             recommendation = simulator.lora_analyzer._clean_recommendation(recommendation_stream)
+            verifiability_report = simulator._build_verifiability_report(
+                simulated_options,
+                collected_info,
+                calibration_profile
+            )
 
             await websocket.send_json({
                 "type": "recommendation",
@@ -1238,69 +2258,23 @@ async def simulate_with_collection_ws(websocket: WebSocket):
             
             # 保存决策记录到数据库
             try:
-                from backend.database.models import Database
-                from backend.database.config import DatabaseConfig
-                from sqlalchemy import Column, String, Integer, Text, DateTime
-                from sqlalchemy.ext.declarative import declarative_base
-                from datetime import datetime
-                db = Database(DatabaseConfig.get_database_url())
-                db_session = db.get_session()
-                # 用原生SQL插入，避免模型定义问题
-                db_session.execute(
-                    __import__('sqlalchemy').text("""
-                        CREATE TABLE IF NOT EXISTS decision_records (
-                            id INT AUTO_INCREMENT PRIMARY KEY,
-                            simulation_id VARCHAR(100) UNIQUE NOT NULL,
-                            user_id VARCHAR(100) NOT NULL,
-                            question TEXT,
-                            options_count INT DEFAULT 0,
-                            recommendation TEXT,
-                            timeline_data LONGTEXT,
-                            created_at VARCHAR(50),
-                            INDEX idx_user_id (user_id)
-                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                    """)
+                simulator._save_decision_record(
+                    simulation_id=simulation_id,
+                    user_id=user_id,
+                    question=question,
+                    options=simulated_options,
+                    recommendation=recommendation,
+                    collected_info=collected_info,
+                    verifiability_report=verifiability_report,
                 )
-                db_session.commit()
-
-                # 序列化完整的 timeline 数据
-                timeline_json = json.dumps([
-                    {
-                        "option_id": opt.option_id,
-                        "title": opt.title,
-                        "description": opt.description,
-                        "final_score": opt.final_score,
-                        "risk_level": opt.risk_level,
-                        "timeline": [asdict(e) for e in opt.timeline]
-                    }
-                    for opt in simulated_options
-                ], ensure_ascii=False)
-
-                db_session.execute(
-                    __import__('sqlalchemy').text("""
-                        INSERT INTO decision_records 
-                        (simulation_id, user_id, question, options_count, recommendation, timeline_data, created_at)
-                        VALUES (:sid, :uid, :q, :oc, :rec, :td, :ca)
-                        ON DUPLICATE KEY UPDATE
-                        recommendation = VALUES(recommendation),
-                        timeline_data = VALUES(timeline_data)
-                    """),
-                    {
-                        "sid": simulation_id,
-                        "uid": user_id,
-                        "q": question[:500],
-                        "oc": len(options),
-                        "rec": recommendation[:2000] if recommendation else "",
-                        "td": timeline_json,
-                        "ca": datetime.now().isoformat()
-                    }
-                )
-                db_session.commit()
-                db_session.close()
                 logger.info(f"决策记录已保存: {simulation_id}")
             except Exception as save_err:
                 logger.warning(f"保存决策记录失败: {save_err}")
             
+            await websocket.send_json({
+                "type": "verifiability_report",
+                "content": verifiability_report
+            })
             await websocket.send_json({
                 "type": "status",
                 "stage": "completed",
@@ -1310,7 +2284,8 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 "type": "done",
                 "simulation_id": simulation_id,
                 "user_id": user_id,
-                "question": question
+                "question": question,
+                "verifiability_report": verifiability_report
             })
 
     except WebSocketDisconnect:

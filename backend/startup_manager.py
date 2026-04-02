@@ -2,8 +2,13 @@
 系统启动管理器
 集中管理所有系统的初始化逻辑
 在后端启动时执行，而不是延迟初始化
+
+环境变量开关：
+  ENABLE_LOCAL_MODEL=false  → 跳过本地 GPU/LoRA 相关加载（默认 false，适合 2GB 服务器）
+  ENABLE_LOCAL_MODEL=true   → 加载本地 Qwen 基座 + LoRA（需要 GPU 服务器）
 """
 import asyncio
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
@@ -11,6 +16,9 @@ import logging
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# 是否启用本地 GPU 模型（默认关闭，适合轻量服务器）
+ENABLE_LOCAL_MODEL = os.environ.get("ENABLE_LOCAL_MODEL", "false").lower() == "true"
 
 # 全局系统实例
 _systems = {
@@ -73,7 +81,7 @@ class StartupManager:
     
     @staticmethod
     async def init_llm_service():
-        """初始化 LLM 服务"""
+        """初始化 LLM 服务（API 模式始终可用，本地模型需 ENABLE_LOCAL_MODEL=true）"""
         try:
             from backend.llm.llm_service import get_llm_service
             _systems['llm_service'] = get_llm_service()
@@ -168,20 +176,24 @@ class StartupManager:
         except Exception as e:
             StartupManager.print_warning(f"Neo4j 知识图谱初始化失败: {e}")
             _systems['knowledge_graphs'][default_user] = None
-        
         try:
-            # 初始化 RAG 系统（设置离线模式避免网络问题）
-            import os
-            os.environ['HF_HUB_OFFLINE'] = '1'  # 启用离线模式
-            
-            from backend.learning.production_rag_system import ProductionRAGSystem
-            _systems['rag_systems'][default_user] = ProductionRAGSystem(default_user, use_gpu=False)
-            StartupManager.print_success(f"RAG 系统初始化完成 ({default_user})")
+            # 初始化 RAG 系统
+            # 轻量服务器模式：跳过 sentence-transformers embedding 模型加载
+            if ENABLE_LOCAL_MODEL:
+                import os
+                os.environ['HF_HUB_OFFLINE'] = '1'
+                from backend.learning.production_rag_system import ProductionRAGSystem
+                _systems['rag_systems'][default_user] = ProductionRAGSystem(default_user, use_gpu=False)
+                StartupManager.print_success(f"RAG 系统初始化完成 ({default_user})")
+            else:
+                # 轻量模式：使用关键词检索的简化 RAG，不加载 embedding 模型
+                from backend.learning.unified_rag_system import UnifiedRAGSystem
+                _systems['rag_systems'][default_user] = UnifiedRAGSystem(default_user)
+                StartupManager.print_success(f"RAG 系统初始化完成（轻量模式，{default_user}）")
             _init_status['rag_system'] = True
         except Exception as e:
             StartupManager.print_warning(f"RAG 系统初始化失败: {e}")
             _systems['rag_systems'][default_user] = None
-    
     @staticmethod
     async def startup():
         """执行完整的启动流程"""

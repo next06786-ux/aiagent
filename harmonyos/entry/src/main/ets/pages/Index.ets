@@ -219,9 +219,9 @@ struct Index {
     },
     {
       id: 'decision_dungeon',
-      title: '决策副本',
-      subtitle: '个性化闯关',
-      description: '描述你的决策问题，AI生成个性化副本，像游戏一样探索未来',
+      title: '增强决策推演',
+      subtitle: '双阶段采集',
+      description: '先自由表达，再由 AI 追问补全信息，最后进入可验证的时间线推演',
       route: 'pages/QuickDecisionInput',
       gradient: ['#9C27B0', '#E91E63']
     }

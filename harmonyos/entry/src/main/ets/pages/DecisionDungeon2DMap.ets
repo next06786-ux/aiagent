@@ -25,6 +25,100 @@ interface TimelineEvent {
   probability: number
 }
 
+interface RiskDimension {
+  name: string
+  score: number
+  level: string
+  factors: string[]
+  mitigation: string[]
+}
+
+interface RiskAssessment {
+  option_title?: string
+  overall_risk: number
+  overall_level: string
+  high_risk_count?: number
+  top_dimensions?: string[]
+  dimensions?: Record<string, RiskDimension>
+  recommendations: string[]
+}
+
+interface PredictionTrace {
+  prediction_confidence: number
+  base_prediction_confidence?: number
+  confidence_level: string
+  context_coverage: number
+  event_specificity: number
+  facts_used: number
+  main_event_count: number
+  evidence_sources: string[]
+  assumptions: string[]
+  calibration_review_count?: number
+  calibration_adjustment?: number
+  calibration_bias?: string
+  calibration_note?: string
+  calibration_applied?: boolean
+}
+
+interface VerifiabilityReport {
+  schema_version: number
+  engine_mode: string
+  collected_info_coverage: number
+  average_prediction_confidence: number
+  missing_key_inputs: string[]
+  note: string
+  historical_review_count?: number
+  calibration_bias?: string
+  confidence_adjustment?: number
+  calibration_quality?: string
+  calibration_note?: string
+}
+
+interface CalibrationProfile {
+  review_count: number
+  average_absolute_error: number
+  optimistic_rate: number
+  conservative_rate: number
+  calibrated_rate: number
+  overconfident_rate: number
+  bias_tendency: string
+  confidence_adjustment: number
+  calibration_quality: string
+  note: string
+}
+
+interface FollowUpReview {
+  simulation_id: string
+  user_id: string
+  option_id: string
+  option_title: string
+  predicted_score: number
+  predicted_risk_level: number
+  predicted_confidence: number
+  actual_score: number
+  elapsed_months: number
+  bias_label: string
+  bias_note: string
+  score_gap: number
+  absolute_error: number
+  confidence_alignment: string
+  risk_alignment: string
+  actual_summary: string
+  updated_at: string
+}
+
+interface FollowUpSummary {
+  review_count: number
+  average_predicted_score: number
+  average_actual_score: number
+  average_absolute_error: number
+  optimistic_count: number
+  conservative_count: number
+  calibrated_count: number
+  user_calibration_profile?: CalibrationProfile
+  reviews: FollowUpReview[]
+}
+
 interface DungeonOption {
   option_id: string
   title: string
@@ -32,6 +126,11 @@ interface DungeonOption {
   timeline: TimelineEvent[]
   final_score: number
   risk_level: number
+  risk_assessment?: RiskAssessment | null
+  prediction_trace?: PredictionTrace | null
+  execution_confidence?: number
+  dropout_risk_month?: number
+  personal_note?: string
 }
 
 interface DungeonData {
@@ -85,7 +184,7 @@ interface OptionSummary {
   riskLevel: number
   status: string
   progress: number
-  // LoRA 自我预测字段
+  // 个性化自我预测字段
   executionConfidence: number   // 执行意志强度 0-1
   dropoutRiskMonth: number      // 预测最可能动摇的月份（0=无风险）
   personalNote: string          // 第一人称自我评估
@@ -107,6 +206,7 @@ interface RecommendationData {
   reasons: string[]
   risks: string[]
   actions: string[]
+  confidence_note?: string
 }
 
 interface ImpactItem {
@@ -133,10 +233,17 @@ struct DecisionDungeon2DMap {
   @State showContent: boolean = false
   @State zoomScale: number = 1
   @State pulseOpacity: number = 1
+  @State verifiabilityReport: VerifiabilityReport | null = null
+  @State followUpSummary: FollowUpSummary | null = null
+  @State followUpActualScore: number = 60
+  @State followUpElapsedMonths: number = 3
+  @State followUpText: string = ''
+  @State isSubmittingFollowUp: boolean = false
   private zoomScaleBase: number = 1
   private pulseTimer: number = -1
 
   private dungeonId: string = ''
+  private simulationId: string = ''
   private userId: string = ''
   private ws: WebSocketUtil | null = null
   private canvasWidth: number = 3000
@@ -149,6 +256,10 @@ struct DecisionDungeon2DMap {
 
   aboutToAppear() {
     AppStorage.setOrCreate('activeSimulation', '')
+    this.verifiabilityReport = null
+    this.followUpSummary = null
+    this.followUpText = ''
+    this.simulationId = ''
     const params = router.getParams() as Record<string, string>
     if (params?.simulationData) {
       try {
@@ -156,6 +267,8 @@ struct DecisionDungeon2DMap {
         const options = simData.options as DungeonOption[]
         const hasTimeline = options && options.length > 0 && options[0].timeline && options[0].timeline.length > 0
         if (hasTimeline) {
+          this.simulationId = simData.simulation_id as string || ''
+          this.userId = simData.user_id as string || params.userId || ''
           this.dungeonData = {
             dungeon_id: simData.simulation_id as string || 'temp',
             user_id: simData.user_id as string || this.userId,
@@ -165,10 +278,13 @@ struct DecisionDungeon2DMap {
             recommendation: simData.recommendation as string || '',
             created_at: simData.created_at as string || new Date().toISOString()
           }
+          this.verifiabilityReport = simData.verifiability_report as VerifiabilityReport || null
           this.buildFromExisting()
+          this.loadFollowUpSummary()
         } else {
           this.dungeonId = (simData.simulation_id as string) || (params.dungeonId || '')
           this.userId = (simData.user_id as string) || (params.userId || '')
+          this.simulationId = ''
           const fullOptions: DungeonOption[] = []
           if (options) {
             for (let i = 0; i < options.length; i++) {
@@ -195,6 +311,7 @@ struct DecisionDungeon2DMap {
       this.dungeonId = params.dungeonId
       this.userId = params.userId || ''
       if (params.isHistory === 'true') {
+        this.simulationId = params.dungeonId
         this.loadHistoryRecord(params.dungeonId, params.question || '', params.recommendation || '')
       }
     }
@@ -215,7 +332,9 @@ struct DecisionDungeon2DMap {
     this.dungeonData.options.forEach((opt: DungeonOption, oi: number) => {
       summaries.push({ index: oi, title: opt.title, color: this.optColor(oi),
         finalScore: opt.final_score || 0, riskLevel: opt.risk_level || 0, status: '推演完成', progress: 1,
-        executionConfidence: 0, dropoutRiskMonth: 0, personalNote: '' })
+        executionConfidence: opt.execution_confidence || 0,
+        dropoutRiskMonth: opt.dropout_risk_month || 0,
+        personalNote: opt.personal_note || '' })
       const rootId = `root_${oi}`
       allNodes.push({ id: rootId, parentId: '', title: opt.title, description: '起点',
         month: 0, probability: 1, position: { x: this.MAIN_START_X, y: this.MAIN_Y },
@@ -254,6 +373,9 @@ struct DecisionDungeon2DMap {
       })
     })
     this.optionSummaries = summaries
+    if (this.dungeonData.options.length > 0) {
+      this.followUpActualScore = this.dungeonData.options[this.activeOptionIndex].final_score || 60
+    }
     this.nodes = allNodes
     this.edges = allEdges
     this.showContent = true
@@ -321,8 +443,15 @@ struct DecisionDungeon2DMap {
                 const execConf = sp ? (sp.execution_confidence as number) || 0 : 0
                 const dropMonth = sp ? (sp.dropout_risk_month as number) || 0 : 0
                 const note = sp ? (sp.personal_note as string) || '' : ''
+                const riskAssessment = (ev.risk_assessment as RiskAssessment) || null
+                const predictionTrace = (ev.prediction_trace as PredictionTrace) || null
                 this.updateScore(idx, ev.final_score as number, ev.risk_level as number,
                   execConf, dropMonth, note)
+                this.updateOptionArtifacts(idx, ev.final_score as number, ev.risk_level as number,
+                  riskAssessment, predictionTrace, execConf, dropMonth, note)
+                if (this.activeOptionIndex === idx && !this.getCurrentFollowUpReview()) {
+                  this.followUpActualScore = ev.final_score as number
+                }
                 this.updateStatus(idx, '推演完成')
                 this.processingNodeId = ''
                 this.stopPulse()
@@ -330,11 +459,18 @@ struct DecisionDungeon2DMap {
               }
             }
             else if (type === 'recommendation') {
-              try { this.structuredRecommendation = JSON.parse((ev.content as string) || '') as RecommendationData }
-              catch (_) { this.structuredRecommendation = null }
+              this.applyRecommendationContent((ev.content as string) || '')
               this.streamStatus = '推演完成'
             }
+            else if (type === 'verifiability_report') {
+              this.verifiabilityReport = (ev.content as VerifiabilityReport) || null
+            }
             else if (type === 'done') {
+              this.simulationId = (ev.simulation_id as string) || this.simulationId
+              this.loadFollowUpSummary()
+              if (!this.verifiabilityReport && ev.verifiability_report) {
+                this.verifiabilityReport = ev.verifiability_report as VerifiabilityReport
+              }
               this.streamStatus = '全部推演完成'
               AppStorage.setOrCreate('activeSimulation', '')
               this.processingNodeId = ''
@@ -357,7 +493,7 @@ struct DecisionDungeon2DMap {
         }
       })
       await this.ws.connect('/ws/decision-simulate')
-      this.streamStatus = '连接成功，正在加载LoRA模型和用户画像...'
+      this.streamStatus = '连接成功，正在加载用户画像与推演上下文...'
       this.ws.send({ session_id: this.dungeonId, options: opts } as StreamRequestPayload)
     } catch (e) {
       this.streamStatus = '推演连接失败，请返回重试'
@@ -467,19 +603,279 @@ struct DecisionDungeon2DMap {
   }
 
   private updateStatus(idx: number, status: string) {
-    this.optionSummaries = this.optionSummaries.map((s: OptionSummary): OptionSummary =>
-      s.index === idx ? { index: s.index, title: s.title, color: s.color, finalScore: s.finalScore,
-        riskLevel: s.riskLevel, status, progress: status.includes('中') ? 0.5 : s.progress } : s)
+    this.optionSummaries = this.optionSummaries.map((s: OptionSummary): OptionSummary => {
+      if (s.index !== idx) {
+        return s
+      }
+
+      const updated: OptionSummary = {
+        index: s.index,
+        title: s.title,
+        color: s.color,
+        finalScore: s.finalScore,
+        riskLevel: s.riskLevel,
+        status: status,
+        progress: status.includes('中') ? 0.5 : s.progress,
+        executionConfidence: s.executionConfidence,
+        dropoutRiskMonth: s.dropoutRiskMonth,
+        personalNote: s.personalNote
+      }
+
+      return updated
+    })
   }
 
   private updateScore(idx: number, score: number, risk: number,
     execConf: number = 0, dropMonth: number = 0, note: string = '') {
-    this.optionSummaries = this.optionSummaries.map((s: OptionSummary): OptionSummary =>
-      s.index === idx ? {
-        index: s.index, title: s.title, color: s.color,
-        finalScore: score, riskLevel: risk, status: s.status, progress: 1,
-        executionConfidence: execConf, dropoutRiskMonth: dropMonth, personalNote: note
-      } : s)
+    this.optionSummaries = this.optionSummaries.map((s: OptionSummary): OptionSummary => {
+      if (s.index !== idx) {
+        return s
+      }
+
+      const updated: OptionSummary = {
+        index: s.index,
+        title: s.title,
+        color: s.color,
+        finalScore: score,
+        riskLevel: risk,
+        status: s.status,
+        progress: 1,
+        executionConfidence: execConf,
+        dropoutRiskMonth: dropMonth,
+        personalNote: note
+      }
+
+      return updated
+    })
+  }
+
+  private currentSimulationId(): string {
+    return this.simulationId
+  }
+
+  private getActiveOption(): DungeonOption | null {
+    if (!this.dungeonData || this.activeOptionIndex < 0 || this.activeOptionIndex >= this.dungeonData.options.length) {
+      return null
+    }
+    return this.dungeonData.options[this.activeOptionIndex]
+  }
+
+  private getCurrentFollowUpReview(): FollowUpReview | null {
+    const option = this.getActiveOption()
+    if (!option || !this.followUpSummary) return null
+    for (let i = 0; i < this.followUpSummary.reviews.length; i++) {
+      const review = this.followUpSummary.reviews[i]
+      if (review.option_id === option.option_id || review.option_title === option.title) {
+        return review
+      }
+    }
+    return null
+  }
+
+  private getActivePredictionTrace(): PredictionTrace | null {
+    const option = this.getActiveOption()
+    if (!option || !option.prediction_trace) {
+      return null
+    }
+    return option.prediction_trace
+  }
+
+  private getActiveRiskAssessment(): RiskAssessment | null {
+    const option = this.getActiveOption()
+    if (!option || !option.risk_assessment) {
+      return null
+    }
+    return option.risk_assessment
+  }
+
+  private hasEvidencePanels(): boolean {
+    return !!(this.verifiabilityReport || this.getActivePredictionTrace() || this.getActiveRiskAssessment())
+  }
+
+  private getActiveNodes(): MapNode[] {
+    return this.nodes.filter((node: MapNode) => node.optionIndex === this.activeOptionIndex && !node.id.startsWith('root_'))
+  }
+
+  private getActiveMainNodeCount(): number {
+    return this.getActiveNodes().filter((node: MapNode) => !node.isBranch).length
+  }
+
+  private getActiveBranchNodeCount(): number {
+    return this.getActiveNodes().filter((node: MapNode) => node.isBranch).length
+  }
+
+  private getActiveAverageProbability(): number {
+    const option = this.getActiveOption()
+    if (!option || option.timeline.length === 0) return 0
+    let total = 0
+    option.timeline.forEach((event: TimelineEvent) => {
+      total += event.probability || 0
+    })
+    return total / option.timeline.length
+  }
+
+  private getSelectedOrFirstNode(): MapNode | null {
+    const selected = this.getSelectedNode()
+    if (selected) return selected
+    const nodes = this.getActiveNodes()
+    return nodes.length > 0 ? nodes[0] : null
+  }
+
+  private updateOptionArtifacts(
+    idx: number,
+    score: number,
+    riskLevel: number,
+    riskAssessment: RiskAssessment | null,
+    predictionTrace: PredictionTrace | null,
+    execConf: number,
+    dropMonth: number,
+    note: string
+  ) {
+    if (!this.dungeonData) return
+    const updatedOptions: DungeonOption[] = this.dungeonData.options.map((opt: DungeonOption, index: number): DungeonOption => {
+      if (index !== idx) return opt
+      return {
+        option_id: opt.option_id,
+        title: opt.title,
+        description: opt.description,
+        timeline: opt.timeline,
+        final_score: score,
+        risk_level: riskLevel,
+        risk_assessment: riskAssessment,
+        prediction_trace: predictionTrace,
+        execution_confidence: execConf,
+        dropout_risk_month: dropMonth,
+        personal_note: note
+      } as DungeonOption
+    })
+    this.dungeonData = {
+      dungeon_id: this.dungeonData.dungeon_id,
+      user_id: this.dungeonData.user_id,
+      title: this.dungeonData.title,
+      description: this.dungeonData.description,
+      options: updatedOptions,
+      recommendation: this.dungeonData.recommendation,
+      created_at: this.dungeonData.created_at
+    }
+  }
+
+  private applyRecommendationContent(content: string) {
+    if (this.dungeonData) {
+      this.dungeonData = {
+        dungeon_id: this.dungeonData.dungeon_id,
+        user_id: this.dungeonData.user_id,
+        title: this.dungeonData.title,
+        description: this.dungeonData.description,
+        options: this.dungeonData.options,
+        recommendation: content,
+        created_at: this.dungeonData.created_at
+      }
+    }
+
+    if (!content) {
+      this.structuredRecommendation = null
+      return
+    }
+
+    try {
+      this.structuredRecommendation = JSON.parse(content) as RecommendationData
+    } catch (_) {
+      this.structuredRecommendation = null
+    }
+  }
+
+  private confidenceColor(value: number): string {
+    if (value >= 0.75) return '#10B981'
+    if (value >= 0.5) return '#F59E0B'
+    return '#EF4444'
+  }
+
+  private biasLabelText(label: string): string {
+    if (label === 'too_optimistic') return '偏乐观'
+    if (label === 'too_conservative') return '偏保守'
+    return '较贴近'
+  }
+
+  private calibrationBiasText(label: string): string {
+    if (label === 'too_optimistic') return '系统偏乐观'
+    if (label === 'too_conservative') return '系统偏保守'
+    if (label === 'balanced') return '整体较平衡'
+    return '样本不足'
+  }
+
+  private calibrationQualityText(level: string): string {
+    if (level === 'strong') return '校准稳定'
+    if (level === 'moderate') return '校准中等'
+    if (level === 'weak') return '仍需校准'
+    return '待积累'
+  }
+
+  private async loadFollowUpSummary() {
+    const simulationId = this.currentSimulationId()
+    if (!simulationId) return
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/decision/enhanced/follow-up/${simulationId}`,
+        { method: http.RequestMethod.GET, connectTimeout: 10000, readTimeout: 10000 }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if ((result.code as number) === 200 && result.data) {
+          this.followUpSummary = result.data as FollowUpSummary
+        }
+      }
+    } catch (err) {
+      console.error('加载回访摘要失败:', err)
+    }
+  }
+
+  private async submitFollowUp() {
+    const simulationId = this.currentSimulationId()
+    const option = this.getActiveOption()
+    if (!simulationId || !option || this.isSubmittingFollowUp) return
+    if (!this.followUpText.trim()) {
+      promptAction.showToast({ message: '请先写一句真实结果' })
+      return
+    }
+
+    this.isSubmittingFollowUp = true
+    try {
+      const httpRequest = http.createHttp()
+      const response = await httpRequest.request(
+        `${ApiConfig.getBaseUrl()}/api/decision/enhanced/follow-up`,
+        {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({
+            user_id: this.userId,
+            simulation_id: simulationId,
+            option_id: option.option_id,
+            option_title: option.title,
+            actual_score: this.followUpActualScore,
+            elapsed_months: this.followUpElapsedMonths,
+            actual_summary: this.followUpText
+          }),
+          connectTimeout: 10000,
+          readTimeout: 10000
+        }
+      )
+      httpRequest.destroy()
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as Record<string, Object>
+        if ((result.code as number) === 200 && result.data) {
+          const data = result.data as Record<string, Object>
+          this.followUpSummary = data.summary as FollowUpSummary
+          this.followUpText = ''
+          promptAction.showToast({ message: '回访已记录' })
+        }
+      }
+    } catch (err) {
+      console.error('提交回访失败:', err)
+      promptAction.showToast({ message: '回访提交失败' })
+    }
+    this.isSubmittingFollowUp = false
   }
 
   private optColor(i: number): string {
@@ -647,24 +1043,25 @@ struct DecisionDungeon2DMap {
           const simData = data as Record<string, Object>
           simData.simulation_id = simulationId
           simData.user_id = this.userId
+          this.simulationId = simulationId
+          this.verifiabilityReport = simData.verifiability_report as VerifiabilityReport || null
           const options = (simData.options as DungeonOption[]) || []
+          const recordRecommendation = (simData.recommendation as string) || recommendation
           this.dungeonData = {
             dungeon_id: simulationId, user_id: this.userId,
             title: question, description: '',
             options: options,
-            recommendation: recommendation,
+            recommendation: recordRecommendation,
             created_at: (simData.created_at as string) || ''
           }
+          this.applyRecommendationContent(recordRecommendation)
           if (options.length > 0 && options[0].timeline && options[0].timeline.length > 0) {
             this.buildFromExisting()
           } else {
             const optCount = (simData.options_count as number) || options.length || 0
-            this.buildHistorySummaryView(question, recommendation, optCount)
+            this.buildHistorySummaryView(question, recordRecommendation, optCount)
           }
-          if (recommendation) {
-            try { this.structuredRecommendation = JSON.parse(recommendation) as RecommendationData }
-            catch (_) { this.structuredRecommendation = null }
-          }
+          this.loadFollowUpSummary()
           this.streamStatus = '历史推演已加载'
           return
         }
@@ -699,8 +1096,8 @@ struct DecisionDungeon2DMap {
       await httpRequest.request(ApiConfig.getApiUrl(`/api/lora/train/${this.dungeonData.user_id}`),
         { method: http.RequestMethod.POST, connectTimeout: 10000, readTimeout: 10000 })
       httpRequest.destroy()
-      promptAction.showToast({ message: '模型更新已触发' })
-    } catch (e) { promptAction.showToast({ message: '更新失败' }) }
+      promptAction.showToast({ message: '储备模型训练已触发，不影响当前云端推演' })
+    } catch (e) { promptAction.showToast({ message: '储备模型训练启动失败' }) }
     this.isUpdatingModel = false
   }
 
@@ -718,6 +1115,9 @@ struct DecisionDungeon2DMap {
       } else if (this.optionSummaries.length > 0) {
         this.buildOptionTabs()
         if (this.structuredRecommendation) { this.buildRecommendation() }
+        this.buildSimulationOverview()
+        this.buildEvidencePanels()
+        this.buildCalibrationPanel()
         this.buildMiniTimeline()
         if (this.streamStatus) { this.buildStatusBar() }
         this.buildNodeCards()
@@ -784,7 +1184,7 @@ struct DecisionDungeon2DMap {
               }.alignItems(VerticalAlign.Bottom)
             }
 
-            // 执行意志条（LoRA 预测）
+            // 执行意志条（个性化预测）
             if (item.executionConfidence > 0) {
               Column({ space: 2 }) {
                 Row({ space: 4 }) {
@@ -824,6 +1224,9 @@ struct DecisionDungeon2DMap {
           .shadow(this.activeOptionIndex === item.index ? Theme.Shadow.Soft : { radius: 0, color: 'transparent', offsetY: 0, offsetX: 0 })
           .onClick(() => {
             this.activeOptionIndex = item.index
+            if (this.dungeonData && this.dungeonData.options[item.index]) {
+              this.followUpActualScore = this.dungeonData.options[item.index].final_score || 60
+            }
             this.showDetail = false
             this.selectedNodeId = ''
             this.drawCanvas()
@@ -836,18 +1239,507 @@ struct DecisionDungeon2DMap {
   }
 
   @Builder
+  buildSimulationOverview() {
+    if (!this.getActiveOption()) {
+      return
+    }
+
+    Column({ space: 10 }) {
+      Row({ space: 10 }) {
+        Column({ space: 6 }) {
+          Text('推演总览舱')
+            .fontSize(13).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+          Text('把轨迹、风险、执行和验证放在同一个观察面板')
+            .fontSize(10).fontColor(Theme.Color.TextTertiary)
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+
+        Text(this.getActiveOption()!.title)
+          .fontSize(11).fontWeight(600).fontColor(this.optColor(this.activeOptionIndex))
+          .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+          .backgroundColor(`${this.optColor(this.activeOptionIndex)}14`)
+          .borderRadius(Theme.Radius.round)
+      }.width('100%')
+
+      Row({ space: 10 }) {
+        this.OverviewMetricCard('主链节点', `${this.getActiveMainNodeCount()}`, 'main path', Theme.Color.Primary)
+        this.OverviewMetricCard('分支事件', `${this.getActiveBranchNodeCount()}`, 'forks', Theme.Color.Secondary)
+        this.OverviewMetricCard('平均发生率', `${(this.getActiveAverageProbability() * 100).toFixed(0)}%`, 'timeline', Theme.Color.Accent)
+      }.width('100%')
+
+      Row({ space: 10 }) {
+        this.OverviewInfoCard('当前状态', this.streamStatus === '' ? '已生成完整推演' : this.streamStatus)
+        this.OverviewInfoCard(
+          '高风险月份',
+          option.dropout_risk_month && option.dropout_risk_month > 0
+            ? `第 ${option.dropout_risk_month} 月更易摇摆`
+            : '暂无明显掉线月'
+        )
+      }.width('100%')
+
+      if (this.getSelectedOrFirstNode()) {
+        Column({ space: 6 }) {
+          Row() {
+            Text('当前焦点事件').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+            Blank()
+            Text(`第 ${focusNode.month} 月`)
+              .fontSize(10).fontColor(Theme.Color.TextTertiary)
+          }.width('100%')
+          Text(focusNode.description)
+            .fontSize(11).lineHeight(18).fontColor(Theme.Color.TextSecondary)
+          Row({ space: 6 }) {
+            Text(`${(focusNode.probability * 100).toFixed(0)}% 概率`)
+              .fontSize(10).fontColor(this.confidenceColor(focusNode.probability))
+              .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+              .backgroundColor(Theme.Color.BackgroundTertiary)
+              .borderRadius(Theme.Radius.round)
+            Text(focusNode.isBranch ? '分支节点' : '主链节点')
+              .fontSize(10).fontColor(focusNode.isBranch ? Theme.Color.Warning : Theme.Color.Primary)
+              .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+              .backgroundColor(focusNode.isBranch ? 'rgba(245,158,11,0.10)' : 'rgba(10,89,247,0.08)')
+              .borderRadius(Theme.Radius.round)
+          }.width('100%')
+        }
+        .width('100%').padding(12)
+        .backgroundColor(Theme.Color.BackgroundTertiary)
+        .borderRadius(Theme.Radius.l)
+        .alignItems(HorizontalAlign.Start)
+      }
+    }
+    .width('100%').padding(12)
+    .backgroundColor(Theme.Color.BackgroundSecondary)
+    .borderRadius(Theme.Radius.l)
+    .border({ width: 1, color: Theme.Color.BorderLight })
+    .shadow(Theme.Shadow.Soft)
+    .alignItems(HorizontalAlign.Start)
+    .margin({ left: 16, right: 16, top: 8, bottom: 6 })
+  }
+
+  @Builder
+  OverviewMetricCard(label: string, value: string, helper: string, color: string) {
+    Column({ space: 4 }) {
+      Text(label).fontSize(10).fontColor(Theme.Color.TextTertiary)
+      Text(value).fontSize(18).fontWeight(700).fontColor(color)
+      Text(helper).fontSize(9).fontColor(Theme.Color.TextTertiary)
+    }
+    .layoutWeight(1)
+    .padding(10)
+    .backgroundColor(Theme.Color.BackgroundTertiary)
+    .borderRadius(Theme.Radius.m)
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  OverviewInfoCard(label: string, value: string) {
+    Column({ space: 6 }) {
+      Text(label).fontSize(10).fontColor(Theme.Color.TextTertiary)
+      Text(value)
+        .fontSize(11).lineHeight(18).fontColor(Theme.Color.TextSecondary)
+        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+    }
+    .layoutWeight(1)
+    .padding(12)
+    .backgroundColor(Theme.Color.BackgroundTertiary)
+    .borderRadius(Theme.Radius.l)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
   buildRecommendation() {
     if (this.structuredRecommendation) {
-      Column({ space: 4 }) {
+      Column({ space: 8 }) {
         Text(`建议: ${this.structuredRecommendation!.recommended_option}`)
           .fontSize(14).fontWeight(600).fontColor(Theme.Color.TextPrimary)
         Text(this.structuredRecommendation!.summary)
           .fontSize(12).fontColor(Theme.Color.TextSecondary).maxLines(2)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (this.structuredRecommendation!.confidence_note) {
+          Text(this.structuredRecommendation!.confidence_note as string)
+            .fontSize(11).fontColor(Theme.Color.Warning).lineHeight(18)
+        }
       }
       .width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
       .backgroundColor('rgba(10, 89, 247, 0.04)')
       .border({ width: { bottom: 0.5 }, color: Theme.Color.BorderLight })
+    }
+  }
+
+  @Builder
+  buildEvidencePanels() {
+    if (this.hasEvidencePanels()) {
+      Column({ space: 10 }) {
+        if (this.verifiabilityReport) {
+          Column({ space: 10 }) {
+            Row() {
+              Text('可验证性报告')
+                .fontSize(13).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+              Blank()
+              Text(`${(this.verifiabilityReport!.average_prediction_confidence * 100).toFixed(0)}% 置信`)
+                .fontSize(11).fontWeight(600)
+                .fontColor(this.confidenceColor(this.verifiabilityReport!.average_prediction_confidence))
+            }.width('100%')
+
+            Row({ space: 10 }) {
+              Column({ space: 3 }) {
+                Text('信息覆盖').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                Text(`${(this.verifiabilityReport!.collected_info_coverage * 100).toFixed(0)}%`)
+                  .fontSize(16).fontWeight(700).fontColor(Theme.Color.Primary)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+              Column({ space: 3 }) {
+                Text('平均置信').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                Text(`${(this.verifiabilityReport!.average_prediction_confidence * 100).toFixed(0)}%`)
+                  .fontSize(16).fontWeight(700)
+                  .fontColor(this.confidenceColor(this.verifiabilityReport!.average_prediction_confidence))
+              }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            }.width('100%')
+
+            if (this.verifiabilityReport!.historical_review_count && this.verifiabilityReport!.historical_review_count! > 0) {
+              Column({ space: 8 }) {
+                Row({ space: 10 }) {
+                  Column({ space: 3 }) {
+                    Text('历史回访').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                    Text(`${this.verifiabilityReport!.historical_review_count}`)
+                      .fontSize(16).fontWeight(700).fontColor(Theme.Color.Secondary)
+                  }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+                  Column({ space: 3 }) {
+                    Text('偏差倾向').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                    Text(this.calibrationBiasText(this.verifiabilityReport!.calibration_bias as string))
+                      .fontSize(12).fontWeight(700).fontColor(Theme.Color.Warning)
+                  }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+                  Column({ space: 3 }) {
+                    Text('置信修正').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                    Text(`${((this.verifiabilityReport!.confidence_adjustment || 0) >= 0 ? '+' : '')}${((this.verifiabilityReport!.confidence_adjustment || 0) * 100).toFixed(0)}%`)
+                      .fontSize(12).fontWeight(700)
+                      .fontColor((this.verifiabilityReport!.confidence_adjustment || 0) > 0 ? '#10B981' : '#F59E0B')
+                  }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+                }.width('100%')
+
+                if (this.verifiabilityReport!.calibration_note) {
+                  Text(this.verifiabilityReport!.calibration_note as string)
+                    .fontSize(10).lineHeight(16).fontColor(Theme.Color.TextSecondary)
+                    .padding(8)
+                    .backgroundColor(Theme.Color.BackgroundTertiary)
+                    .borderRadius(Theme.Radius.m)
+                }
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+
+            if (this.verifiabilityReport!.missing_key_inputs.length > 0) {
+              Column({ space: 6 }) {
+                Text('还缺的关键输入').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                Row({ space: 6 }) {
+                  ForEach(this.verifiabilityReport!.missing_key_inputs, (item: string) => {
+                    Text(item)
+                      .fontSize(10).fontColor('#B45309')
+                      .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+                      .backgroundColor('#FEF3C7').borderRadius(Theme.Radius.round)
+                  }, (item: string) => item)
+                }.width('100%')
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+          }
+          .width('100%').padding(12)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+          .alignItems(HorizontalAlign.Start)
+        }
+
+        if (this.getActivePredictionTrace()) {
+          Column({ space: 10 }) {
+            Row() {
+              Text('当前选项证据链')
+                .fontSize(13).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+              Blank()
+              Text(`${(this.getActivePredictionTrace()!.prediction_confidence * 100).toFixed(0)}%`)
+                .fontSize(12).fontWeight(700).fontColor(this.confidenceColor(this.getActivePredictionTrace()!.prediction_confidence))
+            }.width('100%')
+
+            Row({ space: 10 }) {
+              Column({ space: 2 }) {
+                Text('上下文覆盖').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                Text(`${(this.getActivePredictionTrace()!.context_coverage * 100).toFixed(0)}%`).fontSize(15).fontWeight(700)
+                  .fontColor(Theme.Color.Primary)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+              Column({ space: 2 }) {
+                Text('事件具体度').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                Text(`${(this.getActivePredictionTrace()!.event_specificity * 100).toFixed(0)}%`).fontSize(15).fontWeight(700)
+                  .fontColor(Theme.Color.Accent)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+              Column({ space: 2 }) {
+                Text('事实条数').fontSize(10).fontColor(Theme.Color.TextTertiary)
+                Text(`${this.getActivePredictionTrace()!.facts_used}`).fontSize(15).fontWeight(700)
+                  .fontColor(Theme.Color.Warning)
+              }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            }.width('100%')
+
+            if (this.getActivePredictionTrace()!.calibration_review_count && this.getActivePredictionTrace()!.calibration_review_count! > 0) {
+              Column({ space: 6 }) {
+                Text('历史校准修正').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                Text(
+                  `基础置信 ${(this.getActivePredictionTrace()!.base_prediction_confidence! * 100).toFixed(0)}% → ` +
+                  `校准后 ${(this.getActivePredictionTrace()!.prediction_confidence * 100).toFixed(0)}%`
+                )
+                  .fontSize(10).fontColor(Theme.Color.TextSecondary)
+                Text(this.getActivePredictionTrace()!.calibration_note as string)
+                  .fontSize(10).lineHeight(16).fontColor(Theme.Color.TextSecondary)
+                  .padding(8)
+                  .backgroundColor(Theme.Color.BackgroundTertiary)
+                  .borderRadius(Theme.Radius.m)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+
+            if (this.getActivePredictionTrace()!.evidence_sources.length > 0) {
+              Column({ space: 6 }) {
+                Text('证据来源').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                Row({ space: 6 }) {
+                  ForEach(this.getActivePredictionTrace()!.evidence_sources, (item: string) => {
+                    Text(item)
+                      .fontSize(10).fontColor('#2563EB')
+                      .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+                      .backgroundColor('#DBEAFE').borderRadius(Theme.Radius.round)
+                  }, (item: string) => item)
+                }.width('100%')
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+
+            if (this.getActivePredictionTrace()!.assumptions.length > 0) {
+              Column({ space: 4 }) {
+                Text('当前仍在假设的部分').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                ForEach(this.getActivePredictionTrace()!.assumptions.slice(0, 3), (item: string) => {
+                  Text(`• ${item}`).fontSize(10).lineHeight(16).fontColor(Theme.Color.TextSecondary)
+                }, (item: string) => item)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+
+            if (this.getActiveOption() && this.getActiveOption()!.personal_note) {
+              Column({ space: 4 }) {
+                Text('执行自评').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                Text(this.getActiveOption()!.personal_note as string)
+                  .fontSize(10).lineHeight(16).fontColor(Theme.Color.TextSecondary)
+                  .padding(8)
+                  .backgroundColor(Theme.Color.BackgroundTertiary)
+                  .borderRadius(Theme.Radius.m)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+          }
+          .width('100%').padding(12)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+          .alignItems(HorizontalAlign.Start)
+        }
+
+        if (this.getActiveRiskAssessment()) {
+          Column({ space: 10 }) {
+            Row() {
+              Text('风险引擎结论')
+                .fontSize(13).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+              Blank()
+              Text(`${this.getActiveRiskAssessment()!.overall_risk.toFixed(1)}/10`)
+                .fontSize(12).fontWeight(700).fontColor(this.riskLevelColor(this.getActiveRiskAssessment()!.overall_risk / 10))
+            }.width('100%')
+
+            Row({ space: 6 }) {
+              Text(this.getActiveRiskAssessment()!.overall_level)
+                .fontSize(10).fontWeight(600)
+                .fontColor(this.riskLevelColor(this.getActiveRiskAssessment()!.overall_risk / 10))
+                .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+                .backgroundColor('rgba(245,158,11,0.12)')
+                .borderRadius(Theme.Radius.round)
+              if (this.getActiveRiskAssessment()!.top_dimensions && this.getActiveRiskAssessment()!.top_dimensions!.length > 0) {
+                ForEach(this.getActiveRiskAssessment()!.top_dimensions!.slice(0, 3), (item: string) => {
+                  Text(item)
+                    .fontSize(10).fontColor(Theme.Color.TextSecondary)
+                    .padding({ left: 6, right: 6, top: 3, bottom: 3 })
+                    .backgroundColor(Theme.Color.BackgroundTertiary)
+                    .borderRadius(Theme.Radius.round)
+                }, (item: string) => item)
+              }
+            }.width('100%')
+
+            if (this.getActiveRiskAssessment()!.recommendations && this.getActiveRiskAssessment()!.recommendations.length > 0) {
+              Column({ space: 4 }) {
+                Text('缓解建议').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+                ForEach(this.getActiveRiskAssessment()!.recommendations.slice(0, 3), (item: string) => {
+                  Text(`• ${item}`).fontSize(10).lineHeight(16).fontColor(Theme.Color.TextSecondary)
+                }, (item: string) => item)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+            }
+          }
+          .width('100%').padding(12)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+          .alignItems(HorizontalAlign.Start)
+        }
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 6 })
+    }
+  }
+
+  @Builder
+  buildCalibrationPanel() {
+    if (this.getActiveOption()) {
+      Column({ space: 10 }) {
+        Row() {
+          Text('预测回访校准')
+            .fontSize(13).fontWeight(700).fontColor(Theme.Color.TextPrimary)
+          Blank()
+          if (this.followUpSummary && this.followUpSummary.review_count > 0) {
+            Text(`${this.followUpSummary.review_count} 条回访`)
+              .fontSize(11).fontColor(Theme.Color.TextTertiary)
+          }
+        }.width('100%')
+
+        if (this.followUpSummary && this.followUpSummary.review_count > 0) {
+          Row({ space: 10 }) {
+            Column({ space: 2 }) {
+              Text('预测均分').fontSize(10).fontColor(Theme.Color.TextTertiary)
+              Text(`${this.followUpSummary.average_predicted_score.toFixed(0)}`)
+                .fontSize(15).fontWeight(700).fontColor(Theme.Color.Primary)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            Column({ space: 2 }) {
+              Text('实际均分').fontSize(10).fontColor(Theme.Color.TextTertiary)
+              Text(`${this.followUpSummary.average_actual_score.toFixed(0)}`)
+                .fontSize(15).fontWeight(700).fontColor(Theme.Color.Accent)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            Column({ space: 2 }) {
+              Text('平均误差').fontSize(10).fontColor(Theme.Color.TextTertiary)
+              Text(`${this.followUpSummary.average_absolute_error.toFixed(0)}`)
+                .fontSize(15).fontWeight(700).fontColor(Theme.Color.Warning)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+          }.width('100%')
+
+          Row({ space: 6 }) {
+            Text(`偏乐观 ${this.followUpSummary.optimistic_count}`)
+              .fontSize(10).fontColor('#B45309')
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor('#FEF3C7').borderRadius(Theme.Radius.round)
+            Text(`偏保守 ${this.followUpSummary.conservative_count}`)
+              .fontSize(10).fontColor('#1D4ED8')
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor('#DBEAFE').borderRadius(Theme.Radius.round)
+            Text(`较贴近 ${this.followUpSummary.calibrated_count}`)
+              .fontSize(10).fontColor('#047857')
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor('#D1FAE5').borderRadius(Theme.Radius.round)
+          }.width('100%')
+        }
+
+        if (
+          this.followUpSummary &&
+          this.followUpSummary.user_calibration_profile &&
+          this.followUpSummary.user_calibration_profile!.review_count > 0
+        ) {
+          Column({ space: 6 }) {
+            Row() {
+              Text('系统已学到的偏差').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+              Blank()
+              Text(this.calibrationQualityText(this.followUpSummary.user_calibration_profile!.calibration_quality))
+                .fontSize(10).fontColor(Theme.Color.TextSecondary)
+            }.width('100%')
+            Text(
+              `${this.calibrationBiasText(this.followUpSummary.user_calibration_profile!.bias_tendency)} · ` +
+              `未来置信修正 ${(this.followUpSummary.user_calibration_profile!.confidence_adjustment >= 0 ? '+' : '')}` +
+              `${(this.followUpSummary.user_calibration_profile!.confidence_adjustment * 100).toFixed(0)}%`
+            )
+              .fontSize(10).fontColor(Theme.Color.TextSecondary)
+            Text(this.followUpSummary.user_calibration_profile!.note)
+              .fontSize(10).lineHeight(16).fontColor(Theme.Color.TextSecondary)
+              .padding(8)
+              .backgroundColor(Theme.Color.BackgroundTertiary)
+              .borderRadius(Theme.Radius.m)
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }
+
+        if (!this.currentSimulationId()) {
+          Text('推演完成并保存后，可以在这里记录真实结果，校准预测偏差。')
+            .fontSize(11).lineHeight(18).fontColor(Theme.Color.TextTertiary)
+        } else if (this.getCurrentFollowUpReview()) {
+          Column({ space: 8 }) {
+            Row({ space: 8 }) {
+              Text(`实际 ${this.getCurrentFollowUpReview()!.actual_score.toFixed(0)} 分`)
+                .fontSize(12).fontWeight(700).fontColor(Theme.Color.Accent)
+              Text(`${this.biasLabelText(this.getCurrentFollowUpReview()!.bias_label)} · ${this.getCurrentFollowUpReview()!.elapsed_months}个月后`)
+                .fontSize(11).fontColor(Theme.Color.TextSecondary)
+            }
+            Text(this.getCurrentFollowUpReview()!.bias_note)
+              .fontSize(11).lineHeight(18).fontColor(Theme.Color.TextSecondary)
+            if (this.getCurrentFollowUpReview()!.actual_summary) {
+              Text(this.getCurrentFollowUpReview()!.actual_summary)
+                .fontSize(11).lineHeight(18).fontColor(Theme.Color.TextSecondary)
+                .padding(10)
+                .backgroundColor(Theme.Color.BackgroundTertiary)
+                .borderRadius(Theme.Radius.m)
+            }
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        } else {
+          Column({ space: 10 }) {
+            Column({ space: 6 }) {
+              Row() {
+                Text('经过多久回看').fontSize(11).fontColor(Theme.Color.TextSecondary)
+                Blank()
+                Text(`${this.followUpElapsedMonths.toFixed(0)} 个月`).fontSize(11).fontWeight(600).fontColor(Theme.Color.Primary)
+              }.width('100%')
+              Slider({ value: this.followUpElapsedMonths, min: 1, max: 12, step: 1 })
+                .width('100%')
+                .trackColor(Theme.Color.BackgroundTertiary)
+                .selectedColor(Theme.Color.Primary)
+                .blockColor(Theme.Color.BackgroundSecondary)
+                .trackThickness(6)
+                .blockSize({ width: 20, height: 20 })
+                .onChange((value: number) => { this.followUpElapsedMonths = value })
+            }.width('100%')
+
+            Column({ space: 6 }) {
+              Row() {
+                Text('真实结果得分').fontSize(11).fontColor(Theme.Color.TextSecondary)
+                Blank()
+                Text(`${this.followUpActualScore.toFixed(0)} 分`).fontSize(11).fontWeight(600)
+                  .fontColor(this.followUpActualScore >= 70 ? '#10B981' : this.followUpActualScore >= 45 ? '#F59E0B' : '#EF4444')
+              }.width('100%')
+              Slider({ value: this.followUpActualScore, min: 0, max: 100, step: 5 })
+                .width('100%')
+                .trackColor(Theme.Color.BackgroundTertiary)
+                .selectedColor(this.followUpActualScore >= 70 ? '#10B981' : this.followUpActualScore >= 45 ? '#F59E0B' : '#EF4444')
+                .blockColor(Theme.Color.BackgroundSecondary)
+                .trackThickness(6)
+                .blockSize({ width: 20, height: 20 })
+                .onChange((value: number) => { this.followUpActualScore = value })
+            }.width('100%')
+
+            TextArea({ placeholder: '3-60字描述真实发生了什么，比如：收入比预期低，但身心状态更稳', text: this.followUpText })
+              .width('100%')
+              .height(84)
+              .fontSize(12)
+              .fontColor(Theme.Color.TextPrimary)
+              .placeholderColor(Theme.Color.TextTertiary)
+              .backgroundColor(Theme.Color.BackgroundTertiary)
+              .borderRadius(Theme.Radius.m)
+              .onChange((value: string) => { this.followUpText = value })
+
+            Button(this.isSubmittingFollowUp ? '提交中...' : '提交真实结果')
+              .width('100%')
+              .height(40)
+              .fontSize(13).fontWeight(600)
+              .fontColor('#FFFFFF')
+              .backgroundColor(this.isSubmittingFollowUp ? Theme.Color.TextTertiary : Theme.Color.Primary)
+              .borderRadius(Theme.Radius.m)
+              .enabled(!this.isSubmittingFollowUp)
+              .onClick(() => this.submitFollowUp())
+          }.width('100%')
+        }
+      }
+      .width('100%').padding(12)
+      .backgroundColor(Theme.Color.BackgroundSecondary)
+      .borderRadius(Theme.Radius.l)
+      .border({ width: 1, color: Theme.Color.BorderLight })
+      .shadow(Theme.Shadow.Soft)
+      .alignItems(HorizontalAlign.Start)
+      .margin({ left: 16, right: 16, top: 8, bottom: 6 })
     }
   }
 

@@ -55,11 +55,11 @@ export class ApiConfig {
     endpoints['LLM_STATUS'] = '/api/llm/status';
     endpoints['USER_CONFIG'] = '/api/config';
     endpoints['DOMAINS'] = '/api/domains';
-    endpoints['DECISION_SIMULATE'] = '/api/decision/simulate';
-    endpoints['DECISION_COMPARE'] = '/api/decision/quick-analyze';
-    endpoints['DECISION_CREATE_DUNGEON'] = '/api/decision/create-dungeon';
-    endpoints['DECISION_GET_DUNGEON'] = '/api/decision/dungeon';
-    endpoints['DECISION_LIST_DUNGEONS'] = '/api/decision/dungeons';
+    endpoints['DECISION_ENHANCED_COLLECT_START'] = '/api/decision/enhanced/collect/start';
+    endpoints['DECISION_ENHANCED_COLLECT_CONTINUE'] = '/api/decision/enhanced/collect/continue';
+    endpoints['DECISION_ENHANCED_SESSION'] = '/api/decision/enhanced/collect/session';
+    endpoints['DECISION_ENHANCED_SIMULATE'] = '/api/decision/enhanced/simulate/with-collection';
+    endpoints['DECISION_ENHANCED_FULL_PROCESS'] = '/api/decision/enhanced/full-process';
     return endpoints;
   }
 }

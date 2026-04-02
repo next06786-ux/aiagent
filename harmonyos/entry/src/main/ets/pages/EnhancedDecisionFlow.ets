@@ -3,7 +3,7 @@
  * 两阶段信息收集 + 个性化决策模拟
  * 阶段1: 用户自由表达 -> AI问"还有吗" -> 用户说"没了"
  * 阶段2: AI针对性提问收集信息
- * 阶段3: 本地模型+LoRA决策模拟
+ * 阶段3: 云端/API 决策模拟（保留本地个性模型能力）
  */
 import router from '@ohos.router'
 import http from '@ohos.net.http'

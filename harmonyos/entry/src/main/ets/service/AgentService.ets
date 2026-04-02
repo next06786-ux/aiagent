@@ -136,8 +136,8 @@ export class AgentService {
  */
   async cancelTask(taskId: string): Promise<boolean> {
     try {
-      await this.request(`/api/decision/feedback`, http.RequestMethod.POST);
-      return true;
+      console.warn(`Cancel task is not supported by the current backend, taskId=${taskId}`);
+      return false;
     } catch (error) {
       console.error('Cancel task failed:', JSON.stringify(error));
       return false;

@@ -1,7 +1,7 @@
 """
-LoRA增强的决策分析器
-使用本地 transformers + peft 在 Qwen3.5-9B 基座上挂载用户专属 LoRA，
-用于决策模拟与个性化推荐。
+决策分析器
+保留本地 Qwen3.5-9B + 用户 LoRA 能力，同时支持 API 推理模式。
+默认通过 DECISION_INFERENCE_MODE 控制实际执行链路。
 """
 import os
 import sys
@@ -13,6 +13,7 @@ from typing import List, Dict, Any, Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from backend.lora.lora_model_manager import lora_manager
+from backend.llm.llm_service import get_llm_service
 
 LORA_BASE_DIR = os.path.abspath(
     os.environ.get("LORA_MODELS_DIR",
@@ -21,11 +22,65 @@ LORA_BASE_DIR = os.path.abspath(
 
 
 class LoRADecisionAnalyzer:
-    """通过本地 Qwen3.5-9B + 用户 LoRA 进行个性化决策分析"""
+    """决策推理适配器：可切换 LoRA 本地推理或 API 推理"""
 
     def __init__(self):
         self.lora_manager = lora_manager
         self.lora_base_dir = LORA_BASE_DIR
+        self.llm_service = get_llm_service()
+        self.inference_mode = os.getenv("DECISION_INFERENCE_MODE", "api").strip().lower()
+
+    def get_inference_mode(self) -> str:
+        return "lora" if self.inference_mode == "lora" else "api"
+
+    def is_lora_inference(self) -> bool:
+        return self.get_inference_mode() == "lora"
+
+    def is_api_inference(self) -> bool:
+        return self.get_inference_mode() == "api"
+
+    def _ensure_llm_service(self):
+        if self.llm_service is None:
+            self.llm_service = get_llm_service()
+        if not self.llm_service or not getattr(self.llm_service, "enabled", False):
+            raise RuntimeError("API 推理服务未就绪")
+        return self.llm_service
+
+    def _chatml_prompt_to_messages(self, prompt: str) -> List[Dict[str, str]]:
+        messages: List[Dict[str, str]] = []
+        pattern = r"<\|im_start\|>(system|user|assistant)\n(.*?)(?=<\|im_start\|>|\Z)"
+        for role, content in re.findall(pattern, prompt, re.DOTALL):
+            cleaned = content.replace("<|im_end|>", "").replace("<think>", "").strip()
+            if not cleaned or role == "assistant":
+                continue
+            messages.append({"role": role, "content": cleaned})
+        if messages:
+            return messages
+
+        cleaned_prompt = (
+            prompt.replace("<|im_start|>", "")
+            .replace("<|im_end|>", "")
+            .replace("<think>", "")
+            .strip()
+        )
+        return [{"role": "user", "content": cleaned_prompt}] if cleaned_prompt else []
+
+    def _call_api_with_prompt(
+        self,
+        prompt: str,
+        temperature: float = 0.4,
+        response_format: Optional[str] = None
+    ) -> str:
+        llm_service = self._ensure_llm_service()
+        messages = self._chatml_prompt_to_messages(prompt)
+        return llm_service.chat(messages, temperature=temperature, response_format=response_format)
+
+    async def _stream_text_chunks(self, text: str, chunk_size: int = 96):
+        if not text:
+            return
+        for i in range(0, len(text), chunk_size):
+            yield text[i:i + chunk_size]
+            await asyncio.sleep(0)
 
     def get_user_lora_path(self, user_id: str) -> Optional[str]:
         return self.lora_manager.get_user_lora_path(user_id)
@@ -50,8 +105,18 @@ class LoRADecisionAnalyzer:
         question: str,
         option: Dict[str, str],
         profile: Any,
-        num_events: int = 3
+        num_events: int = 3,
+        collected_info: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
+        if self.is_api_inference():
+            return await self.generate_timeline_with_api(
+                user_id=user_id,
+                question=question,
+                option=option,
+                profile=profile,
+                num_events=num_events,
+                collected_info=collected_info
+            )
         if not self.has_lora_model(user_id):
             raise ValueError(f"用户 {user_id} 还没有训练 LoRA 模型")
         if self.is_user_training(user_id):
@@ -62,10 +127,14 @@ class LoRADecisionAnalyzer:
 
         # 从 RAG 记忆中检索与决策问题相关的生活细节
         life_context = self._retrieve_life_context(user_id, question)
+        collected_context = self._format_collected_info(collected_info)
+        behavioral_dna = self._get_behavioral_dna(user_id)
 
         prompt = self._build_timeline_prompt(question, option, profile, num_events,
                                              strict=False, kg_context=kg_context,
-                                             life_context=life_context)
+                                             life_context=life_context,
+                                             collected_context=collected_context,
+                                             behavioral_dna=behavioral_dna)
         response = await asyncio.to_thread(
             self.lora_manager.generate,
             user_id,
@@ -80,7 +149,9 @@ class LoRADecisionAnalyzer:
         if not timeline:
             retry_prompt = self._build_timeline_prompt(question, option, profile, num_events,
                                                        strict=True, kg_context=kg_context,
-                                                       life_context=life_context)
+                                                       life_context=life_context,
+                                                       collected_context=collected_context,
+                                                       behavioral_dna=behavioral_dna)
             retry_response = await asyncio.to_thread(
                 self.lora_manager.generate,
                 user_id,
@@ -100,25 +171,102 @@ class LoRADecisionAnalyzer:
             raise RuntimeError("LoRA 时间线生成结果为空或无法解析")
         return timeline
 
+    async def generate_timeline_with_api(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        profile: Any,
+        num_events: int = 3,
+        collected_info: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        kg_context = self._query_relevant_persons(user_id, question)
+        life_context = self._retrieve_life_context(user_id, question)
+        collected_context = self._format_collected_info(collected_info)
+        behavioral_dna = self._get_behavioral_dna(user_id)
+
+        prompt = self._build_timeline_prompt(
+            question,
+            option,
+            profile,
+            num_events,
+            strict=False,
+            kg_context=kg_context,
+            life_context=life_context,
+            collected_context=collected_context,
+            behavioral_dna=behavioral_dna
+        )
+        response = await asyncio.to_thread(self._call_api_with_prompt, prompt, 0.35, None)
+        timeline = self._parse_timeline_json(response)
+
+        if not timeline:
+            retry_prompt = self._build_timeline_prompt(
+                question,
+                option,
+                profile,
+                num_events,
+                strict=True,
+                kg_context=kg_context,
+                life_context=life_context,
+                collected_context=collected_context,
+                behavioral_dna=behavioral_dna
+            )
+            retry_response = await asyncio.to_thread(self._call_api_with_prompt, retry_prompt, 0.2, None)
+            timeline = self._parse_timeline_json(retry_response)
+
+        if not timeline:
+            fallback_response = self._build_fallback_timeline(question, option, profile, num_events)
+            timeline = self._parse_timeline_json(fallback_response)
+
+        if not timeline:
+            raise RuntimeError("API 时间线生成结果为空或无法解析")
+        return timeline
+
     async def generate_personalized_recommendation(
         self,
         user_id: str,
         question: str,
         options: List[Dict],
-        profile: Any
+        profile: Any,
+        collected_info: Optional[Dict[str, Any]] = None
     ) -> str:
+        if self.is_api_inference():
+            return await self.generate_personalized_recommendation_with_api(
+                user_id=user_id,
+                question=question,
+                options=options,
+                profile=profile,
+                collected_info=collected_info
+            )
         if not self.has_lora_model(user_id):
             raise ValueError(f"用户 {user_id} 还没有训练 LoRA 模型")
         if self.is_user_training(user_id):
             raise RuntimeError(f"用户 {user_id} 的 LoRA 正在训练中，请稍后再试个性化推荐生成")
 
-        prompt = self._build_recommendation_prompt(question, options, profile)
+        prompt = self._build_recommendation_prompt(question, options, profile, collected_info)
         response = await asyncio.to_thread(
             self.lora_manager.generate,
             user_id,
             prompt,
             140,
             0.35,
+        )
+        return self._clean_recommendation(response)
+
+    async def generate_personalized_recommendation_with_api(
+        self,
+        user_id: str,
+        question: str,
+        options: List[Dict],
+        profile: Any,
+        collected_info: Optional[Dict[str, Any]] = None
+    ) -> str:
+        prompt = self._build_recommendation_prompt(question, options, profile, collected_info)
+        response = await asyncio.to_thread(
+            self._call_api_with_prompt,
+            prompt,
+            0.45,
+            "json_object"
         )
         return self._clean_recommendation(response)
 
@@ -129,11 +277,27 @@ class LoRADecisionAnalyzer:
         option: Dict[str, str],
         profile: Any,
         num_events: int = 12,
-        all_option_titles: List[str] = None
+        all_option_titles: List[str] = None,
+        collected_info: Optional[Dict[str, Any]] = None
     ):
+        if self.is_api_inference():
+            timeline = await self.generate_timeline_with_api(
+                user_id=user_id,
+                question=question,
+                option=option,
+                profile=profile,
+                num_events=num_events,
+                collected_info=collected_info
+            )
+            response_text = json.dumps(timeline, ensure_ascii=False)
+            async for chunk in self._stream_text_chunks(response_text):
+                yield chunk
+            return
         """分批流式生成时间线：每批 4 个节点，后续批次传入累积状态作为上下文"""
         kg_context = await asyncio.to_thread(self._query_relevant_persons, user_id, question)
         life_context = await asyncio.to_thread(self._retrieve_life_context, user_id, question)
+        collected_context = self._format_collected_info(collected_info)
+        behavioral_dna = self._get_behavioral_dna(user_id)
 
         batch_size = 2
         generated_so_far: List[Dict] = []
@@ -155,10 +319,12 @@ class LoRADecisionAnalyzer:
                 question, option, profile, batch_count,
                 strict=False, kg_context=kg_context,
                 life_context=life_context,
+                collected_context=collected_context,
                 other_options=all_option_titles,
                 generated_so_far=generated_so_far,
                 start_month=start_month,
-                cumulative_state=cumulative_state
+                cumulative_state=cumulative_state,
+                behavioral_dna=behavioral_dna
             )
 
             batch_buffer = ""
@@ -179,10 +345,12 @@ class LoRADecisionAnalyzer:
                     question, option, profile, 1,
                     strict=True, kg_context=kg_context,
                     life_context=life_context,
+                    collected_context=collected_context,
                     other_options=all_option_titles,
                     generated_so_far=generated_so_far,
                     start_month=ev['month'],
-                    cumulative_state=cumulative_state
+                    cumulative_state=cumulative_state,
+                    behavioral_dna=behavioral_dna
                 )
                 try:
                     regen_response = await asyncio.to_thread(
@@ -204,9 +372,21 @@ class LoRADecisionAnalyzer:
         user_id: str,
         question: str,
         options: List[Dict],
-        profile: Any
+        profile: Any,
+        collected_info: Optional[Dict[str, Any]] = None
     ):
-        prompt = self._build_recommendation_prompt(question, options, profile)
+        if self.is_api_inference():
+            recommendation = await self.generate_personalized_recommendation_with_api(
+                user_id=user_id,
+                question=question,
+                options=options,
+                profile=profile,
+                collected_info=collected_info
+            )
+            async for chunk in self._stream_text_chunks(recommendation):
+                yield chunk
+            return
+        prompt = self._build_recommendation_prompt(question, options, profile, collected_info)
         for chunk in self.lora_manager.generate_stream(user_id, prompt, 300, 0.4):
             yield chunk
             await asyncio.sleep(0)
@@ -219,6 +399,14 @@ class LoRADecisionAnalyzer:
         parent_event: Dict[str, Any],
         profile: Any
     ) -> List[Dict[str, Any]]:
+        if self.is_api_inference():
+            return await self.generate_branch_events_with_api(
+                user_id=user_id,
+                question=question,
+                option=option,
+                parent_event=parent_event,
+                profile=profile
+            )
         prompt = self._build_branch_prompt(question, option, parent_event, profile)
         response = await asyncio.to_thread(
             self.lora_manager.generate,
@@ -232,13 +420,37 @@ class LoRADecisionAnalyzer:
             return self._build_fallback_branch_events(parent_event)
         return branches[:2]
 
+    async def generate_branch_events_with_api(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        parent_event: Dict[str, Any],
+        profile: Any
+    ) -> List[Dict[str, Any]]:
+        prompt = self._build_branch_prompt(question, option, parent_event, profile)
+        response = await asyncio.to_thread(self._call_api_with_prompt, prompt, 0.45, None)
+        branches = self._parse_timeline_json(response)
+        if not branches:
+            return self._build_fallback_branch_events(parent_event)
+        return branches[:2]
+
     async def generate_self_prediction(
         self,
         user_id: str,
         question: str,
         option: Dict[str, str],
-        profile: Any
+        profile: Any,
+        collected_info: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
+        if self.is_api_inference():
+            return await self.generate_self_prediction_with_api(
+                user_id=user_id,
+                question=question,
+                option=option,
+                profile=profile,
+                collected_info=collected_info
+            )
         """
         让 LoRA 预测"这个用户选了这条路之后，真正会以多强的意志去执行"。
 
@@ -255,7 +467,13 @@ class LoRADecisionAnalyzer:
         if not self.has_lora_model(user_id):
             return empty
 
-        prompt = self._build_self_prediction_prompt(question, option, profile)
+        prompt = self._build_self_prediction_prompt(
+            question,
+            option,
+            profile,
+            collected_context=self._format_collected_info(collected_info),
+            behavioral_dna=self._get_behavioral_dna(user_id)
+        )
         try:
             response = await asyncio.to_thread(
                 self.lora_manager.generate,
@@ -266,8 +484,41 @@ class LoRADecisionAnalyzer:
             print(f"[自我预测推理] 失败: {e}")
             return empty
 
+    async def generate_self_prediction_with_api(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        profile: Any,
+        collected_info: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        empty = {"execution_confidence": 0.7, "dropout_risk_month": None, "personal_note": ""}
+        prompt = self._build_self_prediction_prompt(
+            question,
+            option,
+            profile,
+            collected_context=self._format_collected_info(collected_info),
+            behavioral_dna=self._get_behavioral_dna(user_id)
+        )
+        try:
+            response = await asyncio.to_thread(
+                self._call_api_with_prompt,
+                prompt,
+                0.4,
+                "json_object"
+            )
+            return self._parse_self_prediction(response)
+        except Exception as e:
+            print(f"[API自我预测推理] 失败: {e}")
+            return empty
+
     def _build_self_prediction_prompt(
-        self, question: str, option: Dict[str, str], profile: Any
+        self,
+        question: str,
+        option: Dict[str, str],
+        profile: Any,
+        collected_context: str = "",
+        behavioral_dna: str = ""
     ) -> str:
         option_title = option.get('title', '')
         option_desc  = option.get('description', '')
@@ -289,6 +540,10 @@ class LoRADecisionAnalyzer:
             risk  = getattr(profile, 'risk_preference', '')
             if style or risk:
                 prompt += f"我的决策特征：{style} {risk}\n"
+        if collected_context:
+            prompt += f"本次决策已确认的现实情况：\n{collected_context}\n"
+        if behavioral_dna:
+            prompt += f"{behavioral_dna}\n"
         prompt += (
             "\n请预测我选择这条路后的执行情况，输出 JSON：\n"
             '{"execution_score":75,"dropout_month":4,"note":"我第三四个月遇到压力可能会拖着不推进"}\n'
@@ -537,6 +792,50 @@ class LoRADecisionAnalyzer:
             print(f"[生活细节] 检索失败: {e}")
             return ""
 
+    def _format_collected_info(self, collected_info: Optional[Dict[str, Any]]) -> str:
+        """将信息收集阶段得到的结构化现实约束转成稳定的 prompt 上下文。"""
+        if not collected_info:
+            return ""
+
+        lines: List[str] = []
+        decision_context = collected_info.get("decision_context", {})
+        user_constraints = collected_info.get("user_constraints", {})
+        priorities = collected_info.get("priorities", {})
+        concerns = collected_info.get("concerns", [])
+        options_mentioned = collected_info.get("options_mentioned", [])
+
+        if isinstance(decision_context, dict) and decision_context:
+            lines.append("已确认的背景：")
+            for key, value in decision_context.items():
+                if value:
+                    lines.append(f"- {key}: {value}")
+
+        if isinstance(user_constraints, dict) and user_constraints:
+            lines.append("必须遵守的现实约束：")
+            for _, value in user_constraints.items():
+                if value:
+                    lines.append(f"- {value}")
+
+        if isinstance(priorities, dict) and priorities:
+            lines.append("用户最看重的因素：")
+            for _, value in priorities.items():
+                if value:
+                    lines.append(f"- {value}")
+
+        if isinstance(concerns, list) and concerns:
+            lines.append("用户明确担心的问题：")
+            for item in concerns[:6]:
+                if item:
+                    lines.append(f"- {item}")
+
+        if isinstance(options_mentioned, list) and options_mentioned:
+            lines.append("用户主动提到过的方向：")
+            for item in options_mentioned[:6]:
+                if item:
+                    lines.append(f"- {item}")
+
+        return "\n".join(lines)
+
     def _get_behavioral_dna(self, user_id: str) -> str:
         """
         从游戏对话记录中实时提取用户行为DNA，直接注入推理prompt。
@@ -647,6 +946,7 @@ class LoRADecisionAnalyzer:
                                 kg_context: str = "",
                                 user_feedback: List[Dict[str, str]] = None,
                                 life_context: str = "",
+                                collected_context: str = "",
                                 other_options: List[str] = None,
                                 generated_so_far: List[Dict] = None,
                                 start_month: int = 1,
@@ -669,7 +969,8 @@ class LoRADecisionAnalyzer:
             "② 至少一半事件含具体数字（金额/天数/次数/排名/分数等）\n"
             "③ 事件之间必须有因果关系，后面的事件从前面事件的结果中生长\n"
             "④ 必须有正面也有负面事件，正负比例约 1:1，绝不全正或全负\n"
-            "⑤ 只输出 JSON 数组，不要有任何其他文字\n\n"
+            "⑤ 如果缺少明确信息，宁可保守，不要编造 offer、薪资、录取、投资回报等关键事实\n"
+            "⑥ 只输出 JSON 数组，不要有任何其他文字\n\n"
             "## 禁止写法（这类文字直接无效）\n"
             "✗ '逐渐适应新环境'  '能力稳步提升'  '社交关系有所改善'  '整体状态良好'\n\n"
             "## 合格写法示例\n"
@@ -687,6 +988,10 @@ class LoRADecisionAnalyzer:
         if option_desc:
             prompt += f"\n{option_desc}"
         prompt += "\n\n"
+
+        if collected_context:
+            prompt += "## 本次决策已确认的现实信息（优先级高于常识猜测，必须遵守）\n"
+            prompt += f"{collected_context}\n\n"
 
         if other_options:
             others = [o for o in other_options if o != option_title]
@@ -763,25 +1068,59 @@ class LoRADecisionAnalyzer:
         )
         return prompt
 
-    def _build_recommendation_prompt(self, question: str, options: List[Dict], profile: Any) -> str:
+    def _build_recommendation_prompt(
+        self,
+        question: str,
+        options: List[Dict],
+        profile: Any,
+        collected_info: Optional[Dict[str, Any]] = None
+    ) -> str:
         prompt = (
             "<|im_start|>system\n"
             "你是用户的决策顾问。根据推演结果给出真诚、实用的建议。\n"
-            "不要说空话套话，要像一个有经验的朋友在给建议。只输出 JSON。\n"
+            "不要说空话套话，要像一个有经验的朋友在给建议。\n"
+            "如果某个选项的预测置信度较低，必须提醒用户先补充信息或先做低成本验证，再下结论。\n"
+            "只输出 JSON。\n"
             "<|im_end|>\n"
         )
         prompt += f"<|im_start|>user\n我的决策问题：{question}\n\n"
+        collected_context = self._format_collected_info(collected_info)
+        if collected_context:
+            prompt += f"已确认的现实约束与优先级：\n{collected_context}\n\n"
         prompt += "各选项的推演结果：\n"
         for opt in options:
             prompt += f"\n【{opt['title']}】得分 {opt.get('final_score', 0):.0f}/100，风险 {opt.get('risk_level', 0):.0%}\n"
             prompt += f"  关键事件：{opt.get('timeline_summary', '暂无')}\n"
+            if opt.get('prediction_confidence') is not None:
+                prompt += f"  预测置信度：{float(opt.get('prediction_confidence', 0)):.0%}\n"
+            calibration_review_count = int(opt.get('calibration_review_count', 0) or 0)
+            if calibration_review_count > 0:
+                prompt += f"  历史回访样本：{calibration_review_count}次\n"
+            calibration_note = (opt.get('calibration_note') or '').strip()
+            if calibration_note:
+                prompt += f"  历史校准提醒：{calibration_note[:80]}\n"
+            if opt.get('execution_confidence') is not None:
+                prompt += f"  执行意志预测：{float(opt.get('execution_confidence', 0)):.0%}\n"
+            personal_note = (opt.get('personal_note') or '').strip()
+            if personal_note:
+                prompt += f"  用户自我预判：{personal_note[:60]}\n"
+            risk_assessment = opt.get('risk_assessment') or {}
+            if isinstance(risk_assessment, dict):
+                overall_level = risk_assessment.get('overall_level')
+                overall_risk = risk_assessment.get('overall_risk')
+                if overall_level is not None and overall_risk is not None:
+                    prompt += f"  风险引擎评估：{overall_level} ({float(overall_risk):.1f}/10)\n"
+                top_dimensions = risk_assessment.get('top_dimensions') or []
+                if top_dimensions:
+                    prompt += f"  主要风险维度：{', '.join(top_dimensions[:3])}\n"
         prompt += (
             '\n请给出你的建议，JSON 格式：\n'
             '{"summary":"用大白话说你的核心建议（不超过30字）",'
             '"recommended_option":"你推荐的选项名",'
             '"reasons":["推荐理由1（要具体）","推荐理由2"],'
             '"risks":["最大的风险是什么","如何规避"],'
-            '"actions":["第一步该做什么","第二步该做什么"]}'
+            '"actions":["第一步该做什么","第二步该做什么"],'
+            '"confidence_note":"如果预测不够稳，请明确指出还缺什么信息"}'
             "\n<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt

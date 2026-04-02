@@ -893,7 +893,7 @@ struct AgentHome {
               }.width(32).height(32)
               Text('AI核心').fontSize(18).fontWeight(700).fontColor(Theme.Color.TextPrimary)
             }
-            Text('对话会沉淀为用户信息，并可触发模型更新')
+            Text('对话会沉淀为用户画像，并可用于后续个性模型训练')
               .fontSize(11).fontColor(Theme.Color.TextTertiary)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
 

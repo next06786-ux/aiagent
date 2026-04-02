@@ -410,7 +410,7 @@ struct UserProfile {
       } else if (item.id === 'about') {
         promptAction.showDialog({
           title: 'ParaLife · 平行境',
-          message: '版本：v1.0.0\n\n基于 Qwen3.5-9B + LoRA 个性化微调\n知识图谱 · 决策推演 · 平行人生\n\n© 2026 ParaLife Team',
+          message: '版本：v1.0.0\n\n基于云端大模型推演 + 个性化画像校准\n知识图谱 · 决策推演 · 平行人生\n\n© 2026 ParaLife Team',
           buttons: [{ text: '确定', color: Theme.Color.Primary }]
         })
       }

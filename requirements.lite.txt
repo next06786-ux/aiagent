@@ -1,0 +1,43 @@
+# ===== LifeSwarm 轻量版依赖 =====
+# 适用于 2核2GB 服务器，ENABLE_LOCAL_MODEL=false
+# 存储层：MySQL + Neo4j + ChromaDB
+# 推理层：Qwen API（含对话 + embedding）
+
+# ===== Web 服务 =====
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+aiohttp>=3.8.0
+httpx>=0.24.0
+sse-starlette>=1.6.0
+python-multipart
+aiofiles
+
+# ===== MySQL =====
+sqlalchemy>=2.0.0
+pymysql>=1.0.0
+aiosqlite
+
+# ===== Neo4j 知识图谱 =====
+neo4j>=5.0.0
+
+# ===== ChromaDB 向量数据库 =====
+chromadb>=0.4.0
+
+# ===== 数据处理 =====
+numpy<2.0.0
+
+# ===== AI API 客户端 =====
+# Qwen 对话（qwen-plus/qwen-turbo）+ embedding（text-embedding-v3）
+dashscope>=1.10.0
+
+# ===== 工具 =====
+schedule
+apscheduler
+
+# ===== GPU 服务器专用（ENABLE_LOCAL_MODEL=true 时安装）=====
+# pip install torch transformers peft accelerate datasets bitsandbytes
+# pip install sentence-transformers faiss-cpu
+# pip install vllm
