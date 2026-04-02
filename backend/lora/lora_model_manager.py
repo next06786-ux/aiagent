@@ -246,7 +246,7 @@ class LoRAModelManager:
             "do_sample": temperature > 0,
             "top_p": 0.9,
             "top_k": 50,
-            "repetition_penalty": 1.05,
+            "repetition_penalty": 1.15,
             "pad_token_id": self.tokenizer.pad_token_id,
             "eos_token_id": self.tokenizer.eos_token_id,
             "use_cache": True,
@@ -297,7 +297,7 @@ class LoRAModelManager:
             model = self.base_model
             print(f"ℹ️  使用基础模型流式生成（用户 {user_id} 的 LoRA 未找到）")
 
-        inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+        inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=3072)
         if torch.cuda.is_available():
             inputs = {k: v.to("cuda:0") for k, v in inputs.items()}
 
@@ -307,9 +307,9 @@ class LoRAModelManager:
             "max_new_tokens": max_new_tokens,
             "temperature": temperature,
             "do_sample": temperature > 0,
-            "top_p": 0.85,
-            "top_k": 20,
-            "repetition_penalty": 1.02,
+            "top_p": 0.92,
+            "top_k": 40,
+            "repetition_penalty": 1.15,
             "pad_token_id": self.tokenizer.pad_token_id,
             "eos_token_id": self.tokenizer.eos_token_id,
             "use_cache": True,

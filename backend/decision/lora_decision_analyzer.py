@@ -135,7 +135,7 @@ class LoRADecisionAnalyzer:
         kg_context = await asyncio.to_thread(self._query_relevant_persons, user_id, question)
         life_context = await asyncio.to_thread(self._retrieve_life_context, user_id, question)
 
-        batch_size = 4
+        batch_size = 2
         generated_so_far: List[Dict] = []
 
         for batch_idx in range(0, num_events, batch_size):
@@ -162,13 +162,41 @@ class LoRADecisionAnalyzer:
             )
 
             batch_buffer = ""
-            for chunk in self.lora_manager.generate_stream(user_id, prompt, 800, 0.45):
+            for chunk in self.lora_manager.generate_stream(user_id, prompt, 1200, 0.45):
                 batch_buffer += chunk
                 yield chunk
                 await asyncio.sleep(0)
 
             # 解析本批次结果，加入上下文
             batch_events = self._parse_timeline_json(batch_buffer)
+
+            # ── 空话过滤 + 局部重生成 ──────────────────────────────────────
+            for i, ev in enumerate(batch_events):
+                if not self._is_hollow_event(ev.get('event', '')):
+                    continue
+                # 针对这一个月单独重生成
+                regen_prompt = self._build_timeline_prompt(
+                    question, option, profile, 1,
+                    strict=True, kg_context=kg_context,
+                    life_context=life_context,
+                    other_options=all_option_titles,
+                    generated_so_far=generated_so_far,
+                    start_month=ev['month'],
+                    cumulative_state=cumulative_state
+                )
+                try:
+                    regen_response = await asyncio.to_thread(
+                        self.lora_manager.generate, user_id, regen_prompt, 300, 0.5
+                    )
+                    regen_events = self._parse_timeline_json(regen_response)
+                    if regen_events and not self._is_hollow_event(regen_events[0].get('event', '')):
+                        replacement = regen_events[0]
+                        replacement['month'] = ev['month']
+                        batch_events[i] = replacement
+                        print(f"[空话重生成] 第{ev['month']}月已替换")
+                except Exception as e:
+                    print(f"[空话重生成] 第{ev['month']}月重生成失败: {e}")
+
             generated_so_far.extend(batch_events)
 
     async def stream_recommendation_generation(
@@ -196,13 +224,100 @@ class LoRADecisionAnalyzer:
             self.lora_manager.generate,
             user_id,
             prompt,
-            120,
-            0.25,
+            350,
+            0.42,
         )
         branches = self._parse_timeline_json(response)
         if not branches:
             return self._build_fallback_branch_events(parent_event)
         return branches[:2]
+
+    async def generate_self_prediction(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        profile: Any
+    ) -> Dict[str, Any]:
+        """
+        让 LoRA 预测"这个用户选了这条路之后，真正会以多强的意志去执行"。
+
+        这是本地 LoRA 相对于云端大模型真正有差异的能力：
+        LoRA 权重编码了用户从未说出的行为倾向（历史游戏决策模式），
+        云端大模型只能根据检索到的显式文本猜测。
+
+        返回：
+          execution_confidence  0-1，执行意志强度
+          dropout_risk_month    预测最可能动摇的月份（可为 None）
+          personal_note         用户视角的自我评估（第一人称文字）
+        """
+        empty = {"execution_confidence": 0.7, "dropout_risk_month": None, "personal_note": ""}
+        if not self.has_lora_model(user_id):
+            return empty
+
+        prompt = self._build_self_prediction_prompt(question, option, profile)
+        try:
+            response = await asyncio.to_thread(
+                self.lora_manager.generate,
+                user_id, prompt, 220, 0.38
+            )
+            return self._parse_self_prediction(response)
+        except Exception as e:
+            print(f"[自我预测推理] 失败: {e}")
+            return empty
+
+    def _build_self_prediction_prompt(
+        self, question: str, option: Dict[str, str], profile: Any
+    ) -> str:
+        option_title = option.get('title', '')
+        option_desc  = option.get('description', '')
+
+        system_msg = (
+            "你现在是做决策的用户本人，不是 AI 助手。\n"
+            "用第一人称'我'，诚实地预测：如果我选了这条路，我真正会怎么走下去？\n"
+            "不是'我应该'，而是'我实际上会'。要体现真实的犹豫和可能的动摇。\n"
+            "只输出 JSON，不要有任何其他文字。"
+        )
+        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n"
+        prompt += f"我面临的决策：{question}\n"
+        prompt += f"我选择的方向：{option_title}"
+        if option_desc:
+            prompt += f"（{option_desc[:60]}）"
+        prompt += "\n"
+        if profile:
+            style = getattr(profile, 'decision_style', '')
+            risk  = getattr(profile, 'risk_preference', '')
+            if style or risk:
+                prompt += f"我的决策特征：{style} {risk}\n"
+        prompt += (
+            "\n请预测我选择这条路后的执行情况，输出 JSON：\n"
+            '{"execution_score":75,"dropout_month":4,"note":"我第三四个月遇到压力可能会拖着不推进"}\n'
+            "说明：execution_score 是我真实的执行意志（0-100），"
+            "dropout_month 是我最可能动摇的月份（没有风险则填 null），"
+            "note 是我自己的内心评估（第一人称，30字以内）\n"
+            f"<|im_end|>\n<|im_start|>assistant\n"
+        )
+        return prompt
+
+    def _parse_self_prediction(self, response: str) -> Dict[str, Any]:
+        empty = {"execution_confidence": 0.7, "dropout_risk_month": None, "personal_note": ""}
+        try:
+            cleaned = re.sub(r'```json\s*', '', response)
+            cleaned = re.sub(r'```\s*', '', cleaned)
+            m = re.search(r'\{[^{}]*\}', cleaned, re.DOTALL)
+            if not m:
+                return empty
+            data = json.loads(m.group(0))
+            score = float(data.get('execution_score', 70))
+            month = data.get('dropout_month')
+            note  = str(data.get('note', ''))[:80]
+            return {
+                "execution_confidence": round(min(1.0, max(0.0, score / 100)), 2),
+                "dropout_risk_month":   int(month) if month is not None else None,
+                "personal_note":        note
+            }
+        except Exception:
+            return empty
 
     def extract_incremental_events(self, response: str, emitted_months: List[int]) -> List[Dict[str, Any]]:
         """从流式输出中增量提取已完成的事件 JSON 对象"""
@@ -238,6 +353,9 @@ class LoRADecisionAnalyzer:
                         event = parsed[0]
                         if event['month'] in emitted_months:
                             continue
+                        # 空话过滤：标记 hollow=True，调用方可选择重生成
+                        if self._is_hollow_event(event.get('event', '')):
+                            event['hollow'] = True
                         emitted_months.append(event['month'])
                         events.append(event)
         except Exception:
@@ -437,6 +555,9 @@ class LoRADecisionAnalyzer:
         system_msg = (
             f"你是决策推演引擎。任务：推演用户选择「{option_title}」后"
             f"第{start_month}到第{end_month}个月真实会发生什么。\n\n"
+            "## 基准约定（所有选项共用同一起点）\n"
+            "- impact 值代表相对于用户当前状态的变化量，起点为 0\n"
+            "- 不同选项的推演从同一个现实起点出发，不要假设用户之前走了其他路\n\n"
             "## 写作铁律（违反任何一条都是错误输出）\n"
             "① 每条事件必须以「你」开头，第二人称\n"
             "② 至少一半事件含具体数字（金额/天数/次数/排名/分数等）\n"
@@ -484,7 +605,13 @@ class LoRADecisionAnalyzer:
         # ── 已推演事件（续写时提供上下文）────────────────────────────────────
         if is_continuation and generated_so_far:
             prompt += "## 前几个月已发生的事（在此基础上续写，不要重复）\n"
-            for e in generated_so_far[-6:]:  # 只传最近6条，避免 prompt 过长
+            # 最近3条完整保留，更早的压缩为20字摘要以节省token
+            recent = generated_so_far[-3:]
+            older = generated_so_far[:-3] if len(generated_so_far) > 3 else []
+            for e in older:
+                summary = e.get('event', '')[:20]
+                prompt += f"- 第{e.get('month',0)}月：{summary}…\n"
+            for e in recent:
                 prompt += f"- 第{e.get('month',0)}月：{e.get('event','')}\n"
             prompt += "\n"
 
@@ -519,9 +646,12 @@ class LoRADecisionAnalyzer:
             f"## 输出指令\n"
             f"请输出第{start_month}到第{end_month}月共{num_events}个事件。\n"
             f"所有事件必须围绕「{option_title}」这条路，不能写无关的日常流水账。\n\n"
-            '输出格式（只返回这个JSON数组，不要有其他文字）：\n'
-            '[{"month":1,"event":"你...具体发生了什么","impact":{"健康":0.0,"财务":0.0,"社交":0.0,"情绪":0.0,"学习":0.0,"时间":0.0},"probability":0.8}]\n'
-            f"<|im_end|>\n<|im_start|>assistant\n"
+            "## few-shot 示例（请严格模仿这个格式和具体程度）\n"
+            '[{"month":1,"event":"你连续投了11天简历，终于拿到一家初创公司的技术面试，前一天晚上反复准备到凌晨两点","impact":{"健康":-0.1,"财务":-0.05,"社交":-0.05,"情绪":-0.1,"学习":0.2,"时间":-0.2},"probability":0.82},'
+            '{"month":2,"event":"这个月房租水电3200加上还信用卡2000，账户只剩下480块，你开始认真想要不要接外包","impact":{"健康":-0.05,"财务":-0.25,"社交":0.0,"情绪":-0.2,"学习":0.0,"时间":-0.05},"probability":0.75}]\n\n'
+            '输出格式（只返回这个JSON数组，不要有任何其他文字）：\n'
+            '[{"month":N,"event":"你...具体发生了什么","impact":{"健康":0.0,"财务":0.0,"社交":0.0,"情绪":0.0,"学习":0.0,"时间":0.0},"probability":0.8}]\n'
+            f"<|im_end|>\n<|im_start|>assistant\n<think>\n"
         )
         return prompt
 
@@ -647,11 +777,21 @@ class LoRADecisionAnalyzer:
                     for dim in allowed_dims:
                         value = raw_impact.get(dim, 0.0)
                         try:
-                            impact[dim] = round(float(value), 2)
+                            # 单维度 clamp：每个维度最多影响 ±0.4
+                            impact[dim] = round(max(-0.4, min(0.4, float(value))), 2)
                         except Exception:
                             impact[dim] = 0.0
                 else:
                     impact = {dim: 0.0 for dim in allowed_dims}
+                # 多样性校正：若所有非零维度全正或全负，削减过度偏向的幅度
+                nonzero_vals = [v for v in impact.values() if abs(v) > 0.01]
+                if nonzero_vals:
+                    all_positive = all(v > 0 for v in nonzero_vals)
+                    all_negative = all(v < 0 for v in nonzero_vals)
+                    if all_positive:
+                        impact = {k: round(v * 0.65, 2) for k, v in impact.items()}
+                    elif all_negative:
+                        impact = {k: round(v * 0.65, 2) for k, v in impact.items()}
                 try:
                     month = int(item['month'])
                 except Exception:
@@ -689,6 +829,31 @@ class LoRADecisionAnalyzer:
             return False
         return True
 
+    # 空话词库：模型输出这些短语等于什么都没说
+    _HOLLOW_PHRASES = [
+        '逐渐适应', '稳步提升', '整体状态良好', '有所改善', '有所提升', '逐步改善',
+        '能力稳步', '关系有所', '状态良好', '生活逐渐', '工作逐渐', '持续进步',
+        '努力适应', '慢慢适应', '开始适应', '继续努力', '继续坚持', '不断努力',
+        '不断进步', '取得进展', '稳定发展', '保持稳定', '积极向上', '积极努力',
+        '认真对待', '用心做事', '踏实工作', '全力以赴', '用心生活',
+    ]
+
+    def _is_hollow_event(self, text: str) -> bool:
+        """检测事件是否为无实质内容的空话"""
+        if not text:
+            return True
+        # 空话词库命中
+        for phrase in self._HOLLOW_PHRASES:
+            if phrase in text:
+                return True
+        # 没有任何数字且没有「你」开头 → 大概率是泛化表述
+        import re as _re
+        has_number = bool(_re.search(r'\d', text))
+        starts_with_you = text.startswith('你')
+        if not has_number and not starts_with_you and len(text) < 25:
+            return True
+        return False
+
     def _build_fallback_timeline(self, question: str, option: Dict[str, str], profile: Any, num_events: int) -> str:
         option_title = option.get('title', '当前选项')
         texts = [
@@ -722,20 +887,29 @@ class LoRADecisionAnalyzer:
     def _build_fallback_branch_events(self, parent_event: Dict[str, Any]) -> List[Dict[str, Any]]:
         month = int(parent_event.get('month', 1))
         event_text = parent_event.get('event', '该事件')
-        positive_impact = {k: round(float(v) * 0.6, 2) for k, v in parent_event.get('impact', {}).items()} if isinstance(parent_event.get('impact', {}), dict) else {'健康': 0.0, '财务': 0.1, '社交': 0.0, '情绪': 0.1, '学习': 0.1, '时间': -0.05}
-        negative_impact = {k: round(-abs(float(v)) * 0.5, 2) for k, v in parent_event.get('impact', {}).items()} if isinstance(parent_event.get('impact', {}), dict) else {'健康': -0.1, '财务': -0.1, '社交': -0.05, '情绪': -0.1, '学习': 0.0, '时间': -0.1}
+        raw_impact = parent_event.get('impact', {})
+        positive_impact = {k: round(float(v) * 0.6, 2) for k, v in raw_impact.items()} if isinstance(raw_impact, dict) else {'健康': 0.0, '财务': 0.1, '社交': 0.0, '情绪': 0.1, '学习': 0.1, '时间': -0.05}
+        negative_impact = {k: round(-abs(float(v)) * 0.5, 2) for k, v in raw_impact.items()} if isinstance(raw_impact, dict) else {'健康': -0.1, '财务': -0.1, '社交': -0.05, '情绪': -0.1, '学习': 0.0, '时间': -0.1}
+
+        # 从父事件中提取可用的具体线索，构建有内容的 fallback
+        # 找出影响最大的正/负维度
+        pos_dim = max(positive_impact, key=lambda k: positive_impact[k]) if positive_impact else '情绪'
+        neg_dim = min(negative_impact, key=lambda k: negative_impact[k]) if negative_impact else '财务'
+        dim_label_a = {'财务': '收入', '健康': '身体状态', '情绪': '心态', '学习': '技能', '社交': '人际', '时间': '精力'}.get(pos_dim, pos_dim)
+        dim_label_b = {'财务': '经济压力', '健康': '健康状况', '情绪': '情绪状态', '学习': '进展', '社交': '人际关系', '时间': '时间分配'}.get(neg_dim, neg_dim)
+
         return [
             {
                 'month': month + 1,
-                'event': f"{event_text}推进顺利，出现额外机会",
+                'event': f"你从这件事中找到了突破口，{dim_label_a}开始朝好的方向转变，你感到这条路还有走下去的可能",
                 'impact': positive_impact,
-                'probability': 0.62
+                'probability': 0.60
             },
             {
-                'month': month + 2,
-                'event': f"{event_text}推进过程中遇到阻力，需要重新调整",
+                'month': month + 1,
+                'event': f"这件事带来的{dim_label_b}没有消退，反而在接下来的日子里持续影响你的状态和决策",
                 'impact': negative_impact,
-                'probability': 0.38
+                'probability': 0.40
             }
         ]
 

@@ -66,7 +66,12 @@ class ConversationDataset(Dataset):
 
     def __getitem__(self, idx):
         item = self.conversations[idx]
-        text = f"<|im_start|>user\n{item['user']}<|im_end|>\n<|im_start|>assistant\n{item['assistant']}<|im_end|>"
+        # full_chatml 格式：prompt 已包含完整 system+user+assistant 前缀，直接拼 completion
+        if 'prompt' in item:
+            text = f"{item['prompt']}{item['assistant']}<|im_end|>"
+        else:
+            # 简单格式：user/assistant 对
+            text = f"<|im_start|>user\n{item['user']}<|im_end|>\n<|im_start|>assistant\n{item['assistant']}<|im_end|>"
         encoding = self.tokenizer(
             text,
             max_length=self.max_length,
@@ -103,7 +108,7 @@ class AutoLoRATrainer:
         )
 
         self.training_config = {
-            "min_data_size": 20,
+            "min_data_size": 1,
             "num_epochs": 1,
             "batch_size": 1,
             "learning_rate": 2e-4,
@@ -144,8 +149,8 @@ class AutoLoRATrainer:
     def check_training_trigger(self) -> bool:
         conversations = self.get_user_conversations()
         self.status["current_data_size"] = len(conversations)
-        if len(conversations) < self.training_config["min_data_size"]:
-            print(f"❌ 数据不足: {len(conversations)}/{self.training_config['min_data_size']}")
+        if len(conversations) == 0:
+            print(f"❌ 无训练数据")
             return False
         if self.status["is_training"]:
             print("⚠️ 已有训练任务在进行中")
@@ -272,6 +277,12 @@ class AutoLoRATrainer:
             if synthetic:
                 result.extend(synthetic)
                 print(f"[LoRA训练数据] 合成推演格式样本: {len(synthetic)} 条")
+
+            # ── 合成第一人称行为预测样本（让 LoRA 学会预测"你真正会怎么做"）──
+            self_pred_synthetic = self._synthesize_self_prediction_training_data(game_convs)
+            if self_pred_synthetic:
+                result.extend(self_pred_synthetic)
+                print(f"[LoRA训练数据] 合成自我预测样本: {len(self_pred_synthetic)} 条")
 
             random.shuffle(result)
             return result
@@ -421,9 +432,9 @@ class AutoLoRATrainer:
                         response = re.sub(r"```\s*", "", response)
                         # 验证是合法 JSON
                         json.loads(response.strip())
-                        # 合成训练样本：user = 推演 prompt，assistant = JSON 结果
+                        # full_chatml 格式：prompt 已含完整 system+user+assistant 前缀
                         synthetic.append({
-                            "user": user_prompt,
+                            "prompt": user_prompt,
                             "assistant": response.strip()
                         })
                 except Exception as e:
@@ -433,6 +444,189 @@ class AutoLoRATrainer:
         except Exception as e:
             print(f"[合成训练数据] 整体失败: {e}")
 
+        return synthetic
+
+    def _extract_behavioral_patterns(self, game_convs: List[Dict]) -> Dict:
+        """
+        从游戏对话数据中提取用户的隐式行为模式统计。
+        这些模式从未被用户明确说出，只能通过 LoRA 参数学习获得。
+        """
+        from collections import Counter
+
+        RISK_SIGNALS    = ['冒险', '赌一把', '拼一下', '放手一搏', '大胆', '尝试', '挑战', '机会', '去闯']
+        SAFE_SIGNALS    = ['稳妥', '保守', '安全', '稳定', '踏实', '谨慎', '保险', '不冒险', '求稳']
+        PRIORITY_WORDS  = ['家人', '家庭', '父母', '孩子', '钱', '收入', '薪资', '健康', '身体',
+                           '朋友', '感情', '事业', '职位', '自由', '时间', '稳定', '发展', '面子']
+        PERSIST_SIGNALS = ['坚持', '继续', '再试试', '撑下去', '不放弃', '还有希望', '再想想']
+        RETREAT_SIGNALS = ['算了', '放弃', '不想了', '太累了', '不值得', '后悔', '还是算了', '退出']
+
+        risk_count, safe_count = 0, 0
+        priority_kws: List[str] = []
+        persist_count, retreat_count = 0, 0
+        sample_choices: List[Dict] = []
+
+        for conv in game_convs:
+            text = conv.get('user', '') + conv.get('assistant', '')
+            user_text = conv.get('user', '')
+
+            for kw in RISK_SIGNALS:
+                if kw in text: risk_count += 1
+            for kw in SAFE_SIGNALS:
+                if kw in text: safe_count += 1
+            for kw in PRIORITY_WORDS:
+                if kw in text: priority_kws.append(kw)
+            for kw in PERSIST_SIGNALS:
+                if kw in text: persist_count += 1
+            for kw in RETREAT_SIGNALS:
+                if kw in text: retreat_count += 1
+
+            if len(user_text) > 15:
+                sample_choices.append({
+                    'scenario': user_text[:150],
+                    'response': conv.get('assistant', '')[:80]
+                })
+
+        total_risk_signals = risk_count + safe_count
+        risk_rate = risk_count / total_risk_signals if total_risk_signals > 0 else 0.5
+
+        kw_counter = Counter(priority_kws)
+        top_priorities = [kw for kw, _ in kw_counter.most_common(4)]
+
+        total_persist = persist_count + retreat_count
+        persistence_rate = persist_count / total_persist if total_persist > 0 else 0.6
+
+        return {
+            'total_games': len(game_convs),
+            'risk_rate': round(risk_rate, 2),
+            'persistence_rate': round(persistence_rate, 2),
+            'top_priorities': top_priorities,
+            'sample_choices': sample_choices,
+        }
+
+    def _synthesize_self_prediction_training_data(self, game_convs: List[Dict]) -> List[Dict]:
+        """
+        合成第一人称行为预测训练样本。
+
+        训练目标：让 LoRA 学会回答"如果是你，你真正会怎么做"，
+        而不是 AI 助手视角的建议。
+
+        这是本地 LoRA 相对于云端大模型+RAG 真正有差异的能力：
+        LoRA 权重里编码了用户从未明确说出的行为倾向，
+        云端大模型只能通过检索到的显式文本推测。
+        """
+        if not game_convs:
+            return []
+
+        patterns = self._extract_behavioral_patterns(game_convs)
+        if patterns['total_games'] == 0:
+            print(f"[自我预测合成] 无游戏数据，跳过")
+            return []
+
+        # 构建模式描述文字（注入到 LLM 合成 prompt）
+        risk_label = "偏向冒险" if patterns['risk_rate'] > 0.6 else (
+            "偏向保守" if patterns['risk_rate'] < 0.4 else "风险中性"
+        )
+        persist_label = "执行力强、不轻易放弃" if patterns['persistence_rate'] > 0.65 else (
+            "容易在遇到阻力后动摇" if patterns['persistence_rate'] < 0.45 else "执行意志中等"
+        )
+        top_prio = "、".join(patterns['top_priorities'][:3]) if patterns['top_priorities'] else "家庭和稳定"
+
+        pattern_desc = (
+            f"- 风险偏好：{risk_label}（冒险信号占{patterns['risk_rate']*100:.0f}%）\n"
+            f"- 执行特征：{persist_label}\n"
+            f"- 优先考虑：{top_prio}\n"
+            f"- 历史游戏决策次数：{patterns['total_games']}次"
+        )
+
+        synthetic = []
+        sample_choices = patterns['sample_choices'][:4]
+
+        try:
+            from backend.llm.llm_service import get_llm_service
+            llm = get_llm_service()
+            if not llm or not llm.enabled:
+                return self._synthesize_self_prediction_fallback(pattern_desc, sample_choices)
+
+            for sample in sample_choices[:3]:
+                scenario_text = sample['scenario']
+                gen_prompt = (
+                    f"生成一条LoRA训练样本，让模型学会从第一人称预测这个特定用户的真实行为模式。\n\n"
+                    f"该用户的历史决策行为模式（从游戏数据统计）：\n{pattern_desc}\n\n"
+                    f"用户曾经面对的一个真实场景：\n{scenario_text}\n\n"
+                    f"请生成训练样本，严格按以下格式输出：\n"
+                    f"QUESTION: [一个具体的人生决策情境，类型和上面相似，100字以内]\n"
+                    f"ANSWER: [用第一人称'我'描述这个用户真实会怎么做。必须体现他的真实倾向，"
+                    f"包含可能的犹豫、会先征询谁的意见、在什么情况下会动摇、最终的执行意志。"
+                    f"150字以内，不写'应该'，只写'我会'或'我可能会'。]"
+                )
+
+                try:
+                    import re as _re
+                    response = llm.chat([
+                        {"role": "system", "content": "你是训练数据生成专家。ANSWER必须反映特定用户的真实行为倾向，不是标准建议。"},
+                        {"role": "user", "content": gen_prompt}
+                    ], temperature=0.55)
+
+                    if response and 'QUESTION:' in response and 'ANSWER:' in response:
+                        q_m = _re.search(r'QUESTION:\s*(.+?)(?=ANSWER:|$)', response, _re.DOTALL)
+                        a_m = _re.search(r'ANSWER:\s*(.+?)$', response, _re.DOTALL)
+                        if q_m and a_m:
+                            sp_question = q_m.group(1).strip()
+                            answer      = a_m.group(1).strip()
+                            if len(sp_question) > 10 and len(answer) > 20:
+                                # 与 _build_self_prediction_prompt 推理格式完全一致
+                                sp_system = (
+                                    "你现在是做决策的用户本人，不是 AI 助手。\n"
+                                    "用第一人称'我'，诚实地预测：如果我选了这条路，我真正会怎么走下去？\n"
+                                    "不是'我应该'，而是'我实际上会'。要体现真实的犹豫和可能的动摇。\n"
+                                    "只输出 JSON，不要有任何其他文字。"
+                                )
+                                sp_prompt = (
+                                    f"<|im_start|>system\n{sp_system}<|im_end|>\n"
+                                    f"<|im_start|>user\n{sp_question}\n<|im_end|>\n"
+                                    f"<|im_start|>assistant\n"
+                                )
+                                # 把自然语言 answer 转为 JSON 格式（近似）
+                                sp_json = json.dumps(
+                                    {"execution_score": 70, "dropout_month": None, "note": answer[:60]},
+                                    ensure_ascii=False
+                                )
+                                synthetic.append({"prompt": sp_prompt, "assistant": sp_json})
+                except Exception as e:
+                    print(f"[自我预测合成] 单条生成失败: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"[自我预测合成] 整体失败: {e}")
+            return self._synthesize_self_prediction_fallback(pattern_desc, sample_choices)
+
+        return synthetic
+
+    def _synthesize_self_prediction_fallback(
+        self, pattern_desc: str, sample_choices: List[Dict]
+    ) -> List[Dict]:
+        """LLM 不可用时基于模式描述生成兜底样本"""
+        synthetic = []
+        sp_system = (
+            "你现在是做决策的用户本人，不是 AI 助手。\n"
+            "用第一人称'我'，诚实地预测：如果我选了这条路，我真正会怎么走下去？\n"
+            "不是'我应该'，而是'我实际上会'。要体现真实的犹豫和可能的动摇。\n"
+            "只输出 JSON，不要有任何其他文字。"
+        )
+        for sample in sample_choices[:2]:
+            scenario = sample['scenario'][:80]
+            sp_prompt = (
+                f"<|im_start|>system\n{sp_system}<|im_end|>\n"
+                f"<|im_start|>user\n{scenario}\n<|im_end|>\n"
+                f"<|im_start|>assistant\n"
+            )
+            priority_text = pattern_desc.split('优先考虑：')[-1].split('\n')[0].strip()
+            sp_json = json.dumps(
+                {"execution_score": 55, "dropout_month": 3,
+                 "note": f"我可能先观望，最终倾向{priority_text}，压力大时容易动摇"},
+                ensure_ascii=False
+            )
+            synthetic.append({"prompt": sp_prompt, "assistant": sp_json})
         return synthetic
 
     def _synthesize_fallback(self, questions: List[str], facts_text: str) -> List[Dict]:
@@ -453,7 +647,7 @@ class AutoLoRATrainer:
                  "impact": {"健康": 0.0, "财务": 0.05, "社交": 0.05, "情绪": 0.1, "学习": 0.15, "时间": -0.05},
                  "probability": 0.75}
             ], ensure_ascii=False)
-            synthetic.append({"user": user_prompt, "assistant": fallback_answer})
+            synthetic.append({"prompt": user_prompt, "assistant": fallback_answer})
         return synthetic
 
     def prepare_dataset(self, conversations: List[Dict]) -> Dataset:

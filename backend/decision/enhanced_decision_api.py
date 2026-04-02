@@ -194,7 +194,7 @@ class DecisionSimulator:
                     event_type=self._infer_event_type(e.get('event', '')),
                     branch_group=option_branch,
                     node_level=idx + 1,
-                    risk_tag="high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium"),
+                    risk_tag="high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium"),
                     opportunity_tag="high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium"),
                     visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
                 )
@@ -872,30 +872,20 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 def _run_pkf_once():
                     extractor = PersonalFactExtractor(user_id)
                     facts = extractor.extract_all()
-                    # 用第一个选项的标题构建因果图（个人事实是通用的）
-                    first_title = options[0].get("title", "") if options else ""
-                    cg = CausalReasoningGraph(question, first_title, facts)
-                    cg.build()
-                    chains = cg.get_chains()
-                    return facts, chains
+                    return facts
 
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    facts, causal_chains = await loop.run_in_executor(pool, _run_pkf_once)
-
-                pkf_context_cached = "个人事实：\n"
-                for f in facts[:8]:
-                    pkf_context_cached += f"- {f.to_text()}\n"
-                pkf_context_cached += "\n因果推理链：\n"
-                for chain in causal_chains[:4]:
-                    chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
-                    pkf_context_cached += f"- {chain_str}\n"
+                    pkf_facts_cached = await loop.run_in_executor(pool, _run_pkf_once)
 
                 await websocket.send_json({
                     "type": "status",
                     "stage": "pkf_ready",
-                    "content": f"已提取 {len(facts)} 条个人事实，构建 {len(causal_chains)} 条因果链（所有选项共用）"
+                    "content": f"已提取 {len(pkf_facts_cached)} 条个人事实（因果图将按选项单独构建）"
                 })
-                simulator.lora_analyzer._pkf_context = pkf_context_cached
+                # pkf_context_cached 保持空字符串，因果图在每个选项内单独构建
+                pkf_context_cached = ""
+                simulator.lora_analyzer._pkf_context = ""
+                simulator.lora_analyzer._pkf_facts = pkf_facts_cached
             except Exception as pkf_err:
                 logger.warning(f"PKF-DS 增强失败，降级为普通推演: {pkf_err}")
                 simulator.lora_analyzer._pkf_context = ""
@@ -917,8 +907,25 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "title": option.get("title", f"选项{i+1}")
                 })
 
-                # PKF 上下文直接复用缓存，不再重新提取
-                simulator.lora_analyzer._pkf_context = pkf_context_cached
+                # 用本选项标题构建因果图（facts 复用缓存，causal graph 按选项单独构建）
+                try:
+                    facts = getattr(simulator.lora_analyzer, '_pkf_facts', [])
+                    if facts:
+                        cg = CausalReasoningGraph(question, option.get("title", ""), facts)
+                        cg.build()
+                        chains = cg.get_chains()
+                        ctx = "个人事实：\n"
+                        for f in facts[:8]:
+                            ctx += f"- {f.to_text()}\n"
+                        ctx += "\n因果推理链：\n"
+                        for chain in chains[:4]:
+                            chain_str = " -> ".join([e.cause for e in chain] + [chain[-1].effect])
+                            ctx += f"- {chain_str}\n"
+                        simulator.lora_analyzer._pkf_context = ctx
+                    else:
+                        simulator.lora_analyzer._pkf_context = pkf_context_cached
+                except Exception:
+                    simulator.lora_analyzer._pkf_context = pkf_context_cached
 
                 await websocket.send_json({
                     "type": "status",
@@ -983,7 +990,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         idx = len(timeline)
                         negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
                         positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                        risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                        risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
                         opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
                         node = TimelineEvent(
                             event_id=f"{option_branch}_node_{idx+1}",
@@ -1016,7 +1023,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     for idx, e in enumerate(timeline_data):
                         negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
                         positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                        risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                        risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
                         opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
                         node = TimelineEvent(
                             event_id=f"{option_branch}_node_{idx+1}",
@@ -1050,7 +1057,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         for idx, e in enumerate(retry_timeline):
                             negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
                             positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                            risk_tag = "high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium")
+                            risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
                             node = TimelineEvent(
                                 event_id=f"{option_branch}_node_{idx+1}",
                                 parent_event_id=previous_event_id,
@@ -1138,7 +1145,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                             event_type=simulator._infer_event_type(b['event']),
                             branch_group=f"{option_branch}_fork",
                             node_level=parent.node_level + 1,
-                            risk_tag="high" if negative_impact >= 0.5 else ("low" if negative_impact <= 0.1 else "medium"),
+                            risk_tag="high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium"),
                             opportunity_tag="high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium"),
                             visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
                         )
@@ -1156,14 +1163,26 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "stage": "option_scoring",
                     "option_id": f"option_{i+1}",
                     "option_title": option['title'],
-                    "content": f"{option['title']} 主链已完成，正在补充分支与评分细节"
+                    "content": f"{option['title']} 主链已完成，正在生成执行意志预测..."
                 })
+
+                # ── 执行意志预测（LoRA 独有能力）────────────────────────────
+                # 基于用户历史游戏决策模式，预测"他真正会以多强的意志走这条路"
+                # 这是云端大模型+RAG 做不到的：LoRA 权重里编码了用户的隐式行为倾向
+                self_prediction = await simulator.lora_analyzer.generate_self_prediction(
+                    user_id=user_id,
+                    question=question,
+                    option=option,
+                    profile=profile
+                )
+
                 await websocket.send_json({
                     "type": "option_complete",
                     "option_id": f"option_{i+1}",
                     "title": option['title'],
                     "final_score": final_score,
-                    "risk_level": risk_level
+                    "risk_level": risk_level,
+                    "self_prediction": self_prediction
                 })
 
                 return DecisionOption(
