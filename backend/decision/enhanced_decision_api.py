@@ -45,16 +45,44 @@ class DecisionSimulator:
         return 'normal'
 
     def _calculate_final_score(self, timeline, profile) -> float:
+        """多维度加权评分：后期事件权重更大，net_impact × probability 决定贡献值"""
         if not timeline:
             return 50.0
-        scores = [e.probability * 100 for e in timeline if hasattr(e, 'probability')]
-        return sum(scores) / len(scores) if scores else 50.0
+        main_chain = [e for e in timeline if not (
+            hasattr(e, 'branch_group') and str(getattr(e, 'branch_group', '')).endswith('_fork')
+        )]
+        if not main_chain:
+            main_chain = timeline
+        total, weight_sum = 0.0, 0.0
+        n = len(main_chain)
+        for i, e in enumerate(main_chain):
+            weight = 0.6 + 0.8 * (i / max(n - 1, 1))
+            impact = getattr(e, 'impact', {}) if hasattr(e, 'impact') else {}
+            net = sum(impact.values()) if isinstance(impact, dict) else 0.0
+            prob = float(getattr(e, 'probability', 0.7))
+            contribution = 50.0 + min(max(net * 80, -40), 40)
+            total += contribution * prob * weight
+            weight_sum += prob * weight
+        if weight_sum == 0:
+            return 50.0
+        return round(min(95.0, max(10.0, total / weight_sum)), 1)
 
     def _calculate_risk_level(self, timeline) -> float:
+        """主链负面 impact 绝对值均值，映射到 0~1"""
         if not timeline:
             return 0.5
-        risks = [1 - e.probability for e in timeline if hasattr(e, 'probability')]
-        return sum(risks) / len(risks) if risks else 0.5
+        main_chain = [e for e in timeline if not (
+            hasattr(e, 'branch_group') and str(getattr(e, 'branch_group', '')).endswith('_fork')
+        )]
+        if not main_chain:
+            main_chain = timeline
+        neg_sum, count = 0.0, 0
+        for e in main_chain:
+            impact = getattr(e, 'impact', {}) if hasattr(e, 'impact') else {}
+            neg = sum(abs(v) for v in impact.values() if v < 0) if isinstance(impact, dict) else 0.0
+            neg_sum += neg
+            count += 1
+        return round(min(1.0, (neg_sum / count) / 1.0), 2) if count else 0.5
 
     def _summarize_timeline(self, timeline) -> str:
         if not timeline:
@@ -1052,7 +1080,37 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "content": f"正在扩展 {option['title']} 的风险与机遇分支"
                 })
                 branch_nodes = []
-                candidate_parents = timeline[:1]
+                # ── 智能分支节点选取 ──────────────────────────────────────────
+                # 只从主链（非 fork）中选，策略：高风险节点优先 + 均匀间隔覆盖全程
+                main_chain_nodes = [
+                    n for n in timeline
+                    if not str(getattr(n, 'branch_group', '')).endswith('_fork')
+                ]
+                candidate_parents = []
+                seen_months: set = set()
+
+                # 1. 高风险节点（最值得岔路）
+                for n in main_chain_nodes:
+                    if getattr(n, 'risk_tag', '') == 'high' and n.month not in seen_months:
+                        candidate_parents.append(n)
+                        seen_months.add(n.month)
+                        if len(candidate_parents) >= 2:
+                            break
+
+                # 2. 均匀间隔补充（覆盖早中晚三段）
+                step = max(2, len(main_chain_nodes) // 3)
+                for n in main_chain_nodes[1::step]:
+                    if n.month not in seen_months and len(candidate_parents) < 5:
+                        candidate_parents.append(n)
+                        seen_months.add(n.month)
+
+                # 至少保证 2 个分叉点
+                if len(candidate_parents) < 2 and main_chain_nodes:
+                    for n in main_chain_nodes[:3]:
+                        if n.month not in seen_months:
+                            candidate_parents.append(n)
+                            seen_months.add(n.month)
+
                 for parent in candidate_parents:
                     parent_payload = {
                         "month": parent.month,

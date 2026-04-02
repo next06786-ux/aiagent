@@ -128,8 +128,8 @@ struct DecisionDungeon2DMap {
   private dungeonId: string = ''
   private userId: string = ''
   private ws: WebSocketUtil | null = null
-  private canvasWidth: number = 2800
-  private canvasHeight: number = 800
+  private canvasWidth: number = 3000
+  private canvasHeight: number = 740
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
   @State tokenCount: number = 0
   @State tokensPerSec: number = 0
@@ -207,16 +207,30 @@ struct DecisionDungeon2DMap {
         finalScore: opt.final_score || 0, riskLevel: opt.risk_level || 0, status: '推演完成', progress: 1 })
       const rootId = `root_${oi}`
       allNodes.push({ id: rootId, parentId: '', title: opt.title, description: '起点',
-        month: 0, probability: 1, position: { x: 60, y: 300 },
+        month: 0, probability: 1, position: { x: this.MAIN_START_X, y: this.MAIN_Y },
         color: this.optColor(oi), riskTag: 'medium', eventType: 'origin',
         impact: {}, isBranch: false, optionIndex: oi, optionTitle: opt.title })
+      // 重建历史数据时，主链节点按序号计算 x，分支按 risk_tag 分上下层
       let prevId = rootId
+      let mainSeq = 0
       opt.timeline.forEach((ev: TimelineEvent, ei: number) => {
         const nodeId = ev.event_id || `opt${oi}_${ei}`
         const isBranch = !!(ev.branch_group && ev.branch_group.includes('fork'))
-        const x = 200 + ei * 280
-        const y = isBranch ? (300 + (ei % 2 === 0 ? -180 : 180)) : (300 + (ei % 2 === 0 ? -80 : 80))
-        const color = isBranch ? (ev.risk_tag === 'low' ? '#10B981' : '#EF4444') : this.optColor(oi)
+        const riskTag = ev.risk_tag || 'medium'
+        let x: number
+        let y: number
+        if (isBranch) {
+          // 分支：相对于前一个主链节点偏移
+          const parentInAll = allNodes.find((n: MapNode) => n.id === (ev.parent_event_id || prevId))
+          const parentX = parentInAll ? parentInAll.position.x : (this.MAIN_START_X + mainSeq * this.MAIN_SPACING)
+          x = parentX + this.BRANCH_X_OFFSET
+          y = riskTag === 'low' ? this.BRANCH_Y_UP : (riskTag === 'high' ? this.BRANCH_Y_DOWN : this.BRANCH_Y_UP - 40)
+        } else {
+          x = this.MAIN_START_X + (mainSeq + 1) * this.MAIN_SPACING
+          y = this.MAIN_Y
+          mainSeq++
+        }
+        const color = isBranch ? (riskTag === 'low' ? '#10B981' : '#EF4444') : this.optColor(oi)
         allNodes.push({ id: nodeId, parentId: prevId, title: this.shortTitle(ev.event),
           description: ev.event, month: ev.month, probability: ev.probability,
           position: { x, y }, color, riskTag: ev.risk_tag || 'medium',
@@ -304,6 +318,7 @@ struct DecisionDungeon2DMap {
                 this.updateScore(idx, ev.final_score as number, ev.risk_level as number)
                 this.updateStatus(idx, '推演完成')
                 this.processingNodeId = ''
+                this.drawCanvas()
               }
             }
             else if (type === 'recommendation') {
@@ -315,6 +330,7 @@ struct DecisionDungeon2DMap {
               this.streamStatus = '全部推演完成'
               AppStorage.setOrCreate('activeSimulation', '')  // 清除活跃推演
               if (this.ws) { this.ws.close(); this.ws = null }
+              this.drawCanvas()
             }
             else if (type === 'error') {
               this.streamStatus = `推演出错: ${(ev.content as string) || '未知错误'}`
@@ -339,6 +355,14 @@ struct DecisionDungeon2DMap {
     }
   }
 
+  // ── 布局常量 ──────────────────────────────────────────────────────────────
+  private readonly MAIN_Y: number = 360          // 主链水平中心线
+  private readonly MAIN_SPACING: number = 210    // 主链节点间距（x 轴）
+  private readonly MAIN_START_X: number = 100    // 主链起点 x（root 节点）
+  private readonly BRANCH_Y_UP: number = 175     // 机遇分支（risk_tag=low）y
+  private readonly BRANCH_Y_DOWN: number = 545   // 风险分支（risk_tag=high）y
+  private readonly BRANCH_X_OFFSET: number = 90  // 分支相对父节点的 x 偏移
+
   private handleNode(ev: Record<string, Object>) {
     this.parsedEventCount++
     const node = ev.node as Record<string, Object>
@@ -348,22 +372,33 @@ struct DecisionDungeon2DMap {
     const isBranch = ((node.branch_group as string) || '').includes('fork')
     const parentId = (node.parent_event_id as string) || `root_${oi}`
     const parentNode = this.nodes.find((n: MapNode) => n.id === parentId)
-    const optNodes = this.nodes.filter((n: MapNode) => n.optionIndex === oi && !n.id.startsWith('root_'))
-    const count = optNodes.length
-    const month = (node.month as number) || (count + 1)
+    const month = (node.month as number) || 1
+    const riskTag = (node.risk_tag as string) || 'medium'
 
     let x: number
     let y: number
     if (isBranch && parentNode) {
-      x = parentNode.position.x + 280
-      y = parentNode.position.y + (((node.risk_tag as string) === 'low') ? -180 : 180)
+      // 分支节点：x 比父节点稍微前进，y 按风险等级分上下层
+      x = parentNode.position.x + this.BRANCH_X_OFFSET
+      if (riskTag === 'low') {
+        y = this.BRANCH_Y_UP       // 机遇分支 → 上方
+      } else if (riskTag === 'high') {
+        y = this.BRANCH_Y_DOWN     // 风险分支 → 下方
+      } else {
+        // medium：交替上下，避免多个 medium 分支重叠
+        const siblingBranches = this.nodes.filter(
+          (n: MapNode) => n.parentId === parentId && n.isBranch
+        )
+        y = siblingBranches.length % 2 === 0 ? this.BRANCH_Y_UP - 40 : this.BRANCH_Y_DOWN + 40
+      }
     } else {
-      // 主链节点：水平递增，垂直交错排列避免重叠
-      const mainNodes = this.nodes.filter((n: MapNode) => n.optionIndex === oi && !n.isBranch && !n.id.startsWith('root_'))
-      const seq = mainNodes.length  // 当前是第几个主链节点
-      x = 200 + seq * 280
-      // 蛇形排列：奇数行偏上，偶数行偏下，间距递增避免重叠
-      y = 300 + (seq % 2 === 0 ? -80 : 80)
+      // 主链节点：x 按序号均匀递进，y 固定在中心线
+      const mainNodes = this.nodes.filter(
+        (n: MapNode) => n.optionIndex === oi && !n.isBranch && !n.id.startsWith('root_')
+      )
+      const seq = mainNodes.length
+      x = this.MAIN_START_X + (seq + 1) * this.MAIN_SPACING
+      y = this.MAIN_Y
     }
 
     const color = isBranch ? (((node.risk_tag as string) === 'low') ? '#10B981' : '#EF4444') : this.optColor(oi)
@@ -431,7 +466,7 @@ struct DecisionDungeon2DMap {
     if (this.nodes.some((n: MapNode) => n.id === rootId)) return
     this.nodes = this.nodes.concat([{
       id: rootId, parentId: '', title, description: '推演起点',
-      month: 0, probability: 1, position: { x: 60, y: 300 },
+      month: 0, probability: 1, position: { x: this.MAIN_START_X, y: this.MAIN_Y },
       color: this.optColor(optionIndex), riskTag: 'medium', eventType: 'origin',
       impact: {}, isBranch: false, optionIndex, optionTitle: title
     }])
@@ -637,7 +672,12 @@ struct DecisionDungeon2DMap {
           .borderRadius(Theme.Radius.m)
           .border({ width: 1, color: this.activeOptionIndex === item.index ? Theme.Color.BorderMedium : 'transparent' })
           .shadow(this.activeOptionIndex === item.index ? Theme.Shadow.Soft : { radius: 0, color: 'transparent', offsetY: 0, offsetX: 0 })
-          .onClick(() => { this.activeOptionIndex = item.index; this.showDetail = false; this.selectedNodeId = '' })
+          .onClick(() => {
+            this.activeOptionIndex = item.index
+            this.showDetail = false
+            this.selectedNodeId = ''
+            this.drawCanvas()
+          })
         })
       }.padding({ left: 16, right: 16 })
     }
@@ -828,7 +868,7 @@ struct DecisionDungeon2DMap {
             .position({ x: node.position.x * this.zoomScale - 20, y: node.position.y * this.zoomScale - 20 })
             .scale({ x: this.zoomScale, y: this.zoomScale, centerX: 0, centerY: 0 })
             .onClick(() => { this.selectedNodeId = node.id; this.showDetail = true })
-          })
+          }, (node: MapNode) => node.id)
         }
         .width(this.canvasWidth * this.zoomScale)
         .height(this.canvasHeight * this.zoomScale)

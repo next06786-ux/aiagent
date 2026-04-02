@@ -131,7 +131,7 @@ class LoRADecisionAnalyzer:
         num_events: int = 12,
         all_option_titles: List[str] = None
     ):
-        """分批流式生成时间线：每批 4 个节点，后续批次带上前面的结果作为上下文"""
+        """分批流式生成时间线：每批 4 个节点，后续批次传入累积状态作为上下文"""
         kg_context = await asyncio.to_thread(self._query_relevant_persons, user_id, question)
         life_context = await asyncio.to_thread(self._retrieve_life_context, user_id, question)
 
@@ -141,35 +141,28 @@ class LoRADecisionAnalyzer:
         for batch_idx in range(0, num_events, batch_size):
             batch_count = min(batch_size, num_events - batch_idx)
             start_month = batch_idx + 1
-            end_month = batch_idx + batch_count
 
-            # 构建带上下文的 prompt
-            context_prefix = ""
+            # 计算当前各维度累积状态，传给 prompt
+            cumulative_state: Optional[Dict[str, float]] = None
             if generated_so_far:
-                context_prefix = "## 已推演的事件（在此基础上继续，不要重复类似内容）\n"
+                acc: Dict[str, float] = {}
                 for e in generated_so_far:
-                    context_prefix += f"- 第{e.get('month',0)}月：{e.get('event','')}\n"
-                context_prefix += (
-                    f"\n请继续生成第{start_month}到第{end_month}月的事件。\n"
-                    "要求：后续事件必须是前面事件的因果结果，不能重复前面的主题。\n"
-                    "如果前面都是正面事件，这批要出现困难或转折。\n\n"
-                )
+                    for k, v in e.get('impact', {}).items():
+                        acc[k] = round(acc.get(k, 0.0) + v, 2)
+                cumulative_state = acc
 
             prompt = self._build_timeline_prompt(
                 question, option, profile, batch_count,
                 strict=False, kg_context=kg_context,
                 life_context=life_context,
-                other_options=all_option_titles
+                other_options=all_option_titles,
+                generated_so_far=generated_so_far,
+                start_month=start_month,
+                cumulative_state=cumulative_state
             )
-            # 在 prompt 的 user 部分插入上下文
-            if context_prefix:
-                prompt = prompt.replace(
-                    f"请输出 {batch_count} 个按时间递进的关键事件",
-                    context_prefix + f"请输出 {batch_count} 个按时间递进的关键事件"
-                )
 
             batch_buffer = ""
-            for chunk in self.lora_manager.generate_stream(user_id, prompt, 450, 0.45):
+            for chunk in self.lora_manager.generate_stream(user_id, prompt, 800, 0.45):
                 batch_buffer += chunk
                 yield chunk
                 await asyncio.sleep(0)
@@ -431,75 +424,103 @@ class LoRADecisionAnalyzer:
                                 kg_context: str = "",
                                 user_feedback: List[Dict[str, str]] = None,
                                 life_context: str = "",
-                                other_options: List[str] = None) -> str:
+                                other_options: List[str] = None,
+                                generated_so_far: List[Dict] = None,
+                                start_month: int = 1,
+                                cumulative_state: Dict[str, float] = None) -> str:
         option_title = option['title']
         option_desc = option.get('description', '')
-        
+        end_month = start_month + num_events - 1
+        is_continuation = bool(generated_so_far)
+
+        # ── 系统消息：写作规则（明确好/坏示例）──────────────────────────────
         system_msg = (
-            f"你是一个决策推演引擎。用户选择了「{option_title}」这个方向。\n"
-            f"你必须完全围绕「{option_title}」来推演，所有事件都必须和这个具体方向直接相关。\n"
-            "核心原则：\n"
-            "1. 每个事件必须是具体的、可感知的场景，包含数字、人名、地点等细节\n"
-            "2. 所有事件必须紧扣「" + option_title + "」这个方向，不能写通用的生活流水账\n"
-            "3. 必须包含正面和负面事件，不能全是好事\n"
-            "4. 只输出 JSON 数组"
+            f"你是决策推演引擎。任务：推演用户选择「{option_title}」后"
+            f"第{start_month}到第{end_month}个月真实会发生什么。\n\n"
+            "## 写作铁律（违反任何一条都是错误输出）\n"
+            "① 每条事件必须以「你」开头，第二人称\n"
+            "② 至少一半事件含具体数字（金额/天数/次数/排名/分数等）\n"
+            "③ 事件之间必须有因果关系，后面的事件从前面事件的结果中生长\n"
+            "④ 必须有正面也有负面事件，正负比例约 1:1，绝不全正或全负\n"
+            "⑤ 只输出 JSON 数组，不要有任何其他文字\n\n"
+            "## 禁止写法（这类文字直接无效）\n"
+            "✗ '逐渐适应新环境'  '能力稳步提升'  '社交关系有所改善'  '整体状态良好'\n\n"
+            "## 合格写法示例\n"
+            "✓ '你连续投了11天简历，终于有一家公司约你做技术面试，准备了三天'\n"
+            "✓ '这个月水电房租3200块，加上还信用卡2000，账户只剩下620块'\n"
+            "✓ '你妈打电话问你什么时候回家，你说等稳定了，她沉默了一会儿'\n"
+            "✓ '周会上你的方案被否了，领导说思路太保守，你回家翻来覆去睡不着'"
         )
-        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n"
-        prompt += f"<|im_start|>user\n"
+
+        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n"
+
+        # ── 决策背景 ──────────────────────────────────────────────────────────
         prompt += f"## 决策问题\n{question}\n\n"
-        prompt += f"## 用户选择的方向（所有事件必须围绕这个方向）\n"
-        prompt += f"**{option_title}**"
+        prompt += f"## 用户正在走的路\n**{option_title}**"
         if option_desc:
-            prompt += f"\n说明：{option_desc}"
+            prompt += f"\n{option_desc}"
         prompt += "\n\n"
-        
-        # 告诉模型其他选项是什么，强调不要混淆
+
         if other_options:
             others = [o for o in other_options if o != option_title]
             if others:
-                prompt += f"## 注意：用户没有选择以下方向，不要写这些方向的事件\n"
+                prompt += "## 用户没有选择的路（不要写这些方向的事件）\n"
                 for o in others:
-                    prompt += f"- {o}（未选择）\n"
+                    prompt += f"- {o}\n"
                 prompt += "\n"
 
+        # ── 用户个人背景（PKF/RAG/KG）────────────────────────────────────────
         if life_context:
-            prompt += f"## 用户背景\n{life_context}\n\n"
+            prompt += f"## 用户个人背景（务必让事件与这些细节挂钩）\n{life_context}\n\n"
         if kg_context:
-            prompt += f"## 相关人物\n{kg_context}\n\n"
+            prompt += f"## 用户身边的人（只在与决策直接相关时才提及）\n{kg_context}\n\n"
         if profile:
             style = getattr(profile, 'decision_style', '')
             risk = getattr(profile, 'risk_preference', '')
             priority = getattr(profile, 'life_priority', '')
             if style or risk or priority:
-                prompt += f"## 用户特征\n决策风格: {style}，风险偏好: {risk}，优先级: {priority}\n\n"
+                prompt += f"## 用户性格特征\n决策风格:{style}  风险偏好:{risk}  生活优先级:{priority}\n\n"
 
-        if user_feedback:
-            prompt += "## 用户反馈\n"
-            for fb in user_feedback:
-                event_text = fb.get("event", "")
-                feedback_type = fb.get("type", "")
-                comment = fb.get("comment", "")
-                if feedback_type == "unlikely":
-                    prompt += f"- '{event_text}'不太可能\n"
-                elif feedback_type == "accurate":
-                    prompt += f"- '{event_text}'很准确\n"
-                elif comment:
-                    prompt += f"- 关于'{event_text}'：{comment}\n"
+        # ── 已推演事件（续写时提供上下文）────────────────────────────────────
+        if is_continuation and generated_so_far:
+            prompt += "## 前几个月已发生的事（在此基础上续写，不要重复）\n"
+            for e in generated_so_far[-6:]:  # 只传最近6条，避免 prompt 过长
+                prompt += f"- 第{e.get('month',0)}月：{e.get('event','')}\n"
             prompt += "\n"
 
+        # ── 累积状态（让后续事件体现状态压力）──────────────────────────────
+        if cumulative_state:
+            status_lines = []
+            for dim, val in cumulative_state.items():
+                if abs(val) >= 0.1:
+                    direction = "↑提升" if val > 0 else "↓下降"
+                    status_lines.append(f"{dim}{direction}{abs(val)*100:.0f}%")
+            if status_lines:
+                prompt += f"## 目前的生活状态（后续事件必须体现这些压力或红利）\n"
+                prompt += "  ".join(status_lines) + "\n\n"
+
+        # ── 用户反馈（纠错注入）──────────────────────────────────────────────
+        if user_feedback:
+            prompt += "## 用户的修正意见（必须遵从）\n"
+            for fb in user_feedback:
+                t = fb.get("type", "")
+                ev = fb.get("event", "")
+                cm = fb.get("comment", "")
+                if t == "unlikely":
+                    prompt += f"- 「{ev}」这件事不太可能发生，不要写类似的\n"
+                elif t == "accurate":
+                    prompt += f"- 「{ev}」这个方向是对的，继续深化\n"
+                elif cm:
+                    prompt += f"- 关于「{ev}」：{cm}\n"
+            prompt += "\n"
+
+        # ── 输出指令 ──────────────────────────────────────────────────────────
         prompt += (
-            f"## 输出要求\n"
-            f"生成 {num_events} 个事件，模拟选择「{option_title}」后未来 {num_events} 个月会发生什么。\n\n"
-            f"重要：每个事件都必须和「{option_title}」直接相关，不能写和选择无关的日常琐事。\n\n"
-            "event 写法示例：\n"
-            '- "你花了两周准备简历，投了8家公司，收到3个面试邀请"\n'
-            '- "房租到期要续约，房东涨了300块，你犹豫要不要搬家"\n'
-            '- "第一个月工资到账，扣完五险一金到手4800，比预期少了不少"\n'
-            '- "周末和老同学聚餐，他说你的选择挺冒险的，让你有点动摇"\n\n'
-            "绝对不要写这种废话：\n"
-            '- "开始适应新环境"、"逐步提升能力"、"社交圈有所变化"\n\n'
-            "输出 JSON 数组：\n"
-            '[{"month":1,"event":"你...具体事件","impact":{"健康":0,"财务":0.2,"社交":0,"情绪":0.1,"学习":0.3,"时间":-0.3},"probability":0.85}]\n'
+            f"## 输出指令\n"
+            f"请输出第{start_month}到第{end_month}月共{num_events}个事件。\n"
+            f"所有事件必须围绕「{option_title}」这条路，不能写无关的日常流水账。\n\n"
+            '输出格式（只返回这个JSON数组，不要有其他文字）：\n'
+            '[{"month":1,"event":"你...具体发生了什么","impact":{"健康":0.0,"财务":0.0,"社交":0.0,"情绪":0.0,"学习":0.0,"时间":0.0},"probability":0.8}]\n'
             f"<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt
@@ -528,17 +549,50 @@ class LoRADecisionAnalyzer:
         return prompt
 
     def _build_branch_prompt(self, question: str, option: Dict[str, str], parent_event: Dict[str, Any], profile: Any) -> str:
-        prompt = "<|im_start|>system\n你是未来决策推演引擎。请围绕给定父事件，生成2个分支事件。只输出 JSON 数组。<|im_end|>\n"
-        prompt += f"<|im_start|>user\n决策问题：{question}\n"
-        prompt += f"决策选项：{option.get('title', '当前选项')}\n"
-        prompt += f"父事件：第{parent_event.get('month', 1)}月，{parent_event.get('event', '')}\n"
+        parent_month = parent_event.get('month', 1)
+        parent_text = parent_event.get('event', '')
+        impact = parent_event.get('impact', {})
+
+        # 找出父事件影响最大的维度，让分支围绕它展开
+        most_negative = min(impact.items(), key=lambda x: x[1], default=('情绪', -0.3))
+        most_positive = max(impact.items(), key=lambda x: x[1], default=('学习', 0.3))
+        neg_dim, neg_val = most_negative
+        pos_dim, pos_val = most_positive
+
+        branch_month_a = parent_month + 1
+        branch_month_b = parent_month + 1
+
+        system_msg = (
+            "你是决策分支推演引擎。根据一个关键事件，推演它最可能引发的两条分叉路。\n"
+            "规则：\n"
+            "① 每条事件必须以「你」开头\n"
+            "② 必须包含具体细节（数字/人名/场景）\n"
+            "③ 分支A是从该事件中找到转机，分支B是该事件的压力持续发酵\n"
+            "④ 两条分支必须和父事件直接因果相关，不能写无关的事情\n"
+            "⑤ 只输出JSON数组"
+        )
+
+        prompt = f"<|im_start|>system\n{system_msg}<|im_end|>\n<|im_start|>user\n"
+        prompt += f"## 决策背景\n问题：{question}\n方向：{option.get('title', '')}\n\n"
+        prompt += f"## 触发分叉的父事件（第{parent_month}月）\n{parent_text}\n\n"
+        prompt += f"## 父事件造成的主要影响\n"
+        if abs(neg_val) > 0.05:
+            prompt += f"- {neg_dim}受到了较大冲击（{neg_val*100:+.0f}%）\n"
+        if abs(pos_val) > 0.05:
+            prompt += f"- {pos_dim}有一定收益（{pos_val*100:+.0f}%）\n"
         if profile:
-            prompt += f"用户决策风格：{getattr(profile, 'decision_style', '未知')}\n"
-            prompt += f"用户风险偏好：{getattr(profile, 'risk_preference', '未知')}\n"
+            risk_pref = getattr(profile, 'risk_preference', '')
+            if risk_pref:
+                prompt += f"\n用户风险偏好：{risk_pref}\n"
         prompt += (
-            "请输出2个分支事件：1个偏乐观，1个偏风险。\n"
-            "输出格式：[{\"month\":2,\"event\":\"事件\",\"impact\":{\"健康\":0.0,\"财务\":0.0,\"社交\":0.0,\"情绪\":0.0,\"学习\":0.0,\"时间\":0.0},\"probability\":0.6}]"
-            "<|im_end|>\n<|im_start|>assistant\n"
+            f"\n## 输出要求\n"
+            f"基于上面的父事件，输出2条第{branch_month_a}个月的分支事件：\n"
+            f"- 分支A（probability>0.5）：因为父事件，{pos_dim}方面出现了转机，具体怎么发展\n"
+            f"- 分支B（probability<0.5）：因为父事件，{neg_dim}方面的压力继续积累，具体发酵成什么\n\n"
+            '输出格式（只返回JSON数组）：\n'
+            f'[{{"month":{branch_month_a},"event":"你...（分支A）","impact":{{"健康":0.0,"财务":0.0,"社交":0.0,"情绪":0.0,"学习":0.0,"时间":0.0}},"probability":0.65}},'
+            f'{{"month":{branch_month_b},"event":"你...（分支B）","impact":{{"健康":0.0,"财务":0.0,"社交":0.0,"情绪":0.0,"学习":0.0,"时间":0.0}},"probability":0.35}}]\n'
+            f"<|im_end|>\n<|im_start|>assistant\n"
         )
         return prompt
 
