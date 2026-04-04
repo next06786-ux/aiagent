@@ -534,25 +534,75 @@ export function DecisionWorkbenchPage() {
             subtitle="AI 已为你生成推演分支，你可以修改、删除或添加新选项，然后启动多 Agent 实时推演。"
           >
             <div className="form-stack">
-              {/* 选项列表 */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* 选项列表 - 使用消息气泡样式 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {options.map((opt, i) => (
-                  <div key={`option-${i}-${opt.title}`} style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '12px 16px', borderRadius: 14,
-                    background: 'rgba(10,89,247,0.08)',
-                    border: '1px solid rgba(10,89,247,0.18)',
-                  }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, color: '#e8f0fe', fontSize: 14 }}>{opt.title}</div>
+                  <div 
+                    key={`option-${i}-${opt.title}`} 
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'flex-start',
+                      animation: 'fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  >
+                    <div style={{
+                      maxWidth: '82%',
+                      padding: '14px 20px',
+                      borderRadius: 20,
+                      background: 'linear-gradient(135deg, rgba(232, 213, 208, 0.15), rgba(220, 205, 195, 0.12))',
+                      border: '1px solid rgba(220, 210, 200, 0.25)',
+                      boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+                      position: 'relative',
+                      flex: 1,
+                    }}>
+                      <div style={{ 
+                        fontWeight: 600, 
+                        color: '#e8f0fe', 
+                        fontSize: 15,
+                        lineHeight: 1.5,
+                        marginBottom: opt.description ? 6 : 0,
+                      }}>
+                        {opt.title}
+                      </div>
                       {opt.description && (
-                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 3 }}>{opt.description}</div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          color: 'rgba(255,255,255,0.65)', 
+                          lineHeight: 1.6,
+                        }}>
+                          {opt.description}
+                        </div>
                       )}
+                      <button
+                        onClick={() => handleRemoveOption(i)}
+                        style={{ 
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          background: 'rgba(255, 100, 100, 0.15)', 
+                          border: 'none', 
+                          color: 'rgba(255, 100, 100, 0.9)', 
+                          cursor: 'pointer', 
+                          fontSize: 18, 
+                          lineHeight: 1,
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255, 100, 100, 0.25)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(255, 100, 100, 0.15)';
+                        }}
+                      >
+                        ×
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleRemoveOption(i)}
-                      style={{ background: 'none', border: 'none', color: 'rgba(255,100,100,0.7)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
-                    >×</button>
                   </div>
                 ))}
               </div>
