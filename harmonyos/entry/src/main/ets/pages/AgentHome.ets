@@ -94,14 +94,27 @@ struct AgentHome {
   private authService = getAuthService();
 
   private features: FeatureCard[] = [
-    { id: 'starmap', title: '知识星图', subtitle: '3D知识图谱', route: 'pages/KnowledgeStarMapGL', color: '#0A59F7', iconName: 'network' },
-    { id: 'decision', title: '决策副本', subtitle: '探索未来', route: 'pages/QuickDecisionInput', color: '#6B48FF', iconName: 'comparison' },
+    { id: 'starmap', title: '知识星图', subtitle: '双视图知识星图', route: 'pages/KnowledgeStarMap', color: '#0A59F7', iconName: 'network' },
+    { id: 'decision', title: '决策副本', subtitle: 'Future OS 决策图谱', route: 'pages/EnhancedDecisionFlow', color: '#6B48FF', iconName: 'comparison' },
     { id: 'dashboard', title: '智能洞察', subtitle: '涌现发现', route: 'pages/SmartInsights', color: '#FF9500', iconName: 'analytics' },
     { id: 'profile', title: '我的账号', subtitle: '个人中心', route: 'pages/UserProfile', color: '#00C853', iconName: 'user' },
     { id: 'game', title: '平行人生', subtitle: '决策游戏', route: 'pages/ParallelLifeGame', color: '#FF6B9D', iconName: 'life' },
   ];
 
+  private normalizeFeatureRoutes() {
+    this.features = this.features.map((feature: FeatureCard) => {
+      if (feature.id === 'starmap') {
+        return { ...feature, route: 'pages/KnowledgeStarMap', subtitle: '双视图知识星图' };
+      }
+      if (feature.id === 'decision') {
+        return { ...feature, route: 'pages/EnhancedDecisionFlow', subtitle: 'Future OS 决策图谱' };
+      }
+      return feature;
+    });
+  }
+
   aboutToAppear() {
+    this.normalizeFeatureRoutes();
     this.messages = this.aiService.getConversationHistory();
     if (this.messages.length === 0) this.addWelcomeMessage();
     this.loadUserInfo();

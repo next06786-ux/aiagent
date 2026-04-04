@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { AICoreModal } from '../components/ai/AICoreModal';
 import { GlassCard } from '../components/common/GlassCard';
 import { MetricCard } from '../components/common/MetricCard';
 import { StatusPill } from '../components/common/StatusPill';
-import { AppShell } from '../components/shell/AppShell';
 import { featureModules } from '../data/features';
 import { useAuth } from '../hooks/useAuth';
 import { listConversations } from '../services/chat';
-import { getDecisionHistory, getLoraStatus } from '../services/decision';
+import { getFutureOsHistory } from '../services/futureOs';
 
 interface PentagramNode {
   id: string;
@@ -22,11 +22,25 @@ interface PentagramNode {
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [predictionCount, setPredictionCount] = useState(0);
   const [conversationCount, setConversationCount] = useState(0);
-  const [loraLoaded, setLoraLoaded] = useState(false);
-  const [trainingSamples, setTrainingSamples] = useState(0);
+  const [branchCount, setBranchCount] = useState(0);
+  const [knowledgeMode, setKnowledgeMode] = useState('people');
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [isAICoreOpen, setIsAICoreOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // close menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   useEffect(() => {
     if (!user?.user_id) {
@@ -35,26 +49,28 @@ export function HomePage() {
 
     let active = true;
     Promise.allSettled([
-      getDecisionHistory(user.user_id),
+      getFutureOsHistory(user.user_id),
       listConversations(user.user_id),
-      getLoraStatus(user.user_id),
     ]).then((results) => {
       if (!active) {
         return;
       }
 
-      const [historyResult, chatResult, loraResult] = results;
+      const [historyResult, chatResult] = results;
 
       if (historyResult.status === 'fulfilled') {
         setPredictionCount(historyResult.value.length);
+        setBranchCount(
+          historyResult.value.reduce(
+            (sum, item) => sum + Number(item.options_count || 0),
+            0,
+          ),
+        );
       }
       if (chatResult.status === 'fulfilled') {
         setConversationCount(chatResult.value.length);
       }
-      if (loraResult.status === 'fulfilled') {
-        setLoraLoaded(Boolean(loraResult.value.is_loaded));
-        setTrainingSamples(Number(loraResult.value.training_data_size || 0));
-      }
+      setKnowledgeMode(historyResult.status === 'fulfilled' && historyResult.value.length > 0 ? 'signals' : 'people');
     });
 
     return () => {
@@ -62,8 +78,13 @@ export function HomePage() {
     };
   }, [user]);
 
-  const pentagramNodes = useMemo<PentagramNode[]>(
-    () => [
+  const menuItemStyle: CSSProperties = {
+    display: 'block', width: '100%', padding: '9px 16px',
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    fontSize: 13, fontWeight: 600, color: '#e8f0fe', textAlign: 'left',
+  };
+
+  const pentagramNodes = useMemo<PentagramNode[]>(    () => [
       {
         id: 'decision',
         title: '决策副本',
@@ -71,7 +92,7 @@ export function HomePage() {
         route: '/decision',
         top: '5%',
         left: '50%',
-        gradient: ['#0A59F7', '#6B48FF'],
+        gradient: ['#4facfe', '#00f2fe'],  // 华为蓝青渐变
         status: 'live',
       },
       {
@@ -81,7 +102,7 @@ export function HomePage() {
         route: '/decision/history',
         top: '24%',
         left: '84%',
-        gradient: ['#7B61FF', '#9F7BFF'],
+        gradient: ['#43e97b', '#38f9d7'],  // 清新绿蓝渐变
         status: 'live',
       },
       {
@@ -91,7 +112,7 @@ export function HomePage() {
         route: '/chat',
         top: '79%',
         left: '70%',
-        gradient: ['#4FACFE', '#00F2FE'],
+        gradient: ['#fa709a', '#fee140'],  // 活力粉橙渐变
         status: 'live',
       },
       {
@@ -101,7 +122,7 @@ export function HomePage() {
         route: '/profile',
         top: '79%',
         left: '30%',
-        gradient: ['#43C6AC', '#A8E063'],
+        gradient: ['#a18cd1', '#fbc2eb'],  // 梦幻紫粉渐变
         status: 'live',
       },
       {
@@ -111,77 +132,261 @@ export function HomePage() {
         route: '/knowledge-graph',
         top: '24%',
         left: '16%',
-        gradient: ['#667EEA', '#764BA2'],
+        gradient: ['#0A59F7', '#6B48FF'],  // 华为品牌蓝紫渐变
         status: 'live',
       },
     ],
     [],
   );
 
-  return (
-    <AppShell
-      title="Web 中枢"
-      subtitle="把 Harmony 端首页的仪式感主视觉迁到 Web，中间是 AI 核心，周围是能力球体。"
-      actions={
-        <>
-          <button className="button button-secondary" onClick={() => navigate('/chat')}>
-            打开 AI 对话
-          </button>
-          <button className="button button-primary" onClick={() => navigate('/decision')}>
-            开始决策副本
-          </button>
-        </>
+  // Canvas 粒子流：从核心向各节点发射能量粒子
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  const drawField = useCallback(() => {
+    const canvas = canvasRef.current;
+    const stage = stageRef.current;
+    if (!canvas || !stage) return;
+    const W = stage.offsetWidth;
+    const H = stage.offsetHeight;
+    if (W === 0) return;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const cx = W / 2, cy = H / 2;
+
+    // 节点位置（与 CSS top/left 对应）- HarmonyOS 6 纯净色调
+    const nodePositions = [
+      { top: '5%',  left: '50%', color: '#4facfe' },  // 华为蓝青渐变
+      { top: '24%', left: '84%', color: '#43e97b' },  // 清新绿蓝渐变
+      { top: '79%', left: '70%', color: '#fa709a' },  // 活力粉橙渐变
+      { top: '79%', left: '30%', color: '#a18cd1' },  // 梦幻紫粉渐变
+      { top: '24%', left: '16%', color: '#0A59F7' },  // 华为品牌蓝紫渐变
+    ].map(n => ({
+      x: (parseFloat(n.left) / 100) * W,
+      y: (parseFloat(n.top)  / 100) * H,
+      color: n.color,
+    }));
+
+    // ── 六边形网格背景 ──────────────────────────────────────
+    const hexR = 28;
+    const hexW = hexR * Math.sqrt(3);
+    const hexH = hexR * 2;
+    ctx.save();
+    for (let row = -2; row < H / (hexH * 0.75) + 2; row++) {
+      for (let col = -2; col < W / hexW + 2; col++) {
+        const hx = col * hexW + (row % 2 === 0 ? 0 : hexW / 2);
+        const hy = row * hexH * 0.75;
+        const dist = Math.hypot(hx - cx, hy - cy);
+        const maxDist = Math.min(W, H) * 0.52;
+        if (dist > maxDist) continue;
+        const alpha = (1 - dist / maxDist) * 0.06;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i - Math.PI / 6;
+          const px = hx + hexR * 0.92 * Math.cos(angle);
+          const py = hy + hexR * 0.92 * Math.sin(angle);
+          i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `rgba(10, 89, 247, ${alpha})`;  // HarmonyOS 6 蓝色
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
       }
-    >
-      <section className="hero-card pentagram-hero">
-        <div className="hero-copy">
-          <p className="eyebrow">AI Ritual Interface</p>
+    }
+    ctx.restore();
+
+    // ── 同心圆弧装饰 ────────────────────────────────────────
+    [0.44, 0.72, 0.96].forEach((ratio, i) => {
+      const r = (Math.min(W, H) / 2) * ratio;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(10, 89, 247, ${0.05 - i * 0.01})`;  // HarmonyOS 6 蓝色
+      ctx.lineWidth = i === 0 ? 1.0 : 0.6;
+      ctx.setLineDash(i === 1 ? [4, 8] : []);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // ── 从核心到节点的弧形能量通道 ──────────────────────────
+    nodePositions.forEach(node => {
+      const grad = ctx.createLinearGradient(cx, cy, node.x, node.y);
+      grad.addColorStop(0,   `${node.color}44`);
+      grad.addColorStop(0.5, `${node.color}22`);
+      grad.addColorStop(1,   `${node.color}08`);
+      ctx.beginPath();
+      // 贝塞尔曲线，控制点偏向圆心外侧，产生弧形
+      const mx = (cx + node.x) / 2 + (node.y - cy) * 0.18;
+      const my = (cy + node.y) / 2 - (node.x - cx) * 0.18;
+      ctx.moveTo(cx, cy);
+      ctx.quadraticCurveTo(mx, my, node.x, node.y);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    return nodePositions;
+  }, []);
+
+  // 粒子系统
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const stage = stageRef.current;
+    if (!canvas || !stage) return;
+
+    interface Particle {
+      nodeIdx: number;
+      t: number;       // 0→1 沿路径进度
+      speed: number;
+      size: number;
+      opacity: number;
+    }
+
+    const nodePositions = [
+      { top: '5%',  left: '50%', color: '#4facfe' },  // 华为蓝青渐变
+      { top: '24%', left: '84%', color: '#43e97b' },  // 清新绿蓝渐变
+      { top: '79%', left: '70%', color: '#fa709a' },  // 活力粉橙渐变
+      { top: '79%', left: '30%', color: '#a18cd1' },  // 梦幻紫粉渐变
+      { top: '24%', left: '16%', color: '#0A59F7' },  // 华为品牌蓝紫渐变
+    ];
+
+    const particles: Particle[] = [];
+    // 初始化粒子，每条线 8 个，错开相位
+    nodePositions.forEach((_, ni) => {
+      for (let i = 0; i < 8; i++) {
+        particles.push({
+          nodeIdx: ni,
+          t: i / 8,
+          speed: 0.0018 + Math.random() * 0.0012,
+          size: 2.5 + Math.random() * 2,
+          opacity: 0.6 + Math.random() * 0.4,
+        });
+      }
+    });
+
+    let raf = -1;
+    const animate = () => {
+      const W = stage.offsetWidth;
+      const H = stage.offsetHeight;
+      if (W === 0) { raf = requestAnimationFrame(animate); return; }
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+      const cx = W / 2, cy = H / 2;
+
+      ctx.clearRect(0, 0, W, H);
+
+      // 重绘静态背景
+      drawField();
+
+      // 节点实际坐标
+      const nodes = nodePositions.map(n => ({
+        x: (parseFloat(n.left) / 100) * W,
+        y: (parseFloat(n.top)  / 100) * H,
+        color: n.color,
+      }));
+
+      // 绘制粒子
+      particles.forEach(p => {
+        p.t += p.speed;
+        if (p.t > 1) p.t -= 1;
+
+        const node = nodes[p.nodeIdx];
+        // 贝塞尔插值
+        const mx = (cx + node.x) / 2 + (node.y - cy) * 0.18;
+        const my = (cy + node.y) / 2 - (node.x - cx) * 0.18;
+        const t = p.t;
+        const px = (1-t)*(1-t)*cx + 2*(1-t)*t*mx + t*t*node.x;
+        const py = (1-t)*(1-t)*cy + 2*(1-t)*t*my + t*t*node.y;
+
+        // 粒子在接近节点时变大变亮
+        const boost = t > 0.8 ? (t - 0.8) / 0.2 : 0;
+        const r = p.size * (1 + boost * 1.5);
+        const alpha = p.opacity * (0.4 + t * 0.6);
+
+        const grd = ctx.createRadialGradient(px, py, 0, px, py, r * 2.5);
+        grd.addColorStop(0, `${node.color}${Math.round(alpha * 255).toString(16).padStart(2,'0')}`);
+        grd.addColorStop(1, `${node.color}00`);
+        ctx.beginPath();
+        ctx.arc(px, py, r * 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = grd;
+        ctx.fill();
+      });
+
+      raf = requestAnimationFrame(animate);
+    };
+
+    animate();
+    return () => cancelAnimationFrame(raf);
+  }, [drawField]);
+
+  return (
+    <div className="homepage-fullscreen-wrapper">
+      <div className="shell-backdrop">
+        <div className="shell-glow shell-glow-primary" />
+        <div className="shell-glow shell-glow-secondary" />
+        <div className="shell-glow shell-glow-accent" />
+      </div>
+      <section className="hero-card pentagram-hero harmony-fullscreen">
+        <div className="hero-copy harmony-enter-fade-up">
+          <p className="eyebrow" style={{ color: '#0A59F7', fontWeight: 700 }}>AI Ritual Interface</p>
           <h2>以 AI 核心为中心，把主要能力组织成“五角法阵”式的首页中枢。</h2>
-          <p>
+          <p style={{ color: '#8b8b98', lineHeight: 1.8 }}>
             中心承载智能核心，外圈五个球体分别映射高频功能。视觉上更贴近鸿蒙端的仪式感、
             神秘感和系统中控台气质，交互上仍然保持一键直达真实页面。
           </p>
 
-          <div className="hero-actions">
-            <button className="button button-primary" onClick={() => navigate('/decision')}>
+          <div className="hero-actions harmony-enter-fade-up harmony-delay-2">
+            <button 
+              className="button button-primary harmony-card-shimmer" 
+              onClick={() => navigate('/decision')}
+              style={{
+                background: 'linear-gradient(135deg, #0A59F7, #6B48FF)',
+                color: '#fff',
+                boxShadow: '0 6px 20px rgba(10, 89, 247, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+              }}
+            >
               激活决策副本
             </button>
-            <button className="button button-ghost" onClick={() => navigate('/modules')}>
+            <button 
+              className="button button-ghost harmony-card-shimmer" 
+              onClick={() => navigate('/modules')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.95)',
+                border: '1px solid rgba(0, 0, 0, 0.08)',
+                color: '#1A1A1A'
+              }}
+            >
               查看全部能力
             </button>
           </div>
         </div>
 
-        <div className="hero-side">
-          <div className="pentagram-stage">
+        <div className="hero-side harmony-enter-fade-scale harmony-delay-3">
+          <div className="pentagram-stage" ref={stageRef}>
+            {/* 背景光晕 */}
             <div className="pentagram-aura pentagram-aura-primary" />
             <div className="pentagram-aura pentagram-aura-secondary" />
-            <div className="pentagram-energy-web" aria-hidden="true">
-              <svg viewBox="0 0 100 100" className="pentagram-energy-svg">
-                <defs>
-                  <filter id="pentagramGlow">
-                    <feGaussianBlur stdDeviation="1.2" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-                <line x1="50" y1="50" x2="50" y2="5" className="energy-line energy-line-primary" />
-                <line x1="50" y1="50" x2="84" y2="24" className="energy-line energy-line-secondary" />
-                <line x1="50" y1="50" x2="70" y2="79" className="energy-line energy-line-accent" />
-                <line x1="50" y1="50" x2="30" y2="79" className="energy-line energy-line-mint" />
-                <line x1="50" y1="50" x2="16" y2="24" className="energy-line energy-line-warm" />
-              </svg>
-            </div>
-            <div className="pentagram-ring pentagram-ring-outer" />
-            <div className="pentagram-ring pentagram-ring-inner" />
-            <div className="pentagram-star" aria-hidden="true">
-              <svg viewBox="0 0 100 100" className="pentagram-star-svg">
-                <polygon points="50,5 70,79 16,24 84,24 30,79" />
-              </svg>
-            </div>
 
+            {/* Canvas：六边形网格 + 粒子能量流（无五角星） */}
+            <canvas
+              ref={canvasRef}
+              aria-hidden="true"
+              style={{
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%',
+                pointerEvents: 'none', zIndex: 1,
+              }}
+            />
+
+            {/* 同心轨道环 */}
+            <div className="pentagram-ring pentagram-ring-outer" />
+            <div className="pentagram-ring pentagram-ring-mid" />
+            <div className="pentagram-ring pentagram-ring-inner" />
+
+            {/* 功能节点 */}
             {pentagramNodes.map((node) => (
               <button
                 key={node.id}
@@ -194,7 +399,13 @@ export function HomePage() {
                     '--node-end': node.gradient[1],
                   } as CSSProperties
                 }
-                onClick={() => node.route && navigate(node.route)}
+                onClick={() => {
+                  if (node.id === 'profile') {
+                    setProfileMenuOpen(v => !v);
+                  } else {
+                    node.route && navigate(node.route);
+                  }
+                }}
                 type="button"
               >
                 <span className="pentagram-node-orbit" />
@@ -202,12 +413,54 @@ export function HomePage() {
                   <small>{node.subtitle}</small>
                   <strong>{node.title}</strong>
                 </span>
+                {node.id === 'profile' && profileMenuOpen && (
+                  <div
+                    ref={profileMenuRef}
+                    style={{
+                      position: 'absolute',
+                      bottom: 'calc(100% + 10px)',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: 'rgba(13,27,42,0.96)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(99,179,237,0.2)',
+                      borderRadius: 14,
+                      padding: '6px 0',
+                      minWidth: 140,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                      zIndex: 999,
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {user ? (
+                      <>
+                        <div style={{ padding: '8px 16px 6px', fontSize: 12, color: 'rgba(255,255,255,0.45)', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: 4 }}>
+                          {user.nickname || user.username}
+                        </div>
+                        <button
+                          style={menuItemStyle}
+                          onClick={() => { setProfileMenuOpen(false); navigate('/profile'); }}
+                        >个人中心</button>
+                        <button
+                          style={{ ...menuItemStyle, color: '#FF6B6B' }}
+                          onClick={() => { setProfileMenuOpen(false); void logout().then(() => navigate('/auth')); }}
+                        >退出登录</button>
+                      </>
+                    ) : (
+                      <button
+                        style={menuItemStyle}
+                        onClick={() => { setProfileMenuOpen(false); navigate('/auth'); }}
+                      >去登录</button>
+                    )}
+                  </div>
+                )}
               </button>
             ))}
 
+            {/* AI 核心 */}
             <button
               className="pentagram-core"
-              onClick={() => navigate('/chat')}
+              onClick={() => setIsAICoreOpen(true)}
               type="button"
               aria-label="打开 AI 核心"
             >
@@ -229,29 +482,50 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="metrics-grid">
+      {/* 底部浮动导航 */}
+      <nav className="homepage-bottom-nav">
+        <NavLink to="/" className={({ isActive }) => `nav-item${isActive ? ' is-active' : ''}`} end>
+          <span>总览</span>
+        </NavLink>
+        <NavLink to="/decision" className={({ isActive }) => `nav-item${isActive ? ' is-active' : ''}`}>
+          <span>决策</span>
+        </NavLink>
+        <NavLink to="/chat" className={({ isActive }) => `nav-item${isActive ? ' is-active' : ''}`}>
+          <span>对话</span>
+        </NavLink>
+        <NavLink to="/modules" className={({ isActive }) => `nav-item${isActive ? ' is-active' : ''}`}>
+          <span>能力</span>
+        </NavLink>
+        <NavLink to="/profile" className={({ isActive }) => `nav-item${isActive ? ' is-active' : ''}`}>
+          <span>我的</span>
+        </NavLink>
+      </nav>
+
+      {/* 隐藏的内容区域（可滚动查看） */}
+      <div className="homepage-content-wrapper">
+        <section className="metrics-grid homepage-metrics">
         <MetricCard
-          label="预测记录"
+          label="决策图谱"
           value={String(predictionCount)}
-          helper="增强决策副本历史"
+          helper="Future OS 推演记录"
           tone="primary"
         />
         <MetricCard
-          label="对话会话"
+          label="AI 会话"
           value={String(conversationCount)}
-          helper="复用 /ws/chat 与 V4 对话历史"
+          helper="AI 核心聊天主链"
           tone="secondary"
         />
         <MetricCard
-          label="个性模型储备"
-          value={loraLoaded ? '已就绪' : '未训练'}
-          helper={loraLoaded ? '已保留，当前主链默认仍走云端推演' : '当前仍走云端推演'}
+          label="累计分支"
+          value={String(branchCount)}
+          helper="多 Agent 分支总数"
           tone="accent"
         />
         <MetricCard
-          label="训练样本"
-          value={String(trainingSamples)}
-          helper="来自对话与行为数据"
+          label="知识星图"
+          value={knowledgeMode === 'people' ? '人物视图' : '升学规划视图'}
+          helper="AI 核心当前更推荐的投影方向"
           tone="warning"
         />
       </section>
@@ -335,6 +609,10 @@ export function HomePage() {
           ))}
         </div>
       </GlassCard>
-    </AppShell>
+      </div>
+
+      {/* AI 核心悬浮窗 */}
+      <AICoreModal isOpen={isAICoreOpen} onClose={() => setIsAICoreOpen(false)} />
+    </div>
   );
 }

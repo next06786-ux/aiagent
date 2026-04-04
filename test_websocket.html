@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">未连接</div>
+    <button onclick="connect()">连接</button>
+    <button onclick="sendMessage()">发送测试消息</button>
+    <div id="messages"></div>
+
+    <script>
+        let ws = null;
+
+        function connect() {
+            const statusDiv = document.getElementById('status');
+            const messagesDiv = document.getElementById('messages');
+            
+            statusDiv.textContent = '正在连接...';
+            
+            ws = new WebSocket('ws://localhost:6006/ws/decision-simulate');
+            
+            ws.onopen = () => {
+                statusDiv.textContent = '已连接';
+                messagesDiv.innerHTML += '<p style="color: green;">WebSocket 连接成功!</p>';
+            };
+            
+            ws.onmessage = (event) => {
+                messagesDiv.innerHTML += `<p>收到消息: ${event.data}</p>`;
+            };
+            
+            ws.onerror = (error) => {
+                statusDiv.textContent = '连接错误';
+                messagesDiv.innerHTML += `<p style="color: red;">错误: ${error}</p>`;
+                console.error('WebSocket error:', error);
+            };
+            
+            ws.onclose = (event) => {
+                statusDiv.textContent = '已断开';
+                messagesDiv.innerHTML += `<p style="color: orange;">连接关闭: code=${event.code}, reason=${event.reason}</p>`;
+                console.log('WebSocket closed:', event);
+            };
+        }
+        
+        function sendMessage() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('WebSocket 未连接');
+                return;
+            }
+            
+            // 使用真实存在的 session_id
+            const testMessage = {
+                session_id: "collect_2c2139f7-bab4-483d-9882-ae83ce8734cd_1775200551",
+                options: [
+                    { title: "测试选项1", description: "测试描述1" },
+                    { title: "测试选项2", description: "测试描述2" }
+                ]
+            };
+            
+            ws.send(JSON.stringify(testMessage));
+            document.getElementById('messages').innerHTML += '<p style="color: blue;">已发送测试消息（使用真实 session_id）</p>';
+        }
+    </script>
+</body>
+</html>

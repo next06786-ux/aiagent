@@ -1,0 +1,584 @@
+/* ═══════════════════════════════════════════════════════════
+   AI 核心悬浮窗 - HarmonyOS 6 纯净设计风格
+   ═══════════════════════════════════════════════════════════ */
+
+/* 遮罩层 - 纯净毛玻璃效果 */
+.ai-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+  z-index: 9998;
+  animation: harmonyFadeIn 0.3s ease-out;
+}
+
+@keyframes harmonyFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 悬浮窗容器 - HarmonyOS 6 纯净白 */
+.ai-modal-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 900px;
+  height: 85vh;
+  max-height: 700px;
+  /* HarmonyOS 6 - 纯净白色背景 + 微妙渐变 */
+  background:
+    radial-gradient(ellipse 50% 40% at 15% 20%, rgba(10, 89, 247, 0.04), transparent 50%),
+    radial-gradient(ellipse 40% 40% at 85% 80%, rgba(107, 72, 255, 0.03), transparent 45%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 24px;
+  /* HarmonyOS 6 - 精致阴影 */
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.08),
+    0 10px 40px rgba(10, 89, 247, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: harmonyModalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* HarmonyOS 6 - 微光层 */
+.ai-modal-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 40% 30% at 90% 10%, rgba(255, 255, 255, 0.8), transparent 50%),
+    radial-gradient(ellipse 30% 30% at 10% 90%, rgba(10, 89, 247, 0.02), transparent 40%);
+  border-radius: inherit;
+  animation: harmonyCardShimmer 6s ease-in-out infinite;
+}
+
+@keyframes harmonyModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes harmonyCardShimmer {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   顶部栏
+   ───────────────────────────────────────────────────────── */
+
+.ai-modal-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  /* HarmonyOS 6 - 顶部微妙渐变 */
+  background: linear-gradient(180deg, rgba(10, 89, 247, 0.02), transparent);
+}
+
+.ai-modal-header-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* AI 核心图标 */
+.ai-core-icon {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 6px 20px rgba(10, 89, 247, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.ai-core-icon-pulse {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  opacity: 0.3;
+  filter: blur(10px);
+  animation: harmonyIconPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes harmonyIconPulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.5;
+  }
+}
+
+.ai-core-icon-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ai-core-icon-text {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 标题组 */
+.ai-modal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.ai-modal-subtitle {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+/* 关闭按钮 */
+.ai-modal-close-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 24px;
+  font-weight: 300;
+  transition: all var(--transition-smooth);
+}
+
+.ai-modal-close-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+/* ─────────────────────────────────────────────────────────
+   快捷功能栏
+   ───────────────────────────────────────────────────────── */
+
+.ai-modal-quick-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-smooth);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.quick-action-btn:hover {
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.08), rgba(107, 72, 255, 0.06));
+  border-color: rgba(10, 89, 247, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(10, 89, 247, 0.12);
+}
+
+.quick-action-label {
+  font-size: 13px;
+}
+
+/* ─────────────────────────────────────────────────────────
+   消息区域
+   ───────────────────────────────────────────────────────── */
+
+.ai-modal-messages {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 空状态 */
+.ai-modal-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-icon {
+  animation: harmonyFloatSoft 3s ease-in-out infinite;
+}
+
+.empty-icon-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 10px 30px rgba(10, 89, 247, 0.25),
+    inset 0 2px 0 rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+.empty-icon-circle::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  opacity: 0.2;
+  filter: blur(12px);
+}
+
+.empty-icon-circle span {
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes harmonyFloatSoft {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.empty-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 420px;
+  color: var(--text-secondary);
+}
+
+/* 聊天消息 */
+.chat-message {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  animation: harmonyMessageSlideIn 0.3s ease-out;
+}
+
+@keyframes harmonyMessageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.user-message {
+  flex-direction: row-reverse;
+}
+
+/* 头像 */
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, #a18cd1, #fbc2eb);
+}
+
+.assistant-avatar {
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+}
+
+.avatar-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+/* 消息内容包装器 */
+.message-content-wrapper {
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-message .message-content-wrapper {
+  align-items: flex-end;
+}
+
+/* 思考过程 */
+.message-thinking {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(10, 89, 247, 0.04);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.thinking-label {
+  font-weight: 600;
+  color: var(--primary);
+  font-style: normal;
+  margin-right: 4px;
+}
+
+/* 消息气泡 */
+.message-bubble {
+  padding: 14px 18px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  transition: all var(--transition-smooth);
+}
+
+.user-message .message-bubble {
+  background: linear-gradient(135deg, rgba(161, 140, 209, 0.12), rgba(251, 194, 235, 0.12));
+  border: 1px solid rgba(161, 140, 209, 0.2);
+  color: var(--text-primary);
+}
+
+.assistant-message .message-bubble {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+
+/* 加载气泡 */
+.loading-bubble {
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.typing-indicator {
+  margin-right: 4px;
+}
+
+.dot-1, .dot-2, .dot-3 {
+  animation: harmonyDotBlink 1.4s infinite;
+}
+
+.dot-2 {
+  animation-delay: 0.2s;
+}
+
+.dot-3 {
+  animation-delay: 0.4s;
+}
+
+@keyframes harmonyDotBlink {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   输入区域
+   ───────────────────────────────────────────────────────── */
+
+.ai-modal-input-area {
+  position: relative;
+  z-index: 1;
+  padding: 18px 24px 22px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  /* HarmonyOS 6 - 底部微妙渐变 */
+  background: linear-gradient(0deg, rgba(10, 89, 247, 0.02), transparent);
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+/* 输入框 */
+.message-input {
+  flex: 1;
+  min-height: 48px;
+  max-height: 120px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  font-size: 14px;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  transition: all var(--transition-smooth);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.message-input:focus {
+  background: #fff;
+  border-color: rgba(10, 89, 247, 0.3);
+  box-shadow: 0 0 0 4px rgba(10, 89, 247, 0.08);
+}
+
+.message-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* 发送按钮 */
+.send-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  transition: all var(--transition-smooth);
+  box-shadow:
+    0 4px 16px rgba(10, 89, 247, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 20px rgba(10, 89, 247, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.send-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.1);
+  box-shadow: none;
+}
+
+/* 输入提示 */
+.input-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+/* ─────────────────────────────────────────────────────────
+   响应式设计
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .ai-modal-container {
+    width: 95%;
+    height: 90vh;
+    max-height: none;
+  }
+
+  .message-content-wrapper {
+    max-width: 85%;
+  }
+}

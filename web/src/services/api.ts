@@ -1,6 +1,6 @@
 const rawBaseUrl =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
-  'https://u821458-a197-3cecd37e.westc.seetacloud.com:8443';
+  'http://localhost:6006';
 
 export const API_BASE_URL = rawBaseUrl.replace(/\/+$/, '');
 export const WS_BASE_URL = API_BASE_URL.replace(/^http:\/\//, 'ws://').replace(

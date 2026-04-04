@@ -241,9 +241,9 @@ async def init_test_data():
     print("  数据导入完成 - 系统统计")
     print("="*70 + "\n")
     
-    # 信息知识图谱统计
+    # 知识图谱统计
     info_stats = info_kg.get_statistics()
-    print("📊 信息知识图谱:")
+    print("📊 知识图谱:")
     print(f"   信息节点: {info_stats['information']['total']} 个")
     print(f"     - 实体: {info_stats['information']['by_type'].get('entity', 0)} 个")
     print(f"     - 事件: {info_stats['information']['by_type'].get('event', 0)} 个")
@@ -256,9 +256,9 @@ async def init_test_data():
                                    key=lambda x: x[1], reverse=True):
         print(f"     - {category}: {count} 个")
     
-    # 传统知识图谱统计
+    # 实体关系统计
     kg_stats = knowledge_graph.get_statistics()
-    print(f"\n📊 传统知识图谱:")
+    print(f"\n📊 实体关系:")
     print(f"   实体节点: {kg_stats['entities']['total']} 个")
     print(f"   关系连接: {kg_stats['relations']['total']} 个")
     

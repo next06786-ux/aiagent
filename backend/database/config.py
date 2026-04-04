@@ -20,6 +20,9 @@ class CacheType(Enum):
 class DatabaseConfig:
     """数据库配置 — MySQL + Neo4j + ChromaDB"""
 
+    # ── 数据库类型 ─────────────────────────────────────────────────────────
+    DB_TYPE = 'MySQL + Neo4j + ChromaDB'
+
     # ── MySQL ──────────────────────────────────────────────────────────────
     MYSQL_HOST     = os.getenv('MYSQL_HOST',     'localhost')
     MYSQL_PORT     = int(os.getenv('MYSQL_PORT', '3306'))

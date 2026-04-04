@@ -14,11 +14,13 @@ httpx>=0.24.0
 sse-starlette>=1.6.0
 python-multipart
 aiofiles
+openai>=1.0.0
 
 # ===== MySQL =====
 sqlalchemy>=2.0.0
 pymysql>=1.0.0
 aiosqlite
+redis>=5.0.0
 
 # ===== Neo4j 知识图谱 =====
 neo4j>=5.0.0
@@ -28,6 +30,7 @@ chromadb>=0.4.0
 
 # ===== 数据处理 =====
 numpy<2.0.0
+Pillow>=10.0.0
 
 # ===== AI API 客户端 =====
 # Qwen 对话（qwen-plus/qwen-turbo）+ embedding（text-embedding-v3）

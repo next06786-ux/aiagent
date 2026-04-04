@@ -22,7 +22,7 @@ struct DecisionDungeonInput {
 
     setTimeout(() => {
       router.replaceUrl({
-        url: 'pages/QuickDecisionInput',
+        url: 'pages/EnhancedDecisionFlow',
         params: {
           userId: params?.userId || '',
           initialQuestion: params?.initialQuestion || ''

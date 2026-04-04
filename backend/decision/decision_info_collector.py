@@ -73,10 +73,17 @@ class DecisionInfoCollector:
             "created_at": datetime.now().isoformat()
         }
         
-        # 保存会话
+        # 保存会话（异步优化：先返回，后台保存）
         self._save_session(session)
-        self._persist_message(user_id, session_id, "user", initial_question, {"phase": "init"})
-        self._persist_message(user_id, session_id, "assistant", first_prompt, {"phase": "user_free_talk"})
+        
+        # 异步持久化消息（不阻塞返回）
+        import threading
+        threading.Thread(target=self._persist_message_async, args=(
+            user_id, session_id, "user", initial_question, {"phase": "init"}
+        )).start()
+        threading.Thread(target=self._persist_message_async, args=(
+            user_id, session_id, "assistant", first_prompt, {"phase": "user_free_talk"}
+        )).start()
         
         return {
             "session_id": session_id,
@@ -100,10 +107,15 @@ class DecisionInfoCollector:
         Returns:
             下一个AI问题或完成信号
         """
+        import time
+        start_time = time.time()
+        
         # 加载会话
         session = self._load_session(session_id)
         if not session:
             raise ValueError(f"会话不存在: {session_id}")
+        
+        print(f"[信息收集] 加载会话耗时: {time.time() - start_time:.2f}秒")
         
         # 记录用户回答
         session["conversation_history"].append({
@@ -122,7 +134,9 @@ class DecisionInfoCollector:
         session["current_round"] += 1
         
         # 提取信息
+        extract_start = time.time()
         self._extract_info_from_response(session, user_response)
+        print(f"[信息收集] 提取信息耗时: {time.time() - extract_start:.2f}秒")
         
         # 判断当前阶段
         if session["phase"] == "user_free_talk":
@@ -134,7 +148,9 @@ class DecisionInfoCollector:
                 session["user_said_no_more"] = True
                 
                 # 生成第一个针对性问题
+                question_start = time.time()
                 next_question = self._generate_targeted_question(session)
+                print(f"[信息收集] 生成针对性问题耗时: {time.time() - question_start:.2f}秒")
                 
                 session["conversation_history"].append({
                     "role": "assistant",
@@ -160,7 +176,9 @@ class DecisionInfoCollector:
                 }
             else:
                 # 继续让用户自由表达，使用更自然的跟进方式
+                followup_start = time.time()
                 follow_up = self._generate_free_talk_followup(session)
+                print(f"[信息收集] 生成跟进问题耗时: {time.time() - followup_start:.2f}秒")
                 
                 session["conversation_history"].append({
                     "role": "assistant",
@@ -176,6 +194,8 @@ class DecisionInfoCollector:
                 )
                 
                 self._save_session(session)
+                
+                print(f"[信息收集] 总耗时: {time.time() - start_time:.2f}秒")
                 
                 return {
                     "session_id": session_id,
@@ -327,6 +347,7 @@ class DecisionInfoCollector:
             return self._get_first_targeted_question(session)
         
         try:
+            print(f"[信息收集] 开始调用LLM生成针对性问题...")
             user_statements = [
                 msg["content"] for msg in session["conversation_history"] 
                 if msg["role"] == "user"
@@ -345,6 +366,7 @@ class DecisionInfoCollector:
             ]
             
             response = self.llm_service.chat(messages, temperature=0.8)
+            print(f"[信息收集] LLM生成针对性问题完成")
             return response.strip()
             
         except Exception as e:
@@ -459,6 +481,7 @@ class DecisionInfoCollector:
             return
         
         try:
+            print(f"[信息收集] 开始调用LLM提取信息...")
             messages = [
                 {
                     "role": "system",
@@ -480,6 +503,7 @@ class DecisionInfoCollector:
             ]
             
             response = self.llm_service.chat(messages, temperature=0.3, response_format="json_object")
+            print(f"[信息收集] LLM提取信息完成")
             extracted = json.loads(response)
             
             # 合并到已收集的信息中
@@ -636,6 +660,20 @@ class DecisionInfoCollector:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(session, f, ensure_ascii=False, indent=2)
 
+    def _persist_message_async(
+        self,
+        user_id: str,
+        session_id: str,
+        role: str,
+        content: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """异步持久化消息（不阻塞主流程）"""
+        try:
+            self._persist_message(user_id, session_id, role, content, context)
+        except Exception as e:
+            print(f"⚠️ 异步持久化失败（不影响主流程）: {e}")
+    
     def _persist_message(
         self,
         user_id: str,
@@ -723,3 +761,87 @@ if __name__ == "__main__":
         else:
             print(f"\n第 {result['round']} 轮")
             print(f"AI问题: {result['ai_question']}")
+
+
+    def _identify_decision_type(self, question: str) -> str:
+        """识别决策类型"""
+        if not self.llm_service or not self.llm_service.enabled:
+            return "general"
+        
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": """你是决策类型分类专家。根据用户的问题，判断决策类型。
+
+可选类型：
+- career: 职业发展（工作、跳槽、创业等）
+- education: 教育学习（升学、培训、考证等）
+- relationship: 人际关系（恋爱、婚姻、友情等）
+- finance: 财务投资（理财、买房、投资等）
+- lifestyle: 生活方式（搬家、旅行、兴趣等）
+- health: 健康医疗（就医、健身、养生等）
+- general: 通用决策（无法明确分类）
+
+只返回类型标识，不要其他内容。"""
+                },
+                {
+                    "role": "user",
+                    "content": f"用户问题：{question}"
+                }
+            ]
+            
+            response = self.llm_service.chat(messages, temperature=0.3)
+            decision_type = response.strip().lower()
+            
+            # 验证返回的类型
+            valid_types = ["career", "education", "relationship", "finance", "lifestyle", "health", "general"]
+            return decision_type if decision_type in valid_types else "general"
+            
+        except Exception as e:
+            print(f"⚠️ 决策类型识别失败: {e}")
+            return "general"
+    
+    def _get_decision_type_name(self, decision_type: str) -> str:
+        """获取决策类型的中文名称"""
+        names = {
+            "career": "职业发展",
+            "education": "教育学习",
+            "relationship": "人际关系",
+            "finance": "财务投资",
+            "lifestyle": "生活方式",
+            "health": "健康医疗",
+            "general": "通用决策"
+        }
+        return names.get(decision_type, "通用决策")
+    
+    def _analyze_emotional_state(self, user_response: str) -> Dict[str, Any]:
+        """分析用户情感状态"""
+        if not self.llm_service or not self.llm_service.enabled:
+            return {"emotion": "neutral", "confidence": 0.5, "urgency": "medium"}
+        
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": """分析用户回答中的情感状态和决策紧迫性。
+
+返回 JSON 格式：
+{
+  "emotion": "anxious|confident|confused|calm|excited",
+  "confidence": 0.0-1.0,
+  "urgency": "low|medium|high"
+}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"用户回答：{user_response}"
+                }
+            ]
+            
+            response = self.llm_service.chat(messages, temperature=0.3, response_format="json_object")
+            return json.loads(response)
+            
+        except Exception as e:
+            print(f"⚠️ 情感分析失败: {e}")
+            return {"emotion": "neutral", "confidence": 0.5, "urgency": "medium"}

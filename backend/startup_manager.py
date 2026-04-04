@@ -159,13 +159,13 @@ class StartupManager:
         default_user = "default_user"
         
         try:
-            # 初始化信息知识图谱
+            # 初始化知识图谱
             from backend.knowledge.information_knowledge_graph import InformationKnowledgeGraph
             _systems['info_kg_systems'][default_user] = InformationKnowledgeGraph(default_user)
-            StartupManager.print_success(f"信息知识图谱初始化完成 ({default_user})")
+            StartupManager.print_success(f"知识图谱初始化完成 ({default_user})")
             _init_status['knowledge_graph'] = True
         except Exception as e:
-            StartupManager.print_warning(f"信息知识图谱初始化失败: {e}")
+            StartupManager.print_warning(f"知识图谱初始化失败: {e}")
             _systems['info_kg_systems'][default_user] = None
         
         try:
@@ -279,7 +279,7 @@ def get_knowledge_graph(user_id: str = "default_user"):
     return _systems['knowledge_graphs'].get(user_id)
 
 def get_info_kg(user_id: str = "default_user"):
-    """获取信息知识图谱"""
+    """获取知识图谱"""
     return _systems['info_kg_systems'].get(user_id)
 
 def get_rag_system(user_id: str = "default_user"):

@@ -12,7 +12,7 @@ export const featureModules: FeatureModule[] = [
   {
     slug: 'decision-dungeon',
     title: '决策副本',
-    summary: '信息采集、AI 选项生成、WebSocket 推演、可验证报告与回访校准。',
+    summary: 'AI 核心建模、多 Agent 分支推演、决策图谱舞台与平行人生入口。',
     route: '/decision',
     status: 'live',
     group: '核心闭环',
@@ -20,8 +20,8 @@ export const featureModules: FeatureModule[] = [
   },
   {
     slug: 'decision-history',
-    title: '预测历史',
-    summary: '查看历史推演记录，回放 recommendation、prediction trace 与 follow-up。',
+    title: '决策历史',
+    summary: '回放 Future OS 历史推演记录，继续查看分支图谱和推荐结果。',
     route: '/decision/history',
     status: 'live',
     group: '核心闭环',
@@ -66,7 +66,7 @@ export const featureModules: FeatureModule[] = [
   {
     slug: 'agent-home',
     title: 'Agent Home',
-    summary: 'AgentHome、MetaAgentCoordination、ParallelLifeGame 等代理实验工作台。',
+    summary: '多 Agent 分支、平行人生体验与行为数据回写入口。',
     route: '/parallel-life',
     status: 'live',
     group: '代理与成长',
@@ -75,20 +75,11 @@ export const featureModules: FeatureModule[] = [
   {
     slug: 'learning-progress',
     title: '学习与成长',
-    summary: 'LearningProgress、个性模型训练、EmergencePatterns 等成长反馈模块。',
+    summary: 'LearningProgress、EmergencePatterns 与行为画像成长反馈模块。',
     route: '/learning-progress',
     status: 'live',
     group: '代理与成长',
     gradient: ['#43E97B', '#38F9D7'],
-  },
-  {
-    slug: 'lora-training',
-    title: '个性模型训练',
-    summary: '管理储备中的个性化模型训练、查看进度与版本，不影响当前云端推演主链。',
-    route: '/lora-training',
-    status: 'live',
-    group: '代理与成长',
-    gradient: ['#F093FB', '#F5576C'],
   },
   {
     slug: 'camera-multimodal',

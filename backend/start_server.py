@@ -50,9 +50,11 @@ def main():
         sys.exit(1)
     
     print("🚀 启动服务器...")
-    print(f"   服务器地址: http://localhost:8000")
-    print(f"   API文档: http://localhost:8000/docs")
-    print(f"   交互式文档: http://localhost:8000/redoc")
+    backend_port = int(os.getenv("BACKEND_PORT", os.getenv("PORT", "6006")))
+
+    print(f"   服务器地址: http://localhost:{backend_port}")
+    print(f"   API文档: http://localhost:{backend_port}/docs")
+    print(f"   交互式文档: http://localhost:{backend_port}/redoc")
     print()
     print("💡 提示:")
     print("   - 按 Ctrl+C 停止服务器")
@@ -67,7 +69,7 @@ def main():
             "uvicorn",
             "backend.main:app",
             "--host", "0.0.0.0",
-            "--port", "8000",
+            "--port", str(backend_port),
             "--reload"  # 自动重载（开发模式）
         ])
     except KeyboardInterrupt:

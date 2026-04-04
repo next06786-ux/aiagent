@@ -2,9 +2,6 @@
 LoRA 模型管理器
 负责加载和使用用户的 LoRA 模型
 """
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
-from peft import PeftModel
 import os
 from typing import Optional
 import sys
@@ -39,6 +36,9 @@ class LoRAModelManager:
     def load_base_model(self):
         """加载基础模型（只加载一次）"""
         if self.base_model is None:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+
             model_path = self.base_model_name
             print(f"📥 加载基础模型: {model_path}")
             if not os.path.exists(model_path):
@@ -130,12 +130,14 @@ class LoRAModelManager:
         
         return None
 
-    def load_user_lora(self, user_id: str, prefer_quantized: bool = True) -> Optional[PeftModel]:
+    def load_user_lora(self, user_id: str, prefer_quantized: bool = True):
         """
         加载用户的 LoRA 模型
         
         优先加载量化版本（如果存在且启用了量化）
         """
+        from peft import PeftModel
+
         # 如果已经加载，直接返回
         if user_id in self.loaded_loras:
             return self.loaded_loras[user_id]
@@ -227,6 +229,8 @@ class LoRAModelManager:
     
     def generate(self, user_id: str, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7) -> str:
         """使用用户的 LoRA 模型生成回复"""
+        import torch
+
         model = self.load_user_lora(user_id)
         
         if model is None:
@@ -291,6 +295,9 @@ class LoRAModelManager:
 
     def generate_stream(self, user_id: str, prompt: str, max_new_tokens: int = 512, temperature: float = 0.7):
         """使用用户的 LoRA 模型流式生成回复"""
+        import torch
+        from transformers import TextIteratorStreamer
+
         model = self.load_user_lora(user_id)
         if model is None:
             self.load_base_model()
@@ -368,9 +375,13 @@ class LoRAModelManager:
             pass
         
         # 当前 VRAM 使用
-        if torch.cuda.is_available():
-            info["vram_used_gb"] = round(torch.cuda.memory_allocated() / 1024**3, 2)
-            info["vram_total_gb"] = round(torch.cuda.get_device_properties(0).total_mem / 1024**3, 2)
+        try:
+            import torch
+            if torch.cuda.is_available():
+                info["vram_used_gb"] = round(torch.cuda.memory_allocated() / 1024**3, 2)
+                info["vram_total_gb"] = round(torch.cuda.get_device_properties(0).total_mem / 1024**3, 2)
+        except Exception:
+            pass
         
         # 读取训练状态
         status_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models", "lora", user_id, "status.json"))

@@ -23,7 +23,7 @@ struct DecisionDungeonList {
     setTimeout(() => {
       if (params?.simulationData) {
         router.replaceUrl({
-          url: 'pages/DecisionDungeon2DMap',
+          url: 'pages/EnhancedDecisionResult',
           params: {
             userId: params?.userId || '',
             simulationData: params.simulationData,
@@ -34,7 +34,7 @@ struct DecisionDungeonList {
       }
 
       router.replaceUrl({
-        url: 'pages/QuickDecisionInput',
+        url: 'pages/EnhancedDecisionFlow',
         params: {
           userId: params?.userId || ''
         }

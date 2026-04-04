@@ -354,6 +354,14 @@ struct QuickDecisionInput {
   @Builder
   buildLoraCard() {
     Column({ space: 14 }) {
+      Text('说明：当前决策推演默认走云端 API。这里保留的是本地模型预留接口，不代表正在参与本次推演。')
+        .fontSize(12)
+        .fontColor(Theme.Color.Warning)
+        .lineHeight(20)
+        .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+        .backgroundColor('rgba(255,149,0,0.08)')
+        .borderRadius(Theme.Radius.m)
+
       Row({ space: 12 }) {
         Stack() {
           Circle({ width: 44, height: 44 }).fill(Theme.Color.Secondary).opacity(0.15)
@@ -619,13 +627,10 @@ struct QuickDecisionInput {
           .shadow(Theme.Shadow.Soft)
           .onClick(() => {
             router.pushUrl({
-              url: 'pages/DecisionDungeon2DMap',
+              url: 'pages/EnhancedDecisionFlow',
               params: {
-                dungeonId: record.session_id,
                 userId: this.userId,
-                question: record.question,
-                recommendation: record.recommendation,
-                isHistory: 'true'
+                initialQuestion: record.question
               }
             })
           })

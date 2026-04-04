@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单图表测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #0a0e1a;
+            color: #e0f2fe;
+        }
+        #status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        #graph {
+            width: 100%;
+            height: 600px;
+            background: #07111f;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            border-radius: 12px;
+            margin-top: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .node {
+            position: absolute;
+            width: 120px;
+            height: 80px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .node:hover {
+            background: rgba(59, 130, 246, 0.4);
+            transform: scale(1.05);
+        }
+        .node-month {
+            color: #60a5fa;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .node-event {
+            color: #e0f2fe;
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        button {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 简单图表测试</h1>
+    
+    <div id="status">
+        <div><strong>状态:</strong> <span id="statusText">等待开始</span></div>
+        <div><strong>节点数:</strong> <span id="nodeCount">0</span></div>
+    </div>
+
+    <div>
+        <button onclick="startTest()">开始测试</button>
+        <button onclick="addNode()">手动添加节点</button>
+        <button onclick="clearNodes()">清空节点</button>
+    </div>
+
+    <div id="graph"></div>
+
+    <script>
+        let nodes = [];
+        let nodeIdCounter = 1;
+
+        function updateStatus(text) {
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function updateNodeCount() {
+            document.getElementById('nodeCount').textContent = nodes.length;
+        }
+
+        function renderGraph() {
+            const graph = document.getElementById('graph');
+            graph.innerHTML = '';
+            
+            nodes.forEach((node, index) => {
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node';
+                nodeEl.style.left = `${50 + (index % 5) * 150}px`;
+                nodeEl.style.top = `${50 + Math.floor(index / 5) * 120}px`;
+                nodeEl.innerHTML = `
+                    <div class="node-month">M${node.month}</div>
+                    <div class="node-event">${node.event}</div>
+                `;
+                nodeEl.onclick = () => {
+                    alert(`节点详情:\n月份: ${node.month}\n事件: ${node.event}\n概率: ${node.probability}`);
+                };
+                graph.appendChild(nodeEl);
+            });
+            
+            updateNodeCount();
+        }
+
+        function addNode() {
+            const node = {
+                id: `node_${nodeIdCounter++}`,
+                month: nodes.length + 1,
+                event: `测试事件 ${nodes.length + 1}: 这是一个测试节点`,
+                probability: 0.8
+            };
+            nodes.push(node);
+            console.log('[添加节点]', node);
+            renderGraph();
+            updateStatus(`已添加节点 ${nodes.length}`);
+        }
+
+        function clearNodes() {
+            nodes = [];
+            nodeIdCounter = 1;
+            renderGraph();
+            updateStatus('已清空所有节点');
+        }
+
+        function startTest() {
+            updateStatus('开始自动添加节点...');
+            clearNodes();
+            
+            let count = 0;
+            const interval = setInterval(() => {
+                if (count >= 10) {
+                    clearInterval(interval);
+                    updateStatus('测试完成');
+                    return;
+                }
+                
+                addNode();
+                count++;
+            }, 500);
+        }
+
+        // 初始化
+        updateStatus('就绪');
+        updateNodeCount();
+    </script>
+</body>
+</html>

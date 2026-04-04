@@ -1,670 +1,663 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GlassCard } from '../components/common/GlassCard';
-import { MetricCard } from '../components/common/MetricCard';
-import { StatusPill } from '../components/common/StatusPill';
 import { AppShell } from '../components/shell/AppShell';
+import { GlassCard } from '../components/common/GlassCard';
+import { StatusPill } from '../components/common/StatusPill';
+import { StreamingCollectionChat } from '../components/decision/StreamingCollectionChat';
 import { useAuth } from '../hooks/useAuth';
 import {
-  continueDecisionCollection,
-  generateDecisionOptions,
-  getDecisionHistory,
-  getLoraProgress,
-  getLoraStatus,
   startDecisionCollection,
-  triggerLoraTraining,
+  continueDecisionCollection,
+  streamDecisionCollection,
+  generateDecisionOptions,
+  openDecisionSimulationSocket,
+  getDecisionHistory,
+  getWarmupStatus,
 } from '../services/decision';
-import type {
-  CollectedInfo,
-  DecisionHistoryRecord,
-  DecisionMessage,
-  LoraStatusInfo,
-  OptionInput,
-} from '../types/api';
+import type { CollectedInfo, DecisionHistoryRecord, OptionInput } from '../types/api';
 
-type WorkbenchPhase = 'idle' | 'collecting' | 'ask_options' | 'ready';
+// ── 阶段定义 ─────────────────────────────────────────────────
+type Phase = 'input' | 'collecting' | 'options' | 'simulating';
 
-function parseHints(text: string) {
-  return text
-    .split(/[\n,，；;]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function joinText(values?: string[]) {
-  return values && values.length > 0 ? values.join(' / ') : '暂无';
-}
-
-function hasCollectedInfo(value: CollectedInfo | null) {
-  if (!value) {
-    return false;
-  }
-
-  return (
-    Object.keys(value.decision_context || {}).length > 0 ||
-    Object.keys(value.user_constraints || {}).length > 0 ||
-    Object.keys(value.priorities || {}).length > 0 ||
-    (value.concerns || []).length > 0 ||
-    (value.options_mentioned || []).length > 0
-  );
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return '未知时间';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-    2,
-    '0',
-  )}-${String(date.getDate()).padStart(2, '0')} ${String(
-    date.getHours(),
-  ).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function phaseTitle(phase: WorkbenchPhase) {
-  if (phase === 'idle') return '准备开始';
-  if (phase === 'collecting') return '信息采集中';
-  if (phase === 'ask_options') return '确认选项方向';
-  return '可以开始推演';
+interface ChatMsg { 
+  role: 'ai' | 'user' | 'system'; 
+  text: string;
+  timestamp: number;
+  isStreaming?: boolean;
 }
 
 export function DecisionWorkbenchPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [phase, setPhase] = useState<WorkbenchPhase>('idle');
-  const [initialQuestion, setInitialQuestion] = useState('');
+
+  // 阶段状态
+  const [phase, setPhase] = useState<Phase>('input');
+  const [question, setQuestion] = useState('');
+  const [decisionType, setDecisionType] = useState<'career' | 'relationship' | 'education' | 'general'>('general');
   const [sessionId, setSessionId] = useState('');
-  const [messages, setMessages] = useState<DecisionMessage[]>([]);
-  const [reply, setReply] = useState('');
-  const [optionHints, setOptionHints] = useState('');
-  const [generatedOptions, setGeneratedOptions] = useState<OptionInput[]>([]);
+  const [chatLog, setChatLog] = useState<ChatMsg[]>([]);
+  const [userInput, setUserInput] = useState('');
+  const [isBusy, setIsBusy] = useState(false);
+  const [systemStatus, setSystemStatus] = useState('');
   const [collectedInfo, setCollectedInfo] = useState<CollectedInfo | null>(null);
-  const [history, setHistory] = useState<DecisionHistoryRecord[]>([]);
-  const [loraStatus, setLoraStatus] = useState<LoraStatusInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [options, setOptions] = useState<OptionInput[]>([]);
+  const [optionInput, setOptionInput] = useState('');
   const [error, setError] = useState('');
-  const [trainingProgress, setTrainingProgress] = useState(0);
-  const [trainingStage, setTrainingStage] = useState('');
-  const [isTraining, setIsTraining] = useState(false);
-  const trainingTimerRef = useRef<number | null>(null);
-  const transcriptRef = useRef<HTMLDivElement | null>(null);
-  const readyOptionCount = generatedOptions.filter((item) => item.title.trim()).length;
+  const [history, setHistory] = useState<DecisionHistoryRecord[]>([]);
+  const [progress, setProgress] = useState<{ current: number; total: number; stage: string } | undefined>();
+  const [useStreaming, setUseStreaming] = useState(true); // 是否使用流式响应
+  const [warmupProgress, setWarmupProgress] = useState<{ stage: string; progress: number } | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // 检查AI核心预热状态（简化版 - 只查询一次）
+  useEffect(() => {
+    if (user?.user_id && phase === 'input' && warmupProgress === null) {
+      getWarmupStatus(user.user_id).then(status => {
+        if (status.status !== 'ready') {
+          setWarmupProgress({ stage: status.stage, progress: status.progress });
+        }
+      }).catch(() => {
+        // 查询失败，假设已就绪
+        setWarmupProgress(null);
+      });
+    }
+  }, [user, phase, warmupProgress]);
 
   useEffect(() => {
-    if (!user?.user_id) {
-      return;
+    if (user?.user_id && phase === 'input') {
+      // 延迟加载历史记录，不阻塞页面渲染
+      const timer = setTimeout(() => {
+        getDecisionHistory(user.user_id, 5).then(setHistory).catch(() => {});
+      }, 500);
+      return () => clearTimeout(timer);
     }
-
-    Promise.allSettled([
-      getDecisionHistory(user.user_id),
-      getLoraStatus(user.user_id),
-    ]).then((results) => {
-      const [historyResult, loraResult] = results;
-      if (historyResult.status === 'fulfilled') {
-        setHistory(historyResult.value);
-      }
-      if (loraResult.status === 'fulfilled') {
-        setLoraStatus(loraResult.value);
-      }
-    });
-  }, [user]);
+  }, [user, phase]);
 
   useEffect(() => {
-    return () => {
-      if (trainingTimerRef.current) {
-        window.clearInterval(trainingTimerRef.current);
-      }
-    };
-  }, []);
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatLog]);
 
-  useEffect(() => {
-    if (!transcriptRef.current) {
-      return;
-    }
-
-    transcriptRef.current.scrollTo({
-      top: transcriptRef.current.scrollHeight,
-      behavior: 'smooth',
-    });
-  }, [messages]);
-
-  async function handleStartCollection() {
-    if (!user?.user_id || !initialQuestion.trim()) {
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
+  // ── 阶段1：开始信息采集 ───────────────────────────────────
+  async function handleStart() {
+    if (!user?.user_id || !question.trim()) return;
+    setIsBusy(true); setError('');
+    
     try {
-      const result = await startDecisionCollection({
+      // 显示正在连接的状态
+      setSystemStatus('正在连接决策引擎...');
+      
+      const { session_id, message } = await startDecisionCollection({
         user_id: user.user_id,
-        initial_question: initialQuestion.trim(),
+        initial_question: question.trim(),
+        decision_type: decisionType,
       });
-      setSessionId(result.session_id);
-      setMessages([
-        {
-          role: 'system',
-          content: result.message,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-      setGeneratedOptions([]);
-      setCollectedInfo(null);
-      setOptionHints('');
+      
+      // 显示正在初始化的状态
+      setSystemStatus('正在初始化对话...');
+      
+      // 短暂延迟让用户看到状态变化
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      setSessionId(session_id);
+      setChatLog([{ role: 'ai', text: message, timestamp: Date.now() }]);
       setPhase('collecting');
-    } catch (startError) {
-      setError(startError instanceof Error ? startError.message : '启动失败');
+      setSystemStatus('');
+      
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '启动失败');
+      setSystemStatus('');
     } finally {
-      setIsLoading(false);
+      setIsBusy(false);
     }
   }
 
-  async function handleCollectionReply() {
-    if (!reply.trim() || !sessionId || isLoading) {
-      return;
-    }
-
-    const userMessage = reply.trim();
-    setReply('');
-    setError('');
-    setIsLoading(true);
-    setMessages((current) => [
-      ...current,
-      {
-        role: 'user',
-        content: userMessage,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-
-    try {
-      const result = await continueDecisionCollection({
-        session_id: sessionId,
-        user_response: userMessage,
-      });
-
-      if (result.is_complete) {
-        setCollectedInfo(result.collected_info || null);
-        setMessages((current) => [
-          ...current,
-          {
-            role: 'assistant',
-            content: result.summary
-              ? `信息采集完成。\n\n${result.summary}`
-              : '信息采集完成，请确认选项方向。',
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        setPhase('ask_options');
-      } else if (result.ai_question) {
-        setMessages((current) => [
-          ...current,
-          {
-            role: 'assistant',
-            content: result.ai_question || '请继续补充。',
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      }
-    } catch (replyError) {
-      setError(replyError instanceof Error ? replyError.message : '继续采集失败');
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function handleGenerateOptions() {
-    if (!sessionId) {
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    try {
-      const aiOptions = await generateDecisionOptions({
-        session_id: sessionId,
-        user_options: parseHints(optionHints),
-      });
-      if (aiOptions.length === 0) {
-        setGeneratedOptions([]);
-        setError('当前没有生成出可用选项，请补充更多上下文或手动输入选项。');
-        return;
-      }
-      setGeneratedOptions(aiOptions);
-      setPhase('ready');
-    } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : '生成选项失败');
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function updateOption(index: number, key: keyof OptionInput, value: string) {
-    setGeneratedOptions((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [key]: value } : item,
-      ),
-    );
-  }
-
-  function addOption() {
-    setGeneratedOptions((current) =>
-      current.length >= 5
-        ? current
-        : [...current, { title: `备选项 ${current.length + 1}`, description: '' }],
-    );
-  }
-
-  function removeOption(index: number) {
-    setGeneratedOptions((current) =>
-      current.length <= 2 ? current : current.filter((_, itemIndex) => itemIndex !== index),
-    );
-  }
-
-  function launchSimulation() {
-    const options = generatedOptions
-      .map((item) => ({
-        title: item.title.trim(),
-        description: item.description.trim(),
-      }))
-      .filter((item) => item.title);
-
-    if (!user?.user_id || !sessionId || options.length < 2) {
-      setError('至少保留 2 个选项后才能开始推演。');
-      return;
-    }
-
-    navigate('/decision/simulation', {
-      state: {
-        mode: 'stream',
-        sessionId,
-        question: initialQuestion,
-        userId: user.user_id,
-        options,
-        collectedInfo,
-      },
-    });
-  }
-
-  async function handleStartTraining() {
-    if (!user?.user_id || isTraining) {
-      return;
-    }
-
-    setIsTraining(true);
-    setTrainingProgress(5);
-    setTrainingStage('已触发训练任务，正在轮询进度...');
-    setError('');
-
-    try {
-      await triggerLoraTraining(user.user_id);
-      trainingTimerRef.current = window.setInterval(() => {
-        void getLoraProgress(user.user_id)
-          .then((progress) => {
-            setTrainingProgress(Number(progress.progress || 0));
-            setTrainingStage(progress.stage || '');
-
-            if (!progress.is_training && Number(progress.progress || 0) >= 100) {
-              if (trainingTimerRef.current) {
-                window.clearInterval(trainingTimerRef.current);
-                trainingTimerRef.current = null;
-              }
-              setIsTraining(false);
-              setTrainingStage('训练完成');
-              void getLoraStatus(user.user_id).then(setLoraStatus).catch(() => undefined);
+  // ── 阶段2：继续信息采集对话（支持流式响应）───────────────────────────────
+  async function handleCollectReplyWithMessage(reply: string) {
+    if (!reply.trim() || isBusy) return;
+    
+    if (useStreaming) {
+      // 使用流式响应
+      try {
+        let streamingMessage: ChatMsg | null = null;
+        let streamBuffer = '';
+        
+        for await (const chunk of streamDecisionCollection({ 
+          session_id: sessionId, 
+          user_response: reply 
+        })) {
+          if (chunk.type === 'status') {
+            // 只显示关键状态，跳过"分析用户情况"等冗余提示
+            const status = chunk.content || '';
+            if (!status.includes('分析你的情况') && !status.includes('理解回答')) {
+              setSystemStatus(status);
             }
-
-            if (progress.error) {
-              if (trainingTimerRef.current) {
-                window.clearInterval(trainingTimerRef.current);
-                trainingTimerRef.current = null;
-              }
-              setIsTraining(false);
-              setError(progress.error);
+          } else if (chunk.type === 'progress') {
+            // 只在生成问题阶段显示进度
+            if (chunk.progress?.stage === '生成问题') {
+              setProgress(chunk.progress);
             }
-          })
-          .catch(() => {
-            if (trainingTimerRef.current) {
-              window.clearInterval(trainingTimerRef.current);
-              trainingTimerRef.current = null;
-            }
-            setIsTraining(false);
-            setError('轮询个性模型训练进度失败');
-          });
-      }, 2500);
-    } catch (trainingError) {
-      setIsTraining(false);
-      setError(trainingError instanceof Error ? trainingError.message : '个性模型训练启动失败');
-    }
-  }
-
-  return (
-    <AppShell
-      title="决策副本"
-      subtitle="以 Harmony 端增强流程为蓝本，把采集、选项生成、储备模型状态和推演入口组织成一个完整工作台。"
-      actions={
-        <>
-          <StatusPill tone={readyOptionCount >= 2 ? 'success' : 'neutral'}>
-            {readyOptionCount >= 2 ? `已准备 ${readyOptionCount} 个选项` : '等待至少 2 个选项'}
-          </StatusPill>
-          <button
-            className="button button-primary"
-            onClick={launchSimulation}
-            disabled={phase !== 'ready' || readyOptionCount < 2}
-          >
-            开始推演
-          </button>
-        </>
-      }
-    >
-      <div className="stack-layout">
-        <section className="hero-card decision-hero-card">
-          <div className="hero-copy">
-            <p className="eyebrow">Decision Flow</p>
-            <h2>先把问题说清，再让系统生成真正可推演的未来分支。</h2>
-            <p>
-              这里不是一次性表单，而是 Harmony 风格的渐进采集流程。系统会先帮你整理约束、
-              顾虑和优先级，再生成适合推演的候选路径。
-            </p>
-            <div className="hero-actions">
-              <StatusPill
-                tone={
-                  phase === 'idle'
-                    ? 'neutral'
-                    : phase === 'collecting'
-                      ? 'primary'
-                      : phase === 'ask_options'
-                        ? 'warning'
-                        : 'success'
+          } else if (chunk.type === 'message') {
+            // 清除状态提示，开始显示AI消息
+            setSystemStatus('');
+            setProgress(undefined);
+            
+            // 流式显示AI消息
+            streamBuffer += chunk.content || '';
+            
+            if (!streamingMessage) {
+              streamingMessage = {
+                role: 'ai',
+                text: streamBuffer,
+                timestamp: Date.now(),
+                isStreaming: true,
+              };
+              setChatLog(prev => [...prev, streamingMessage!]);
+            } else {
+              setChatLog(prev => {
+                const newLog = [...prev];
+                const lastMsg = newLog[newLog.length - 1];
+                if (lastMsg && lastMsg.isStreaming) {
+                  lastMsg.text = streamBuffer;
                 }
-              >
-                {phaseTitle(phase)}
-              </StatusPill>
-              {sessionId ? <span className="stream-status">session: {sessionId}</span> : null}
-            </div>
-          </div>
+                return newLog;
+              });
+            }
+          } else if (chunk.type === 'complete') {
+            // 完成流式显示
+            if (streamingMessage) {
+              setChatLog(prev => {
+                const newLog = [...prev];
+                const lastMsg = newLog[newLog.length - 1];
+                if (lastMsg && lastMsg.isStreaming) {
+                  lastMsg.isStreaming = false;
+                }
+                return newLog;
+              });
+            }
+            
+            if (chunk.data?.is_complete) {
+              console.log('[信息采集] 采集完成');
+              setCollectedInfo(chunk.data.collected_info || null);
+              setChatLog(prev => [...prev, { 
+                role: 'system', 
+                text: '✓ 信息采集完成！正在生成推演选项...',
+                timestamp: Date.now(),
+              }]);
+              
+              setSystemStatus('正在生成推演选项...');
+              const aiOptions = await generateDecisionOptions({ session_id: sessionId, user_options: [] });
+              
+              setOptions(aiOptions.length ? aiOptions : [
+                { title: '保守稳定路线', description: '优先稳住现有基础，再寻找窗口' },
+                { title: '主动突破路线', description: '接受短期波动，投向长期跃迁' },
+              ]);
+              setPhase('options');
+            }
+            
+            setSystemStatus('');
+            setProgress(undefined);
+          }
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '对话失败');
+        setSystemStatus('');
+        setProgress(undefined);
+      } finally {
+        setIsBusy(false);
+      }
+    } else {
+      // 使用传统非流式响应
+      try {
+        const result = await continueDecisionCollection({ session_id: sessionId, user_response: reply });
+        
+        if (result.ai_question) {
+          setChatLog(prev => [...prev, { role: 'ai', text: result.ai_question!, timestamp: Date.now() }]);
+        }
+        
+        if (result.is_complete) {
+          console.log('[信息采集] 采集完成');
+          
+          setCollectedInfo(result.collected_info || null);
+          setChatLog(prev => [...prev, { 
+            role: 'system', 
+            text: '✓ 信息采集完成！正在生成推演选项...',
+            timestamp: Date.now(),
+          }]);
+          
+          setSystemStatus('正在生成推演选项...');
+          const aiOptions = await generateDecisionOptions({ session_id: sessionId, user_options: [] });
+          
+          setOptions(aiOptions.length ? aiOptions : [
+            { title: '保守稳定路线', description: '优先稳住现有基础，再寻找窗口' },
+            { title: '主动突破路线', description: '接受短期波动，投向长期跃迁' },
+          ]);
+          setPhase('options');
+          setSystemStatus('');
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '对话失败');
+        setSystemStatus('');
+      } finally {
+        setIsBusy(false);
+      }
+    }
+  }
 
-          <div className="hero-side">
-            <GlassCard title="快速引导" subtitle="先用自然语言描述，再逐步收束">
-              <div className="status-stack">
-                <div className="status-row">
-                  <span>1. 问题输入</span>
-                  <StatusPill tone={phase === 'idle' ? 'primary' : 'success'}>问题定义</StatusPill>
+  // ── 阶段2：继续信息采集对话（旧版本，保留兼容）───────────────────────────────
+  async function handleCollectReply() {
+    if (!userInput.trim() || isBusy) return;
+    const reply = userInput.trim();
+    setUserInput('');
+    setChatLog(prev => [...prev, { role: 'user', text: reply, timestamp: Date.now() }]);
+    await handleCollectReplyWithMessage(reply);
+  }
+
+  // ── 阶段3：确认选项，发起 WebSocket 推演 ─────────────────
+  function handleAddOption() {
+    if (!optionInput.trim()) return;
+    setOptions(prev => [...prev, { title: optionInput.trim(), description: '' }]);
+    setOptionInput('');
+  }
+
+  function handleRemoveOption(i: number) {
+    setOptions(prev => prev.filter((_, idx) => idx !== i));
+  }
+
+  function handleStartSimulation() {
+    if (!sessionId || options.length === 0) return;
+    
+    console.log('[决策副本] 准备跳转到推演页面');
+    console.log('[决策副本] sessionId:', sessionId);
+    console.log('[决策副本] question:', question);
+    console.log('[决策副本] options:', options);
+    console.log('[决策副本] collectedInfo:', collectedInfo);
+    
+    // 显示跳转状态
+    setSimulatingStatus('正在初始化推演环境...');
+    
+    // 短暂延迟以显示状态
+    setTimeout(() => {
+      setSimulatingStatus('正在连接推演引擎...');
+      
+      setTimeout(() => {
+        // 跳转到推演页，携带 session_id + options，由推演页建立 WebSocket
+        navigate('/decision/simulation', {
+          state: {
+            mode: 'future',
+            sessionId,
+            question,
+            userId: user?.user_id || '',
+            options,
+            collectedInfo,
+            decisionType,
+          },
+        });
+      }, 300);
+    }, 300);
+  }
+
+  // 启动模拟时的状态
+  const [simulatingStatus, setSimulatingStatus] = useState('');
+
+  // ── 阶段3：确认选项，发起 WebSocket 推演 ─────────────────
+  function handleAddOption() {
+    if (!optionInput.trim()) return;
+    setOptions(prev => [...prev, { title: optionInput.trim(), description: '' }]);
+    setOptionInput('');
+  }
+
+  // ── 渲染 ─────────────────────────────────────────────────
+  return (
+    <AppShell>
+      <div className="stack-layout">
+
+        {/* ── 阶段1：输入问题 ── */}
+        {phase === 'input' && (
+          <GlassCard title="发起推演" subtitle="描述你正在面对的真实决策问题，AI 会通过几轮对话深入了解你的处境。">
+            {/* AI核心预热状态 */}
+            {warmupProgress && warmupProgress.progress < 100 && (
+              <div style={{
+                padding: '14px 18px',
+                borderRadius: 16,
+                background: 'linear-gradient(135deg, rgba(10, 89, 247, 0.08), rgba(107, 72, 255, 0.08))',
+                border: '1px solid rgba(10, 89, 247, 0.2)',
+                marginBottom: 16,
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 10,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #0A59F7, #6B48FF)',
+                      animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0A59F7' }}>
+                      AI核心预热中
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 12, color: '#6B48FF', fontWeight: 600 }}>
+                    {warmupProgress.progress}%
+                  </span>
                 </div>
-                <div className="status-row">
-                  <span>2. 约束采集</span>
-                  <StatusPill tone={phase === 'collecting' ? 'primary' : phase === 'idle' ? 'neutral' : 'success'}>
-                    信息收集
-                  </StatusPill>
+                <div style={{ fontSize: 12, color: '#5a5a6e', marginBottom: 8 }}>
+                  {warmupProgress.stage}
                 </div>
-                <div className="status-row">
-                  <span>3. 选项确认</span>
-                  <StatusPill tone={phase === 'ask_options' ? 'warning' : phase === 'ready' ? 'success' : 'neutral'}>
-                    候选路径
-                  </StatusPill>
-                </div>
-                <div className="status-row">
-                  <span>4. 流式推演</span>
-                  <StatusPill tone={phase === 'ready' ? 'success' : 'neutral'}>准备完成</StatusPill>
+                <div style={{
+                  height: 6,
+                  borderRadius: 999,
+                  background: 'rgba(10, 89, 247, 0.1)',
+                  overflow: 'hidden',
+                }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      borderRadius: 999,
+                      background: 'linear-gradient(90deg, #0A59F7, #6B48FF)',
+                      width: `${warmupProgress.progress}%`,
+                      transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  />
                 </div>
               </div>
-            </GlassCard>
-          </div>
-        </section>
-
-        <GlassCard title="起始问题" subtitle="可以是一段自由描述，不要求一开始就结构化。">
-          <div className="hero-input-strip">
-            <textarea
-              className="textarea"
-              value={initialQuestion}
-              onChange={(event) => setInitialQuestion(event.target.value)}
-              placeholder="例如：我现在在两个 offer 之间犹豫，怎么选更适合我未来 12 个月的发展？"
-              rows={4}
-            />
-            <div className="composer-actions">
-              <button
-                className="button button-primary"
-                onClick={() => void handleStartCollection()}
-                disabled={isLoading || !initialQuestion.trim()}
-              >
-                {isLoading && phase === 'idle' ? '启动中...' : '开始信息采集'}
-              </button>
-            </div>
-          </div>
-        </GlassCard>
-
-        <section className="two-column-grid decision-workbench-grid">
-          <GlassCard
-            title="采集对话"
-            subtitle="对应 Harmony 的 EnhancedDecisionFlow 前半段，通过多轮问答收束问题边界。"
-          >
-            <div className="decision-transcript" ref={transcriptRef}>
-              {messages.length === 0 ? (
-                <div className="empty-state-block">
-                  <strong>尚未开始采集</strong>
-                  <p>启动后，AI 会先帮你梳理上下文、限制条件和你真正重视的结果。</p>
-                </div>
-              ) : (
-                messages.map((message, index) => (
-                  <article
-                    key={`${message.timestamp}_${index}`}
-                    className={`decision-msg decision-msg-${message.role}`}
-                  >
-                    <strong>
-                      {message.role === 'user'
-                        ? '你'
-                        : message.role === 'assistant'
-                          ? 'AI'
-                          : '系统'}
-                    </strong>
-                    <p>{message.content}</p>
-                  </article>
-                ))
-              )}
-            </div>
-
-            {phase === 'collecting' ? (
-              <div className="chat-composer">
-                <textarea
-                  className="textarea"
-                  value={reply}
-                  onChange={(event) => setReply(event.target.value)}
-                  placeholder="继续补充你的真实情况、顾虑、限制条件和你在意的东西..."
-                  rows={4}
-                />
-                <div className="composer-actions">
+            )}
+            
+            {/* 初始化状态提示 */}
+            {systemStatus && (
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: 14,
+                background: 'rgba(232, 213, 208, 0.08)',
+                border: '1px solid rgba(220, 210, 200, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 16,
+              }}>
+                <div style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #E8D5D0, #D4C4BF)',
+                  animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                }} />
+                <span style={{ fontSize: 13, color: '#7a6f65', fontWeight: 500 }}>
+                  {systemStatus}
+                </span>
+              </div>
+            )}
+            <div className="form-stack">
+              {/* 决策类型选择 */}
+              <label className="field-block">
+                <span>决策类型</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 8 }}>
                   <button
-                    className="button button-primary"
-                    onClick={() => void handleCollectionReply()}
-                    disabled={isLoading || !reply.trim()}
+                    type="button"
+                    onClick={() => setDecisionType('career')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: 12,
+                      border: decisionType === 'career' ? '2px solid #0A59F7' : '1px solid rgba(255,255,255,0.2)',
+                      background: decisionType === 'career' ? 'rgba(10,89,247,0.12)' : 'rgba(255,255,255,0.05)',
+                      color: '#e0f2fe',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
                   >
-                    {isLoading ? '提交中...' : '继续采集'}
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>职业发展</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>求职、跳槽、转行</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionType('relationship')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: 12,
+                      border: decisionType === 'relationship' ? '2px solid #0A59F7' : '1px solid rgba(255,255,255,0.2)',
+                      background: decisionType === 'relationship' ? 'rgba(10,89,247,0.12)' : 'rgba(255,255,255,0.05)',
+                      color: '#e0f2fe',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>人际关系</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>恋爱、婚姻、社交</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionType('education')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: 12,
+                      border: decisionType === 'education' ? '2px solid #0A59F7' : '1px solid rgba(255,255,255,0.2)',
+                      background: decisionType === 'education' ? 'rgba(10,89,247,0.12)' : 'rgba(255,255,255,0.05)',
+                      color: '#e0f2fe',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>教育升学</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>考研、留学、专业选择</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDecisionType('general')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: 12,
+                      border: decisionType === 'general' ? '2px solid #0A59F7' : '1px solid rgba(255,255,255,0.2)',
+                      background: decisionType === 'general' ? 'rgba(10,89,247,0.12)' : 'rgba(255,255,255,0.05)',
+                      color: '#e0f2fe',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>通用决策</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8' }}>其他类型决策</div>
                   </button>
                 </div>
-              </div>
-            ) : null}
-
-            {(phase === 'ask_options' || phase === 'ready') ? (
-              <div className="chat-composer">
+              </label>
+              
+              <label className="field-block">
+                <span>当前问题</span>
                 <textarea
-                  className="textarea"
-                  value={optionHints}
-                  onChange={(event) => setOptionHints(event.target.value)}
-                  placeholder="如果你已有明确选项，就每行写一个；如果没有，也可以直接点“AI 生成选项”。"
-                  rows={4}
+                  className="textarea" rows={5}
+                  value={question}
+                  onChange={e => setQuestion(e.target.value)}
+                  placeholder="例如：我要不要在今年离开现在的工作，去做更适合我的方向？"
                 />
-                <div className="composer-actions">
-                  <button
-                    className="button button-secondary"
-                    onClick={() => void handleGenerateOptions()}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? '生成中...' : 'AI 生成选项'}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {error ? <div className="form-error">{error}</div> : null}
-          </GlassCard>
-
-          <div className="stack-layout">
-            <GlassCard title="个性模型储备" subtitle="当前推演默认走云端/API，这里保留训练与版本管理能力">
-              <div className="metrics-grid compact-grid">
-                <MetricCard
-                  label="储备模型已加载"
-                  value={loraStatus?.is_loaded ? '是' : '否'}
-                  helper="当前主链未默认接入"
-                  tone="secondary"
-                />
-                <MetricCard
-                  label="训练样本"
-                  value={String(loraStatus?.training_data_size || 0)}
-                  helper="用于后续个性化训练"
-                  tone="accent"
-                />
-                <MetricCard
-                  label="最近训练"
-                  value={
-                    loraStatus?.last_train_time ? formatDateTime(loraStatus.last_train_time) : '--'
-                  }
-                  helper="后台记录时间"
-                  tone="primary"
-                />
-              </div>
+              </label>
+              {error && <div className="form-error">{error}</div>}
               <div className="composer-actions">
                 <button
-                  className="button button-ghost"
-                  onClick={() => void handleStartTraining()}
-                  disabled={isTraining}
+                  className="button button-primary"
+                  onClick={() => void handleStart()}
+                  disabled={isBusy || !question.trim()}
                 >
-                  {isTraining ? '训练中...' : '训练储备模型'}
+                  {isBusy ? '启动中…' : '开始信息采集'}
                 </button>
               </div>
-              {isTraining ? (
-                <div className="progress-panel">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${Math.max(4, trainingProgress)}%` }}
-                    />
-                  </div>
-                  <span>{trainingStage || '训练进行中...'}</span>
-                </div>
-              ) : null}
-            </GlassCard>
-
-            <GlassCard title="采集摘要" subtitle="可验证报告的输入基础">
-              {hasCollectedInfo(collectedInfo) ? (
-                <div className="summary-groups">
-                  <div>
-                    <strong>顾虑</strong>
-                    <p>{joinText(collectedInfo?.concerns)}</p>
-                  </div>
-                  <div>
-                    <strong>优先级</strong>
-                    <p>{joinText(Object.keys(collectedInfo?.priorities || {}))}</p>
-                  </div>
-                  <div>
-                    <strong>已提及选项</strong>
-                    <p>{joinText(collectedInfo?.options_mentioned)}</p>
-                  </div>
-                  <div>
-                    <strong>上下文维度</strong>
-                    <p>{joinText(Object.keys(collectedInfo?.decision_context || {}))}</p>
-                  </div>
-                  <div>
-                    <strong>限制条件</strong>
-                    <p>{joinText(Object.keys(collectedInfo?.user_constraints || {}))}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="empty-copy">采集完成后，这里会显示约束、优先级和已提及选项。</p>
-              )}
-            </GlassCard>
-
-            <GlassCard
-              title="待推演选项"
-              subtitle={
-                readyOptionCount > 0
-                  ? `当前可推演 ${readyOptionCount} 个选项，可继续手动微调`
-                  : 'AI 生成后可继续手动微调'
+            </div>
+            
+            {/* 添加pulse动画 */}
+            <style>{`
+              @keyframes pulse {
+                0%, 100% {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+                50% {
+                  opacity: 0.5;
+                  transform: scale(0.8);
+                }
               }
-            >
-              {generatedOptions.length === 0 ? (
-                <div className="empty-state-block">
-                  <strong>尚未生成选项</strong>
-                  <p>完成采集后可让 AI 自动拆出候选路径，也可以手动补充。</p>
-                </div>
-              ) : (
-                <div className="option-editor-list">
-                  {generatedOptions.map((option, index) => (
-                    <article key={`${option.title}_${index}`} className="option-editor-card">
-                      <span className="metric-label">选项 {index + 1}</span>
-                      <input
-                        className="input"
-                        value={option.title}
-                        onChange={(event) => updateOption(index, 'title', event.target.value)}
-                      />
-                      <textarea
-                        className="textarea"
-                        value={option.description}
-                        onChange={(event) =>
-                          updateOption(index, 'description', event.target.value)
-                        }
-                        rows={3}
-                      />
-                      <button className="button button-ghost" onClick={() => removeOption(index)}>
-                        删除
-                      </button>
-                    </article>
-                  ))}
-                  <button className="button button-secondary" onClick={addOption}>
-                    添加一个选项
-                  </button>
-                </div>
-              )}
-            </GlassCard>
+            `}</style>
+          </GlassCard>
+        )}
 
-            <GlassCard title="最近推演" subtitle="快速回到历史记录">
-              {history.length === 0 ? (
-                <p className="empty-copy">还没有历史推演。</p>
-              ) : (
-                <div className="mini-history-list">
-                  {history.slice(0, 4).map((record) => (
+        {/* ── 阶段2：信息采集对话 ── */}
+        {phase === 'collecting' && (
+          <GlassCard
+            title="信息采集"
+            subtitle="AI 正在通过对话深入了解你的处境，请如实回答，这会让推演更准确。"
+          >
+            <StreamingCollectionChat
+              messages={chatLog.map(msg => ({
+                role: msg.role,
+                content: msg.text,
+                timestamp: msg.timestamp,
+                isStreaming: msg.isStreaming,
+              }))}
+              onSendMessage={async (message) => {
+                // 直接添加用户消息到聊天记录
+                setChatLog(prev => [...prev, { role: 'user', text: message, timestamp: Date.now() }]);
+                setIsBusy(true);
+                setError('');
+                
+                // 调用处理函数
+                await handleCollectReplyWithMessage(message);
+              }}
+              isProcessing={isBusy}
+              currentStatus={systemStatus}
+              progress={progress}
+            />
+            {error && <div className="form-error" style={{ marginTop: 12 }}>{error}</div>}
+          </GlassCard>
+        )}
+
+        {/* ── 阶段3：确认选项 ── */}
+        {phase === 'options' && (
+          <GlassCard
+            title="确认推演选项"
+            subtitle="AI 已为你生成推演分支，你可以修改、删除或添加新选项，然后启动多 Agent 实时推演。"
+          >
+            <div className="form-stack">
+              {/* 选项列表 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {options.map((opt, i) => (
+                  <div key={`option-${i}-${opt.title}`} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px', borderRadius: 14,
+                    background: 'rgba(10,89,247,0.08)',
+                    border: '1px solid rgba(10,89,247,0.18)',
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, color: '#e8f0fe', fontSize: 14 }}>{opt.title}</div>
+                      {opt.description && (
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 3 }}>{opt.description}</div>
+                      )}
+                    </div>
                     <button
-                      key={record.session_id}
-                      className="mini-history-item"
-                      onClick={() =>
-                        navigate(
-                          `/decision/simulation?simulationId=${encodeURIComponent(
-                            record.session_id,
-                          )}`,
-                          {
-                            state: {
-                              mode: 'history',
-                              simulationId: record.session_id,
-                              question: record.question,
-                              userId: user?.user_id || '',
-                            },
-                          },
-                        )
-                      }
-                    >
-                      <strong>{record.question}</strong>
-                      <span>{formatDateTime(record.created_at)}</span>
-                    </button>
-                  ))}
+                      onClick={() => handleRemoveOption(i)}
+                      style={{ background: 'none', border: 'none', color: 'rgba(255,100,100,0.7)', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+
+              {/* 添加选项 */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  className="textarea"
+                  style={{ flex: 1, padding: '8px 14px', borderRadius: 10, fontSize: 13 }}
+                  value={optionInput}
+                  onChange={e => setOptionInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddOption()}
+                  placeholder="添加自定义选项…"
+                />
+                <button className="button button-secondary" onClick={handleAddOption}>添加</button>
+              </div>
+
+              {/* 采集摘要 */}
+              {collectedInfo && (
+                <div style={{ padding: '12px 16px', borderRadius: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>
+                  <div style={{ marginBottom: 6, fontWeight: 600, color: 'rgba(147,197,253,0.8)' }}>已采集信息摘要</div>
+                  {collectedInfo.concerns.length > 0 && (
+                    <div>顾虑：{collectedInfo.concerns.join(' / ')}</div>
+                  )}
+                  {collectedInfo.options_mentioned.length > 0 && (
+                    <div>提及选项：{collectedInfo.options_mentioned.join(' / ')}</div>
+                  )}
                 </div>
               )}
-            </GlassCard>
-          </div>
-        </section>
+
+              {/* 启动状态 */}
+              {simulatingStatus && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: 10,
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <div style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    background: '#3b82f6',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
+                  <span style={{ fontSize: 13, color: '#3b82f6', fontWeight: 500 }}>{simulatingStatus}</span>
+                </div>
+              )}
+
+              <div className="composer-actions">
+                <button className="button button-ghost" onClick={() => setPhase('collecting')}>
+                  返回补充信息
+                </button>
+                <button
+                  className="button button-primary"
+                  onClick={handleStartSimulation}
+                  disabled={options.length === 0}
+                >
+                  启动多 Agent 推演
+                </button>
+              </div>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* ── 历史记录 ── */}
+        {history.length > 0 && phase === 'input' && (
+          <GlassCard title="最近推演" subtitle="点击打开历史图谱">
+            <div className="history-grid">
+              {history.map(item => (
+                <article key={item.simulation_id || item.session_id || `history-${Math.random()}`} className="history-card">
+                  <div className="module-accent history-accent-primary" />
+                  <div className="history-card-body">
+                    <div className="history-card-top">
+                      <StatusPill tone="primary">Recent</StatusPill>
+                      <span>{item.created_at}</span>
+                    </div>
+                    <h3>{item.question}</h3>
+                    <p>{item.recommendation || '暂无推荐'}</p>
+                    <div className="history-card-foot">
+                      <button
+                        className="button button-primary"
+                        onClick={() => navigate('/decision/simulation', {
+                          state: { mode: 'history', simulationId: item.simulation_id, question: item.question, userId: user?.user_id || '' },
+                        })}
+                      >
+                        打开图谱
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </GlassCard>
+        )}
       </div>
     </AppShell>
   );

@@ -1,22 +1,39 @@
 :root {
-  --primary: #0a59f7;
-  --secondary: #6b48ff;
-  --accent: #00c853;
-  --warning: #ff9500;
-  --danger: #ff3b30;
-  --bg-primary: #f5f7fa;
-  --bg-secondary: rgba(255, 255, 255, 0.84);
-  --bg-tertiary: #fafbfc;
-  --text-primary: #1a1a1a;
-  --text-secondary: #666;
-  --text-tertiary: #8b8b98;
-  --border-light: rgba(19, 26, 44, 0.08);
-  --border-strong: rgba(19, 26, 44, 0.14);
-  --shadow-soft: 0 18px 48px rgba(14, 21, 43, 0.08);
-  --shadow-glow: 0 18px 40px rgba(10, 89, 247, 0.18);
+  /* HarmonyOS 6 Official - Clean & Pure Color Palette */
+  --primary: #0A59F7;           /* 华为蓝 - 主色调 */
+  --secondary: #6B48FF;         /* 华为紫 */
+  --accent: #00C8FF;            /* 清新蓝 */
+  --warning: #FF9500;            /* 活力橙 */
+  --danger: #FF3B30;            /* 警示红 */
+  --success: #34C759;            /* 成功绿 */
+  
+  /* Background Colors - 纯净白 */
+  --bg-primary: #FFFFFF;        /* 纯净白 */
+  --bg-secondary: rgba(255, 255, 255, 0.95);
+  --bg-tertiary: #F5F7FA;       /* 浅灰白 */
+  
+  /* Text Colors */
+  --text-primary: #1A1A1A;     /* 纯黑 */
+  --text-secondary: #666666;    /* 中灰 */
+  --text-tertiary: #999999;     /* 浅灰 */
+  
+  /* Border Colors */
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.10);
+  
+  /* HarmonyOS 6 Shadow System */
+  --shadow-soft: 0 18px 48px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 18px 40px rgba(10, 89, 247, 0.12);
+  --shadow-warm: 0 18px 48px rgba(0, 0, 0, 0.06);
+  
+  /* Border Radius - 圆润友好 */
   --radius-lg: 24px;
   --radius-md: 18px;
   --radius-sm: 14px;
+  
+  /* 动画时长 */
+  --flow-duration: 0.5s;
+  --transition-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -36,23 +53,56 @@ body {
     'Noto Sans SC', sans-serif;
   line-height: 1.5;
   overflow-x: hidden;
+  /* HarmonyOS 6 - 纯净白色背景 */
   background:
-    radial-gradient(circle at top left, rgba(107, 72, 255, 0.16), transparent 32%),
-    radial-gradient(circle at top right, rgba(10, 89, 247, 0.14), transparent 28%),
-    linear-gradient(180deg, #f8faff 0%, #f2f5fb 100%);
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(10, 89, 247, 0.03), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(107, 72, 255, 0.02), transparent 45%),
+    #FFFFFF;
+  position: relative;
 }
 
+/* HarmonyOS 6 - 全局微光效果层 */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.42;
+  z-index: 0;
+  /* 微妙的网格纹理 */
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
-  background-size: 32px 32px;
-  mask-image: radial-gradient(circle at center, black 45%, transparent 100%);
+    linear-gradient(rgba(10, 89, 247, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 89, 247, 0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at center, black 30%, transparent 70%);
+  animation: harmonyBackgroundFlow 20s ease-in-out infinite;
+}
+
+/* HarmonyOS 6 - 动态光感背景动画 */
+@keyframes harmonyBackgroundFlow {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* HarmonyOS 6 - 顶部导航栏 */
+.app-topnav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 28px;
+  height: 60px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  box-shadow: 
+    0 1px 0 rgba(0, 0, 0, 0.04),
+    0 4px 24px rgba(0, 0, 0, 0.03);
 }
 
 button,
@@ -100,8 +150,8 @@ pre {
 
 .app-shell {
   position: relative;
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
@@ -115,32 +165,52 @@ pre {
 .shell-glow {
   position: absolute;
   border-radius: 999px;
-  filter: blur(90px);
-  opacity: 0.55;
+  filter: blur(100px);
+  opacity: 0.4;
+  animation: harmonyGlowFloat 12s ease-in-out infinite;
+}
+
+/* HarmonyOS 6 - 清新光晕 */
+@keyframes harmonyGlowFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  33% {
+    transform: translate(20px, -30px) scale(1.05);
+    opacity: 0.4;
+  }
+  66% {
+    transform: translate(-10px, 20px) scale(0.98);
+    opacity: 0.35;
+  }
 }
 
 .shell-glow-primary {
-  top: -80px;
-  left: -60px;
-  width: 320px;
-  height: 320px;
-  background: rgba(10, 89, 247, 0.16);
+  top: -100px;
+  left: -80px;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(10, 89, 247, 0.08), transparent 70%);
+  animation-delay: 0s;
 }
 
 .shell-glow-secondary {
-  top: 18%;
-  right: -80px;
-  width: 360px;
-  height: 360px;
-  background: rgba(107, 72, 255, 0.14);
+  top: 30%;
+  right: -100px;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(107, 72, 255, 0.06), transparent 70%);
+  animation-delay: -4s;
 }
 
 .shell-glow-accent {
-  bottom: -120px;
-  left: 28%;
-  width: 360px;
-  height: 360px;
-  background: rgba(79, 172, 254, 0.12);
+  bottom: -150px;
+  left: 35%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 200, 255, 0.05), transparent 70%);
+  animation-delay: -8s;
 }
 
 .app-sidebar {
@@ -155,6 +225,88 @@ pre {
   border-right: 1px solid var(--border-light);
   background: rgba(255, 255, 255, 0.52);
   backdrop-filter: blur(24px);
+}
+
+/* ── 顶部导航栏 ─────────────────────────────────────────── */
+.app-topnav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 28px;
+  height: 58px;
+  border-bottom: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 1px 0 rgba(10, 89, 247, 0.06), 0 4px 24px rgba(0, 0, 0, 0.04);
+}
+
+.topnav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  margin-left: 12px;
+}
+
+.topnav-link {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all var(--transition-smooth);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.topnav-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(123, 104, 238, 0.1), rgba(93, 173, 226, 0.08));
+  border-radius: 999px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all var(--transition-smooth);
+}
+
+.topnav-link:hover::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.topnav-link:hover {
+  background: rgba(123, 104, 238, 0.06);
+  color: var(--text-primary);
+}
+
+.topnav-link.is-active {
+  background: linear-gradient(135deg, rgba(123, 104, 238, 0.12), rgba(107, 142, 159, 0.10));
+  color: var(--primary);
+  border: 1px solid rgba(123, 104, 238, 0.15);
+  box-shadow: 0 2px 12px rgba(123, 104, 238, 0.10);
+}
+
+.topnav-link.is-active::before {
+  opacity: 0;
+}
+
+.topnav-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.topnav-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .brand-panel,
@@ -301,7 +453,8 @@ pre {
   position: relative;
   z-index: 1;
   min-width: 0;
-  padding: 28px;
+  flex: 1;
+  padding: 28px 28px 100px;
 }
 
 .topbar,
@@ -371,9 +524,33 @@ pre {
 .auth-hero {
   border-radius: var(--radius-lg);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72)),
-    linear-gradient(135deg, rgba(10, 89, 247, 0.04), rgba(107, 72, 255, 0.05));
-  backdrop-filter: blur(22px);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.92)),
+    linear-gradient(135deg, rgba(10, 89, 247, 0.02), rgba(107, 72, 255, 0.01));
+  backdrop-filter: blur(16px);
+  /* HarmonyOS 6 - 纯净光感效果 */
+  position: relative;
+  overflow: hidden;
+}
+
+/* HarmonyOS 6 - 玻璃卡片微光层 */
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 40% 30% at 90% 10%, rgba(255, 255, 255, 0.8), transparent 50%),
+    radial-gradient(ellipse 30% 30% at 10% 90%, rgba(10, 89, 247, 0.02), transparent 40%);
+  border-radius: inherit;
+}
+
+@keyframes harmonyCardShimmer {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .glass-card,
@@ -384,16 +561,6 @@ pre {
 .glass-card {
   position: relative;
   overflow: hidden;
-}
-
-.glass-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.55), transparent 28%),
-    linear-gradient(135deg, rgba(10, 89, 247, 0.04), transparent 32%);
 }
 
 .card-header {
@@ -421,10 +588,43 @@ pre {
   justify-content: center;
   gap: 10px;
   min-height: 46px;
-  padding: 0 18px;
-  border-radius: 16px;
+  padding: 0 20px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: transform 160ms ease, opacity 160ms ease;
+  /* HarmonyOS 6 - 流畅过渡 */
+  transition: all var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+/* HarmonyOS 6 - 按钮微光效果 */
+.button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.button:hover::before {
+  left: 100%;
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(10, 89, 247, 0.12);
+}
+
+.button:active {
+  transform: translateY(0);
 }
 
 .button:disabled {
@@ -435,15 +635,18 @@ pre {
 .button-primary {
   color: #fff;
   background: linear-gradient(135deg, var(--primary), var(--secondary));
+  box-shadow: 0 4px 16px rgba(10, 89, 247, 0.15);
 }
 
 .button-secondary {
   color: #fff;
   background: linear-gradient(135deg, #4facfe, #00c8ff);
+  box-shadow: 0 4px 16px rgba(0, 200, 255, 0.15);
 }
 
 .button-ghost {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .button-large {
@@ -584,20 +787,23 @@ pre {
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
   gap: 24px;
   padding: 28px;
-  border-radius: 32px;
+  border-radius: var(--radius-lg);
+  /* HarmonyOS 6 - 纯净渐变 */
   background:
-    radial-gradient(circle at top left, rgba(10, 89, 247, 0.16), transparent 28%),
-    radial-gradient(circle at right center, rgba(107, 72, 255, 0.18), transparent 32%),
-    linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.62));
+    radial-gradient(ellipse 50% 40% at 15% 20%, rgba(10, 89, 247, 0.06), transparent 50%),
+    radial-gradient(ellipse 40% 40% at 85% 80%, rgba(107, 72, 255, 0.04), transparent 45%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.95));
+  border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .hero-card::after {
   content: '';
   position: absolute;
   inset: 1px;
-  border-radius: 31px;
+  border-radius: calc(var(--radius-lg) - 1px);
   pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.5);
 }
 
 .hero-copy {
@@ -642,14 +848,175 @@ pre {
 }
 
 .pentagram-hero {
-  min-height: 860px;
+  min-height: 100vh;
   align-items: center;
-  grid-template-columns: minmax(320px, 0.68fr) minmax(720px, 1.32fr);
+  justify-content: center;
+  grid-template-columns: 1fr;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  /* HarmonyOS 6 - 纯净背景 */
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 30%, rgba(10, 89, 247, 0.04), transparent 50%),
+    radial-gradient(ellipse 50% 50% at 80% 70%, rgba(107, 72, 255, 0.03), transparent 45%),
+    #FFFFFF;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes harmonyHeroBackground {
+  0%, 100% {
+    background-position: 0% 0%, 100% 100%, 0% 0%;
+  }
+  50% {
+    background-position: 5% 5%, 95% 95%, 0% 0%;
+  }
+}
+
+.homepage-fullscreen-wrapper {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.homepage-content-wrapper {
+  padding: 40px 28px 120px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.homepage-content-wrapper > section {
+  margin-bottom: 28px;
+}
+
+.homepage-bottom-nav {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  z-index: 100;
+}
+
+.homepage-bottom-nav .nav-item {
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all var(--transition-smooth);
+  cursor: pointer;
+  position: relative;
+}
+
+.homepage-bottom-nav .nav-item:hover {
+  background: rgba(10, 89, 247, 0.06);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+
+.homepage-bottom-nav .nav-item.is-active {
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  color: #fff;
+  box-shadow: 
+    0 6px 18px rgba(10, 89, 247, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.homepage-bottom-nav .nav-item span {
+  display: block;
+}
+
+.pentagram-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.3) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at center, black 50%, transparent 100%);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.harmony-fullscreen {
+  display: flex;
+  flex-direction: column;
+}
+
+.harmony-stage-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 85vh;
+}
+
+.harmony-intro {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: 680px;
+  padding: 24px 32px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(24px);
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    0 20px 60px rgba(10, 89, 247, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  z-index: 10;
+}
+
+.harmony-intro .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--primary);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.harmony-intro h2 {
+  font-size: 28px;
+  margin: 0 0 12px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.harmony-intro p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+}
+
+.harmony-intro .hero-actions {
+  display: flex;
   gap: 12px;
+  justify-content: center;
 }
 
 .pentagram-stage {
-  --orbit-size: min(860px, 100%);
+  --orbit-size: min(720px, 90vw);
   position: relative;
   width: var(--orbit-size);
   aspect-ratio: 1;
@@ -659,7 +1026,7 @@ pre {
 }
 
 .pentagram-hero .hero-side {
-  min-height: 780px;
+  min-height: auto;
 }
 
 .pentagram-aura,
@@ -673,20 +1040,33 @@ pre {
 
 .pentagram-aura {
   border-radius: 999px;
-  filter: blur(48px);
+  filter: blur(100px);
   pointer-events: none;
+  animation: harmonyAuraFloat 8s ease-in-out infinite;
+}
+
+@keyframes harmonyAuraFloat {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+  50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.5; }
 }
 
 .pentagram-aura-primary {
-  width: 360px;
-  height: 360px;
-  background: rgba(10, 89, 247, 0.2);
+  width: 480px;
+  height: 480px;
+  /* HarmonyOS 6 - 纯净蓝色光晕 */
+  background: radial-gradient(circle, rgba(10, 89, 247, 0.15), transparent 70%);
+  inset: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .pentagram-aura-secondary {
-  width: 540px;
-  height: 540px;
-  background: rgba(107, 72, 255, 0.16);
+  width: 640px;
+  height: 640px;
+  /* HarmonyOS 6 - 纯净紫蓝光晕 */
+  background: radial-gradient(circle, rgba(107, 72, 255, 0.12), transparent 70%);
+  inset: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -4s;
 }
 
 .pentagram-energy-web {
@@ -738,22 +1118,49 @@ pre {
   border-radius: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  transition: all var(--transition-smooth);
 }
 
 .pentagram-ring-outer {
-  width: 96%;
-  height: 96%;
-  border: 1.5px solid rgba(10, 89, 247, 0.16);
+  width: 98%;
+  height: 98%;
+  /* HarmonyOS 6 - 纯净蓝色边框 */
+  border: 2px solid rgba(10, 89, 247, 0.15);
   box-shadow:
-    0 0 0 12px rgba(255, 255, 255, 0.18),
-    inset 0 0 42px rgba(10, 89, 247, 0.06);
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 0 50px rgba(10, 89, 247, 0.08),
+    inset 0 0 50px rgba(10, 89, 247, 0.05);
+  animation: harmonyRingPulse 6s ease-in-out infinite;
+}
+
+@keyframes harmonyRingPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) scale(1.02); opacity: 1; }
+}
+
+.pentagram-ring-mid {
+  width: 76%;
+  height: 76%;
+  /* HarmonyOS 6 - 纯净紫色边框 */
+  border: 1.5px solid rgba(107, 72, 255, 0.18);
+  box-shadow: 
+    inset 0 0 35px rgba(107, 72, 255, 0.06),
+    0 0 35px rgba(107, 72, 255, 0.06);
+  animation: harmonyRingRotate 40s linear infinite;
+}
+
+@keyframes harmonyRingRotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .pentagram-ring-inner {
-  width: 54%;
-  height: 54%;
-  border: 1px dashed rgba(107, 72, 255, 0.26);
-  box-shadow: inset 0 0 28px rgba(107, 72, 255, 0.08);
+  width: 56%;
+  height: 56%;
+  /* HarmonyOS 6 - 纯净蓝紫边框 */
+  border: 1px dashed rgba(10, 89, 247, 0.20);
+  box-shadow: inset 0 0 30px rgba(10, 89, 247, 0.08);
+  animation: harmonyRingRotate 30s linear infinite reverse;
 }
 
 .pentagram-star {
@@ -780,24 +1187,49 @@ pre {
 
 .pentagram-core {
   inset: 50%;
-  z-index: 4;
-  width: 220px;
-  height: 220px;
+  z-index: 5;
+  width: 240px;
+  height: 240px;
   padding: 0;
   border-radius: 50%;
   cursor: pointer;
   transform: translate(-50%, -50%);
   background: transparent;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pentagram-core:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.pentagram-core:active {
+  transform: translate(-50%, -50%) scale(1.02);
 }
 
 .pentagram-core-halo {
   position: absolute;
-  inset: -42px;
+  inset: -60px;
   border-radius: 50%;
+  /* 精致深度光晕 */
   background:
-    radial-gradient(circle, rgba(10, 89, 247, 0.14), transparent 58%),
-    radial-gradient(circle, rgba(107, 72, 255, 0.18), transparent 72%);
-  animation: pentagramPulse 4.2s ease-in-out infinite;
+    radial-gradient(circle, rgba(10, 89, 247, 0.12), transparent 40%),
+    radial-gradient(circle, rgba(107, 72, 255, 0.08), transparent 60%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.05), transparent 80%);
+  animation: harmonyCoreHalo 5s ease-in-out infinite;
+  filter: blur(2px);
+}
+
+@keyframes harmonyCoreHalo {
+  0%, 100% { 
+    transform: scale(0.95); 
+    opacity: 0.5;
+    filter: blur(2px);
+  }
+  50% { 
+    transform: scale(1.15); 
+    opacity: 0.8;
+    filter: blur(3px);
+  }
 }
 
 .pentagram-core-ring,
@@ -810,42 +1242,54 @@ pre {
 }
 
 .pentagram-core-ring-outer {
-  width: calc(100% + 44px);
-  height: calc(100% + 44px);
-  border: 1px solid rgba(134, 190, 255, 0.24);
+  width: calc(100% + 56px);
+  height: calc(100% + 56px);
+  border: 2px solid rgba(123, 104, 238, 0.4);
   box-shadow:
-    0 0 28px rgba(10, 89, 247, 0.12),
-    inset 0 0 22px rgba(255, 255, 255, 0.08);
-  animation: coreRotate 14s linear infinite;
+    0 0 40px rgba(123, 104, 238, 0.15),
+    inset 0 0 30px rgba(255, 255, 255, 0.1);
+  animation: harmonyCoreRingRotate 18s linear infinite;
+}
+
+@keyframes harmonyCoreRingRotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .pentagram-core-ring-inner {
-  width: calc(100% + 16px);
-  height: calc(100% + 16px);
-  border: 1px dashed rgba(182, 157, 255, 0.34);
-  opacity: 0.9;
-  animation: coreRotateReverse 11s linear infinite;
+  width: calc(100% + 20px);
+  height: calc(100% + 20px);
+  border: 1.5px dashed rgba(93, 173, 226, 0.5);
+  opacity: 0.95;
+  animation: harmonyCoreRingRotate 14s linear infinite reverse;
 }
 
 .pentagram-core-spark {
-  width: 18px;
-  height: 18px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.95), rgba(84, 220, 255, 0.15));
-  box-shadow: 0 0 24px rgba(120, 186, 255, 0.8);
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 1), rgba(123, 104, 238, 0.4));
+  box-shadow: 
+    0 0 30px rgba(123, 104, 238, 0.8),
+    0 0 60px rgba(93, 173, 226, 0.4);
+  animation: harmonySparkFloat 6s ease-in-out infinite;
+}
+
+@keyframes harmonySparkFloat {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) translateY(-12px) scale(1.2); opacity: 1; }
 }
 
 .pentagram-core-spark-a {
-  top: 8%;
-  left: 78%;
-  animation: coreSparkFloat 5.4s ease-in-out infinite;
+  top: 5%;
+  left: 80%;
 }
 
 .pentagram-core-spark-b {
-  top: 80%;
-  left: 20%;
-  width: 12px;
-  height: 12px;
-  animation: coreSparkFloat 6.1s ease-in-out infinite reverse;
+  top: 82%;
+  left: 18%;
+  width: 14px;
+  height: 14px;
+  animation-delay: -3s;
 }
 
 .pentagram-core-shell {
@@ -853,23 +1297,53 @@ pre {
   z-index: 1;
   display: grid;
   place-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   height: 100%;
-  padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  padding: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
   border-radius: 50%;
   color: #fff;
   text-align: center;
+  /* 多层渐变营造深度 */
   background:
-    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.36), transparent 32%),
-    radial-gradient(circle at center, rgba(84, 220, 255, 0.34), transparent 40%),
-    linear-gradient(135deg, rgba(10, 89, 247, 0.96), rgba(107, 72, 255, 0.96));
+    /* 高光层（光照方向） */
+    radial-gradient(ellipse 50% 35% at 28% 18%, rgba(255, 255, 255, 0.98) 0%, transparent 45%),
+    /* 侧面光 */
+    radial-gradient(ellipse 35% 50% at 78% 60%, rgba(255, 255, 255, 0.3) 0%, transparent 40%),
+    /* 环境反射 */
+    radial-gradient(ellipse 60% 40% at 50% 95%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
+    /* 主渐变（深色增加质感） */
+    linear-gradient(150deg, #1a4fd8 0%, #0A59F7 30%, #3d5afe 60%, #5c6bc0 100%);
+  /* 精致阴影 */
   box-shadow:
-    0 28px 70px rgba(10, 89, 247, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    /* 主阴影 */
+    0 30px 70px -15px rgba(10, 60, 200, 0.5),
+    0 15px 35px -8px rgba(0, 0, 0, 0.4),
+    /* 内层光影 */
+    inset 0 3px 6px rgba(255, 255, 255, 0.95),
+    inset 0 -6px 15px rgba(0, 0, 0, 0.25),
+    inset 3px 0 10px rgba(255, 255, 255, 0.5),
+    inset -3px 0 10px rgba(255, 255, 255, 0.3),
+    /* 边缘光 */
+    0 0 60px rgba(10, 89, 247, 0.25);
   isolation: isolate;
   overflow: hidden;
+  transition: all var(--transition-smooth);
+  filter: contrast(1.05) saturate(1.1);
+}
+
+.pentagram-core:hover .pentagram-core-shell {
+  transform: scale(1.05);
+  box-shadow:
+    0 35px 80px -15px rgba(10, 60, 200, 0.6),
+    0 18px 40px -10px rgba(0, 0, 0, 0.45),
+    inset 0 3px 8px rgba(255, 255, 255, 1),
+    inset 0 -6px 18px rgba(0, 0, 0, 0.2),
+    inset 3px 0 12px rgba(255, 255, 255, 0.6),
+    inset -3px 0 12px rgba(255, 255, 255, 0.4),
+    0 0 80px rgba(10, 89, 247, 0.35);
+  filter: contrast(1.08) saturate(1.15);
 }
 
 .pentagram-core-shell-gloss,
@@ -883,9 +1357,9 @@ pre {
 
 .pentagram-core-shell-gloss {
   background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.44), transparent 24%),
-    radial-gradient(circle at 72% 78%, rgba(255, 255, 255, 0.08), transparent 18%);
-  opacity: 0.95;
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.55), transparent 26%),
+    radial-gradient(circle at 74% 80%, rgba(255, 255, 255, 0.12), transparent 20%);
+  opacity: 1;
 }
 
 .pentagram-core-shell-grid {
@@ -911,9 +1385,14 @@ pre {
 }
 
 .pentagram-core-shell-pulse {
-  inset: 18%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28), transparent 68%);
-  animation: corePulse 3.2s ease-in-out infinite;
+  inset: 20%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.35), transparent 70%);
+  animation: harmonyCorePulse 4s ease-in-out infinite;
+}
+
+@keyframes harmonyCorePulse {
+  0%, 100% { transform: scale(0.9); opacity: 0.4; }
+  50% { transform: scale(1.1); opacity: 0.85; }
 }
 
 .pentagram-core-shell small,
@@ -923,44 +1402,87 @@ pre {
 }
 
 .pentagram-core-shell small {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  opacity: 0.8;
+  opacity: 0.85;
+  font-weight: 600;
 }
 
 .pentagram-core-shell strong {
-  font-size: 36px;
-  letter-spacing: -0.04em;
+  font-size: 40px;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
 }
 
-.pentagram-core-shell span {
-  font-size: 12px;
-  opacity: 0.86;
+.pentagram-core-shell > span:last-child {
+  font-size: 11px;
+  opacity: 0.9;
+  font-weight: 500;
 }
 
 .pentagram-node {
   top: var(--node-top);
   left: var(--node-left);
-  width: 142px;
-  height: 142px;
+  width: 160px;
+  height: 160px;
   padding: 0;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: transparent;
   cursor: pointer;
-  z-index: 3;
+  z-index: 4;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pentagram-node:hover {
+  transform: translate(-50%, -50%) scale(1.12);
+  z-index: 6;
+}
+
+.pentagram-node:active {
+  transform: translate(-50%, -50%) scale(1.05);
 }
 
 .pentagram-node-orbit {
   position: absolute;
-  inset: -18px;
+  inset: -22px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  /* 精致光晕 + 质感 */
   background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.16), transparent 72%),
-    linear-gradient(135deg, color-mix(in srgb, var(--node-start) 22%, white), transparent);
-  opacity: 0.75;
+    radial-gradient(circle, rgba(10, 89, 247, 0.06), transparent 75%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1), transparent 50%);
+  opacity: 0.9;
+  animation: harmonyNodePulse 4s ease-in-out infinite;
+  transition: all var(--transition-smooth);
+  filter: blur(0.5px);
+}
+
+@keyframes harmonyNodePulse {
+  0%, 100% { 
+    opacity: 0.7; 
+    transform: scale(1); 
+    box-shadow: 
+      0 0 20px rgba(10, 89, 247, 0.1),
+      inset 0 0 20px rgba(10, 89, 247, 0.05);
+  }
+  50% { 
+    opacity: 1; 
+    transform: scale(1.08); 
+    box-shadow: 
+      0 0 50px rgba(10, 89, 247, 0.2),
+      inset 0 0 30px rgba(10, 89, 247, 0.1);
+  }
+}
+
+.pentagram-node:hover .pentagram-node-orbit {
+  opacity: 1;
+  transform: scale(1.1);
+  box-shadow: 
+    0 0 60px rgba(10, 89, 247, 0.25),
+    inset 0 0 40px rgba(10, 89, 247, 0.15);
 }
 
 .pentagram-node-core {
@@ -968,78 +1490,120 @@ pre {
   z-index: 1;
   display: grid;
   align-content: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   height: 100%;
-  padding: 18px;
+  padding: 20px;
   border-radius: 50%;
   text-align: center;
   color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  /* 多层渐变营造深度感 */
   background:
-    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.34), transparent 30%),
-    linear-gradient(135deg, var(--node-start), var(--node-end));
+    /* 第一层：顶层高光（模拟光照方向） */
+    radial-gradient(ellipse 60% 40% at 30% 20%, rgba(255, 255, 255, 0.95) 0%, transparent 50%),
+    /* 第二层：侧面光 */
+    radial-gradient(ellipse 40% 60% at 80% 50%, rgba(255, 255, 255, 0.25) 0%, transparent 50%),
+    /* 第三层：底部环境光 */
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
+    /* 第四层：主渐变 */
+    linear-gradient(160deg, var(--node-start) 0%, var(--node-end) 60%, color-mix(in srgb, var(--node-end) 80%, black) 100%);
+  /* 精致多层阴影 */
   box-shadow:
-    0 18px 40px color-mix(in srgb, var(--node-start) 24%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    /* 主阴影（物体高度感） */
+    0 25px 50px -12px rgba(0, 0, 0, 0.4),
+    0 12px 24px -6px rgba(0, 0, 0, 0.3),
+    /* 内层高光（玻璃质感） */
+    inset 0 2px 4px rgba(255, 255, 255, 0.9),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.2),
+    /* 边缘光 */
+    inset 2px 0 6px rgba(255, 255, 255, 0.4),
+    inset -2px 0 6px rgba(255, 255, 255, 0.2),
+    /* 顶边高光线 */
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.1) inset;
+  transition: all var(--transition-smooth);
+  /* 质感滤镜 */
+  filter: contrast(1.05) saturate(1.1);
+  /* 抗锯齿 */
+  -webkit-font-smoothing: antialiased;
+}
+
+.pentagram-node:hover .pentagram-node-core {
+  transform: scale(1.03);
+  box-shadow:
+    0 30px 60px -12px rgba(0, 0, 0, 0.5),
+    0 15px 30px -8px rgba(0, 0, 0, 0.35),
+    inset 0 2px 6px rgba(255, 255, 255, 1),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.15),
+    inset 2px 0 8px rgba(255, 255, 255, 0.5),
+    inset -2px 0 8px rgba(255, 255, 255, 0.3),
+    0 0 40px rgba(255, 255, 255, 0.1);
+  filter: contrast(1.08) saturate(1.15);
+}
+
+.pentagram-node-core::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 2;
+  mix-blend-mode: overlay;
+}
+
+.pentagram-node:hover .pentagram-node-core::after {
+  opacity: 0.05;
+}
+
+.pentagram-core-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 2;
+  mix-blend-mode: overlay;
+}
+
+.pentagram-core:hover .pentagram-core-shell::after {
+  opacity: 0.06;
 }
 
 .pentagram-node-core small,
 .pentagram-node-core strong {
   display: block;
+  position: relative;
+  z-index: 3;
 }
 
 .pentagram-node-core small {
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  opacity: 0.84;
+  opacity: 0.88;
+  font-weight: 600;
 }
 
 .pentagram-node-core strong {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.2;
-  letter-spacing: -0.03em;
-}
-
-.pentagram-stage::before,
-.pentagram-stage::after {
-  content: '';
-  position: absolute;
-  inset: 50%;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.pentagram-stage::before {
-  width: 72%;
-  height: 72%;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  opacity: 0.7;
-}
-
-.pentagram-stage::after {
-  width: 100%;
-  height: 100%;
-  border: 1px solid rgba(107, 72, 255, 0.1);
-  box-shadow: inset 0 0 80px rgba(10, 89, 247, 0.05);
-  opacity: 0.9;
-}
-
-.pentagram-node:hover {
-  transform: translate(-50%, -50%) scale(1.04);
-}
-
-.pentagram-core:hover {
-  transform: translate(-50%, -50%) scale(1.03);
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  text-shadow: 0 2px 15px rgba(0, 0, 0, 0.15);
 }
 
 .pentagram-node.is-preview .pentagram-node-core {
-  opacity: 0.92;
+  opacity: 0.95;
 }
 
 .pentagram-node.is-planned .pentagram-node-core {
-  opacity: 0.74;
+  opacity: 0.8;
+  filter: grayscale(0.2);
 }
 
 .metrics-grid,
@@ -1422,6 +1986,189 @@ pre {
   align-items: flex-start;
 }
 
+.simulation-main-grid > :first-child {
+  flex: 1 1 860px;
+  min-width: 0;
+}
+
+.simulation-main-grid > :last-child {
+  flex: 0 1 420px;
+  min-width: 320px;
+}
+
+.decision-graph-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.decision-graph-stage__hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.decision-graph-stage__hud span {
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(8, 16, 31, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.decision-graph-stage__scroll {
+  overflow: auto hidden;
+  padding: 14px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 16% 30%, rgba(88, 151, 255, 0.22), transparent 28%),
+    radial-gradient(circle at 78% 12%, rgba(47, 224, 165, 0.16), transparent 24%),
+    linear-gradient(135deg, #07111f, #10233f 54%, #081828);
+  border: 1px solid rgba(96, 146, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 28px 60px rgba(7, 17, 31, 0.16);
+}
+
+.decision-graph-stage__canvas {
+  position: relative;
+  min-height: 680px;
+}
+
+.decision-graph-stage__svg {
+  display: block;
+  width: 100%;
+  height: 680px;
+}
+
+.decision-graph-stage__edge,
+.decision-graph-stage__root-line {
+  fill: none;
+}
+
+.decision-graph-stage__edge {
+  stroke: rgba(145, 188, 255, 0.34);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 10px rgba(70, 128, 255, 0.24));
+}
+
+.decision-graph-stage__edge--active {
+  stroke: rgba(191, 220, 255, 0.82);
+  filter: drop-shadow(0 0 16px rgba(127, 176, 255, 0.42));
+}
+
+.decision-graph-stage__root-line {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 14px rgba(145, 188, 255, 0.2));
+}
+
+.decision-graph-stage__origin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 108px;
+  min-height: 108px;
+  padding: 16px 14px;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.28), transparent 38%),
+    linear-gradient(180deg, rgba(128, 182, 255, 0.28), rgba(13, 31, 57, 0.92));
+  border: 1px solid rgba(196, 223, 255, 0.3);
+  color: #f4f8ff;
+  box-shadow:
+    0 0 42px rgba(71, 128, 255, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.decision-graph-stage__origin-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.decision-graph-stage__origin strong {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.decision-graph-stage__origin small {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.74;
+}
+
+.decision-graph-node {
+  position: absolute;
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 156px;
+  min-height: 122px;
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(7, 17, 31, 0.92)),
+    linear-gradient(135deg, rgba(84, 137, 255, 0.2), rgba(47, 224, 165, 0.08));
+  color: #dce9ff;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 44px rgba(3, 10, 23, 0.36),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 0 28px var(--node-glow, rgba(84, 137, 255, 0.22));
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.decision-graph-node:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.decision-graph-node--active {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(223, 238, 255, 0.4);
+  box-shadow:
+    0 22px 48px rgba(3, 10, 23, 0.46),
+    0 0 0 1px rgba(223, 238, 255, 0.12) inset,
+    0 0 38px var(--node-glow, rgba(84, 137, 255, 0.35));
+}
+
+.decision-graph-node__month,
+.decision-graph-node__meta,
+.decision-graph-node__impact {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(223, 238, 255, 0.74);
+}
+
+.decision-graph-node strong {
+  color: #f4f8ff;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.decision-graph-node__chips {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: rgba(223, 238, 255, 0.84);
+}
+
 .timeline-map {
   overflow: auto hidden;
   padding-bottom: 10px;
@@ -1601,7 +2348,52 @@ pre {
 }
 
 .mobile-nav {
-  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  z-index: 100;
+}
+
+.mobile-nav-link {
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all var(--transition-smooth);
+  cursor: pointer;
+  position: relative;
+}
+
+.mobile-nav-link:hover {
+  background: rgba(10, 89, 247, 0.06);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+
+.mobile-nav-link.is-active {
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  color: #fff;
+  box-shadow: 
+    0 6px 18px rgba(10, 89, 247, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mobile-nav-link span {
+  display: block;
 }
 
 .loading-orbit {
@@ -1756,22 +2548,119 @@ pre {
     display: none;
   }
 
-  .app-main {
-    padding: 20px 20px 92px;
-  }
-
   .pentagram-hero {
-    min-height: auto;
-    grid-template-columns: 1fr;
-    gap: 24px;
+    min-height: 100vh;
+    padding: 20px;
+    margin: -20px;
   }
 
   .pentagram-stage {
-    --orbit-size: min(620px, 100%);
+    --orbit-size: min(580px, 85vw);
   }
 
-  .pentagram-hero .hero-side {
-    min-height: auto;
+  .pentagram-core {
+    width: 200px;
+    height: 200px;
+  }
+
+  .pentagram-core-shell strong {
+    font-size: 32px;
+  }
+
+  .pentagram-node {
+    width: 130px;
+    height: 130px;
+  }
+
+  .pentagram-node-core strong {
+    font-size: 16px;
+  }
+
+  .harmony-intro {
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    transform: none;
+    max-width: none;
+    padding: 20px 24px;
+  }
+
+  .harmony-intro h2 {
+    font-size: 22px;
+  }
+
+  .harmony-intro p {
+    font-size: 13px;
+  }
+
+  .harmony-intro .hero-actions {
+    flex-direction: column;
+  }
+
+  .harmony-intro .button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .pentagram-stage {
+    --orbit-size: min(420px, 90vw);
+  }
+
+  .pentagram-core {
+    width: 160px;
+    height: 160px;
+  }
+
+  .pentagram-core-shell strong {
+    font-size: 26px;
+  }
+
+  .pentagram-core-shell small {
+    font-size: 9px;
+  }
+
+  .pentagram-node {
+    width: 100px;
+    height: 100px;
+  }
+
+  .pentagram-node-core {
+    padding: 14px;
+    gap: 4px;
+  }
+
+  .pentagram-node-core strong {
+    font-size: 13px;
+  }
+
+  .pentagram-node-core small {
+    font-size: 9px;
+  }
+
+  .harmony-intro {
+    bottom: 15px;
+    left: 15px;
+    right: 15px;
+    padding: 16px 20px;
+  }
+
+  .harmony-intro h2 {
+    font-size: 18px;
+  }
+
+  .harmony-intro p {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .pentagram-ring-outer {
+    border-width: 1.5px;
+  }
+
+  .pentagram-ring-mid,
+  .pentagram-ring-inner {
+    border-width: 1px;
   }
 
   .pentagram-core {
@@ -1783,8 +2672,9 @@ pre {
     width: 118px;
     height: 118px;
   }
+}
 
-  .mobile-nav {
+@media (max-width: 900px) {  .mobile-nav {
     position: fixed;
     right: 16px;
     bottom: 16px;
@@ -1859,6 +2749,255 @@ pre {
   }
 }
 
+.form-stack,
+.field-block,
+.compact-stack,
+.state-list,
+.impact-list,
+.agent-vote-list,
+.parallel-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-block span,
+.section-title,
+.inline-note {
+  color: var(--text-secondary);
+}
+
+.field-block span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.compact-stack {
+  gap: 12px;
+}
+
+.inline-note {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.chip-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.graph-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(79, 172, 254, 0.14);
+  border: 1px solid rgba(79, 172, 254, 0.18);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.graph-chip-secondary {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+.future-route-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.18), transparent 32%),
+    linear-gradient(135deg, rgba(7, 17, 31, 0.92), rgba(15, 35, 66, 0.92));
+  border: 1px solid rgba(96, 146, 255, 0.16);
+  color: #f3f8ff;
+}
+
+.future-route-card h3,
+.future-route-card p {
+  margin: 0;
+}
+
+.decision-stage-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 18px;
+}
+
+.node-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.node-detail-card,
+.agent-vote-item {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+}
+
+.node-detail-card strong,
+.agent-vote-item strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.state-list {
+  gap: 8px;
+}
+
+.state-list span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.impact-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.impact-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.impact-chip-positive {
+  background: rgba(47, 224, 165, 0.16);
+  color: #148f67;
+}
+
+.impact-chip-negative {
+  background: rgba(255, 107, 107, 0.16);
+  color: #c24141;
+}
+
+.agent-vote-item p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.knowledge-stage-shell {
+  overflow: hidden;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(90, 169, 255, 0.18), transparent 32%),
+    radial-gradient(circle at 80% 18%, rgba(34, 197, 94, 0.14), transparent 28%),
+    linear-gradient(135deg, #06101d, #0f233d 48%, #091827);
+  border: 1px solid rgba(96, 146, 255, 0.16);
+}
+
+.knowledge-stage-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.knowledge-stage-core-title,
+.knowledge-stage-core-subtitle,
+.knowledge-stage-node-label {
+  fill: #f3f8ff;
+  font-family: inherit;
+}
+
+.knowledge-stage-core-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.knowledge-stage-core-subtitle {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  opacity: 0.72;
+  text-transform: uppercase;
+}
+
+.knowledge-stage-node {
+  cursor: pointer;
+}
+
+.knowledge-stage-node-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kg-error-block {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.parallel-scene-copy {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--text-primary);
+}
+
+.parallel-choice-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(79, 172, 254, 0.12), transparent 28%),
+    rgba(255, 255, 255, 0.68);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.parallel-choice-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px rgba(8, 16, 31, 0.12);
+}
+
+.parallel-choice-card strong {
+  color: var(--text-primary);
+}
+
+.parallel-choice-card span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1200px) {
+  .decision-stage-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .future-route-card,
+  .node-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .future-route-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -1867,4 +3006,341 @@ pre {
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ========================================================
+   HarmonyOS 6 - 全局入场动画与交互增强
+   ======================================================== */
+
+/* 入场动画 - 元素渐入上浮 */
+@keyframes harmonyFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 入场动画 - 元素渐入缩放 */
+@keyframes harmonyFadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 入场动画 - 元素渐入淡出 */
+@keyframes harmonyFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 流光扫描效果 */
+@keyframes harmonyScanLine {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+
+/* 呼吸光晕效果 */
+@keyframes harmonyBreathingGlow {
+  0%, 100% {
+    opacity: 0.4;
+    filter: blur(40px);
+  }
+  50% {
+    opacity: 0.7;
+    filter: blur(50px);
+  }
+}
+
+/* 页面加载时的入场动画类 */
+.harmony-enter-fade-up {
+  animation: harmonyFadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+.harmony-enter-fade-scale {
+  animation: harmonyFadeInScale 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+}
+
+.harmony-enter-fade {
+  animation: harmonyFadeIn 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+/* 延迟入场 - 用于错开动画 */
+.harmony-delay-1 { animation-delay: 0.1s; }
+.harmony-delay-2 { animation-delay: 0.2s; }
+.harmony-delay-3 { animation-delay: 0.3s; }
+.harmony-delay-4 { animation-delay: 0.4s; }
+.harmony-delay-5 { animation-delay: 0.5s; }
+
+/* 卡片悬停流光效果 */
+.harmony-card-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.harmony-card-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  transition: left 0.8s ease;
+}
+
+.harmony-card-shimmer:hover::after {
+  left: 150%;
+}
+
+/* 页面过渡动画 */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+.page-transition-exit {
+  opacity: 1;
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+/* 触摸反馈效果 */
+.harmony-touch-feedback {
+  position: relative;
+  overflow: hidden;
+}
+
+.harmony-touch-feedback::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(123, 104, 238, 0.15);
+  transform: translate(-50%, -50%);
+  transition: width 0.4s ease, height 0.4s ease;
+}
+
+.harmony-touch-feedback:active::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* 焦点高亮效果 */
+.harmony-focus-ring {
+  position: relative;
+}
+
+.harmony-focus-ring:focus {
+  outline: none;
+}
+
+.harmony-focus-ring:focus::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid rgba(123, 104, 238, 0.4);
+  animation: harmonyFocusPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes harmonyFocusPulse {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* 加载骨架屏动画 */
+@keyframes harmonySkeleton {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.harmony-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(200, 190, 180, 0.06) 25%,
+    rgba(200, 190, 180, 0.12) 50%,
+    rgba(200, 190, 180, 0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: harmonySkeleton 1.5s ease-in-out infinite;
+}
+
+/* 通知/提示流光边框 */
+@keyframes harmonyNotificationPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(123, 104, 238, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(123, 104, 238, 0);
+  }
+}
+
+.harmony-notification {
+  animation: harmonyNotificationPulse 2s ease-in-out infinite;
+}
+
+/* 滚动指示器动画 */
+@keyframes harmonyScrollIndicator {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(8px);
+    opacity: 1;
+  }
+}
+
+.harmony-scroll-hint {
+  animation: harmonyScrollIndicator 2s ease-in-out infinite;
+}
+
+/* 微交互反馈 */
+.harmony-bounce {
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.harmony-bounce:hover {
+  transform: scale(1.05);
+}
+
+.harmony-bounce:active {
+  transform: scale(0.95);
+}
+
+/* 成功/错误状态动画 */
+@keyframes harmonySuccess {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes harmonyError {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}
+
+.harmony-success {
+  animation: harmonySuccess 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.harmony-error {
+  animation: harmonyError 0.4s ease-out;
+}
+
+/* 浮动提示动画 */
+@keyframes harmonyTooltip {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.harmony-tooltip {
+  animation: harmonyTooltip 0.25s ease-out;
+}
+
+/* 模态框入场动画 */
+@keyframes harmonyModalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes harmonyModalOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.harmony-modal-overlay {
+  animation: harmonyModalOverlay 0.3s ease-out;
+}
+
+.harmony-modal {
+  animation: harmonyModalEnter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }

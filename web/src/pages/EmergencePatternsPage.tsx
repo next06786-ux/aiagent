@@ -60,7 +60,7 @@ export default function EmergencePatternsPage() {
   const filtered = tab === 'all' ? patterns : patterns.filter(p => p.type === tab)
 
   return (
-    <AppShell title="涌现模式" subtitle="系统检测到的跨域关联模式">
+    <AppShell>
       {loading && <p style={{ color: 'var(--text-tertiary)' }}>加载中…</p>}
 
       {summary && (
@@ -118,7 +118,9 @@ export default function EmergencePatternsPage() {
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 8 }}>
-                  <StatusPill tone={impactTone(p.impact_score)}>影响 {impactLabel(p.impact_score)}</StatusPill>
+                  <StatusPill tone={impactTone(p.impact_score)}>
+                    {`影响 ${impactLabel(p.impact_score)}`}
+                  </StatusPill>
                 </div>
               </div>
               <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 8px' }}>{p.description}</p>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket 调试工具</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        #log {
+            background: #000;
+            padding: 10px;
+            height: 500px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            margin-top: 10px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #3b82f6;
+        }
+        .error {
+            border-left-color: #ef4444;
+        }
+        .thinking {
+            border-left-color: #10b981;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket 推演调试</h1>
+    <div>
+        <input type="text" id="sessionId" placeholder="session_id" style="width: 300px; padding: 8px;">
+        <button onclick="connect()">连接</button>
+        <button onclick="clearLog()">清空日志</button>
+    </div>
+    <div id="log"></div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+        let thinkingChunkCount = 0;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+            msgDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(msgDiv);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            messageCount = 0;
+            thinkingChunkCount = 0;
+        }
+
+        function connect() {
+            const sessionId = document.getElementById('sessionId').value;
+            if (!sessionId) {
+                alert('请输入 session_id');
+                return;
+            }
+
+            if (ws) {
+                ws.close();
+            }
+
+            const wsUrl = `ws://localhost:8000/ws/decision-simulate`;
+            log(`连接到: ${wsUrl}`);
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                log('✓ WebSocket 连接已建立', 'info');
+                const payload = {
+                    session_id: sessionId,
+                    options: [
+                        { title: '测试选项1', description: '测试描述1' },
+                        { title: '测试选项2', description: '测试描述2' }
+                    ]
+                };
+                ws.send(JSON.stringify(payload));
+                log(`发送payload: ${JSON.stringify(payload)}`, 'info');
+            };
+
+            ws.onmessage = (event) => {
+                messageCount++;
+                try {
+                    const data = JSON.parse(event.data);
+                    const type = data.type || 'unknown';
+                    
+                    if (type === 'thinking_chunk') {
+                        thinkingChunkCount++;
+                        const chunk = data.content || '';
+                        log(`[${thinkingChunkCount}] thinking_chunk: ${chunk.length}字符 - "${chunk.substring(0, 50)}..."`, 'thinking');
+                    } else if (type === 'error') {
+                        log(`❌ ERROR: ${data.content}`, 'error');
+                    } else if (type === 'status') {
+                        log(`📊 STATUS: ${data.content} (stage: ${data.stage})`, 'info');
+                    } else if (type === 'node') {
+                        log(`📍 NODE: ${data.option_id} - ${data.node?.event || 'unknown'}`, 'info');
+                    } else if (type === 'option_start') {
+                        log(`🚀 OPTION_START: ${data.option_id} - ${data.option_title}`, 'info');
+                    } else if (type === 'option_complete') {
+                        log(`✅ OPTION_COMPLETE: ${data.option_id} - score: ${data.final_score}`, 'info');
+                    } else if (type === 'done') {
+                        log(`🎉 DONE: simulation_id=${data.simulation_id}`, 'info');
+                    } else {
+                        log(`📦 ${type}: ${JSON.stringify(data).substring(0, 100)}`, 'info');
+                    }
+                } catch (e) {
+                    log(`解析失败: ${e.message}`, 'error');
+                }
+            };
+
+            ws.onerror = (error) => {
+                log(`❌ WebSocket 错误: ${error}`, 'error');
+            };
+
+            ws.onclose = (event) => {
+                log(`🔌 WebSocket 关闭: code=${event.code}, reason=${event.reason}`, 'info');
+                log(`总消息数: ${messageCount}, thinking_chunk数: ${thinkingChunkCount}`, 'info');
+            };
+        }
+    </script>
+</body>
+</html>

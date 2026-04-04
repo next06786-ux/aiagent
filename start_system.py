@@ -131,7 +131,10 @@ def start_backend_server():
         host="0.0.0.0",
         port=6006,
         reload=False,
-        log_level="info"
+        log_level="info",
+        ws_ping_interval=20.0,  # WebSocket ping间隔20秒
+        ws_ping_timeout=60.0,   # WebSocket ping超时60秒
+        timeout_keep_alive=120  # HTTP keep-alive超时120秒
     )
 
 

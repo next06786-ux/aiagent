@@ -62,12 +62,17 @@ class PersonalFactExtractor:
 
     def extract_all(self) -> List[PersonalFact]:
         """从所有数据源抽取事实"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PKF] 开始为用户 {self.user_id} 提取个人资本（Neo4j + LLM调用）")
+        
         self.facts = []
         self._extract_from_kg()
         self._extract_from_conversations()
         self._extract_from_game()
         self._deduplicate()
         print(f"[PKF] 用户 {self.user_id} 共抽取 {len(self.facts)} 条个人事实")
+        logger.info(f"[PKF] 用户 {self.user_id} 个人资本提取完成，共 {len(self.facts)} 条事实")
         return self.facts
 
     def _extract_from_kg(self):

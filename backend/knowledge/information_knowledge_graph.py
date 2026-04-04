@@ -1,6 +1,11 @@
 """
-信息知识图谱 - 以信息为中心的知识图谱
-Information-Centric Knowledge Graph
+知识图谱 - 统一的知识图谱系统
+Knowledge Graph
+
+支持三种视图模式:
+- 人物关系视图：展示人际网络和社交关系
+- 升学规划视图：展示学习路径和教育规划
+- 职业发展视图：展示职业技能和发展路径
 
 核心理念:
 - 信息（概念/实体/事件）是节点
@@ -17,7 +22,7 @@ load_dotenv()
 
 
 class InformationKnowledgeGraph:
-    """信息知识图谱"""
+    """知识图谱 - 支持人物关系、升学规划、职业发展三种视图"""
     
     def __init__(self, user_id: str):
         self.user_id = user_id
@@ -30,7 +35,7 @@ class InformationKnowledgeGraph:
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
             self.driver.verify_connectivity()
-            print(f"✅ 信息知识图谱连接成功: {uri}")
+            print(f"✅ 知识图谱连接成功: {uri}")
         except Exception as e:
             print(f"❌ Neo4j 连接失败: {e}")
             raise

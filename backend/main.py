@@ -61,7 +61,7 @@ feedback_processors = {}
 # 初始化数据库管理器(轻量级)
 from backend.database.db_manager import db_manager
 
-# 全局信息知识图谱系统字典
+# 全局知识图谱系统字典
 info_kg_systems = {}
 
 # 轻量训练任务状态
@@ -117,6 +117,14 @@ async def startup_event():
     """应用启动时初始化所有系统"""
     await StartupManager.startup()
     
+    # 启动岗位数据调度器
+    try:
+        from backend.vertical.career.job_scheduler import start_job_scheduler
+        start_job_scheduler()
+        print("✅ 岗位数据调度器已启动")
+    except Exception as e:
+        print(f"⚠️ 岗位数据调度器启动失败: {e}")
+    
     # 本地 GPU 模型相关：仅在 ENABLE_LOCAL_MODEL=true 时加载
     import os
     enable_local = os.environ.get("ENABLE_LOCAL_MODEL", "false").lower() == "true"
@@ -146,11 +154,69 @@ async def startup_event():
     try:
         from backend.knowledge.information_knowledge_graph import InformationKnowledgeGraph
         global info_kg_systems
-        print("🔧 预初始化 default_user 知识图谱...")
+        print("预初始化 default_user 知识图谱...")
         info_kg_systems["default_user"] = InformationKnowledgeGraph("default_user")
-        print("✅ default_user 知识图谱预加载完成")
+        print("知识图谱预加载完成")
     except Exception as e:
-        print(f"⚠️ 知识图谱预初始化失败: {e}")
+        print(f"知识图谱预初始化失败: {e}")
+
+    # 预初始化 LLM 服务（避免首次请求时初始化延迟）
+    try:
+        from backend.llm.llm_service import get_llm_service
+        print("预初始化 LLM 服务...")
+        llm = get_llm_service()
+        if llm and llm.enabled:
+            print(f"LLM 服务已就绪: {llm.provider.value}")
+            
+            # 预热LLM连接 - 发送一个真实的dummy请求，初始化HTTP连接池
+            try:
+                print("🔥 预热 LLM 连接...")
+                llm.chat(
+                    messages=[{"role": "user", "content": "hello"}],
+                    temperature=0.1
+                )
+                print("✅ LLM 连接预热完成")
+            except Exception as e:
+                print(f"⚠️ LLM 连接预热失败: {e}")
+        else:
+            print("ℹ️  LLM 服务未启用")
+    except Exception as e:
+        print(f"⚠️ LLM 服务预初始化失败: {e}")
+    
+    # 预初始化数据库连接
+    try:
+        from backend.database.connection import db_connection
+        print("✅ 数据库连接预初始化完成")
+    except Exception as e:
+        print(f"⚠️ 数据库连接预初始化失败: {e}")
+    
+    # 预热AI核心决策系统
+    try:
+        print("🔥 预热 AI 核心决策系统...")
+        
+        # 1. 预热决策信息收集器
+        from backend.decision.decision_info_collector import DecisionInfoCollector
+        info_collector = DecisionInfoCollector()
+        print("  ✓ 决策信息收集器已就绪")
+        
+        # 2. 预热三维垂直决策引擎
+        from backend.vertical.career.career_decision_engine import CareerDecisionEngine
+        from backend.vertical.relationship.relationship_decision_engine import RelationshipDecisionEngine
+        from backend.vertical.education.education_decision_engine import EducationDecisionEngine
+        
+        career_engine = CareerDecisionEngine()
+        relationship_engine = RelationshipDecisionEngine()
+        education_engine = EducationDecisionEngine()
+        print("  ✓ 三维垂直决策引擎已就绪")
+        
+        # 3. 预热核心决策引擎
+        from backend.decision_algorithm.core_decision_engine import CoreDecisionEngine
+        core_engine = CoreDecisionEngine()
+        print("  ✓ 核心决策引擎已就绪")
+        
+        print("✅ AI 核心决策系统预热完成")
+    except Exception as e:
+        print(f"⚠️ AI 核心决策系统预热失败: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -263,7 +329,7 @@ async def upload_multimodal_data(request_data: Dict[str, Any]):
                 reinforcement_learner=systems.get('learner'),
                 multimodal_fusion=get_or_init_fusion_system(),
                 rag_system=systems.get('rag'),
-                info_kg_system=systems.get('info_kg')  # 信息知识图谱
+                info_kg_system=systems.get('info_kg')  # 知识图谱
             )
             
             # 构造感知数据
@@ -4521,12 +4587,13 @@ async def get_kg_statistics(user_id: str):
         }
 
 
-# ==================== 信息知识图谱API (v4) ====================
+# ==================== 知识图谱API (v4) ====================
 
 @app.get("/api/v4/knowledge-graph/{user_id}/export")
 async def export_information_knowledge_graph(user_id: str, session_id: str = None):
     """
-    导出信息知识图谱(用于3D可视化)
+    导出知识图谱(用于3D可视化)
+    支持三种视图：人物关系、升学规划、职业发展
     
     参数:
     - user_id: 用户ID
@@ -4548,17 +4615,17 @@ async def export_information_knowledge_graph(user_id: str, session_id: str = Non
         
         # 如果用户系统不存在,尝试初始化(仅用于非默认用户)
         if user_id not in info_kg_systems:
-            print(f"🔧 初始化信息知识图谱 for {user_id}")
+            print(f"🔧 初始化知识图谱 for {user_id}")
             try:
                 info_kg_systems[user_id] = InformationKnowledgeGraph(user_id)
             except Exception as e:
-                print(f"信息知识图谱初始化失败: {e}")
+                print(f"知识图谱初始化失败: {e}")
                 info_kg_systems[user_id] = None
         
         info_kg = info_kg_systems.get(user_id)
         
         if not info_kg:
-            print(f"信息知识图谱未初始化 for {user_id}")
+            print(f"知识图谱未初始化 for {user_id}")
             return {
                 "success": False,
                 "message": "Neo4j 数据库连接失败,请检查后端服务配置",
@@ -4588,27 +4655,14 @@ async def export_information_knowledge_graph(user_id: str, session_id: str = Non
                 }
             }
         
-        # 只保留人物节点（entity_type == person 或 category 为人物关系类别）
-        person_categories = {'family', 'close_friends', 'colleagues', 'friends', 'weak_ties', '自己'}
+        # 返回所有信息节点（不限于人物）
         all_info = graph_data.get('information', [])
-        person_nodes = [
-            node for node in all_info
-            if node.get('entity_type') == 'person' 
-            or node.get('category') in person_categories
-            or node.get('type') == 'entity' and node.get('entity_type') == 'person'
-        ]
-        person_ids = {node['id'] for node in person_nodes}
-        
-        # 只保留人物之间的关系
-        person_rels = [
-            rel for rel in graph_data.get('relationships', [])
-            if rel['source'] in person_ids and rel['target'] in person_ids
-        ]
-        
+        all_ids = {node['id'] for node in all_info}
+
         graph_data = {
-            'information': person_nodes,
+            'information': all_info,
             'sources': graph_data.get('sources', []),
-            'relationships': person_rels
+            'relationships': graph_data.get('relationships', [])
         }
         
         # 如果指定了session_id，筛选该会话的节点
@@ -4795,7 +4849,7 @@ async def get_information_sources(user_id: str, info_name: str):
     try:
         global info_kg_systems
         
-        # 获取用户的信息知识图谱
+        # 获取用户的知识图谱
         if user_id not in info_kg_systems:
             info_kg_systems[user_id] = InformationKnowledgeGraph(user_id)
         
@@ -4804,7 +4858,7 @@ async def get_information_sources(user_id: str, info_name: str):
         if not info_kg:
             return {
                 "success": False,
-                "message": "信息知识图谱未初始化",
+                "message": "知识图谱未初始化",
                 "sources": []
             }
         
@@ -4889,7 +4943,7 @@ async def get_kg_statistics(user_id: str):
     try:
         global info_kg_systems
         
-        # 获取用户的信息知识图谱
+        # 获取用户的知识图谱
         if user_id not in info_kg_systems:
             info_kg_systems[user_id] = InformationKnowledgeGraph(user_id)
         
@@ -4898,7 +4952,7 @@ async def get_kg_statistics(user_id: str):
         if not info_kg:
             return {
                 "success": False,
-                "message": "信息知识图谱未初始化",
+                "message": "知识图谱未初始化",
                 "data": {}
             }
         
@@ -6153,14 +6207,39 @@ async def get_personality_profile(user_id: str):
 from backend.decision.enhanced_decision_api import router as enhanced_decision_router
 app.include_router(enhanced_decision_router)
 
+# 注册统一智能体 Future OS API（AI 核心 / 知识星图 / 决策图谱 / 平行人生）
+from backend.decision.future_os_api import router as future_os_router
+app.include_router(future_os_router)
+
 # 在 app 级别注册决策推演 WebSocket（与 /ws/chat 同级，确保反向代理兼容）
 from backend.decision.enhanced_decision_api import simulate_with_collection_ws as _decision_ws_handler
 @app.websocket("/ws/decision-simulate")
 async def decision_simulate_ws(websocket: WebSocket):
     """决策推演 WebSocket - 注册在 app 级别确保代理兼容"""
-    await _decision_ws_handler(websocket)
+    try:
+        print(f"[WS] 收到 WebSocket 连接请求: {websocket.client}")
+        await _decision_ws_handler(websocket)
+    except WebSocketDisconnect:
+        print("[WS] 客户端主动断开连接")
+    except Exception as e:
+        print(f"[WS] WebSocket 处理异常: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            await websocket.close(code=1011, reason=f"服务器错误: {str(e)[:100]}")
+        except:
+            pass
 
 print("增强决策 API 已加载（含 app 级 WebSocket）")
+print("Future OS API 已加载")
+print("   - GET /api/v5/future-os/knowledge/{user_id}")
+print("   - POST /api/v5/future-os/context")
+print("   - POST /api/v5/future-os/route")
+print("   - POST /api/v5/future-os/simulate")
+print("   - GET /api/v5/future-os/history/{user_id}")
+print("   - GET /api/v5/future-os/simulations/{simulation_id}")
+print("   - POST /api/v5/future-os/parallel-life/branch")
+print("   - POST /api/v5/future-os/parallel-life/complete")
 
 # ==================== 智能洞察 API ====================
 

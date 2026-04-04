@@ -8,6 +8,7 @@ import { SimpleIcon } from '../components/IconRenderer'
 import http from '@ohos.net.http'
 import { ApiConfig } from '../config/ApiConfig'
 import { getAuthService } from '../service/AuthService'
+import { getFutureOSService } from '../service/FutureOSService'
 import router from '@ohos.router'
 
 interface StatDelta { emotion: number; finance: number; social: number; health: number; growth: number; confidence: number; stress: number }
@@ -72,7 +73,14 @@ struct ParallelLifeGame {
   @State ending: Record<string, string> = {}
   @State finalStats: Stats = { emotion: 50, finance: 50, social: 50, health: 50, growth: 50, confidence: 50, stress: 30 }
   @State freeInputText: string = ''
+  @State reflectionText: string = ''
   @State showContent: boolean = false
+  @State sourceMode: string = 'legacy'
+  @State resultHint: string = ''
+  @State currentScenarioId: string = ''
+  @State currentSimulationId: string = ''
+  @State currentBranchId: string = ''
+  @State sourceQuestion: string = ''
 
   // 塔罗牌抽卡动画状态
   @State tarotDrawn: boolean = false          // 是否已抽牌
@@ -104,16 +112,71 @@ struct ParallelLifeGame {
   private nodeStartTime: number = 0
 
   private authService = getAuthService()
+  private futureOSService = getFutureOSService()
 
   aboutToAppear() {
-    this.loadChapters()
+    const params = router.getParams() as Record<string, string>
+    if (params?.simulationId && params?.branchId) {
+      this.loadFutureScenario(params.simulationId, params.branchId, params.sourceQuestion ?? '')
+    } else {
+      this.loadChapters()
+    }
     setTimeout(() => { this.showContent = true }, 50)
   }
   aboutToDisappear() { this.stopCountdown() }
 
+  private resetFutureScenarioMeta() {
+    this.sourceMode = 'legacy'
+    this.resultHint = ''
+    this.currentScenarioId = ''
+    this.currentSimulationId = ''
+    this.currentBranchId = ''
+    this.sourceQuestion = ''
+    this.reflectionText = ''
+  }
+
+  private isFutureScenario(): boolean {
+    return this.sourceMode === 'future_os' && this.currentScenarioId.length > 0
+  }
+
+  private toChapter(payload: Record<string, Object>): Chapter {
+    return {
+      id: String(payload['scenario_id'] ?? payload['id'] ?? ''),
+      title: String(payload['title'] ?? '平行人生分支体验'),
+      subtitle: String(payload['subtitle'] ?? ''),
+      theme: String(payload['theme'] ?? '#0b1830'),
+      accent: String(payload['accent'] ?? '#5AA9FF'),
+      cover_emoji: String(payload['cover_emoji'] ?? '◎'),
+      intro: String(payload['intro'] ?? ''),
+      nodes: (payload['nodes'] as unknown as GameNode[]) ?? [],
+      endings: (payload['endings'] as unknown as Ending[]) ?? []
+    }
+  }
+
+  async loadFutureScenario(simulationId: string, branchId: string, sourceQuestion: string) {
+    try {
+      this.phase = 'loading'
+      const userId = this.authService.getCurrentUserId()
+      const scenario = await this.futureOSService.createParallelLifeBranch(userId, simulationId, branchId) as Record<string, Object>
+      this.currentChapter = this.toChapter(scenario)
+      this.sourceMode = 'future_os'
+      this.currentScenarioId = String(scenario['scenario_id'] ?? '')
+      this.currentSimulationId = String(scenario['simulation_id'] ?? simulationId)
+      this.currentBranchId = String(scenario['branch_id'] ?? branchId)
+      this.sourceQuestion = sourceQuestion || String(scenario['source_question'] ?? '')
+      this.resultHint = ''
+      this.phase = 'intro'
+    } catch (e) {
+      console.error('加载 Future OS 分支体验失败:', e)
+      this.resetFutureScenarioMeta()
+      this.loadChapters()
+    }
+  }
+
   // ── 数据加载 ──────────────────────────────────────────────────────────
   async loadChapters() {
     try {
+      this.resetFutureScenarioMeta()
       const req = http.createHttp()
       const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/chapters`,
         { method: http.RequestMethod.GET })
@@ -131,6 +194,7 @@ struct ParallelLifeGame {
 
   async loadChapter(chapterId: string) {
     try {
+      this.resetFutureScenarioMeta()
       const req = http.createHttp()
       const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/chapter/${chapterId}`,
         { method: http.RequestMethod.GET })
@@ -145,6 +209,7 @@ struct ParallelLifeGame {
 
   async loadRandomChapter() {
     try {
+      this.resetFutureScenarioMeta()
       const req = http.createHttp()
       const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/random`,
         { method: http.RequestMethod.GET })
@@ -165,10 +230,15 @@ struct ParallelLifeGame {
     this.statBarEmotion = 50; this.statBarFinance = 50; this.statBarSocial = 50
     this.statBarHealth = 50; this.statBarGrowth = 50; this.statBarConfidence = 50; this.statBarStress = 30
     this.choices = []
+    this.freeInputText = ''
+    this.reflectionText = ''
+    this.resultHint = ''
     this.currentNodeId = ch.nodes[0].id
     this.phase = 'playing'
     this.animateNodeIn()
-    this.startCountdown()
+    if (ch.nodes[0].type !== 'free_input') {
+      this.startCountdown()
+    }
   }
 
   currentNode(): GameNode | null {
@@ -217,17 +287,20 @@ struct ParallelLifeGame {
     const ch = this.currentChapter
     const node = this.currentNode()
     if (!ch || !node) return
+    this.reflectionText = text
     this.choices.push({ node_id: this.currentNodeId, option_id: 'free', choice_time_ms: Date.now() - this.nodeStartTime })
-    try {
-      const userId = this.authService.getCurrentUserId()
-      const req = http.createHttp()
-      await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/free-input`, {
-        method: http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json' },
-        extraData: JSON.stringify({ user_id: userId, chapter_id: ch.id, node_id: node.id, user_text: text, current_stats: this.stats })
-      })
-      req.destroy()
-    } catch (e) { console.error('提交自由输入失败:', e) }
+    if (!this.isFutureScenario()) {
+      try {
+        const userId = this.authService.getCurrentUserId()
+        const req = http.createHttp()
+        await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/free-input`, {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({ user_id: userId, chapter_id: ch.id, node_id: node.id, user_text: text, current_stats: this.stats })
+        })
+        req.destroy()
+      } catch (e) { console.error('提交自由输入失败:', e) }
+    }
     this.freeInputText = ''
     const nextId = node.next ?? 'ending'
     if (nextId === 'ending') { this.finishGame() }
@@ -238,21 +311,47 @@ struct ParallelLifeGame {
     const ch = this.currentChapter
     if (!ch) return
     this.finalStats = { emotion: this.stats.emotion, finance: this.stats.finance, social: this.stats.social, health: this.stats.health, growth: this.stats.growth, confidence: this.stats.confidence, stress: this.stats.stress }
-    try {
-      const userId = this.authService.getCurrentUserId()
-      const req = http.createHttp()
-      const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/finish`, {
-        method: http.RequestMethod.POST,
-        header: { 'Content-Type': 'application/json' },
-        extraData: JSON.stringify({ user_id: userId, chapter_id: ch.id, final_stats: this.finalStats, choices: this.choices })
-      })
-      req.destroy()
-      if (res.responseCode === 200) {
-        const body = JSON.parse(res.result as string) as Record<string, Object>
-        const data = body['data'] as Record<string, Object>
-        this.ending = data['ending'] as Record<string, string>
+    if (this.isFutureScenario()) {
+      const fallbackEnding = ch.endings[0] ?? { condition: 'fallback', title: '分支体验完成', text: '你已经完成这条分支体验。', badge: '已完成' }
+      const balancedEnding = ch.endings[1] ?? fallbackEnding
+      this.ending = (this.finalStats.growth >= 60 && this.finalStats.confidence >= 60 && this.finalStats.stress <= 55)
+        ? fallbackEnding as unknown as Record<string, string>
+        : balancedEnding as unknown as Record<string, string>
+
+      try {
+        const userId = this.authService.getCurrentUserId()
+        const payload = await this.futureOSService.completeParallelLife({
+          user_id: userId,
+          scenario_id: this.currentScenarioId,
+          simulation_id: this.currentSimulationId,
+          branch_id: this.currentBranchId,
+          final_stats: this.finalStats,
+          choices: this.choices,
+          emotion_feedback: '',
+          free_text: this.reflectionText
+        }) as Record<string, Object>
+
+        this.resultHint = String(payload['next_hint'] ?? '')
+      } catch (e) {
+        console.error('提交 Future OS 分支体验结果失败:', e)
       }
-    } catch (e) { console.error('提交结果失败:', e) }
+    } else {
+      try {
+        const userId = this.authService.getCurrentUserId()
+        const req = http.createHttp()
+        const res = await req.request(`${ApiConfig.getBaseUrl()}/api/game/parallel-life/finish`, {
+          method: http.RequestMethod.POST,
+          header: { 'Content-Type': 'application/json' },
+          extraData: JSON.stringify({ user_id: userId, chapter_id: ch.id, final_stats: this.finalStats, choices: this.choices })
+        })
+        req.destroy()
+        if (res.responseCode === 200) {
+          const body = JSON.parse(res.result as string) as Record<string, Object>
+          const data = body['data'] as Record<string, Object>
+          this.ending = data['ending'] as Record<string, string>
+        }
+      } catch (e) { console.error('提交结果失败:', e) }
+    }
     this.phase = 'result'
     this.resultOpacity = 0
     setTimeout(() => {
@@ -798,6 +897,19 @@ struct ParallelLifeGame {
           .border({ width: 1, color: Theme.Color.BorderLight })
           .shadow(Theme.Shadow.Soft)
 
+          if (this.isFutureScenario()) {
+            Column({ space: 10 }) {
+              Text('来自决策图谱舞台').fontSize(16).fontWeight(600).fontColor(Theme.Color.TextPrimary)
+              Text(this.sourceQuestion || '这是一条从当前推演分支注入的平行人生体验。')
+                .fontSize(14).fontColor(Theme.Color.TextSecondary).lineHeight(22)
+            }
+            .width('100%').padding(20)
+            .backgroundColor(Theme.Color.BackgroundSecondary)
+            .borderRadius(Theme.Radius.l)
+            .border({ width: 1, color: Theme.Color.BorderLight })
+            .shadow(Theme.Shadow.Soft)
+          }
+
           // 属性说明
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
             this.buildStatPreview('情绪', 'heart', '#00C853')
@@ -820,7 +932,7 @@ struct ParallelLifeGame {
 
       // 底部按钮
       Column() {
-        Button('开始游戏')
+        Button(this.isFutureScenario() ? '开始分支体验' : '开始游戏')
           .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
           .backgroundColor(this.accentColor())
           .borderRadius(Theme.Radius.l)
@@ -1016,7 +1128,9 @@ struct ParallelLifeGame {
         Column({ space: 8 }) {
           Text(`共做了 ${this.choices.length} 次选择`)
             .fontSize(14).fontColor(Theme.Color.TextSecondary)
-          Text('你的选择已用于优化专属 AI 模型')
+          Text(this.isFutureScenario()
+            ? '你的选择已回写到 Future OS 的决策画像与知识星图。'
+            : '你的选择已用于优化后续决策体验。')
             .fontSize(12).fontColor(Theme.Color.TextTertiary)
         }
         .width('100%').padding(16)
@@ -1025,24 +1139,46 @@ struct ParallelLifeGame {
         .border({ width: 1, color: Theme.Color.BorderLight })
         .alignItems(HorizontalAlign.Center)
 
+        if (this.resultHint) {
+          Column({ space: 8 }) {
+            Text('下一步建议')
+              .fontSize(16)
+              .fontWeight(600)
+              .fontColor(Theme.Color.TextPrimary)
+            Text(this.resultHint)
+              .fontSize(14)
+              .fontColor(Theme.Color.TextSecondary)
+              .lineHeight(22)
+          }
+          .width('100%').padding(16)
+          .backgroundColor(Theme.Color.BackgroundSecondary)
+          .borderRadius(Theme.Radius.l)
+          .border({ width: 1, color: Theme.Color.BorderLight })
+          .shadow(Theme.Shadow.Soft)
+        }
+
         // 操作按钮
         Column({ space: 12 }) {
-          Button('进入决策副本')
+          Button(this.isFutureScenario() ? '返回推演详情' : '进入决策副本')
             .width('100%').height(52).fontSize(16).fontWeight(600).fontColor('#FFFFFF')
             .backgroundColor(this.accentColor())
             .borderRadius(Theme.Radius.l)
             .shadow({ radius: 16, color: this.accentColor(), offsetY: 4, offsetX: 0 })
             .onClick(() => {
-              try { router.pushUrl({ url: 'pages/QuickDecisionInput' }) }
-              catch (e) { this.navigateBack() }
+              if (this.isFutureScenario()) {
+                this.navigateBack()
+              } else {
+                try { router.pushUrl({ url: 'pages/EnhancedDecisionFlow' }) }
+                catch (e) { this.navigateBack() }
+              }
             })
-          Button('再玩一次')
+          Button(this.isFutureScenario() ? '重新体验该分支' : '再玩一次')
             .width('100%').height(44).fontSize(14).fontWeight(600)
             .fontColor(Theme.Color.TextSecondary)
             .backgroundColor(Theme.Color.BackgroundSecondary)
             .borderRadius(Theme.Radius.l)
             .border({ width: 1, color: Theme.Color.BorderLight })
-            .onClick(() => { this.phase = 'intro' })
+            .onClick(() => { this.phase = 'intro'; this.resultHint = '' })
         }
         .width('100%')
 

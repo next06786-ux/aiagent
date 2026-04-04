@@ -12,7 +12,6 @@ from typing import List, Dict, Any, Optional
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from backend.lora.lora_model_manager import lora_manager
 from backend.llm.llm_service import get_llm_service
 
 LORA_BASE_DIR = os.path.abspath(
@@ -25,10 +24,10 @@ class LoRADecisionAnalyzer:
     """决策推理适配器：可切换 LoRA 本地推理或 API 推理"""
 
     def __init__(self):
-        self.lora_manager = lora_manager
+        self.inference_mode = os.getenv("DECISION_INFERENCE_MODE", "api").strip().lower()
+        self.lora_manager = None
         self.lora_base_dir = LORA_BASE_DIR
         self.llm_service = get_llm_service()
-        self.inference_mode = os.getenv("DECISION_INFERENCE_MODE", "api").strip().lower()
 
     def get_inference_mode(self) -> str:
         return "lora" if self.inference_mode == "lora" else "api"
@@ -38,6 +37,12 @@ class LoRADecisionAnalyzer:
 
     def is_api_inference(self) -> bool:
         return self.get_inference_mode() == "api"
+
+    def _ensure_lora_manager(self):
+        if self.lora_manager is None:
+            from backend.lora.lora_model_manager import lora_manager
+            self.lora_manager = lora_manager
+        return self.lora_manager
 
     def _ensure_llm_service(self):
         if self.llm_service is None:
@@ -75,6 +80,22 @@ class LoRADecisionAnalyzer:
         messages = self._chatml_prompt_to_messages(prompt)
         return llm_service.chat(messages, temperature=temperature, response_format=response_format)
 
+    def _call_api_stream(
+        self,
+        prompt: str,
+        temperature: float = 0.4
+    ):
+        """API流式调用（生成器）"""
+        llm_service = self._ensure_llm_service()
+        messages = self._chatml_prompt_to_messages(prompt)
+        # 使用LLM服务的流式接口
+        for chunk in llm_service.chat_stream(messages, temperature=temperature):
+            if chunk.get("type") == "answer":
+                yield chunk.get("content", "")
+            elif chunk.get("type") == "thinking":
+                # 思考过程也可以yield出去
+                yield chunk.get("content", "")
+
     async def _stream_text_chunks(self, text: str, chunk_size: int = 96):
         if not text:
             return
@@ -83,10 +104,22 @@ class LoRADecisionAnalyzer:
             await asyncio.sleep(0)
 
     def get_user_lora_path(self, user_id: str) -> Optional[str]:
-        return self.lora_manager.get_user_lora_path(user_id)
+        if self.is_api_inference():
+            status_file = os.path.join(self.lora_base_dir, user_id, "status.json")
+            if not os.path.exists(status_file):
+                return None
+            try:
+                with open(status_file, "r", encoding="utf-8") as f:
+                    status = json.load(f)
+                return status.get("lora_path") or status.get("model_path")
+            except Exception:
+                return None
+        return self._ensure_lora_manager().get_user_lora_path(user_id)
 
     def has_lora_model(self, user_id: str) -> bool:
-        return self.lora_manager.has_lora_model(user_id)
+        if self.is_api_inference():
+            return self.get_user_lora_path(user_id) is not None
+        return self._ensure_lora_manager().has_lora_model(user_id)
 
     def is_user_training(self, user_id: str) -> bool:
         status_file = os.path.join(self.lora_base_dir, user_id, "status.json")
@@ -136,7 +169,7 @@ class LoRADecisionAnalyzer:
                                              collected_context=collected_context,
                                              behavioral_dna=behavioral_dna)
         response = await asyncio.to_thread(
-            self.lora_manager.generate,
+            self._ensure_lora_manager().generate,
             user_id,
             prompt,
             320,
@@ -153,7 +186,7 @@ class LoRADecisionAnalyzer:
                                                        collected_context=collected_context,
                                                        behavioral_dna=behavioral_dna)
             retry_response = await asyncio.to_thread(
-                self.lora_manager.generate,
+                self._ensure_lora_manager().generate,
                 user_id,
                 retry_prompt,
                 320,
@@ -245,7 +278,7 @@ class LoRADecisionAnalyzer:
 
         prompt = self._build_recommendation_prompt(question, options, profile, collected_info)
         response = await asyncio.to_thread(
-            self.lora_manager.generate,
+            self._ensure_lora_manager().generate,
             user_id,
             prompt,
             140,
@@ -281,16 +314,16 @@ class LoRADecisionAnalyzer:
         collected_info: Optional[Dict[str, Any]] = None
     ):
         if self.is_api_inference():
-            timeline = await self.generate_timeline_with_api(
+            # 使用真正的API流式调用
+            async for chunk in self._stream_timeline_generation_with_api(
                 user_id=user_id,
                 question=question,
                 option=option,
                 profile=profile,
                 num_events=num_events,
+                all_option_titles=all_option_titles,
                 collected_info=collected_info
-            )
-            response_text = json.dumps(timeline, ensure_ascii=False)
-            async for chunk in self._stream_text_chunks(response_text):
+            ):
                 yield chunk
             return
         """分批流式生成时间线：每批 4 个节点，后续批次传入累积状态作为上下文"""
@@ -328,7 +361,7 @@ class LoRADecisionAnalyzer:
             )
 
             batch_buffer = ""
-            for chunk in self.lora_manager.generate_stream(user_id, prompt, 1200, 0.45):
+            for chunk in self._ensure_lora_manager().generate_stream(user_id, prompt, 1200, 0.45):
                 batch_buffer += chunk
                 yield chunk
                 await asyncio.sleep(0)
@@ -354,7 +387,7 @@ class LoRADecisionAnalyzer:
                 )
                 try:
                     regen_response = await asyncio.to_thread(
-                        self.lora_manager.generate, user_id, regen_prompt, 300, 0.5
+                        self._ensure_lora_manager().generate, user_id, regen_prompt, 300, 0.5
                     )
                     regen_events = self._parse_timeline_json(regen_response)
                     if regen_events and not self._is_hollow_event(regen_events[0].get('event', '')):
@@ -387,7 +420,7 @@ class LoRADecisionAnalyzer:
                 yield chunk
             return
         prompt = self._build_recommendation_prompt(question, options, profile, collected_info)
-        for chunk in self.lora_manager.generate_stream(user_id, prompt, 300, 0.4):
+        for chunk in self._ensure_lora_manager().generate_stream(user_id, prompt, 300, 0.4):
             yield chunk
             await asyncio.sleep(0)
 
@@ -409,7 +442,7 @@ class LoRADecisionAnalyzer:
             )
         prompt = self._build_branch_prompt(question, option, parent_event, profile)
         response = await asyncio.to_thread(
-            self.lora_manager.generate,
+            self._ensure_lora_manager().generate,
             user_id,
             prompt,
             350,
@@ -476,7 +509,7 @@ class LoRADecisionAnalyzer:
         )
         try:
             response = await asyncio.to_thread(
-                self.lora_manager.generate,
+                self._ensure_lora_manager().generate,
                 user_id, prompt, 220, 0.38
             )
             return self._parse_self_prediction(response)
@@ -584,6 +617,7 @@ class LoRADecisionAnalyzer:
             # 用括号匹配法找完整的 JSON 对象，而不是简单的 .*?
             depth = 0
             start = -1
+            json_objects_found = 0
             for pos in range(len(cleaned)):
                 ch = cleaned[pos]
                 if ch == '{':
@@ -595,13 +629,21 @@ class LoRADecisionAnalyzer:
                     if depth == 0 and start >= 0:
                         raw = cleaned[start:pos + 1]
                         start = -1
+                        json_objects_found += 1
                         # 检查是否包含 month 字段
                         if '"month"' not in raw:
                             continue
+                        
+                        # 检查JSON是否完整（必须包含所有必需字段）
+                        if '"event"' not in raw or '"impact"' not in raw or '"probability"' not in raw:
+                            continue
+                        
                         try:
                             item = json.loads(raw)
-                        except Exception:
+                        except Exception as parse_err:
+                            # JSON不完整或格式错误，跳过
                             continue
+                        
                         parsed = self._extract_events([item])
                         if not parsed:
                             continue
@@ -613,8 +655,11 @@ class LoRADecisionAnalyzer:
                             event['hollow'] = True
                         emitted_months.append(event['month'])
                         events.append(event)
-        except Exception:
-            pass
+            
+            if json_objects_found > 0 and len(events) > 0:
+                print(f"[增量解析] 找到 {json_objects_found} 个JSON对象，提取出 {len(events)} 个新事件")
+        except Exception as e:
+            print(f"[增量解析] 异常: {e}")
         return events
 
     def get_lora_status(self, user_id: str) -> Dict[str, Any]:
@@ -645,7 +690,7 @@ class LoRADecisionAnalyzer:
             pass
         
         try:
-            info = self.lora_manager.get_model_info(user_id)
+            info = self._ensure_lora_manager().get_model_info(user_id)
             status["is_loaded"] = info.get("is_loaded", False)
         except Exception:
             pass
@@ -1225,6 +1270,9 @@ class LoRADecisionAnalyzer:
                         value = raw_impact.get(dim, 0.0)
                         try:
                             # 单维度 clamp：每个维度最多影响 ±0.4
+                            # 确保value不为None
+                            if value is None:
+                                value = 0.0
                             impact[dim] = round(max(-0.4, min(0.4, float(value))), 2)
                         except Exception:
                             impact[dim] = 0.0
@@ -1245,9 +1293,18 @@ class LoRADecisionAnalyzer:
                     continue
                 try:
                     probability = float(item.get('probability', 0.8))
+                    # 确保probability不为None
+                    if probability is None:
+                        probability = 0.8
                 except Exception:
                     probability = 0.8
                 probability = max(0.05, min(0.98, probability))
+                
+                # 最终验证：确保所有必需字段都不为None
+                if month is None or probability is None or not impact:
+                    print(f"[事件验证] 跳过无效事件: month={month}, probability={probability}, impact={impact}")
+                    continue
+                
                 events.append({
                     'month': month,
                     'event': raw_event,
@@ -1379,3 +1436,78 @@ class LoRADecisionAnalyzer:
                 unique_lines.append(line)
                 seen.add(line)
         return '\n'.join(unique_lines)
+
+    async def _stream_timeline_generation_with_api(
+        self,
+        user_id: str,
+        question: str,
+        option: Dict[str, str],
+        profile: Any,
+        num_events: int = 12,
+        all_option_titles: List[str] = None,
+        collected_info: Optional[Dict[str, Any]] = None
+    ):
+        """使用API进行真正的流式时间线生成"""
+        # 构建上下文
+        kg_context = await asyncio.to_thread(self._query_relevant_persons, user_id, question)
+        life_context = await asyncio.to_thread(self._retrieve_life_context, user_id, question)
+        collected_context = self._format_collected_info(collected_info)
+        behavioral_dna = self._get_behavioral_dna(user_id)
+        
+        # 分批生成，每批4个月
+        batch_size = 4
+        generated_so_far: List[Dict] = []
+        
+        for batch_idx in range(0, num_events, batch_size):
+            batch_count = min(batch_size, num_events - batch_idx)
+            start_month = batch_idx + 1
+            
+            # 计算累积状态
+            cumulative_state: Optional[Dict[str, float]] = None
+            if generated_so_far:
+                acc: Dict[str, float] = {}
+                for e in generated_so_far:
+                    for k, v in e.get('impact', {}).items():
+                        acc[k] = round(acc.get(k, 0.0) + v, 2)
+                cumulative_state = acc
+            
+            # 构建prompt
+            prompt = self._build_timeline_prompt(
+                question, option, profile, batch_count,
+                strict=False, kg_context=kg_context,
+                life_context=life_context,
+                collected_context=collected_context,
+                other_options=all_option_titles,
+                generated_so_far=generated_so_far,
+                start_month=start_month,
+                cumulative_state=cumulative_state,
+                behavioral_dna=behavioral_dna
+            )
+            
+            # 使用真正的流式API调用
+            batch_buffer = ""
+            
+            def stream_generator():
+                return self._call_api_stream(prompt, temperature=0.45)
+            
+            # 在线程池中执行流式生成
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                stream_iter = await loop.run_in_executor(pool, stream_generator)
+                for chunk in stream_iter:
+                    batch_buffer += chunk
+                    yield chunk
+                    await asyncio.sleep(0)
+            
+            # 解析本批次结果
+            batch_events = self._parse_timeline_json(batch_buffer)
+            
+            # 空话过滤（如果需要）
+            for i, ev in enumerate(batch_events):
+                if not self._is_hollow_event(ev.get('event', '')):
+                    continue
+                # 重生成逻辑...
+                
+            generated_so_far.extend(batch_events)

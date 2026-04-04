@@ -8,6 +8,7 @@ import { ApiConfig } from '../config/ApiConfig'
 import { Theme } from '../common/Theme'
 import { SimpleIcon } from '../components/IconRenderer'
 import { getAuthService } from '../service/AuthService'
+import { getFutureOSService } from '../service/FutureOSService'
 
 // 星点粒子
 interface Star {
@@ -78,10 +79,20 @@ interface ApiResponse {
   message?: string
 }
 
+interface SummaryData {
+  bootstrap?: boolean
+  user_id?: string
+  node_count?: number
+  link_count?: number
+}
+
 interface GraphData {
+  nodes?: NodeData[]
+  links?: LinkData[]
   information?: NodeData[]
   sources?: NodeData[]
   relationships?: LinkData[]
+  summary?: SummaryData
 }
 
 interface NodeData {
@@ -95,6 +106,7 @@ interface LinkData {
   source: string
   target: string
   type: string
+  strength?: number
 }
 
 // 分组后的节点
@@ -129,9 +141,11 @@ struct KnowledgeStarMap {
   @State links: GraphLink[] = []
   @State isLoading: boolean = false
   @State loadError: string = ''
+  @State isBootstrap: boolean = false
   
   // 人物列表面板
   @State showPersonList: boolean = true
+  @State viewMode: string = 'people'
   
   // 3D视角控制
   @State rotationX: number = 0.3    // 俯仰角
@@ -171,6 +185,7 @@ struct KnowledgeStarMap {
   private readonly ATTRACTION = 0.03
   private readonly DAMPING = 0.85
   private readonly CENTER_GRAVITY = 0.01
+  private futureOSService = getFutureOSService()
 
   async aboutToAppear() {
     try {
@@ -181,7 +196,7 @@ struct KnowledgeStarMap {
     }
     
     this.initStars()
-    this.loadGraphData()
+    this.loadFutureGraphData()
   }
 
   aboutToDisappear() {
@@ -244,10 +259,37 @@ struct KnowledgeStarMap {
   }
 
   // 解析图谱数据
+  async loadFutureGraphData() {
+    this.isLoading = true
+    this.loadError = ''
+    this.isBootstrap = false
+
+    try {
+      const result = await this.futureOSService.getKnowledgeView(this.userId, this.viewMode)
+      const graphData = result as GraphData
+      // 检测后端是否返回的是引导（bootstrap）占位数据
+      if (graphData.summary && graphData.summary.bootstrap === true) {
+        this.isBootstrap = true
+      }
+      this.parseGraphData(graphData)
+      this.startAnimation()
+    } catch (error) {
+      const detail = (error as Error).message || '知识星图加载失败'
+      this.loadError =
+        `无法连接到后端服务\n` +
+        `当前后端地址: ${ApiConfig.getBaseUrl()}\n` +
+        `请求接口: /api/v5/future-os/knowledge/${this.userId}?view=${this.viewMode}\n` +
+        `详细信息: ${detail}\n` +
+        `建议检查: 后端是否已启动、端口是否一致、/health 是否可访问`
+    } finally {
+      this.isLoading = false
+    }
+  }
+
   parseGraphData(data: GraphData) {
     // 统计每个节点的连接数
     const connectionCount: Map<string, number> = new Map()
-    const linkData = data.relationships || []
+    const linkData = data.links || data.relationships || []
     
     linkData.forEach(link => {
       connectionCount.set(link.source, (connectionCount.get(link.source) || 0) + 1)
@@ -255,7 +297,7 @@ struct KnowledgeStarMap {
     })
     
     // 解析节点
-    const nodeData = data.information || []
+    const nodeData = data.nodes || data.information || []
     const layoutRadius = 200
     
     this.nodes = nodeData.map((node, index) => {
@@ -288,7 +330,7 @@ struct KnowledgeStarMap {
         source: link.source,
         target: link.target,
         type: link.type,
-        strength: 1
+        strength: link.strength || 1
       }
       return graphLink
     })
@@ -847,6 +889,15 @@ struct KnowledgeStarMap {
     this.autoRotate = true
   }
 
+  switchView(nextView: string) {
+    if (this.viewMode === nextView) {
+      return
+    }
+    this.viewMode = nextView
+    this.selectedNode = null
+    this.loadFutureGraphData()
+  }
+
   // 获取连接的节点
   getConnectedNodes(nodeId: string): GraphNode[] {
     const connectedIds: Set<string> = new Set()
@@ -921,7 +972,7 @@ struct KnowledgeStarMap {
             .fontColor('#FFF')
             .backgroundColor('rgba(100, 181, 246, 0.3)')
             .borderRadius(20)
-            .onClick(() => this.loadGraphData())
+            .onClick(() => this.loadFutureGraphData())
         }
         .width('100%')
         .height('100%')
@@ -946,9 +997,11 @@ struct KnowledgeStarMap {
             .fontColor('#FFFFFF')
           
           if (this.nodes.length > 0) {
-            Text(`${this.nodes.length} 个知识节点 · ${this.links.length} 条关联`)
+            Text(this.isBootstrap
+              ? `引导模式 · 当前账号暂无图谱数据`
+              : `${this.nodes.length} 个知识节点 · ${this.links.length} 条关联`)
               .fontSize(11)
-              .fontColor('rgba(255, 255, 255, 0.5)')
+              .fontColor(this.isBootstrap ? 'rgba(255, 200, 100, 0.9)' : 'rgba(255, 255, 255, 0.5)')
           }
         }
         .alignItems(HorizontalAlign.Start)
@@ -962,13 +1015,33 @@ struct KnowledgeStarMap {
         .width(40)
         .height(40)
         .backgroundColor('rgba(255, 255, 255, 0.1)')
-        .onClick(() => this.loadGraphData())
+        .onClick(() => this.loadFutureGraphData())
       }
       .width('100%')
       .height(56)
       .padding({ left: 16, right: 16 })
       .backgroundColor('rgba(10, 10, 26, 0.8)')
       .backdropBlur(20)
+      .position({ x: 0, y: 0 })
+
+      Row({ space: 10 }) {
+        Button(this.viewMode === 'people' ? '人物关系视图' : '切到人物视图')
+          .height(32)
+          .fontSize(12)
+          .fontColor('#FFFFFF')
+          .backgroundColor(this.viewMode === 'people' ? 'rgba(90, 169, 255, 0.35)' : 'rgba(255,255,255,0.08)')
+          .borderRadius(16)
+          .onClick(() => this.switchView('people'))
+
+        Button(this.viewMode === 'signals' ? '其它节点视图' : '切到其它节点')
+          .height(32)
+          .fontSize(12)
+          .fontColor('#FFFFFF')
+          .backgroundColor(this.viewMode === 'signals' ? 'rgba(72, 187, 120, 0.32)' : 'rgba(255,255,255,0.08)')
+          .borderRadius(16)
+          .onClick(() => this.switchView('signals'))
+      }
+      .padding({ left: 16, right: 16, top: 64 })
       .position({ x: 0, y: 0 })
 
       // 左侧人物列表面板
@@ -981,14 +1054,14 @@ struct KnowledgeStarMap {
               .fontColor('rgba(255, 255, 255, 0.6)')
             
             if (this.showPersonList) {
-              Text('人物列表')
+              Text(this.viewMode === 'people' ? '人物列表' : '节点列表')
                 .fontSize(13)
                 .fontWeight(FontWeight.Medium)
                 .fontColor('#FFFFFF')
               
               Blank()
               
-              Text(`${this.nodes.length}人`)
+              Text(`${this.nodes.length}个`)
                 .fontSize(11)
                 .fontColor('rgba(255, 255, 255, 0.5)')
             }

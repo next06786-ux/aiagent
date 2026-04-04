@@ -78,7 +78,7 @@ function isMockToken(token: string) {
 
 function buildMockUser(): UserInfo {
   return {
-    user_id: 'local_demo_user',
+    user_id: '2c2139f7-bab4-483d-9882-ae83ce8734cd',
     username: 'demo',
     email: 'demo@local.dev',
     nickname: '本地演示账号',

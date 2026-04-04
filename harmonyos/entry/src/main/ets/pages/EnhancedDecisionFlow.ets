@@ -15,6 +15,7 @@ import media from '@ohos.multimedia.media'
 import common from '@ohos.app.ability.common'
 import fs from '@ohos.file.fs'
 import abilityAccessCtrl from '@ohos.abilityAccessCtrl'
+import { getFutureOSService } from '../service/FutureOSService'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -56,7 +57,6 @@ interface SimulationResult {
   question: string
   options: SimulationOption[]
   recommendation: string
-  used_lora: boolean
 }
 
 @Entry
@@ -86,6 +86,7 @@ struct EnhancedDecisionFlow {
   private audioRecorder: media.AVRecorder | null = null
   private recordFilePath: string = ''
   private inputController: TextInputController = new TextInputController()
+  private futureOSService = getFutureOSService()
 
   async aboutToAppear() {
     // 获取真实用户ID
@@ -178,6 +179,7 @@ struct EnhancedDecisionFlow {
         }
       }
     } catch (error) {
+      this.currentPhase = 'ask_options'
       console.error('开始收集失败:', (error as Error).message)
     }
 
@@ -418,27 +420,37 @@ struct EnhancedDecisionFlow {
 
   // 开始决策模拟
   private async startSimulation(options: OptionInput[]): Promise<void> {
+    if (!this.initialQuestion.trim()) {
+      promptAction.showToast({ message: '请先输入你的决策问题' })
+      return
+    }
+
+    this.isLoading = true
+    this.currentPhase = 'simulation'
+
     try {
+      const simulation = await this.futureOSService.simulate(
+        this.userId,
+        this.initialQuestion,
+        options
+          .map((option: OptionInput) => option.title.trim())
+          .filter((title: string) => title.length > 0)
+      )
+
+      this.simulationResult = simulation as unknown as SimulationResult
+
       router.replaceUrl({
-        url: 'pages/DecisionDungeon2DMap',
+        url: 'pages/EnhancedDecisionResult',
         params: {
-          dungeonId: this.sessionId,
-          question: this.initialQuestion,
-          userId: this.userId,
-          simulationData: JSON.stringify({
-            simulation_id: this.sessionId,
-            user_id: this.userId,
-            question: this.initialQuestion,
-            options: options,
-            recommendation: '',
-            created_at: new Date().toISOString()
-          })
+          simulationId: simulation.simulation_id,
+          simulationData: JSON.stringify(simulation)
         }
       })
     } catch (error) {
       console.error('跳转到决策地图失败:', (error as Error).message)
       promptAction.showToast({ message: '进入决策地图失败' })
     }
+    this.isLoading = false
   }
 
   build() {

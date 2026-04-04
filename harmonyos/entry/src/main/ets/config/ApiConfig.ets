@@ -6,9 +6,10 @@
 export class ApiConfig {
   //  API 
   // 
-  // - : 'http://localhost:8000'  'http://10.0.2.2:8000'
-  // - : IP 'http://192.168.1.192:8000'
-  private static BASE_URL: string = 'https://u821458-a197-3cecd37e.westc.seetacloud.com:8443';
+  // 本地调试默认走 6006，云端部署时可再统一替换
+  // - 模拟器: 'http://10.0.2.2:6006'
+  // - 真机联调: 改成局域网 IP，例如 'http://192.168.x.x:6006'
+  private static BASE_URL: string = 'http://localhost:6006';
   
   /**
    *  API 
@@ -60,6 +61,13 @@ export class ApiConfig {
     endpoints['DECISION_ENHANCED_SESSION'] = '/api/decision/enhanced/collect/session';
     endpoints['DECISION_ENHANCED_SIMULATE'] = '/api/decision/enhanced/simulate/with-collection';
     endpoints['DECISION_ENHANCED_FULL_PROCESS'] = '/api/decision/enhanced/full-process';
+    endpoints['FUTURE_OS_KNOWLEDGE'] = '/api/v5/future-os/knowledge';
+    endpoints['FUTURE_OS_CONTEXT'] = '/api/v5/future-os/context';
+    endpoints['FUTURE_OS_ROUTE'] = '/api/v5/future-os/route';
+    endpoints['FUTURE_OS_SIMULATE'] = '/api/v5/future-os/simulate';
+    endpoints['FUTURE_OS_HISTORY'] = '/api/v5/future-os/history';
+    endpoints['FUTURE_OS_PARALLEL_BRANCH'] = '/api/v5/future-os/parallel-life/branch';
+    endpoints['FUTURE_OS_PARALLEL_COMPLETE'] = '/api/v5/future-os/parallel-life/complete';
     return endpoints;
   }
 }

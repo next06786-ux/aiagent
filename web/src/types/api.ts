@@ -104,11 +104,45 @@ export interface OptionInput {
   description: string;
 }
 
+export interface AgentVote {
+  agent_id: string;
+  agent_name: string;
+  stance: string;
+  score: number;
+  confidence: number;
+  reason: string;
+  focus: string[];
+  flags: string[];
+}
+
+export interface DecisionGraphEdge {
+  edge_id: string;
+  source: string;
+  target: string;
+  relation: string;
+  strength: number;
+  label?: string;
+}
+
+export interface DecisionGraphSummary {
+  title?: string;
+  node_count: number;
+  edge_count: number;
+  high_risk_nodes: number;
+  dominant_axes: string[];
+  agent_stance_mix: Record<string, number>;
+  review_mode?: string;
+}
+
 export interface TimelineEvent {
   event_id?: string;
   parent_event_id?: string | null;
   month: number;
   event: string;
+  state_before?: Record<string, string | number | boolean | null>;
+  impact_vector?: Record<string, number>;
+  evidence_sources?: string[];
+  agent_votes?: AgentVote[];
   event_type?: string;
   branch_group?: string;
   node_level?: number;
@@ -117,6 +151,29 @@ export interface TimelineEvent {
   visual_weight?: number;
   impact: Record<string, number>;
   probability: number;
+}
+
+export interface DecisionGraphNode extends TimelineEvent {
+  event_id: string;
+  state_before: Record<string, string | number | boolean | null>;
+  state_after?: Record<string, string | number | boolean | null>;
+  impact_vector: Record<string, number>;
+  evidence_sources: string[];
+  agent_votes: AgentVote[];
+  branch_id?: string;
+  branch_strategy?: string;
+  execution_confidence?: number;
+  collapse_risk?: string;
+  key_people?: string[];
+}
+
+export interface DecisionGraph {
+  graph_id: string;
+  schema_version: number;
+  layout_hint?: string;
+  graph_summary?: DecisionGraphSummary;
+  nodes: DecisionGraphNode[];
+  edges: DecisionGraphEdge[];
 }
 
 export interface RiskDimension {
@@ -217,7 +274,11 @@ export interface DecisionOption {
   option_id: string;
   title: string;
   description: string;
+  branch_strategy?: string;
+  branch_agent_id?: string;
+  key_people?: string[];
   timeline: TimelineEvent[];
+  decision_graph?: DecisionGraph | null;
   final_score: number;
   risk_level: number;
   risk_assessment?: RiskAssessment | null;
@@ -234,6 +295,8 @@ export interface DecisionRecordPayload {
   options_count?: number;
   recommendation: string;
   schema_version?: number;
+  engine_mode?: string;
+  context_snapshot?: FutureOsContext;
   collected_info_summary?: CollectedInfo;
   verifiability_report?: VerifiabilityReport;
   options: DecisionOption[];
@@ -241,7 +304,7 @@ export interface DecisionRecordPayload {
 }
 
 export interface DecisionHistoryRecord {
-  session_id: string;
+  simulation_id: string;
   question: string;
   options_count: number;
   recommendation: string;
@@ -286,7 +349,7 @@ export interface LegacyDungeonPayload {
 }
 
 export interface DecisionSimulationRouteState {
-  mode: 'stream' | 'history' | 'legacy';
+  mode: 'future' | 'history' | 'legacy';
   sessionId?: string;
   simulationId?: string;
   dungeonId?: string;
@@ -295,4 +358,144 @@ export interface DecisionSimulationRouteState {
   options?: OptionInput[];
   collectedInfo?: CollectedInfo | null;
   record?: DecisionRecordPayload;
+  scenario?: ParallelLifeScenario;
+  decisionType?: 'career' | 'relationship' | 'education' | 'general';
+}
+
+export interface KnowledgeGraphViewNode {
+  id: string;
+  name: string;
+  type: string;
+  category?: string;
+  view_role: 'person' | 'signal';
+  weight: number;
+  influence_score: number;
+  connections: number;
+  insight_tags: string[];
+}
+
+export interface KnowledgeGraphViewLink {
+  source: string;
+  target: string;
+  type: string;
+  strength: number;
+  description?: string;
+}
+
+export interface KnowledgeGraphViewSummary {
+  user_id: string;
+  view_mode: 'people' | 'signals' | 'career';
+  node_count: number;
+  link_count: number;
+  top_nodes: string[];
+}
+
+export interface KnowledgeGraphView {
+  view_mode: 'people' | 'signals' | 'career';
+  title: string;
+  nodes: KnowledgeGraphViewNode[];
+  links: KnowledgeGraphViewLink[];
+  summary: KnowledgeGraphViewSummary;
+}
+
+export interface PersonalizationProfile {
+  risk_tolerance: number;
+  delay_discount: number;
+  social_dependency: number;
+  execution_stability: number;
+  growth_bias: number;
+  loss_aversion: number;
+  ambiguity_tolerance: number;
+}
+
+export interface FutureOsContextBrief {
+  current_focus: string;
+  people_count: number;
+  signal_count: number;
+  key_people: string[];
+  key_signals: string[];
+}
+
+export interface FutureOsContext {
+  question: string;
+  recommended_view: 'people' | 'signals' | 'career';
+  profile: PersonalizationProfile;
+  top_people: KnowledgeGraphViewNode[];
+  top_signals: KnowledgeGraphViewNode[];
+  brief: FutureOsContextBrief;
+}
+
+export interface FutureOsRouteSuggestion {
+  recommended_module: 'knowledge_graph' | 'decision_graph' | 'parallel_life' | 'chat';
+  recommended_view: 'people' | 'signals' | 'career';
+  reason: string;
+  context_brief: FutureOsContextBrief;
+}
+
+export interface ParallelLifeDelta {
+  emotion?: number;
+  finance?: number;
+  social?: number;
+  health?: number;
+  growth?: number;
+  confidence?: number;
+  stress?: number;
+}
+
+export interface ParallelLifeChoiceOption {
+  id: string;
+  text: string;
+  sub: string;
+  delta: ParallelLifeDelta;
+  next: string;
+}
+
+export interface ParallelLifeScene {
+  id: string;
+  type: 'choice' | 'free_input';
+  text: string;
+  options: ParallelLifeChoiceOption[];
+  next?: string;
+}
+
+export interface ParallelLifeEnding {
+  condition: string;
+  title: string;
+  text: string;
+  badge: string;
+}
+
+export interface ParallelLifeScenario {
+  scenario_id: string;
+  simulation_id: string;
+  branch_id: string;
+  source_question: string;
+  title: string;
+  subtitle: string;
+  theme: string;
+  accent: string;
+  cover_emoji: string;
+  intro: string;
+  nodes: ParallelLifeScene[];
+  endings: ParallelLifeEnding[];
+  branch_context?: DecisionOption;
+}
+
+export interface ParallelLifeCompletionResult {
+  summary: {
+    scenario_id: string;
+    simulation_id: string;
+    branch_id: string;
+    user_id: string;
+    final_stats: Record<string, number>;
+    choices: Array<Record<string, unknown>>;
+    emotion_feedback: string;
+    free_text: string;
+    behavior_profile: Record<string, number>;
+    updated_profile: PersonalizationProfile;
+    created_at: string;
+  };
+  behavior_profile: Record<string, number>;
+  updated_profile: PersonalizationProfile;
+  next_hint: string;
 }

@@ -24,7 +24,7 @@ struct DecisionDungeonMap {
 
     setTimeout(() => {
       router.replaceUrl({
-        url: 'pages/DecisionDungeon2DMap',
+        url: 'pages/EnhancedDecisionResult',
         params: {
           dungeonId: params?.dungeonId || '',
           userId: params?.userId || '',

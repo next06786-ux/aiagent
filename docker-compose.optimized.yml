@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 主应用 - 限制内存
+  app:
+    build: .
+    container_name: lifeswarm-app
+    ports:
+      - "3000:3000"
+      - "5001:5001"
+    environment:
+      # 禁用Neo4j,使用轻量级方案
+      - USE_NEO4J=false
+      - USE_INFORMATION_KG=false
+      
+      # 使用内存缓存代替Redis
+      - CACHE_TYPE=memory
+      
+      # 使用SQLite代替MySQL(更轻量)
+      - DB_TYPE=sqlite
+      - DATABASE_URL=sqlite:///./data/lifeswarm.db
+      
+      # LLM配置
+      - LLM_PROVIDER=qwen
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      
+      # 连接池优化
+      - DB_POOL_SIZE=2
+      - DB_MAX_OVERFLOW=3
+      
+      # Python内存优化
+      - PYTHONUNBUFFERED=1
+      - MALLOC_TRIM_THRESHOLD_=100000
+    volumes:
+      - ./data:/app/data
+      - ./backend/uploads:/app/backend/uploads
+    restart: unless-stopped
+    # 限制资源使用
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+        reservations:
+          memory: 800M

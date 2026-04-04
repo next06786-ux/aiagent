@@ -32,6 +32,7 @@ import { SimpleIcon } from '../components/IconRenderer';
 import http from '@ohos.net.http';
 import { ApiConfig } from '../config/ApiConfig';
 import { getAuthService } from '../service/AuthService';
+import { getFutureOSService, FutureOSRouteSuggestion } from '../service/FutureOSService';
 
 // 对话会话接口
 interface ConversationItem {
@@ -93,9 +94,12 @@ struct AIChat {
   @State conversations: ConversationItem[] = [];
   @State currentSessionId: string = '';
   @State isLoadingHistory: boolean = false;
+  @State routeSuggestion: FutureOSRouteSuggestion | null = null;
+  @State isRouting: boolean = false;
   
   private aiService = getAIConversationService();
   private photoService = PhotoAlbumService.getInstance(this.getUIContext());
+  private futureOSService = getFutureOSService();
   private scroller: Scroller = new Scroller();
   
   aboutToAppear() {
@@ -188,6 +192,11 @@ struct AIChat {
           this.messages = messages;
           this.currentSessionId = sessionId;
           this.showHistoryPanel = false;
+          this.routeSuggestion = null;
+          const lastUser = messages.slice().reverse().find((item: ChatMessage) => item.role === 'user');
+          if (lastUser?.content) {
+            this.analyzeRoute(lastUser.content);
+          }
           
           // 滚动到底部
           setTimeout(() => {
@@ -224,6 +233,7 @@ struct AIChat {
           this.messages = [];
           this.addWelcomeMessage();
           this.showHistoryPanel = false;
+          this.routeSuggestion = null;
           
           // 重新加载对话列表
           this.loadConversations();
@@ -305,7 +315,7 @@ struct AIChat {
     const welcomeMsg = new ChatMessage(
       Date.now().toString(),
       'assistant',
-      ' LifeSwarm AI \n\n Qwen3.5-Plus \n\n\n\n',
+      '这里是 AI 核心。你可以先自由对话，我会在合适的时候把你导向知识星图、决策图谱舞台或平行人生。',
       Date.now()
     );
     this.messages.push(welcomeMsg);
@@ -342,6 +352,8 @@ struct AIChat {
       ''
     );
     this.messages.push(aiMsg);
+    this.routeSuggestion = null;
+    this.analyzeRoute(userMessage);
     
     // 处理逻辑
     setTimeout(() => {
@@ -602,6 +614,95 @@ struct AIChat {
         return 'AI';
     }
   }
+
+  private latestUserMessage(): string {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      if (this.messages[i].role === 'user' && this.messages[i].content.trim()) {
+        return this.messages[i].content.trim();
+      }
+    }
+    return '';
+  }
+
+  private async analyzeRoute(message: string): Promise<void> {
+    if (!message.trim()) {
+      return;
+    }
+
+    this.isRouting = true;
+    try {
+      const userId = getAuthService().getCurrentUserId();
+      this.routeSuggestion = await this.futureOSService.routeMessage(userId, message.trim());
+    } catch (err) {
+      console.error('[AIChat] Future OS 路由分析失败:', err);
+      this.routeSuggestion = null;
+    } finally {
+      this.isRouting = false;
+    }
+  }
+
+  private routeBannerTitle(): string {
+    if (!this.routeSuggestion) {
+      return 'AI 核心会根据对话，把你导向最合适的模块。';
+    }
+    if (this.routeSuggestion.recommended_module === 'knowledge_graph') {
+      return '这条消息更适合先看知识星图。';
+    }
+    if (this.routeSuggestion.recommended_module === 'decision_graph') {
+      return '这条消息已经适合进入决策图谱舞台。';
+    }
+    if (this.routeSuggestion.recommended_module === 'parallel_life') {
+      return '这条消息适合进入平行人生做情境体验。';
+    }
+    return '这条消息还适合继续在 AI 核心里补充上下文。';
+  }
+
+  private routeActionLabel(): string {
+    if (!this.routeSuggestion) {
+      return '继续对话';
+    }
+    if (this.routeSuggestion.recommended_module === 'knowledge_graph') {
+      return '打开知识星图';
+    }
+    if (this.routeSuggestion.recommended_module === 'decision_graph') {
+      return '进入决策副本';
+    }
+    if (this.routeSuggestion.recommended_module === 'parallel_life') {
+      return '进入平行人生';
+    }
+    return '继续对话';
+  }
+
+  private navigateToSuggestedModule(): void {
+    const suggestion = this.routeSuggestion;
+    if (!suggestion) {
+      return;
+    }
+
+    const currentPrompt = this.latestUserMessage();
+    const uiRouter = this.getUIContext().getRouter();
+
+    try {
+      if (suggestion.recommended_module === 'knowledge_graph') {
+        uiRouter.pushUrl({ url: 'pages/KnowledgeStarMap' });
+        return;
+      }
+      if (suggestion.recommended_module === 'decision_graph') {
+        uiRouter.pushUrl({
+          url: 'pages/EnhancedDecisionFlow',
+          params: {
+            initialQuestion: currentPrompt
+          }
+        });
+        return;
+      }
+      if (suggestion.recommended_module === 'parallel_life') {
+        uiRouter.pushUrl({ url: 'pages/ParallelLifeGame' });
+      }
+    } catch (err) {
+      console.error('[AIChat] 跳转推荐模块失败:', err);
+    }
+  }
   
   build() {
     Stack() {
@@ -722,6 +823,55 @@ struct AIChat {
         }
           
         // 消息列表区域
+        if (this.routeSuggestion || this.isRouting) {
+          Column({ space: 10 }) {
+            Row({ space: 8 }) {
+              if (this.isRouting) {
+                LoadingProgress()
+                  .width(14)
+                  .height(14)
+                  .color(Theme.Color.Primary)
+              }
+              Text('AI 核心路由建议')
+                .fontSize(Theme.Typography.BodySmall.size)
+                .fontWeight(600)
+                .fontColor(Theme.Color.Primary)
+            }
+
+            Text(this.routeBannerTitle())
+              .fontSize(Theme.Typography.BodyMedium.size)
+              .fontColor(Theme.Color.TextPrimary)
+              .lineHeight(22)
+
+            if (this.routeSuggestion?.reason) {
+              Text(this.routeSuggestion?.reason ?? '')
+                .fontSize(Theme.Typography.Caption.size)
+                .fontColor(Theme.Color.TextSecondary)
+                .lineHeight(20)
+            }
+
+            if (this.routeSuggestion) {
+              Button(this.routeActionLabel())
+                .height(40)
+                .fontSize(14)
+                .fontWeight(600)
+                .fontColor('#FFFFFF')
+                .backgroundColor(Theme.Color.Primary)
+                .borderRadius(Theme.Radius.round)
+                .onClick(() => {
+                  this.navigateToSuggestedModule();
+                })
+            }
+          }
+          .width('100%')
+          .padding(Theme.Spacing.m)
+          .margin({ left: Theme.Spacing.m, right: Theme.Spacing.m, top: 10, bottom: 4 })
+          .backgroundColor(Theme.Color.GlassHeavy)
+          .backdropBlur(Theme.Blur.Heavy)
+          .borderRadius(Theme.Radius.l)
+          .shadow(Theme.Shadow.Soft)
+        }
+
         Scroll(this.scroller) {
           Column({ space: Theme.Spacing.l }) {
             ForEach(this.messages, (msg: ChatMessage, index: number) => {

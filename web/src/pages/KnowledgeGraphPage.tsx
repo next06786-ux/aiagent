@@ -1,693 +1,1268 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
-import { API_BASE_URL } from '../services/api'
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { useLocation } from 'react-router-dom';
+import { AppShell } from '../components/shell/AppShell';
+import { StatusPill } from '../components/common/StatusPill';
+import { useAuth } from '../hooks/useAuth';
+import { getFutureOsGraphView } from '../services/futureOs';
+import { API_BASE_URL } from '../services/api';
+import type { KnowledgeGraphView, KnowledgeGraphViewNode } from '../types/api';
 
-// ── Types ──────────────────────────────────────────────────────────────────
-interface GraphNode {
-  id: string
-  name: string
-  type: string
-  category?: string
-  x: number
-  y: number
-  vx: number
-  vy: number
-  fx?: number
-  fy?: number
-  pulsePhase: number
-  glowIntensity: number
+type GraphViewMode = 'people' | 'signals' | 'career';
+
+// ── 颜色映射 ────────────────────────────────────────────────
+const PEOPLE_COLORS: Record<string, number> = {
+  person: 0x4d9eff, relationship: 0x9575ff, default: 0xa0c4ff,
+}
+const EDUCATION_COLORS: Record<string, number> = {
+  emotion: 0xf093fb, health: 0x43e97b, finance: 0xffd93d,
+  location: 0xb19cd9, concept: 0x63b3ed, event: 0xff6b9d,
+  resource: 0x54dcff, risk: 0xff8c42, default: 0xa0a0c0,
+}
+const CAREER_COLORS: Record<string, number> = {
+  center: 0xe8f4ff,     // 中心节点"我"
+  skill: 0x4CAF50,      // 技能节点（已掌握-绿色）
+  partial: 0xFFC107,    // 部分掌握技能（黄色）
+  missing: 0xF44336,    // 缺失技能（红色）
+  job: 0x2196F3,        // 岗位节点（蓝色）
+  company: 0x9C27B0,    // 公司节点（紫色）
+  default: 0xa0c4ff,
+}
+function nodeColor(node: KnowledgeGraphViewNode, mode: GraphViewMode): number {
+  if (mode === 'career') {
+    // 职业视图：根据节点类型和元数据着色
+    const nodeType = (node.type || '').toLowerCase();
+    if (nodeType === 'center') return CAREER_COLORS.center;
+    if (nodeType === 'skill') {
+      const status = (node as any).metadata?.status;
+      if (status === 'mastered') return CAREER_COLORS.skill;
+      if (status === 'partial') return CAREER_COLORS.partial;
+      if (status === 'missing') return CAREER_COLORS.missing;
+      return CAREER_COLORS.skill;
+    }
+    if (nodeType === 'job') return CAREER_COLORS.job;
+    if (nodeType === 'company') return CAREER_COLORS.company;
+    return CAREER_COLORS.default;
+  }
+  const map = mode === 'people' ? PEOPLE_COLORS : mode === 'signals' ? EDUCATION_COLORS : CAREER_COLORS
+  const key = (node.type || node.category || '').toLowerCase()
+  return map[key] ?? map.default
 }
 
-interface GraphLink {
-  source: string
-  target: string
-  type: string
-  flowPhase: number
+// ── Shaders ──────────────────────────────────────────────────
+const VERT = `
+varying vec3 vNormal; varying vec3 vViewDir; varying vec3 vWorldPos;
+uniform float uTime;
+void main(){
+  vNormal = normalize(normalMatrix * normal);
+  vec4 wp = modelMatrix * vec4(position,1.0);
+  vWorldPos = wp.xyz;
+  vec4 mv = viewMatrix * wp;
+  vViewDir = normalize(-mv.xyz);
+  gl_Position = projectionMatrix * mv;
+}`
+
+const FRAG = `
+varying vec3 vNormal; varying vec3 vViewDir; varying vec3 vWorldPos;
+uniform vec3 uColor; uniform float uTime; uniform float uSelected;
+
+float hash1(float n){ return fract(sin(n)*43758.5453123); }
+float hash3(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
+float vnoise(vec3 p){
+  vec3 i=floor(p); vec3 f=fract(p); vec3 u=f*f*(3.0-2.0*f);
+  return mix(
+    mix(mix(hash3(i),hash3(i+vec3(1,0,0)),u.x),mix(hash3(i+vec3(0,1,0)),hash3(i+vec3(1,1,0)),u.x),u.y),
+    mix(mix(hash3(i+vec3(0,0,1)),hash3(i+vec3(1,0,1)),u.x),mix(hash3(i+vec3(0,1,1)),hash3(i+vec3(1,1,1)),u.x),u.y),
+    u.z);
 }
+float fbm(vec3 p){ float v=0.0; float a=0.55; for(int i=0;i<5;i++){v+=a*vnoise(p);p=p*2.03+vec3(1.7,9.2,3.4);a*=0.48;} return v; }
+float wfbm(vec3 p){ vec3 q=vec3(fbm(p),fbm(p+vec3(5.2,1.3,2.8)),fbm(p+vec3(1.7,9.2,3.4))); return fbm(p+1.8*q); }
+vec3 rotY(vec3 p,float a){ float c=cos(a); float s=sin(a); return vec3(c*p.x+s*p.z,p.y,-s*p.x+c*p.z); }
 
-interface KGSession {
-  session_id: string
-  title: string
-  node_count: number
-  last_update: string
-}
+void main(){
+  vec3 N=normalize(vNormal); vec3 V=normalize(vViewDir);
+  vec3 L=normalize(vec3(1.2,0.9,0.7));
+  vec3 sp=rotY(normalize(vWorldPos),uTime*0.06);
+  float h=smoothstep(0.30,0.72,wfbm(sp*2.2));
+  float lat=abs(sp.y);
+  float iceBase=smoothstep(0.60,0.82,lat);
+  float ice=clamp(iceBase+vnoise(sp*8.0)*0.15*(1.0-iceBase),0.0,1.0);
 
-interface GraphData {
-  information?: Array<{ id: string; name: string; type: string; category?: string; source_id?: string }>
-  sources?: Array<{ id: string; name: string; type: string; source_id?: string }>
-  entities?: Array<{ id: string; name: string; type: string; category?: string }>
-  relationships?: Array<{ source: string; target: string; type: string }>
-  relations?: Array<{ source: string; target: string; type: string }>
-}
+  vec3 deepSea=vec3(0.04,0.10,0.28)*(uColor*0.6+vec3(0.4,0.4,0.4));
+  vec3 shallow=vec3(0.08,0.22,0.52)*(uColor*0.5+vec3(0.5,0.5,0.5));
+  vec3 beach=vec3(0.76,0.70,0.50)*(uColor*0.3+vec3(0.7,0.7,0.7));
+  vec3 low=uColor*0.75+vec3(0.05,0.08,0.02);
+  vec3 mid=uColor*0.95+vec3(0.02,0.05,0.01);
+  vec3 high=uColor*1.15+vec3(0.06,0.06,0.06);
+  vec3 snow=vec3(0.90,0.93,1.00);
+  vec3 sc;
+  if(h<0.18){ sc=mix(deepSea,shallow,smoothstep(0.0,0.18,h)); }
+  else if(h<0.24){ sc=mix(shallow,beach,smoothstep(0.18,0.24,h)); }
+  else if(h<0.42){ sc=mix(beach,low,smoothstep(0.24,0.42,h)); }
+  else if(h<0.65){ sc=mix(low,mid,smoothstep(0.42,0.65,h)); }
+  else if(h<0.82){ sc=mix(mid,high,smoothstep(0.65,0.82,h)); }
+  else{ sc=mix(high,snow,smoothstep(0.82,1.0,h)); }
+  sc=mix(sc,snow,ice*0.9);
 
-// ── Color map ──────────────────────────────────────────────────────────────
-const NODE_COLORS: Record<string, string> = {
-  Concept:  '#FF6B6B',
-  Entity:   '#4ECDC4',
-  Event:    '#45B7D1',
-  Pattern:  '#FFA07A',
-  Source:   '#95E1D3',
-  Photo:    '#A8E6CF',
-  Location: '#FFD93D',
-  Person:   '#6BCF7F',
-  Time:     '#B19CD9',
-}
-const getNodeColor = (type: string) => NODE_COLORS[type] ?? '#A0A0A0'
+  float isOcean=1.0-smoothstep(0.18,0.26,h);
+  vec3 H2=normalize(L+V);
+  float spec=pow(max(dot(N,H2),0.0),120.0)*0.9*isOcean;
+  float diff=max(dot(N,L),0.0);
+  float term=smoothstep(-0.05,0.18,diff);
 
-// ── Main Component ─────────────────────────────────────────────────────────
-export default function KnowledgeGraphPage() {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const userId = user?.user_id ?? 'default_user'
+  vec3 cp=rotY(normalize(vWorldPos),uTime*0.13+1.5);
+  float cloud=smoothstep(0.52,0.72,wfbm(cp*2.8+vec3(0.0,2.0,0.0)));
+  vec3 cloudCol=vec3(0.95,0.97,1.0)*(diff*0.7+0.3);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animTimerRef = useRef<number>(-1)
-  const frameCountRef = useRef(0)
+  float city=smoothstep(0.70,0.76,vnoise(sp*9.0))*(1.0-ice)*(1.0-term);
+  vec3 nightCol=sc*0.04+uColor*1.2*city*(1.0-cloud*0.8);
+  vec3 dayCol=sc*(diff*0.85+0.12)*(1.0-cloud*0.35)+vec3(0.0,0.15,0.4)*isOcean*0.3;
+  dayCol=mix(dayCol,cloudCol,cloud*term);
+  vec3 planet=mix(nightCol,dayCol,term)+vec3(spec)*term;
 
-  // graph state (mutable refs for perf, mirrored to state for UI)
-  const nodesRef = useRef<GraphNode[]>([])
-  const linksRef = useRef<GraphLink[]>([])
+  float rim=pow(1.0-max(dot(N,V),0.0),3.5);
+  vec3 atm=mix(vec3(0.25,0.55,1.0),uColor*0.6,0.35)*rim*mix(0.15,0.65,smoothstep(0.0,0.5,diff));
+  planet=mix(planet,atm,rim*0.55); planet+=atm*0.4;
 
-  const [nodeCount, setNodeCount] = useState(0)
-  const [isLoading, setIsLoading] = useState(false)
-  const [loadError, setLoadError] = useState('')
+  float sp2=sin(uTime*2.5)*0.5+0.5;
+  planet+=vec3(0.3,1.0,0.85)*uSelected*rim*(1.0+sp2*0.6);
+  gl_FragColor=vec4(planet,1.0);
+}`
 
-  // sessions
-  const [sessions, setSessions] = useState<KGSession[]>([])
-  const [currentSessionId, setCurrentSessionId] = useState('')
-  const [showSessionPanel, setShowSessionPanel] = useState(false)
-  const [isLoadingSessions, setIsLoadingSessions] = useState(false)
+const ATM_FRAG = `
+varying vec3 vNormal; varying vec3 vViewDir;
+uniform vec3 uColor; uniform float uTime;
+void main(){
+  vec3 n=normalize(vNormal); vec3 v=normalize(vViewDir);
+  float r1=pow(1.0-max(dot(n,v),0.0),3.0);
+  float r2=pow(1.0-max(dot(n,v),0.0),6.0);
+  vec3 c=mix(vec3(0.2,0.5,1.0),uColor*0.5,0.25);
+  gl_FragColor=vec4(c,r1*0.28+r2*0.12);
+}`
 
-  // selected node panel
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null)
+const EDGE_VERT = `
+attribute float aT; varying float vT; varying vec3 vWP;
+void main(){ vT=aT; vec4 wp=modelMatrix*vec4(position,1.0); vWP=wp.xyz; gl_Position=projectionMatrix*viewMatrix*wp; }`
 
-  // view transform
-  const offsetRef = useRef({ x: 0, y: 0 })
-  const zoomRef = useRef(1.0)
-  const [zoom, setZoom] = useState(1.0)
+const EDGE_FRAG = `
+varying float vT; varying vec3 vWP; uniform float uTime;
+void main(){
+  float f1=fract(vT-uTime*0.4); float f2=fract(vT-uTime*0.25+0.5);
+  float g1=exp(-8.0*abs(f1-0.5)); float g2=exp(-12.0*abs(f2-0.5))*0.6;
+  float sp=sin(vWP.x*0.5+uTime*1.2)*sin(vWP.z*0.5+uTime*0.8)*0.15+0.85;
+  float intensity=(g1+g2)*sp+0.12;
+  vec3 c=mix(vec3(0.15,0.45,0.95),vec3(0.35,0.75,1.0),g1);
+  gl_FragColor=vec4(c,intensity*0.85);
+}`
 
-  // drag state
-  const dragCanvasRef = useRef(false)
-  const dragStartRef = useRef({ x: 0, y: 0 })
-  const dragNodeRef = useRef<GraphNode | null>(null)
-
-  // ── Canvas render ────────────────────────────────────────────────────────
-  const render = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const W = canvas.width
-    const H = canvas.height
-    const nodes = nodesRef.current
-    const links = linksRef.current
-    const sel = dragNodeRef.current?.id ?? null
-
-    ctx.clearRect(0, 0, W, H)
-
-    // dark starfield background
-    const bg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.8)
-    bg.addColorStop(0, '#0d1b2a')
-    bg.addColorStop(1, '#060d14')
-    ctx.fillStyle = bg
-    ctx.fillRect(0, 0, W, H)
-
-    ctx.save()
-    ctx.translate(W / 2 + offsetRef.current.x, H / 2 + offsetRef.current.y)
-    ctx.scale(zoomRef.current, zoomRef.current)
-
-    // draw links
-    links.forEach(link => {
-      const src = nodes.find(n => n.id === link.source)
-      const tgt = nodes.find(n => n.id === link.target)
-      if (!src || !tgt) return
-
-      // animated flow dot
-      const t = (link.flowPhase % (Math.PI * 2)) / (Math.PI * 2)
-      const fx = src.x + (tgt.x - src.x) * t
-      const fy = src.y + (tgt.y - src.y) * t
-
-      // gradient line
-      const grad = ctx.createLinearGradient(src.x, src.y, tgt.x, tgt.y)
-      grad.addColorStop(0, 'rgba(99,179,237,0.15)')
-      grad.addColorStop(0.5, 'rgba(99,179,237,0.45)')
-      grad.addColorStop(1, 'rgba(99,179,237,0.15)')
-      ctx.beginPath()
-      ctx.moveTo(src.x, src.y)
-      ctx.lineTo(tgt.x, tgt.y)
-      ctx.strokeStyle = grad
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-
-      // flow dot
-      ctx.beginPath()
-      ctx.arc(fx, fy, 3, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(147,210,255,0.9)'
-      ctx.fill()
-    })
-
-    // draw nodes
-    nodes.forEach(node => {
-      const color = getNodeColor(node.type)
-      const r = 22
-      const pulse = Math.sin(node.pulsePhase) * 0.3 + 0.7
-      const isSelected = selectedNodeRef.current?.id === node.id
-
-      // outer glow
-      const glow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, r * 2.2)
-      glow.addColorStop(0, color + Math.round(node.glowIntensity * pulse * 120).toString(16).padStart(2, '0'))
-      glow.addColorStop(1, 'transparent')
-      ctx.beginPath()
-      ctx.arc(node.x, node.y, r * 2.2, 0, Math.PI * 2)
-      ctx.fillStyle = glow
-      ctx.fill()
-
-      // selection ring
-      if (isSelected) {
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, r + 7, 0, Math.PI * 2)
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)'
-        ctx.lineWidth = 2.5
-        ctx.stroke()
+// ── Force layout ─────────────────────────────────────────────
+interface FNode { x:number; y:number; z:number; vx:number; vy:number; vz:number }
+function runForce(nodes: FNode[], edges: [number,number][], fixedIdx = -1) {
+  for (let iter = 0; iter < 180; iter++) {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i+1; j < nodes.length; j++) {
+        const dx=nodes[j].x-nodes[i].x, dy=nodes[j].y-nodes[i].y, dz=nodes[j].z-nodes[i].z
+        const d=Math.sqrt(dx*dx+dy*dy+dz*dz)+0.01
+        const f=Math.min(18/(d*d),2.5)
+        const inv=f/d
+        if (i !== fixedIdx) { nodes[i].vx-=dx*inv; nodes[i].vy-=dy*inv; nodes[i].vz-=dz*inv }
+        if (j !== fixedIdx) { nodes[j].vx+=dx*inv; nodes[j].vy+=dy*inv; nodes[j].vz+=dz*inv }
       }
-
-      // node circle
-      const nodeGrad = ctx.createRadialGradient(node.x - r * 0.3, node.y - r * 0.3, 2, node.x, node.y, r)
-      nodeGrad.addColorStop(0, lighten(color, 40))
-      nodeGrad.addColorStop(1, color)
-      ctx.beginPath()
-      ctx.arc(node.x, node.y, r, 0, Math.PI * 2)
-      ctx.fillStyle = nodeGrad
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-
-      // initial letter
-      ctx.fillStyle = '#fff'
-      ctx.font = `bold 14px -apple-system, sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(node.name.charAt(0).toUpperCase(), node.x, node.y)
-
-      // label below
-      ctx.fillStyle = 'rgba(220,235,255,0.9)'
-      ctx.font = `11px -apple-system, sans-serif`
-      ctx.fillText(node.name.length > 8 ? node.name.slice(0, 7) + '…' : node.name, node.x, node.y + r + 13)
+    }
+    edges.forEach(([a,b])=>{
+      const dx=nodes[b].x-nodes[a].x, dy=nodes[b].y-nodes[a].y, dz=nodes[b].z-nodes[a].z
+      const d=Math.sqrt(dx*dx+dy*dy+dz*dz)+0.01
+      const f=Math.min(Math.max((d-7)*0.04,-1.5),1.5)
+      const inv=f/d
+      if (a !== fixedIdx) { nodes[a].vx+=dx*inv; nodes[a].vy+=dy*inv; nodes[a].vz+=dz*inv }
+      if (b !== fixedIdx) { nodes[b].vx-=dx*inv; nodes[b].vy-=dy*inv; nodes[b].vz-=dz*inv }
     })
+    nodes.forEach((n, idx)=>{
+      if (idx === fixedIdx) return  // 固定节点不移动
+      n.vx*=0.82; n.vy*=0.82; n.vz*=0.82
+      if(!isFinite(n.vx)) n.vx=0
+      if(!isFinite(n.vy)) n.vy=0
+      if(!isFinite(n.vz)) n.vz=0
+      n.x+=n.vx; n.y+=n.vy; n.z+=n.vz
+    })
+  }
+}
 
-    ctx.restore()
-  }, [])
+// ── Sprite label ─────────────────────────────────────────────
+function makeLabel(text: string, col: number): THREE.Sprite {
+  const cv = document.createElement('canvas'); cv.width=256; cv.height=64
+  const ctx = cv.getContext('2d')!
+  ctx.clearRect(0,0,256,64)
+  ctx.fillStyle=`#${col.toString(16).padStart(6,'0')}cc`
+  ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'
+  ctx.fillText(text.length>10?text.slice(0,10)+'...':text, 128, 32)
+  const tex = new THREE.CanvasTexture(cv)
+  const mat = new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false })
+  const sp = new THREE.Sprite(mat); sp.scale.set(3.2,0.8,1); return sp
+}
 
-  // helper: lighten hex color
-  function lighten(hex: string, amt: number) {
-    const n = parseInt(hex.slice(1), 16)
-    const r = Math.min(255, (n >> 16) + amt)
-    const g = Math.min(255, ((n >> 8) & 0xff) + amt)
-    const b = Math.min(255, (n & 0xff) + amt)
-    return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)
+interface NodeMeta {
+  id: string; name: string; type: string; category: string | undefined
+  mesh: THREE.Mesh; mat: THREE.ShaderMaterial
+  halo: THREE.Mesh; ring: THREE.Mesh; label: THREE.Sprite; connections: number
+  node: KnowledgeGraphViewNode
+}
+
+function formatError(endpoint: string, detail?: string) {
+  return [
+    '无法连接到后端服务',
+    `后端地址: ${API_BASE_URL}`,
+    `接口: ${endpoint}`,
+    detail ? `详情: ${detail}` : '',
+    '请检查后端是否启动、端口是否一致',
+  ].filter(Boolean).join('\n')
+}
+
+// ── 核心图谱构建函数（组件外，避免闭包问题） ─────────────────
+type ThreeRef = {
+  scene: THREE.Scene;
+  camera?: THREE.PerspectiveCamera;
+  controls?: OrbitControls;
+  nodes: NodeMeta[];
+  edgeMats: THREE.ShaderMaterial[];
+};
+
+function buildGraphInScene(
+  ref: ThreeRef,
+  data: KnowledgeGraphView,
+  mode: GraphViewMode,
+) {
+  console.log('[KG] buildGraphInScene start, nodes:', data.nodes.length, 'mode:', mode);
+  const { scene } = ref;
+  
+  // 立即清除旧图谱对象
+  const toRemove = scene.children.filter(c => c.userData.g);
+  toRemove.forEach(c => {
+    scene.remove(c);
+    if ((c as THREE.Mesh).geometry) (c as THREE.Mesh).geometry.dispose();
+    if ((c as THREE.Mesh).material) {
+      const m = (c as THREE.Mesh).material;
+      if (Array.isArray(m)) m.forEach(x => x.dispose()); else (m as THREE.Material).dispose();
+    }
+  });
+  
+  ref.nodes = []; 
+  ref.edgeMats = [];
+  
+  if (!data.nodes.length) {
+    console.log('[KG] no nodes, skipping build');
+    return;
   }
 
-  // keep selectedNode accessible inside render without re-creating render
-  const selectedNodeRef = useRef<GraphNode | null>(null)
-  useEffect(() => { selectedNodeRef.current = selectedNode }, [selectedNode])
+  const idxMap = new Map<string, number>();
+  data.nodes.forEach((n, i) => idxMap.set(n.id, i));
+  const conn = new Array(data.nodes.length).fill(0);
+  data.links.forEach(l => {
+    const a = idxMap.get(l.source), b = idxMap.get(l.target);
+    if (a !== undefined) conn[a]++;
+    if (b !== undefined) conn[b]++;
+  });
 
-  // ── Physics simulation ───────────────────────────────────────────────────
-  const stopSimulation = useCallback(() => {
-    if (animTimerRef.current !== -1) {
-      clearInterval(animTimerRef.current)
-      animTimerRef.current = -1
+  // Force layout — "我"节点固定在原点
+  // 职业视图：直接使用后端返回的位置（同心圆结构）
+  // 其他视图：使用力导向布局
+  const selfIdx = data.nodes.findIndex(n => (n as any).is_self || n.name === '我' || n.id.startsWith('__me__'));
+  
+  let fn: FNode[];
+  const fe: [number, number][] = data.links
+    .map(l => [idxMap.get(l.source) ?? -1, idxMap.get(l.target) ?? -1] as [number, number])
+    .filter(([a, b]) => a >= 0 && b >= 0);
+  
+  if (mode === 'career') {
+    // 职业视图：直接使用后端返回的位置
+    fn = data.nodes.map((n) => {
+      const pos = (n as any).position || { x: 0, y: 0, z: 0 };
+      return {
+        x: pos.x || 0,
+        y: pos.y || 0,
+        z: pos.z || 0,
+        vx: 0, vy: 0, vz: 0,
+      };
+    });
+    console.log('[KG] Career mode: using backend positions (concentric circles)');
+  } else {
+  // 人物关系/升学规划/职业发展视图：使用力导向布局
+    fn = data.nodes.map((_, i) => ({
+      x: i === selfIdx ? 0 : (Math.random() - 0.5) * 22,
+      y: i === selfIdx ? 0 : (Math.random() - 0.5) * 22,
+      z: i === selfIdx ? 0 : (Math.random() - 0.5) * 22,
+      vx: 0, vy: 0, vz: 0,
+    }));
+    runForce(fn, fe, selfIdx);
+    console.log('[KG] People/Education/Career mode: using force-directed layout');
+  }
+
+  // 节点球体 — 星球 shader
+  const metas: NodeMeta[] = data.nodes.map((n, i) => {
+    const isSelf = (n as any).is_self || n.name === '我' || n.id.startsWith('__me__');
+    const col = isSelf ? 0xe8f4ff : nodeColor(n, mode);
+    const r = isSelf ? 1.6 : 0.55 + Math.min(conn[i], 10) * 0.07;
+    const c3 = new THREE.Color(col);
+
+    // ── 星球主体（shader） ──────────────────────────────────
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms: {
+        uColor:    { value: new THREE.Vector3(c3.r, c3.g, c3.b) },
+        uTime:     { value: 0 },
+        uSelected: { value: 0 },
+      },
+      transparent: false,
+      depthWrite: true,
+      side: THREE.FrontSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 64), mat);
+    mesh.userData.g = true;
+    mesh.position.set(fn[i].x, fn[i].y, fn[i].z);
+    scene.add(mesh);
+
+    // ── 大气层（外层薄壳） ──────────────────────────────────
+    const atmMat = new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: ATM_FRAG,
+      uniforms: {
+        uColor: { value: new THREE.Vector3(c3.r, c3.g, c3.b) },
+        uTime:  { value: 0 },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+      side: THREE.BackSide,
+    });
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(r * 1.22, 32, 32), atmMat);
+    halo.userData.g = true;
+    halo.position.copy(mesh.position);
+    scene.add(halo);
+    ref.edgeMats.push(atmMat);
+
+    // ── 轨道装饰（按节点 index 随机分配，不是每个都有环） ──
+    // 用 index 做伪随机：0=无装饰, 1=单环, 2=双环, 3=卫星小球
+    const decorType = isSelf ? 2 : [0, 1, 3, 0, 1, 0, 3, 1, 0, 2][i % 10];
+
+    let ring: THREE.Mesh;
+    if (decorType === 1 || decorType === 2 || isSelf) {
+      // 单环或双环
+      const ringColor = isSelf ? 0xffffff : col;
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: ringColor, transparent: true,
+        opacity: isSelf ? 0.55 : 0.32, depthWrite: false, side: THREE.DoubleSide,
+      });
+      ring = new THREE.Mesh(new THREE.TorusGeometry(r * 1.65, r * 0.04, 16, 80), ringMat);
+      ring.userData.g = true;
+      ring.position.copy(mesh.position);
+      ring.rotation.x = Math.PI / 2.2 + (i % 3) * 0.18;
+      ring.rotation.z = (i % 5) * 0.22;
+      scene.add(ring);
+
+      if (decorType === 2) {
+        // 第二圈，更大更细
+        const ring2Mat = new THREE.MeshBasicMaterial({
+          color: ringColor, transparent: true,
+          opacity: isSelf ? 0.28 : 0.16, depthWrite: false, side: THREE.DoubleSide,
+        });
+        const ring2 = new THREE.Mesh(new THREE.TorusGeometry(r * 2.1, r * 0.025, 16, 80), ring2Mat);
+        ring2.userData.g = true;
+        ring2.position.copy(mesh.position);
+        ring2.rotation.x = ring.rotation.x + 0.35;
+        ring2.rotation.z = ring.rotation.z + 0.5;
+        scene.add(ring2);
+      }
+    } else if (decorType === 3) {
+      // 卫星小球：1~2 个小球绕轨道
+      ring = new THREE.Mesh(new THREE.SphereGeometry(0, 1, 1), new THREE.MeshBasicMaterial()); // 占位
+      ring.userData.g = true;
+      const moonCount = 1 + (i % 2);
+      for (let m = 0; m < moonCount; m++) {
+        const moonR = r * 0.18;
+        const moonDist = r * 1.8 + m * r * 0.4;
+        const moonAngle = (m / moonCount) * Math.PI * 2;
+        const moonMat = new THREE.MeshBasicMaterial({
+          color: col, transparent: true, opacity: 0.7, depthWrite: false,
+        });
+        const moon = new THREE.Mesh(new THREE.SphereGeometry(moonR, 8, 8), moonMat);
+        moon.userData.g = true;
+        moon.position.set(
+          mesh.position.x + Math.cos(moonAngle) * moonDist,
+          mesh.position.y + Math.sin(moonAngle * 0.5) * moonDist * 0.3,
+          mesh.position.z + Math.sin(moonAngle) * moonDist,
+        );
+        scene.add(moon);
+      }
+    } else {
+      // 无装饰，只有大气层光晕
+      ring = new THREE.Mesh(new THREE.SphereGeometry(0, 1, 1), new THREE.MeshBasicMaterial());
+      ring.userData.g = true;
     }
-  }, [])
 
-  const startSimulation = useCallback(() => {
-    stopSimulation()
-    frameCountRef.current = 0
-    animTimerRef.current = window.setInterval(() => {
-      frameCountRef.current++
-      const nodes = nodesRef.current
-      const links = linksRef.current
+    // ── 标签 ────────────────────────────────────────────────
+    const label = makeLabel(n.name, col);
+    label.userData.g = true;
+    label.position.set(fn[i].x, fn[i].y + r + 1.0, fn[i].z);
+    scene.add(label);
 
-      // update pulse & flow phases
-      nodes.forEach(n => { n.pulsePhase += 0.025; if (n.pulsePhase > Math.PI * 2) n.pulsePhase -= Math.PI * 2 })
-      links.forEach(l => { l.flowPhase += 0.04; if (l.flowPhase > Math.PI * 2) l.flowPhase -= Math.PI * 2 })
+    return { id: n.id, name: n.name, type: n.type, category: n.category, mesh, mat, halo, ring, label, connections: conn[i], node: n };
+  });
+  ref.nodes = metas;
+  console.log(`[KG] buildGraphInScene done: ${metas.length} nodes, ${fe.length} edges`);
 
-      if (frameCountRef.current <= 120) {
-        // repulsion
-        nodes.forEach(n => { n.vx = 0; n.vy = 0 })
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
-            const a = nodes[i], b = nodes[j]
-            const dx = b.x - a.x, dy = b.y - a.y
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1
-            const f = 1200 / (dist * dist)
-            const fx = (dx / dist) * f, fy = (dy / dist) * f
-            a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy
+  // 边：每条边单独一条 Line（贝塞尔曲线）
+  if (metas.length > 0 && ref.camera && ref.controls) {
+    const bounds = new THREE.Box3();
+    metas.forEach(meta => bounds.expandByPoint(meta.mesh.position));
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.x, size.y, size.z, 10);
+    ref.camera.position.set(center.x + radius * 0.9, center.y + radius * 0.55, center.z + radius * 1.25);
+    ref.camera.lookAt(center);
+    ref.controls.target.copy(center);
+    ref.controls.update();
+  }
+
+  fe.forEach(([a, b]) => {
+    const pa = fn[a], pb = fn[b];
+    // 跳过含 NaN/Infinity 的节点
+    if (!isFinite(pa.x) || !isFinite(pa.y) || !isFinite(pa.z) ||
+        !isFinite(pb.x) || !isFinite(pb.y) || !isFinite(pb.z)) return;
+    
+    // 获取连线信息
+    const link = data.links.find(l => 
+      (idxMap.get(l.source) === a && idxMap.get(l.target) === b) ||
+      (idxMap.get(l.source) === b && idxMap.get(l.target) === a)
+    );
+    
+    if (mode === 'career') {
+      // 职业视图：简化的直线连接，根据类型着色
+      const linkType = link?.type || 'default';
+      let lineColor = 0x65b7ff;
+      let lineWidth = 1;
+      let opacity = 0.4;
+      let dashed = false;
+      
+      if (linkType === 'mastery') {
+        // 我→技能：根据掌握度着色
+        const weight = (link as any)?.weight || 0.5;
+        lineColor = weight >= 0.8 ? 0x4CAF50 : (weight >= 0.4 ? 0xFFC107 : 0xF44336);
+        lineWidth = 1 + weight * 2;
+        opacity = 0.6;
+      } else if (linkType === 'requirement') {
+        // 技能→岗位：绿色表示匹配
+        lineColor = 0x4CAF50;
+        opacity = 0.5;
+      } else if (linkType === 'employment') {
+        // 岗位→公司：虚线
+        lineColor = 0x9E9E9E;
+        opacity = 0.3;
+        dashed = true;
+      } else if (linkType === 'dependency') {
+        // 技能依赖：黄色虚线
+        lineColor = 0xFFC107;
+        opacity = 0.4;
+        dashed = true;
+      }
+      
+      // 直线连接
+      const pts = [new THREE.Vector3(pa.x, pa.y, pa.z), new THREE.Vector3(pb.x, pb.y, pb.z)];
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = dashed 
+        ? new THREE.LineDashedMaterial({ color: lineColor, transparent: true, opacity, depthWrite: false, dashSize: 0.5, gapSize: 0.3 })
+        : new THREE.LineBasicMaterial({ color: lineColor, transparent: true, opacity, depthWrite: false, linewidth: lineWidth });
+      const line = new THREE.Line(geo, mat);
+      if (dashed) line.computeLineDistances();
+      line.userData.g = true;
+      scene.add(line);
+    } else {
+      // 人物关系/升学规划视图：原有的贝塞尔曲线
+      const segs = 16;
+      const pts: THREE.Vector3[] = [];
+      const mx = (pa.x + pb.x) / 2 + (pb.y - pa.y) * 0.18;
+      const my = (pa.y + pb.y) / 2 - (pb.x - pa.x) * 0.18;
+      const mz = (pa.z + pb.z) / 2;
+      for (let s = 0; s <= segs; s++) {
+        const t = s / segs, it = 1 - t;
+        pts.push(new THREE.Vector3(
+          it*it*pa.x + 2*it*t*mx + t*t*pb.x,
+          it*it*pa.y + 2*it*t*my + t*t*pb.y,
+          it*it*pa.z + 2*it*t*mz + t*t*pb.z,
+        ));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x65b7ff, transparent: true, opacity: 0.58, depthWrite: false,
+      });
+      const line = new THREE.Line(geo, mat);
+      line.userData.g = true;
+      scene.add(line);
+    }
+  });
+}
+
+
+export default function KnowledgeGraphPage() {
+  const location = useLocation();
+  const { user, isLoading: authLoading } = useAuth();
+  const routeState = (location.state || {}) as { question?: string; view?: GraphViewMode };
+
+  const [viewMode, setViewMode] = useState<GraphViewMode>(routeState.view || 'people');
+  const [question, setQuestion] = useState(routeState.question || '');
+  const [graph, setGraph] = useState<KnowledgeGraphView | null>(null);
+  const [selectedNode, setSelectedNode] = useState<KnowledgeGraphViewNode | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  // 缓存不同视图的数据，避免重复加载
+  const graphCacheRef = useRef<Map<string, KnowledgeGraphView>>(new Map());
+
+  // Three.js refs
+  const mountRef = useRef<HTMLDivElement>(null);
+  // 用 ref 存最新 graph+mode，避免 Three.js 初始化时机问题
+  const pendingGraphRef = useRef<{ data: KnowledgeGraphView; mode: GraphViewMode } | null>(null);
+  const threeRef = useRef<{
+    renderer: THREE.WebGLRenderer;
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    controls: OrbitControls;
+    raf: number;
+    nodes: NodeMeta[];
+    edgeMats: THREE.ShaderMaterial[];
+    clock: THREE.Clock;
+  } | null>(null);
+
+  // ── 数据加载（优化切换体验） ──────────────────────────────────────────────
+  useEffect(() => {
+    console.log('[KG] data effect, authLoading:', authLoading, 'user_id:', user?.user_id, 'viewMode:', viewMode);
+    if (authLoading || !user?.user_id) return;
+    
+    // 生成缓存key
+    const cacheKey = `${viewMode}-${question}`;
+    
+    // 先设置加载状态，清空当前图谱（避免闪现旧视图）
+    setIsLoading(true);
+    setGraph(null);
+    
+    // 使用 setTimeout 延迟一帧，确保UI更新
+    const timer = setTimeout(() => {
+      // 检查缓存
+      const cached = graphCacheRef.current.get(cacheKey);
+      if (cached) {
+        console.log('[KG] using cached data for', cacheKey);
+        setGraph(cached);
+        setSelectedNode(cached.nodes[0] || null);
+        setIsLoading(false);
+        return;
+      }
+      
+      // 没有缓存，加载数据
+      setError('');
+    
+    // 职业视图使用不同的API
+    if (viewMode === 'career') {
+      const endpoint = `${API_BASE_URL}/api/v5/future-os/career-graph`;
+      
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          mastered_skills: ['Python', 'JavaScript', 'Git', 'MySQL'],
+          partial_skills: ['React', 'Docker'],
+          missing_skills: ['Kubernetes', 'AWS'],
+          target_direction: 'Python工程师'
+        })
+      })
+        .then(res => res.json())
+        .then(result => {
+          if (result.success && result.data) {
+            const careerData = result.data;
+            const payload: KnowledgeGraphView = {
+              nodes: careerData.nodes.map((n: any) => ({
+                id: n.id,
+                name: n.label,
+                type: n.type,
+                category: n.type,
+                metadata: n.metadata,
+                is_self: n.type === 'center',
+                position: n.position
+              })),
+              links: careerData.edges.map((e: any) => ({
+                source: e.source,
+                target: e.target,
+                type: e.type,
+                weight: e.weight || 1
+              })),
+              summary: {
+                node_count: careerData.nodes.length,
+                link_count: careerData.edges.length,
+                view_mode: 'career'
+              }
+            };
+            console.log('[KG] career data loaded, nodes:', payload.nodes.length);
+            graphCacheRef.current.set(cacheKey, payload);
+            setGraph(payload);
+            setSelectedNode(payload.nodes[0] || null);
+          } else {
+            throw new Error(result.message || '加载失败');
+          }
+        })
+        .catch(e => {
+          console.error('[KG] career load error:', e);
+          setGraph(null);
+          setError(formatError(endpoint, e instanceof Error ? e.message : '加载失败'));
+        })
+        .finally(() => setIsLoading(false));
+      return;
+    }
+    
+    // 人物关系/升学规划视图
+    const endpoint = `${API_BASE_URL}/api/v5/future-os/knowledge/${user.user_id}?view=${viewMode}`;
+    getFutureOsGraphView(user.user_id, { view: viewMode, question })
+      .then(payload => {
+        console.log('[KG] data loaded, nodes:', payload.nodes.length, 'links:', payload.links.length);
+        graphCacheRef.current.set(cacheKey, payload);
+        setGraph(payload); 
+        setSelectedNode(payload.nodes[0] || null);
+      })
+      .catch(e => {
+        console.error('[KG] load error:', e);
+        setGraph(null);
+        setError(formatError(endpoint, e instanceof Error ? e.message : '加载失败'));
+      })
+      .finally(() => setIsLoading(false));
+    }, 16); // 延迟一帧（约16ms）
+    
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user?.user_id, viewMode, question]);
+
+  // ── Three.js 初始化（只跑一次） ───────────────────────────
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+
+    // 等一帧确保 DOM 有尺寸
+    let cancelled = false;
+    const init = () => {
+      if (cancelled || !mountRef.current) return;
+      const W = mount.clientWidth || 800;
+      const H = mount.clientHeight || 600;
+      console.log('[KG] Three.js init, size:', W, H);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(W, H);
+      renderer.setClearColor(0x060d1a, 1);
+      mount.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      // 星空背景粒子
+      const starGeo = new THREE.BufferGeometry();
+      const starPos = new Float32Array(3000);
+      for (let i = 0; i < 3000; i++) starPos[i] = (Math.random() - 0.5) * 300;
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.18, transparent: true, opacity: 0.55 })));
+
+      scene.add(new THREE.AmbientLight(0x223366, 1.2));
+      const pl = new THREE.PointLight(0x4488ff, 6, 120); pl.position.set(10, 15, 10); scene.add(pl);
+
+      const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 600);
+      camera.position.set(0, 0, 32);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.dampingFactor = 0.07;
+      controls.minDistance = 4; controls.maxDistance = 140;
+
+      const clock = new THREE.Clock();
+      // 相机动画状态
+      const camAnim = {
+        active: false,
+        progress: 0,
+        fromTarget: new THREE.Vector3(),
+        fromPos: new THREE.Vector3(),
+        toTarget: new THREE.Vector3(),
+        toPos: new THREE.Vector3(),
+      };
+      const ref = { renderer, scene, camera, controls, raf: -1, nodes: [] as NodeMeta[], edgeMats: [] as THREE.ShaderMaterial[], clock };
+      threeRef.current = ref;
+
+      const animate = () => {
+        ref.raf = requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+        ref.nodes.forEach((nm, index) => {
+          const pulse = 1 + Math.sin(t * 1.4 + index * 0.85) * 0.06;
+          nm.halo.scale.setScalar(pulse * 1.08);
+          nm.ring.rotation.z += 0.0035;
+          nm.label.lookAt(camera.position);
+          // 更新星球 shader 时间
+          if (nm.mat) nm.mat.uniforms['uTime'].value = t;
+          // 更新大气层 shader 时间
+          if ((nm.halo.material as THREE.ShaderMaterial).uniforms?.['uTime']) {
+            (nm.halo.material as THREE.ShaderMaterial).uniforms['uTime'].value = t;
+          }
+        });
+
+        // 丝滑相机动画
+        if (camAnim.active) {
+          camAnim.progress = Math.min(camAnim.progress + 0.022, 1);
+          // easeInOutQuart
+          const p = camAnim.progress;
+          const e = p < 0.5 ? 8*p*p*p*p : 1 - Math.pow(-2*p+2, 4)/2;
+          controls.target.lerpVectors(camAnim.fromTarget, camAnim.toTarget, e);
+          camera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, e);
+          controls.enabled = camAnim.progress > 0.92;
+          if (camAnim.progress >= 1) {
+            camAnim.active = false;
+            controls.target.copy(camAnim.toTarget);
+            camera.position.copy(camAnim.toPos);
+            controls.enabled = true;
           }
         }
-        // attraction
-        links.forEach(link => {
-          const s = nodes.find(n => n.id === link.source)
-          const t = nodes.find(n => n.id === link.target)
-          if (!s || !t) return
-          const dx = t.x - s.x, dy = t.y - s.y
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1
-          const f = dist * 0.03
-          const fx = (dx / dist) * f, fy = (dy / dist) * f
-          s.vx += fx; s.vy += fy; t.vx -= fx; t.vy -= fy
-        })
-        // integrate
-        let maxV = 0
-        nodes.forEach(n => {
-          if (n.fx !== undefined) { n.x = n.fx; n.y = n.fy!; return }
-          const spd = Math.sqrt(n.vx * n.vx + n.vy * n.vy)
-          if (spd > 6) { n.vx = n.vx / spd * 6; n.vy = n.vy / spd * 6 }
-          n.x += n.vx; n.y += n.vy
-          const d = Math.sqrt(n.x * n.x + n.y * n.y)
-          if (d > 260) { n.x = n.x / d * 260; n.y = n.y / d * 260 }
-          n.vx *= 0.72; n.vy *= 0.72
-          maxV = Math.max(maxV, Math.abs(n.vx), Math.abs(n.vy))
-        })
-        if (maxV < 0.05 && frameCountRef.current > 30) frameCountRef.current = 121
+
+        controls.update();
+        renderer.render(scene, camera);
+      };
+      animate();
+
+      // Three.js 初始化完成后，立即渲染已有数据
+      if (pendingGraphRef.current) {
+        console.log('[KG] consuming pending graph on init');
+        const { data, mode } = pendingGraphRef.current;
+        pendingGraphRef.current = null;  // 清除pending，避免重复
+        buildGraphInScene(ref, data, mode);
+      } else {
+        console.log('[KG] no pending graph at init time');
       }
 
-      render()
-    }, 16)
-  }, [render, stopSimulation])
+      const ro = new ResizeObserver(() => {
+        const nW = mount.clientWidth || 800;
+        const nH = mount.clientHeight || 600;
+        camera.aspect = nW / nH;
+        camera.updateProjectionMatrix();
+        renderer.setSize(nW, nH);
+      });
+      ro.observe(mount);
 
-  // ── Data loading ─────────────────────────────────────────────────────────
-  const loadSessions = useCallback(async () => {
-    setIsLoadingSessions(true)
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/v4/knowledge-graph/${userId}/sessions`)
-      if (res.ok) {
-        const json = await res.json()
-        if (json.success && Array.isArray(json.data)) setSessions(json.data)
-      }
-    } catch { /* ignore */ } finally { setIsLoadingSessions(false) }
-  }, [userId])
+      // 点击拾取
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      const onClick = (e: MouseEvent) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(ref.nodes.map(n => n.mesh));
+        if (hits.length > 0) {
+          const nm = ref.nodes.find(n => n.mesh === hits[0].object);
+          if (nm) {
+            ref.nodes.forEach(n => {
+              n.mesh.scale.setScalar(1);
+              if (n.mat) n.mat.uniforms.uSelected.value = 0;
+              (n.halo.material as THREE.MeshBasicMaterial).opacity = 0.16;
+              (n.ring.material as THREE.MeshBasicMaterial).opacity = 0.28;
+            });
+            nm.mesh.scale.setScalar(1.18);
+            if (nm.mat) nm.mat.uniforms.uSelected.value = 1;
+            (nm.halo.material as THREE.MeshBasicMaterial).opacity = 0.38;
+            (nm.ring.material as THREE.MeshBasicMaterial).opacity = 0.55;
+            setSelectedNode(nm.node);
 
-  const loadGraphData = useCallback(async (sessionId = '') => {
-    setIsLoading(true)
-    setLoadError('')
-    stopSimulation()
-    try {
-      let url = `${API_BASE_URL}/api/v4/knowledge-graph/${userId}/export`
-      if (sessionId) url += `?session_id=${sessionId}`
-      const res = await fetch(url)
-      if (!res.ok) { setLoadError(`后端错误 (${res.status})，请检查服务状态`); return }
-      const json = await res.json()
-      if (!json.success || !json.data) {
-        if (json.error_code === 'KG_EMPTY') setLoadError('知识图谱为空，请先进行对话以构建知识网络')
-        else setLoadError(json.message || '知识图谱加载失败')
-        return
-      }
-      const data: GraphData = json.data
-      let nodeData = data.information?.length ? data.information : (data.entities ?? [])
-      if (data.sources?.length) {
-        data.sources.forEach(s => nodeData.push({ id: s.id, name: s.source_id ?? s.type, type: 'Source' }))
-      }
-      const radius = 160
-      nodesRef.current = nodeData.map((n, i) => {
-        const angle = (i / nodeData.length) * Math.PI * 2
-        return {
-          id: n.id, name: n.name, type: n.type, category: n.category,
-          x: Math.cos(angle) * radius, y: Math.sin(angle) * radius,
-          vx: 0, vy: 0,
-          pulsePhase: Math.random() * Math.PI * 2,
-          glowIntensity: 0.5 + Math.random() * 0.5,
+            // 丝滑飞向节点
+            const nodePos = nm.mesh.position.clone();
+            const dist = 6 + nm.connections * 0.4;
+            const dir = camera.position.clone().sub(controls.target).normalize();
+            dir.y = Math.max(dir.y, 0.08);
+            dir.normalize();
+            camAnim.fromTarget.copy(controls.target);
+            camAnim.fromPos.copy(camera.position);
+            camAnim.toTarget.copy(nodePos);
+            camAnim.toPos.copy(nodePos).addScaledVector(dir, dist);
+            camAnim.progress = 0;
+            camAnim.active = true;
+            controls.enabled = false;
+          }
         }
-      })
-      const linkData = data.relationships ?? data.relations ?? []
-      linksRef.current = linkData.map(l => ({ ...l, flowPhase: Math.random() * Math.PI * 2 }))
-      setNodeCount(nodesRef.current.length)
-      setSelectedNode(null)
-      startSimulation()
-      loadSessions()
-    } catch { setLoadError('无法连接到后端服务，请确保后端已启动') }
-    finally { setIsLoading(false) }
-  }, [userId, startSimulation, stopSimulation, loadSessions])
+      };
+      renderer.domElement.addEventListener('click', onClick);
 
-  // initial load
+      // cleanup 存到外部变量
+      cleanupRef = () => {
+        cancelAnimationFrame(ref.raf);
+        ro.disconnect();
+        renderer.domElement.removeEventListener('click', onClick);
+        controls.dispose(); renderer.dispose();
+        if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+        threeRef.current = null;
+      };
+    };
+
+    // 用 rAF 确保 DOM 已布局完成
+    let rafId = requestAnimationFrame(init);
+    let cleanupRef: (() => void) | undefined;
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      cleanupRef?.();
+    };
+  }, []);
+
+  // ── 图谱重建（数据变化时，防抖优化） ────────────────────────────────
+  const buildGraph = useCallback((data: KnowledgeGraphView, mode: GraphViewMode) => {
+    console.log('[KG] buildGraph called, nodes:', data.nodes.length, 'mode:', mode, 'threeRef:', !!threeRef.current);
+    const ref = threeRef.current;
+    if (!ref) {
+      console.log('[KG] threeRef null, storing pending');
+      pendingGraphRef.current = { data, mode };
+      return;
+    }
+    // 清除pending，避免重复渲染
+    pendingGraphRef.current = null;
+    buildGraphInScene(ref, data, mode);
+  }, []);
+
+  // 使用 useRef 追踪当前渲染的视图，避免重复渲染
+  const lastRenderedRef = useRef<{ graph: KnowledgeGraphView | null; mode: GraphViewMode | null }>({ 
+    graph: null, 
+    mode: null 
+  });
+
   useEffect(() => {
-    loadSessions()
-    loadGraphData()
-    return () => stopSimulation()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // resize canvas to fill container
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const obs = new ResizeObserver(() => {
-      canvas.width = canvas.offsetWidth
-      canvas.height = canvas.offsetHeight
-      render()
-    })
-    obs.observe(canvas)
-    return () => obs.disconnect()
-  }, [render])
-
-  // ── Mouse / touch interaction ────────────────────────────────────────────
-  const toCanvasCoords = (clientX: number, clientY: number) => {
-    const canvas = canvasRef.current!
-    const rect = canvas.getBoundingClientRect()
-    const cx = clientX - rect.left
-    const cy = clientY - rect.top
-    return {
-      x: (cx - canvas.width / 2 - offsetRef.current.x) / zoomRef.current,
-      y: (cy - canvas.height / 2 - offsetRef.current.y) / zoomRef.current,
+    // 只有当数据或模式真正改变时才重建
+    if (graph && (lastRenderedRef.current.graph !== graph || lastRenderedRef.current.mode !== viewMode)) {
+      console.log('[KG] rebuilding graph, mode:', viewMode, 'nodes:', graph.nodes.length);
+      lastRenderedRef.current = { graph, mode: viewMode };
+      buildGraph(graph, viewMode);
     }
-  }
+  }, [graph, viewMode, buildGraph]);
 
-  const findNodeAt = (x: number, y: number) =>
-    nodesRef.current.find(n => Math.hypot(n.x - x, n.y - y) <= 26) ?? null
+  const isGraphEmpty = Boolean(graph && graph.nodes.length === 0);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const { x, y } = toCanvasCoords(e.clientX, e.clientY)
-    const hit = findNodeAt(x, y)
-    if (hit) {
-      dragNodeRef.current = hit
-      hit.fx = hit.x; hit.fy = hit.y
-      setSelectedNode(hit)
-    } else {
-      dragCanvasRef.current = true
-      dragStartRef.current = { x: e.clientX, y: e.clientY }
-    }
-  }
+  // ── JSX ───────────────────────────────────────────────────
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (dragNodeRef.current) {
-      const { x, y } = toCanvasCoords(e.clientX, e.clientY)
-      dragNodeRef.current.fx = x; dragNodeRef.current.fy = y
-    } else if (dragCanvasRef.current) {
-      offsetRef.current.x += e.clientX - dragStartRef.current.x
-      offsetRef.current.y += e.clientY - dragStartRef.current.y
-      dragStartRef.current = { x: e.clientX, y: e.clientY }
-    }
-  }
-
-  const handleMouseUp = () => {
-    if (dragNodeRef.current) {
-      dragNodeRef.current.fx = undefined; dragNodeRef.current.fy = undefined
-      dragNodeRef.current = null
-    }
-    dragCanvasRef.current = false
-  }
-
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const factor = e.deltaY < 0 ? 1.12 : 0.89
-    zoomRef.current = Math.min(3, Math.max(0.25, zoomRef.current * factor))
-    setZoom(zoomRef.current)
-    render()
-  }
-
-  const handleZoomIn  = () => { zoomRef.current = Math.min(3, zoomRef.current * 1.2); setZoom(zoomRef.current); render() }
-  const handleZoomOut = () => { zoomRef.current = Math.max(0.25, zoomRef.current / 1.2); setZoom(zoomRef.current); render() }
-  const handleReset   = () => { offsetRef.current = { x: 0, y: 0 }; zoomRef.current = 1; setZoom(1); render() }
-
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div style={styles.root}>
-      {/* Top nav */}
-      <div style={styles.navbar}>
-        <button style={styles.iconBtn} onClick={() => navigate(-1)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <div style={{ flex: 1, marginLeft: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={styles.navTitle}>知识星图</span>
-            {nodeCount > 0 && <span style={styles.badge}>{nodeCount}</span>}
-          </div>
-          <div style={styles.navSub}>灵动流体 · 记忆永存</div>
-        </div>
-        <button style={styles.iconBtn} title="会话" onClick={() => setShowSessionPanel(v => !v)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        </button>
-        <button style={styles.iconBtn} title="刷新" onClick={() => loadGraphData(currentSessionId)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        </button>
-      </div>
+    <AppShell>
+      {/* 全屏沉浸式容器 */}
+      <div style={{ position: 'relative', height: 'calc(100vh - 58px)', minHeight: 500, borderRadius: 16, overflow: 'hidden', margin: '-28px' }}>
 
-      {/* Canvas area */}
-      <div style={styles.canvasWrap}>
-        {isLoading && (
-          <div style={styles.overlay}>
-            <div style={styles.spinner}/>
-            <p style={styles.overlayTitle}>加载知识图谱中…</p>
-            <p style={styles.overlaySub}>正在从数据库读取</p>
-          </div>
-        )}
-        {!isLoading && loadError && (
-          <div style={styles.overlay}>
-            <div style={{ ...styles.iconCircle, background: 'rgba(255,59,48,0.12)' }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        {/* Three.js 挂载点：铺满整个容器 */}
+        <div ref={mountRef} style={{ position: 'absolute', inset: 0, background: '#060d1a', transition: 'opacity 0.3s ease', opacity: isLoading ? 0.5 : 1 }}>
+          {!graph && !isLoading && !error && (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'rgba(147,197,253,0.5)', fontSize: 14 }}>
+              等待数据加载…
             </div>
-            <p style={styles.overlayTitle}>加载失败</p>
-            <p style={styles.overlaySub}>{loadError}</p>
-            <button style={styles.primaryBtn} onClick={() => loadGraphData(currentSessionId)}>重新加载</button>
-          </div>
-        )}
-        {!isLoading && !loadError && nodeCount === 0 && (
-          <div style={styles.overlay}>
-            <div style={styles.iconCircle}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#0A59F7" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-            </div>
-            <p style={styles.overlayTitle}>暂无知识图谱</p>
-            <p style={styles.overlaySub}>开始使用 AI 助手对话，系统将自动构建您的知识网络</p>
-            <button style={styles.primaryBtn} onClick={() => navigate('/chat')}>开始对话</button>
-          </div>
-        )}
-        <canvas
-          ref={canvasRef}
-          style={{ width: '100%', height: '100%', cursor: 'grab', display: 'block' }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-        />
-
-        {/* Zoom controls */}
-        <div style={styles.zoomPanel}>
-          <button style={styles.zoomBtn} onClick={handleZoomIn}>＋</button>
-          <span style={styles.zoomLabel}>{Math.round(zoom * 100)}%</span>
-          <button style={styles.zoomBtn} onClick={handleZoomOut}>－</button>
-          <button style={{ ...styles.zoomBtn, marginTop: 4 }} onClick={handleReset} title="重置视图">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          </button>
-        </div>
-
-        {/* Legend */}
-        <div style={styles.legend}>
-          {Object.entries(NODE_COLORS).slice(0, 6).map(([type, color]) => (
-            <div key={type} style={styles.legendItem}>
-              <span style={{ ...styles.legendDot, background: color }}/>
-              <span style={styles.legendLabel}>{type}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Session panel */}
-      {showSessionPanel && (
-        <div style={styles.sessionOverlay} onClick={() => setShowSessionPanel(false)}>
-          <div style={styles.sessionPanel} onClick={e => e.stopPropagation()}>
-            <div style={styles.sessionHeader}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#e8f0fe' }}>对话会话</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button style={styles.chipBtn} onClick={() => { setCurrentSessionId(''); setShowSessionPanel(false); loadGraphData('') }}>全部</button>
-                <button style={{ ...styles.iconBtn, color: '#8899aa' }} onClick={() => setShowSessionPanel(false)}>✕</button>
+          )}
+          {isGraphEmpty && !isLoading && !error && (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 32 }}>
+              <div style={{ maxWidth: 460, textAlign: 'center', color: 'rgba(232,240,254,0.88)' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>当前账号还没有知识节点</div>
+                <div style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.58)' }}>
+                  用户 ID: {user?.user_id || 'unknown'}<br />
+                  通过 AI 对话、平行人生或决策推演沉淀信息后，再回来查看星图。
+                </div>
               </div>
             </div>
-            {isLoadingSessions ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div style={styles.spinner}/></div>
-            ) : sessions.length === 0 ? (
-              <p style={{ textAlign: 'center', color: '#8899aa', padding: 40 }}>暂无会话数据</p>
-            ) : (
-              <div style={{ overflowY: 'auto', maxHeight: 360, padding: '0 12px 12px' }}>
-                {sessions.map(s => (
-                  <div
-                    key={s.session_id}
-                    style={{ ...styles.sessionItem, background: currentSessionId === s.session_id ? 'rgba(10,89,247,0.18)' : 'rgba(255,255,255,0.05)' }}
-                    onClick={() => { setCurrentSessionId(s.session_id); setShowSessionPanel(false); loadGraphData(s.session_id) }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ color: '#dce8ff', fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{s.title}</span>
-                      <span style={{ color: '#8899aa', fontSize: 12 }}>{s.node_count} 节点</span>
+          )}
+          {error && (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 32 }}>
+              <pre style={{ color: '#ff8080', fontSize: 12, whiteSpace: 'pre-wrap', maxWidth: 480 }}>{error}</pre>
+            </div>
+          )}
+          {isLoading && (
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(6,13,26,0.8)', backdropFilter: 'blur(8px)', zIndex: 5 }}>
+              <div style={{ textAlign: 'center', color: 'rgba(147,197,253,0.9)' }}>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>加载中...</div>
+                <div style={{ fontSize: 12, color: 'rgba(147,197,253,0.6)' }}>正在构建{viewMode === 'people' ? '人物关系' : viewMode === 'signals' ? '升学规划' : '职业发展'}图谱</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 顶部控制栏：叠加在 canvas 上 */}
+        <div style={{
+          position: 'absolute', top: 16, left: 16, right: 16,
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: 'rgba(6,13,26,0.75)', backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(99,179,237,0.14)', borderRadius: 14,
+          padding: '10px 16px', zIndex: 10,
+        }}>
+          <button
+            className={`button ${viewMode === 'people' ? 'button-primary' : 'button-ghost'}`}
+            style={{ padding: '6px 14px', fontSize: 13, transition: 'all 0.2s ease' }}
+            onClick={() => setViewMode('people')}
+            disabled={isLoading}
+          >人物关系</button>
+          <button
+            className={`button ${viewMode === 'signals' ? 'button-primary' : 'button-ghost'}`}
+            style={{ padding: '6px 14px', fontSize: 13, transition: 'all 0.2s ease' }}
+            onClick={() => setViewMode('signals')}
+            disabled={isLoading}
+          >升学规划</button>
+          <button
+            className={`button ${viewMode === 'career' ? 'button-primary' : 'button-ghost'}`}
+            style={{ padding: '6px 14px', fontSize: 13, transition: 'all 0.2s ease' }}
+            onClick={() => setViewMode('career')}
+            disabled={isLoading}
+          >职业发展</button>
+          <input
+            style={{ flex: 1, minWidth: 160, padding: '6px 12px', borderRadius: 8, fontSize: 13, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(99,179,237,0.18)', color: '#e8f0fe', outline: 'none' }}
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            placeholder={viewMode === 'career' ? '输入求职方向…' : '输入问题聚焦子图…'}
+          />
+          {isLoading && <span style={{ fontSize: 12, color: 'rgba(147,197,253,0.8)', whiteSpace: 'nowrap' }}>同步中…</span>}
+          {graph && !isLoading && (
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>
+              {graph.summary.node_count} 节点 · {graph.summary.link_count} 关系
+              {viewMode === 'career' && (graph as any).metadata?.data_sources && (
+                <span style={{ marginLeft: 8, color: 'rgba(76,175,80,0.8)' }}>
+                  · {Object.entries((graph as any).metadata.data_sources).map(([source, count]) => {
+                    const sourceNames: Record<string, string> = {
+                      'boss_zhipin': 'BOSS直聘',
+                      'lagou': '拉勾网',
+                      'mock': '模拟数据'
+                    };
+                    return `${sourceNames[source] || source}:${count}`;
+                  }).join(' ')}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* 底部提示 */}
+        {!selectedNode && graph && graph.nodes.length > 0 && (
+          <div style={{
+            position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(6,13,26,0.72)', backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(99,179,237,0.14)', borderRadius: 999,
+            padding: '8px 20px', fontSize: 13, color: 'rgba(147,197,253,0.7)',
+            pointerEvents: 'none', zIndex: 10, whiteSpace: 'nowrap',
+          }}>
+            点击星球查看详情 · 拖拽旋转 · 滚轮缩放
+          </div>
+        )}
+
+        {/* 节点详情面板 */}
+        {selectedNode && (
+          <div style={{
+            position: 'absolute', top: 90, right: 16, width: 360,
+            maxHeight: 'calc(100vh - 140px)', overflowY: 'auto',
+            background: 'rgba(6,13,26,0.92)', backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99,179,237,0.2)', borderRadius: 16,
+            padding: 20, zIndex: 15,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}>
+            {/* 关闭按钮 */}
+            <button
+              onClick={() => setSelectedNode(null)}
+              style={{
+                position: 'absolute', top: 12, right: 12,
+                background: 'rgba(255,255,255,0.08)', border: 'none',
+                borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'rgba(255,255,255,0.6)', fontSize: 18,
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                e.currentTarget.style.color = 'rgba(255,255,255,0.9)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+              }}
+            >×</button>
+
+            {/* 人物关系视图详情 */}
+            {viewMode === 'people' && (
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#e8f0fe', marginBottom: 8 }}>
+                  {selectedNode.name}
+                </div>
+                <div style={{ fontSize: 13, color: 'rgba(147,197,253,0.7)', marginBottom: 16 }}>
+                  {selectedNode.type} · {selectedNode.connections || 0} 个连接
+                </div>
+
+                {/* 人物属性 */}
+                {(selectedNode as any).metadata && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 10 }}>
+                      基本信息
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#8899aa', fontSize: 12 }}>…{s.session_id.slice(-8)}</span>
-                      <span style={{ color: '#8899aa', fontSize: 11 }}>{s.last_update}</span>
+                    <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12 }}>
+                      {Object.entries((selectedNode as any).metadata).map(([key, value]) => (
+                        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                          <span style={{ color: 'rgba(147,197,253,0.6)' }}>{key}:</span>
+                          <span style={{ color: '#e8f0fe' }}>{String(value)}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* 关系故事 */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 10 }}>
+                    相关故事
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(147,197,253,0.7)', lineHeight: 1.6 }}>
+                    {selectedNode.name === '李华' && (
+                      <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ color: '#e8f0fe', marginBottom: 4 }}>大学同学，一起找工作</div>
+                        <div style={{ fontSize: 12, color: 'rgba(147,197,253,0.5)' }}>35天前</div>
+                      </div>
+                    )}
+                    {selectedNode.name === '王教授' && (
+                      <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ color: '#e8f0fe', marginBottom: 4 }}>建议考研，认为就业形势不好</div>
+                        <div style={{ fontSize: 12, color: 'rgba(147,197,253,0.5)' }}>30天前</div>
+                      </div>
+                    )}
+                    {selectedNode.name === '女朋友' && (
+                      <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ color: '#e8f0fe', marginBottom: 4 }}>在上海工作，希望我也去上海</div>
+                        <div style={{ fontSize: 12, color: 'rgba(147,197,253,0.5)' }}>5天前</div>
+                      </div>
+                    )}
+                    {selectedNode.name === '父亲' && (
+                      <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ color: '#e8f0fe', marginBottom: 4 }}>希望我去上海，说北京太远</div>
+                        <div style={{ fontSize: 12, color: 'rgba(147,197,253,0.5)' }}>32天前</div>
+                      </div>
+                    )}
+                    {selectedNode.name === '母亲' && (
+                      <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                        <div style={{ color: '#e8f0fe', marginBottom: 4 }}>担心北京生活成本太高</div>
+                        <div style={{ fontSize: 12, color: 'rgba(147,197,253,0.5)' }}>32天前</div>
+                      </div>
+                    )}
+                    {!['李华', '王教授', '女朋友', '父亲', '母亲'].includes(selectedNode.name) && (
+                      <div style={{ color: 'rgba(147,197,253,0.5)', fontStyle: 'italic' }}>
+                        暂无相关故事记录
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 影响力评分 */}
+                {selectedNode.influence_score !== undefined && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 8 }}>
+                      影响力评分
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, height: 8, background: 'rgba(99,179,237,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${selectedNode.influence_score * 100}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #4d9eff, #9575ff)',
+                          transition: 'width 0.3s ease',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 13, color: '#e8f0fe', minWidth: 40 }}>
+                        {(selectedNode.influence_score * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 升学规划视图详情 */}
+            {viewMode === 'signals' && (
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#e8f0fe', marginBottom: 8 }}>
+                  {selectedNode.name}
+                </div>
+                <div style={{ fontSize: 13, color: 'rgba(147,197,253,0.7)', marginBottom: 16 }}>
+                  {selectedNode.category} · {selectedNode.type}
+                </div>
+
+                {/* 教育属性 */}
+                {(selectedNode as any).metadata && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 10 }}>
+                      详细信息
+                    </div>
+                    <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12 }}>
+                      {Object.entries((selectedNode as any).metadata).map(([key, value]) => (
+                        <div key={key} style={{ marginBottom: 8, fontSize: 13 }}>
+                          <div style={{ color: 'rgba(147,197,253,0.6)', marginBottom: 2 }}>{key}</div>
+                          <div style={{ color: '#e8f0fe' }}>{String(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 学习进度 */}
+                {selectedNode.weight !== undefined && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 8 }}>
+                      掌握程度
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, height: 8, background: 'rgba(99,179,237,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${selectedNode.weight * 100}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #43e97b, #38f9d7)',
+                          transition: 'width 0.3s ease',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 13, color: '#e8f0fe', minWidth: 40 }}>
+                        {(selectedNode.weight * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 相关标签 */}
+                {selectedNode.insight_tags && selectedNode.insight_tags.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 8 }}>
+                      标签
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {selectedNode.insight_tags.map((tag, i) => (
+                        <span key={i} style={{
+                          padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                          background: 'rgba(99,179,237,0.15)', color: 'rgba(147,197,253,0.9)',
+                        }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 职业发展视图详情 */}
+            {viewMode === 'career' && (
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#e8f0fe', marginBottom: 8 }}>
+                  {selectedNode.name}
+                </div>
+                <div style={{ fontSize: 13, color: 'rgba(147,197,253,0.7)', marginBottom: 16 }}>
+                  {selectedNode.type} · {selectedNode.connections || 0} 个连接
+                </div>
+
+                {/* 职业属性 */}
+                {(selectedNode as any).metadata && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 10 }}>
+                      详细信息
+                    </div>
+                    <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12 }}>
+                      {Object.entries((selectedNode as any).metadata).map(([key, value]) => {
+                        // 特殊处理技能状态
+                        if (key === 'status' && selectedNode.type === 'skill') {
+                          const statusColors: Record<string, string> = {
+                            'mastered': '#4CAF50',
+                            'partial': '#FFC107',
+                            'missing': '#F44336',
+                          };
+                          const statusLabels: Record<string, string> = {
+                            'mastered': '已掌握',
+                            'partial': '部分掌握',
+                            'missing': '待学习',
+                          };
+                          return (
+                            <div key={key} style={{ marginBottom: 8, fontSize: 13 }}>
+                              <div style={{ color: 'rgba(147,197,253,0.6)', marginBottom: 2 }}>状态</div>
+                              <div style={{ 
+                                color: statusColors[String(value)] || '#e8f0fe',
+                                fontWeight: 600,
+                              }}>
+                                {statusLabels[String(value)] || String(value)}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={key} style={{ marginBottom: 8, fontSize: 13 }}>
+                            <div style={{ color: 'rgba(147,197,253,0.6)', marginBottom: 2 }}>{key}</div>
+                            <div style={{ color: '#e8f0fe' }}>{String(value)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 技能掌握度 */}
+                {selectedNode.type === 'skill' && selectedNode.weight !== undefined && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 8 }}>
+                      掌握程度
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, height: 8, background: 'rgba(99,179,237,0.15)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${selectedNode.weight * 100}%`,
+                          height: '100%',
+                          background: selectedNode.weight >= 0.8 ? 'linear-gradient(90deg, #4CAF50, #8BC34A)' :
+                                     selectedNode.weight >= 0.4 ? 'linear-gradient(90deg, #FFC107, #FFD54F)' :
+                                     'linear-gradient(90deg, #F44336, #EF5350)',
+                          transition: 'width 0.3s ease',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 13, color: '#e8f0fe', minWidth: 40 }}>
+                        {(selectedNode.weight * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 岗位要求 */}
+                {selectedNode.type === 'job' && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 10 }}>
+                      技能要求
+                    </div>
+                    <div style={{ fontSize: 13, color: 'rgba(147,197,253,0.7)' }}>
+                      <div style={{ background: 'rgba(99,179,237,0.08)', borderRadius: 10, padding: 12 }}>
+                        根据市场数据分析，该岗位通常需要：
+                        <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                          <li>编程语言：Python/Java</li>
+                          <li>数据库：MySQL/Redis</li>
+                          <li>框架：Spring/Django</li>
+                          <li>工具：Git/Docker</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 相关标签 */}
+                {selectedNode.insight_tags && selectedNode.insight_tags.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(147,197,253,0.9)', marginBottom: 8 }}>
+                      标签
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {selectedNode.insight_tags.map((tag, i) => (
+                        <span key={i} style={{
+                          padding: '4px 10px', borderRadius: 6, fontSize: 12,
+                          background: 'rgba(99,179,237,0.15)', color: 'rgba(147,197,253,0.9)',
+                        }}>
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Selected node panel */}
-      {selectedNode && (
-        <div style={styles.nodePanel}>
-          <div style={styles.nodePanelHandle}/>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ ...styles.nodeAvatar, background: getNodeColor(selectedNode.type), boxShadow: `0 6px 20px ${getNodeColor(selectedNode.type)}55` }}>
-              {selectedNode.name.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#e8f0fe', marginBottom: 6 }}>{selectedNode.name}</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <span style={{ ...styles.tag, color: '#63b3ed', background: 'rgba(99,179,237,0.15)' }}>{selectedNode.type}</span>
-                {selectedNode.category && <span style={{ ...styles.tag, color: '#8899aa', background: 'rgba(255,255,255,0.07)' }}>{selectedNode.category}</span>}
-              </div>
-            </div>
-            <button style={{ ...styles.iconBtn, color: '#8899aa' }} onClick={() => setSelectedNode(null)}>✕</button>
-          </div>
-          <div style={styles.divider}/>
-          <div style={{ color: '#8899aa', fontSize: 13, textAlign: 'center', padding: '8px 0' }}>
-            连接数：{linksRef.current.filter(l => l.source === selectedNode.id || l.target === selectedNode.id).length}
-          </div>
-          <button style={styles.primaryBtn}>查看详细档案</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Styles ─────────────────────────────────────────────────────────────────
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: 'flex', flexDirection: 'column', height: '100vh',
-    background: '#060d14', color: '#e8f0fe', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-    overflow: 'hidden',
-  },
-  navbar: {
-    display: 'flex', alignItems: 'center', padding: '0 16px',
-    height: 56, flexShrink: 0,
-    background: 'rgba(13,27,42,0.85)', backdropFilter: 'blur(20px)',
-    borderBottom: '1px solid rgba(99,179,237,0.12)',
-    zIndex: 100,
-  },
-  navTitle: { fontSize: 18, fontWeight: 700, color: '#e8f0fe' },
-  navSub:   { fontSize: 12, color: '#8899aa', marginTop: 1 },
-  badge: {
-    fontSize: 12, fontWeight: 700, color: '#fff',
-    background: '#0A59F7', borderRadius: 10,
-    padding: '2px 8px',
-  },
-  iconBtn: {
-    background: 'transparent', border: 'none', cursor: 'pointer',
-    color: '#dce8ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: 36, height: 36, borderRadius: '50%', padding: 0,
-    transition: 'background 0.2s',
-  },
-  canvasWrap: {
-    flex: 1, position: 'relative', overflow: 'hidden',
-  },
-  overlay: {
-    position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', gap: 12, zIndex: 10,
-    background: 'rgba(6,13,20,0.7)', backdropFilter: 'blur(4px)',
-  },
-  iconCircle: {
-    width: 72, height: 72, borderRadius: '50%',
-    background: 'rgba(10,89,247,0.12)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-  overlayTitle: { fontSize: 20, fontWeight: 700, color: '#e8f0fe', margin: 0 },
-  overlaySub:   { fontSize: 14, color: '#8899aa', margin: 0, textAlign: 'center', maxWidth: 280 },
-  spinner: {
-    width: 40, height: 40, borderRadius: '50%',
-    border: '3px solid rgba(99,179,237,0.2)',
-    borderTopColor: '#63b3ed',
-    animation: 'spin 0.8s linear infinite',
-  },
-  primaryBtn: {
-    background: 'linear-gradient(135deg, #0A59F7, #3b82f6)',
-    color: '#fff', border: 'none', borderRadius: 24,
-    padding: '12px 32px', fontSize: 15, fontWeight: 600,
-    cursor: 'pointer', marginTop: 4,
-    boxShadow: '0 6px 20px rgba(10,89,247,0.4)',
-  },
-  zoomPanel: {
-    position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-    background: 'rgba(13,27,42,0.8)', backdropFilter: 'blur(16px)',
-    borderRadius: 16, padding: '10px 8px',
-    border: '1px solid rgba(99,179,237,0.15)',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-  },
-  zoomBtn: {
-    background: 'transparent', border: 'none', cursor: 'pointer',
-    color: '#63b3ed', fontSize: 20, width: 36, height: 36,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: 8, transition: 'background 0.2s',
-  },
-  zoomLabel: { fontSize: 11, color: '#8899aa', userSelect: 'none' },
-  legend: {
-    position: 'absolute', left: 12, bottom: 12,
-    display: 'flex', flexDirection: 'column', gap: 5,
-    background: 'rgba(13,27,42,0.75)', backdropFilter: 'blur(12px)',
-    borderRadius: 12, padding: '10px 12px',
-    border: '1px solid rgba(99,179,237,0.1)',
-  },
-  legendItem: { display: 'flex', alignItems: 'center', gap: 7 },
-  legendDot:  { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },
-  legendLabel:{ fontSize: 11, color: '#8899aa' },
-  sessionOverlay: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-    backdropFilter: 'blur(4px)', zIndex: 200,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-  sessionPanel: {
-    width: '85%', maxWidth: 420,
-    background: 'rgba(13,27,42,0.95)', backdropFilter: 'blur(30px)',
-    borderRadius: 20, border: '1px solid rgba(99,179,237,0.2)',
-    boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-    overflow: 'hidden',
-  },
-  sessionHeader: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '16px 16px 12px',
-    borderBottom: '1px solid rgba(99,179,237,0.1)',
-  },
-  sessionItem: {
-    borderRadius: 12, padding: 12, marginBottom: 8,
-    cursor: 'pointer', transition: 'background 0.2s',
-    border: '1px solid rgba(99,179,237,0.08)',
-  },
-  chipBtn: {
-    background: 'rgba(10,89,247,0.15)', border: 'none', borderRadius: 16,
-    color: '#63b3ed', fontSize: 13, padding: '4px 14px', cursor: 'pointer',
-  },
-  nodePanel: {
-    position: 'fixed', bottom: 0, left: 0, right: 0,
-    background: 'rgba(13,27,42,0.95)', backdropFilter: 'blur(30px)',
-    borderRadius: '24px 24px 0 0',
-    border: '1px solid rgba(99,179,237,0.15)',
-    boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
-    padding: '12px 20px 28px',
-    zIndex: 150,
-    animation: 'slideUp 0.25s ease',
-  },
-  nodePanelHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    background: 'rgba(255,255,255,0.15)',
-    margin: '0 auto 16px',
-  },
-  nodeAvatar: {
-    width: 52, height: 52, borderRadius: '50%',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 22, fontWeight: 700, color: '#fff', flexShrink: 0,
-  },
-  tag: {
-    fontSize: 12, borderRadius: 6, padding: '3px 10px',
-  },
-  divider: {
-    height: 1, background: 'rgba(99,179,237,0.1)', margin: '14px 0',
-  },
+        )}
+      </div>
+    </AppShell>
+  );
 }

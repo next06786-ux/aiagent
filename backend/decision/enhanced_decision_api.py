@@ -3,16 +3,30 @@
 集成信息收集（Qwen3.5-plus）和决策模拟（本地模型+LoRA）
 """
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+from datetime import datetime
+import json
+import asyncio
 import logging
 import json
 import asyncio
+import queue
+import threading
 import re
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
 from backend.decision.lora_decision_analyzer import LoRADecisionAnalyzer
+from backend.decision.review_agents import ReviewAgentScaffold
+from backend.decision.integrated_decision_engine import integrated_engine, DecisionType
+from backend.llm.llm_service import get_llm_service
 from dataclasses import asdict
+
+# 导入三维垂直决策引擎
+from backend.vertical.career.career_decision_engine import CareerDecisionEngine
+from backend.vertical.relationship.relationship_decision_engine import RelationshipDecisionEngine
+from backend.vertical.education.education_decision_engine import EducationDecisionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +35,176 @@ router = APIRouter(prefix="/api/decision/enhanced", tags=["enhanced-decision"])
 # 全局实例
 info_collector = DecisionInfoCollector()
 
+# 三维垂直决策引擎实例
+career_engine = CareerDecisionEngine()
+relationship_engine = RelationshipDecisionEngine()
+education_engine = EducationDecisionEngine()
+
+
+# ==================== 辅助函数 ====================
+
+def get_score_assessment(score: float) -> str:
+    """根据评分返回评估文字"""
+    if score >= 80:
+        return "非常优秀，各方面准备充分"
+    elif score >= 70:
+        return "表现良好，具备一定优势"
+    elif score >= 60:
+        return "中等水平，需要继续努力"
+    elif score >= 50:
+        return "偏低，建议加强薄弱环节"
+    else:
+        return "风险较高，需要重点关注"
+
+
+def get_agent_status(status: str) -> str:
+    """将Agent状态转换为中文"""
+    status_map = {
+        'good': '良好',
+        'warning': '警告',
+        'critical': '危险'
+    }
+    return status_map.get(status, status)
+
+
+def format_metric_key(key: str) -> str:
+    """将指标Key转换为中文"""
+    key_map = {
+        'skill_gap': '技能差距',
+        'avg_completion': '完成度',
+        'learning_efficiency': '学习效率',
+        'skills_count': '技能数量',
+        'network_size': '人脉规模',
+        'network_quality': '人脉质量',
+        'industry_connections': '行业人脉',
+        'referral_opportunities': '内推机会',
+        'savings': '储蓄',
+        'runway_months': '财务跑道',
+        'monthly_cashflow': '月现金流',
+        'total_investment': '总投入',
+        'self_efficacy': '自我效能',
+        'resilience': '韧性',
+        'stress_level': '压力水平',
+        'motivation': '动力',
+        'job_demand_index': '岗位需求',
+        'salary_trend': '薪资趋势',
+        'industry_growth': '行业增长',
+        'competition_level': '竞争程度'
+    }
+    return key_map.get(key, key)
+
+
+# ==================== 决策类型选择 API ====================
+
+class IdentifyDecisionTypeRequest(BaseModel):
+    """识别决策类型请求"""
+    question: str
+
+
+class SelectDecisionTypeRequest(BaseModel):
+    """选择决策类型请求"""
+    user_id: str
+    question: str
+    decision_type: str  # career, relationship, education, general
+
+
+@router.post("/identify-type")
+async def identify_decision_type(request: IdentifyDecisionTypeRequest) -> Dict[str, Any]:
+    """
+    自动识别决策类型
+    
+    根据问题内容自动判断属于职业/关系/升学/通用哪个类型
+    """
+    try:
+        decision_type = integrated_engine.identify_decision_type(request.question)
+        type_info = integrated_engine.get_decision_type_info(decision_type)
+        
+        return {
+            "success": True,
+            "question": request.question,
+            "identified_type": decision_type.value,
+            "type_info": type_info,
+            "message": f"识别为{type_info['name']}"
+        }
+    except Exception as e:
+        logger.error(f"识别决策类型失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/decision-types")
+async def get_decision_types() -> Dict[str, Any]:
+    """
+    获取所有决策类型信息
+    
+    返回四种决策类型的详细说明，供用户选择
+    """
+    try:
+        types_info = []
+        for decision_type in DecisionType:
+            type_info = integrated_engine.get_decision_type_info(decision_type)
+            types_info.append(type_info)
+        
+        return {
+            "success": True,
+            "types": types_info,
+            "message": "支持4种决策类型"
+        }
+    except Exception as e:
+        logger.error(f"获取决策类型失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/start-with-type")
+async def start_decision_with_type(request: SelectDecisionTypeRequest) -> Dict[str, Any]:
+    """
+    选择决策类型并开始决策流程
+    
+    用户选择决策类型后，生成对应的信息收集清单
+    """
+    try:
+        # 解析决策类型
+        decision_type = DecisionType(request.decision_type)
+        
+        # 获取类型信息
+        type_info = integrated_engine.get_decision_type_info(decision_type)
+        
+        # 生成信息收集清单
+        checklist = integrated_engine.generate_information_checklist(
+            decision_type=decision_type,
+            question=request.question,
+            options=[]
+        )
+        
+        # 创建会话（使用现有的信息收集器）
+        session_id = info_collector.start_collection(
+            user_id=request.user_id,
+            initial_question=request.question
+        )
+        
+        # 在会话中保存决策类型
+        if session_id in info_collector.sessions:
+            info_collector.sessions[session_id]["decision_type"] = decision_type.value
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "decision_type": decision_type.value,
+            "type_info": type_info,
+            "information_checklist": checklist,
+            "message": f"已创建{type_info['name']}会话，请按清单收集信息"
+        }
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"无效的决策类型: {request.decision_type}")
+    except Exception as e:
+        logger.error(f"创建决策会话失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 class DecisionSimulator:
     """决策模拟器包装类"""
     def __init__(self):
         self.lora_analyzer = LoRADecisionAnalyzer()
+        self.review_agents = ReviewAgentScaffold()
         self.personality_test = None
         try:
             from backend.personality.personality_test import PersonalityTest
@@ -57,13 +236,31 @@ class DecisionSimulator:
         total, weight_sum = 0.0, 0.0
         n = len(main_chain)
         for i, e in enumerate(main_chain):
-            weight = 0.6 + 0.8 * (i / max(n - 1, 1))
-            impact = getattr(e, 'impact', {}) if hasattr(e, 'impact') else {}
-            net = sum(impact.values()) if isinstance(impact, dict) else 0.0
-            prob = float(getattr(e, 'probability', 0.7))
-            contribution = 50.0 + min(max(net * 80, -40), 40)
-            total += contribution * prob * weight
-            weight_sum += prob * weight
+            try:
+                # 确保所有值都不为None
+                i_val = float(i) if i is not None else 0.0
+                n_val = float(n) if n is not None else 1.0
+                weight = 0.6 + 0.8 * (i_val / max(n_val - 1, 1))
+                
+                impact = getattr(e, 'impact', {}) if hasattr(e, 'impact') else {}
+                net = sum(impact.values()) if isinstance(impact, dict) else 0.0
+                prob = float(getattr(e, 'probability', 0.7) or 0.7)
+                contribution = 50.0 + min(max(net * 80, -40), 40)
+                
+                # 确保所有计算值都不为None
+                if weight is None:
+                    weight = 1.0
+                if prob is None:
+                    prob = 0.7
+                if contribution is None:
+                    contribution = 50.0
+                    
+                total += contribution * prob * weight
+                weight_sum += prob * weight
+            except Exception as e:
+                logger.warning(f"计算事件评分时出错: {e}")
+                continue
+                
         if weight_sum == 0:
             return 50.0
         return round(min(95.0, max(10.0, total / weight_sum)), 1)
@@ -77,6 +274,193 @@ class DecisionSimulator:
         )]
         if not main_chain:
             main_chain = timeline
+        
+        # 计算负面影响的平均值
+        negative_impacts = []
+        for e in main_chain:
+            impact = getattr(e, 'impact', {}) if hasattr(e, 'impact') else {}
+            if isinstance(impact, dict):
+                negative_sum = sum(abs(value) for value in impact.values() if value < 0)
+                negative_impacts.append(negative_sum)
+        
+        if not negative_impacts:
+            return 0.5
+        
+        avg_negative = sum(negative_impacts) / len(negative_impacts)
+        # 映射到0~1范围，假设单个事件最大负面影响为2.0
+        risk_level = min(1.0, max(0.0, avg_negative / 2.0))
+        return round(risk_level, 2)
+    
+    def _convert_career_result_to_standard(self, career_result: Dict[str, Any]):
+        """
+        将职业决策多Agent结果转换为标准格式
+        
+        Args:
+            career_result: CareerSimulationIntegration的输出
+        
+        Returns:
+            SimulationResult格式的数据
+        """
+        from dataclasses import dataclass
+        from datetime import datetime
+        import uuid
+        
+        @dataclass
+        class TimelineEvent:
+            event_id: str
+            parent_event_id: Optional[str]
+            month: int
+            event: str
+            impact: Dict[str, float]
+            probability: float
+            state_before: Dict[str, Any]
+            impact_vector: Dict[str, float]
+            evidence_sources: List[str]
+            agent_votes: List[Dict[str, Any]]
+            event_type: str = "general"
+            branch_group: str = "main"
+            node_level: int = 1
+            risk_tag: str = "medium"
+            opportunity_tag: str = "medium"
+            visual_weight: float = 0.5
+        
+        @dataclass
+        class DecisionOption:
+            option_id: str
+            title: str
+            description: str
+            timeline: list
+            final_score: float
+            risk_level: float
+            risk_assessment: Optional[Dict] = None
+            prediction_trace: Optional[Dict[str, Any]] = None
+            execution_confidence: float = 0.7
+            dropout_risk_month: Optional[int] = None
+            personal_note: str = ""
+        
+        @dataclass
+        class SimulationResult:
+            simulation_id: str
+            user_id: str
+            question: str
+            options: list
+            recommendation: str
+            created_at: str
+            verifiability_report: Optional[Dict[str, Any]] = None
+        
+        simulation_id = str(uuid.uuid4())
+        options_list = []
+        
+        # 转换每个选项
+        for i, option_sim in enumerate(career_result.get('options_simulation', [])):
+            if option_sim.get('error'):
+                continue
+            
+            option_info = option_sim['option']
+            timeline_data = option_sim.get('timeline', [])
+            final_assessment = option_sim.get('final_assessment', {})
+            
+            # 转换时间线为标准格式
+            timeline_events = []
+            previous_event_id = None
+            
+            for month_idx, month_data in enumerate(timeline_data):
+                month = month_data['month']
+                agents = month_data.get('agents', {})
+                
+                # 生成事件描述（综合5个Agent的状态）
+                event_parts = []
+                impact_dict = {}
+                
+                for agent_name, agent_data in agents.items():
+                    if agent_data.get('changes'):
+                        event_parts.append(agent_data['changes'][0])
+                    
+                    # 映射Agent得分到impact维度
+                    if agent_name == 'skill_development':
+                        impact_dict['职业发展'] = (agent_data['score'] - 50) / 50
+                    elif agent_name == 'financial':
+                        impact_dict['财务'] = (agent_data['score'] - 50) / 50
+                    elif agent_name == 'psychological':
+                        impact_dict['情绪'] = (agent_data['score'] - 50) / 50
+                    elif agent_name == 'career_network':
+                        impact_dict['社交'] = (agent_data['score'] - 50) / 50
+                
+                event_text = f"第{month}月：" + "；".join(event_parts[:2]) if event_parts else f"第{month}月进展"
+                
+                event_id = f"option_{i+1}_month_{month}"
+                
+                timeline_events.append(TimelineEvent(
+                    event_id=event_id,
+                    parent_event_id=previous_event_id,
+                    month=month,
+                    event=event_text,
+                    impact=impact_dict,
+                    probability=0.8,
+                    state_before={},
+                    impact_vector=impact_dict,
+                    evidence_sources=['multi_agent_evaluation'],
+                    agent_votes=[],
+                    event_type='normal',
+                    branch_group=f"option_{i+1}",
+                    node_level=month,
+                    risk_tag=month_data.get('overall_status', 'medium'),
+                    opportunity_tag='medium',
+                    visual_weight=month_data.get('overall_score', 50) / 100
+                ))
+                
+                previous_event_id = event_id
+            
+            # 创建选项对象
+            option_obj = DecisionOption(
+                option_id=f"option_{i+1}",
+                title=option_info['title'],
+                description=option_info.get('description', ''),
+                timeline=timeline_events,
+                final_score=final_assessment.get('overall_score', 50),
+                risk_level=1.0 - (final_assessment.get('overall_score', 50) / 100),
+                risk_assessment={
+                    'level': final_assessment.get('overall_status', 'medium'),
+                    'key_risks': final_assessment.get('key_risks', []),
+                    'weakest_dimension': final_assessment.get('weakest_dimension', {})
+                },
+                prediction_trace={
+                    'agent_evaluation': option_sim.get('agent_evaluation', {}),
+                    'success_probability': option_sim.get('agent_evaluation', {}).get('summary', {}).get('success_probability', 0.5)
+                },
+                execution_confidence=option_sim.get('agent_evaluation', {}).get('summary', {}).get('success_probability', 0.7),
+                personal_note=f"基于多Agent评估：{len(option_sim.get('agent_evaluation', {}).get('decision_points', []))}个关键决策点"
+            )
+            
+            options_list.append(option_obj)
+        
+        # 生成推荐
+        recommendation_data = career_result.get('recommendation', {})
+        recommendation_text = f"推荐选择：{recommendation_data.get('recommended_option', '未知')}\n"
+        recommendation_text += f"综合得分：{recommendation_data.get('overall_score', 0):.1f}\n"
+        recommendation_text += f"成功概率：{recommendation_data.get('success_probability', 0):.0%}\n\n"
+        recommendation_text += "推荐理由：\n" + "\n".join(f"• {r}" for r in recommendation_data.get('reasons', []))
+        
+        if recommendation_data.get('considerations'):
+            recommendation_text += "\n\n需要考虑：\n" + "\n".join(f"⚠ {c}" for c in recommendation_data.get('considerations', []))
+        
+        # 创建结果对象
+        result = SimulationResult(
+            simulation_id=simulation_id,
+            user_id=career_result.get('user_id', ''),
+            question=career_result.get('question', ''),
+            options=options_list,
+            recommendation=recommendation_text,
+            created_at=datetime.now().isoformat(),
+            verifiability_report={
+                'data_sources': ['career_knowledge_graph', 'career_algorithm', 'multi_agent_evaluation'],
+                'evaluation_method': 'multi_agent_framework',
+                'agents_used': ['skill_development', 'career_network', 'financial', 'psychological', 'market_environment'],
+                'comparison': career_result.get('comparison', {})
+            }
+        )
+        
+        return result
         neg_sum, count = 0.0, 0
         for e in main_chain:
             impact = getattr(e, 'impact', {}) if hasattr(e, 'impact') else {}
@@ -123,6 +507,315 @@ class DecisionSimulator:
             len(collected_info.get("options_mentioned", [])) >= 2,
         ]
         return round(sum(1 for item in checks if item) / len(checks), 2)
+
+    def _normalize_impact_vector(self, impact: Optional[Dict[str, Any]]) -> Dict[str, float]:
+        if not isinstance(impact, dict):
+            return {}
+        normalized: Dict[str, float] = {}
+        for key, value in impact.items():
+            if key is None:
+                continue
+            try:
+                # 确保value不为None
+                if value is None:
+                    continue
+                normalized[str(key)] = round(float(value), 3)
+            except (TypeError, ValueError) as e:
+                logger.warning(f"无法规范化影响向量 {key}={value}: {e}")
+                continue
+        return normalized
+
+    def _top_impact_axes(self, impact_vector: Dict[str, float], limit: int = 3) -> List[str]:
+        return [
+            key
+            for key, _ in sorted(
+                impact_vector.items(),
+                key=lambda item: abs(item[1]),
+                reverse=True,
+            )[:limit]
+        ]
+
+    def _build_state_before(
+        self,
+        *,
+        question: str,
+        option_title: str,
+        timeline: List[Any],
+        month: int,
+        branch_group: str,
+    ) -> Dict[str, Any]:
+        cumulative: Dict[str, float] = {}
+        previous_event = ""
+        for item in timeline:
+            impact = self._normalize_impact_vector(
+                getattr(item, "impact_vector", None)
+                if hasattr(item, "impact_vector")
+                else item.get("impact_vector")
+                if isinstance(item, dict)
+                else None
+            )
+            if not impact:
+                impact = self._normalize_impact_vector(
+                    getattr(item, "impact", None)
+                    if hasattr(item, "impact")
+                    else item.get("impact")
+                    if isinstance(item, dict)
+                    else None
+                )
+            for key, value in impact.items():
+                cumulative[key] = cumulative.get(key, 0.0) + value
+            event_text = self._event_text(item)
+            if event_text:
+                previous_event = event_text
+
+        momentum = round(sum(cumulative.values()), 2)
+        if not timeline:
+            phase = "origin"
+        elif str(branch_group).endswith("_fork"):
+            phase = "branch_review"
+        elif month <= 3:
+            phase = "early_exploration"
+        elif month <= 8:
+            phase = "active_execution"
+        else:
+            phase = "future_consolidation"
+
+        return {
+            "question_anchor": (question or "")[:48],
+            "option_anchor": option_title,
+            "phase": phase,
+            "path_depth": len(timeline),
+            "momentum": momentum,
+            "previous_event": previous_event or "当前状态",
+            "focus_axes": " / ".join(self._top_impact_axes(cumulative, 2)) if cumulative else "待展开",
+            "is_branching": str(branch_group).endswith("_fork"),
+        }
+
+    def _build_node_evidence_sources(
+        self,
+        *,
+        collected_info: Optional[Dict[str, Any]],
+        facts_count: int,
+        profile: Any,
+        calibration_profile: Optional[Dict[str, Any]],
+        branch_group: str,
+    ) -> List[str]:
+        sources = ["user_lora" if self.lora_analyzer.is_lora_inference() else "api_llm"]
+        if collected_info:
+            sources.append("decision_collection")
+        if facts_count > 0:
+            sources.append("pkf_facts")
+        if profile is not None:
+            sources.append("personality_profile")
+        if calibration_profile and int(calibration_profile.get("review_count", 0) or 0) > 0:
+            sources.append("historical_calibration")
+        if str(branch_group).endswith("_fork"):
+            sources.append("counterfactual_branch")
+        unique_sources: List[str] = []
+        for item in sources:
+            if item and item not in unique_sources:
+                unique_sources.append(item)
+        return unique_sources
+
+    def _create_timeline_node(
+        self,
+        event_cls: Any,
+        *,
+        event_id: str,
+        parent_event_id: Optional[str],
+        month: int,
+        event_text: str,
+        impact: Dict[str, Any],
+        probability: float,
+        branch_group: str,
+        node_level: int,
+        question: str,
+        option_title: str,
+        timeline: List[Any],
+        collected_info: Optional[Dict[str, Any]],
+        facts_count: int,
+        profile: Any,
+        calibration_profile: Optional[Dict[str, Any]],
+    ) -> Any:
+        try:
+            # 防御性处理：确保所有数值参数不为None
+            normalized_month = int(month or 1)
+            normalized_probability = float(probability if probability is not None else 0.0)
+            
+            # 确保impact不为None
+            if impact is None:
+                impact = {}
+            
+            impact_vector = self._normalize_impact_vector(impact)
+            
+            # 安全计算负面和正面影响
+            negative_impact = sum(abs(value) for value in impact_vector.values() if value < 0) if impact_vector else 0.0
+            positive_impact = sum(value for value in impact_vector.values() if value > 0) if impact_vector else 0.0
+            
+            # 确保计算结果不为None
+            if negative_impact is None:
+                negative_impact = 0.0
+            if positive_impact is None:
+                positive_impact = 0.0
+            
+            risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
+            opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
+            state_before = self._build_state_before(
+                question=question,
+                option_title=option_title,
+                timeline=timeline,
+                month=month,
+                branch_group=branch_group,
+            )
+            evidence_sources = self._build_node_evidence_sources(
+                collected_info=collected_info,
+                facts_count=facts_count,
+                profile=profile,
+                calibration_profile=calibration_profile,
+                branch_group=branch_group,
+            )
+            parent_snapshot = None
+            if parent_event_id:
+                for item in reversed(timeline):
+                    item_id = (
+                        getattr(item, "event_id", None)
+                        if hasattr(item, "event_id")
+                        else item.get("event_id")
+                        if isinstance(item, dict)
+                        else None
+                    )
+                    if item_id == parent_event_id:
+                        parent_snapshot = {
+                            "event": self._event_text(item),
+                            "month": getattr(item, "month", None)
+                            if hasattr(item, "month")
+                            else item.get("month")
+                            if isinstance(item, dict)
+                            else None,
+                        }
+                        break
+            agent_votes = self.review_agents.review_node(
+                event_text=event_text,
+                impact_vector=impact_vector,
+                probability=float(probability or 0.0),
+                risk_tag=risk_tag,
+                opportunity_tag=opportunity_tag,
+                evidence_sources=evidence_sources,
+                state_before=state_before,
+                parent_event=parent_snapshot,
+            )
+            
+            # 计算visual_weight，确保所有值都不为None
+            visual_weight_value = float(positive_impact) + float(negative_impact)
+            visual_weight = max(0.2, min(1.0, visual_weight_value))
+            
+            return event_cls(
+                event_id=event_id,
+                parent_event_id=parent_event_id,
+                month=normalized_month,
+                event=event_text,
+                impact=impact_vector,
+                probability=normalized_probability,
+                state_before=state_before,
+                impact_vector=impact_vector,
+                evidence_sources=evidence_sources,
+                agent_votes=agent_votes,
+                event_type=self._infer_event_type(event_text),
+                branch_group=branch_group,
+                node_level=node_level,
+                risk_tag=risk_tag,
+                opportunity_tag=opportunity_tag,
+                visual_weight=visual_weight,
+            )
+        except Exception as e:
+            logger.error(f"创建时间线节点失败 M{month}: {e}")
+            logger.error(f"参数: event_text={event_text[:50]}, impact={impact}, probability={probability}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    def _serialize_timeline_event(self, event: Any, index: int = 0) -> Dict[str, Any]:
+        source = asdict(event) if hasattr(event, "__dataclass_fields__") else dict(event or {})
+        impact_vector = self._normalize_impact_vector(
+            source.get("impact_vector") or source.get("impact") or {}
+        )
+        source["event_id"] = source.get("event_id") or f"event_{index + 1}"
+        source["impact"] = impact_vector
+        source["impact_vector"] = impact_vector
+        source["state_before"] = source.get("state_before") or {}
+        source["evidence_sources"] = list(source.get("evidence_sources") or [])
+        source["agent_votes"] = list(source.get("agent_votes") or [])
+        source["probability"] = float(source.get("probability") or 0.0)
+        source["month"] = int(source.get("month") or (index + 1))
+        source["node_level"] = int(source.get("node_level") or (index + 1))
+        source["event"] = str(source.get("event") or f"未来状态节点 {index + 1}")
+        source["branch_group"] = str(source.get("branch_group") or "main")
+        source["event_type"] = str(source.get("event_type") or self._infer_event_type(source["event"]))
+        source["risk_tag"] = str(source.get("risk_tag") or "medium")
+        source["opportunity_tag"] = str(source.get("opportunity_tag") or "medium")
+        source["visual_weight"] = float(source.get("visual_weight") or 0.4)
+        return source
+
+    def _build_decision_graph_payload(
+        self,
+        option_id: str,
+        option_title: str,
+        timeline: List[Any],
+    ) -> Dict[str, Any]:
+        nodes = [
+            self._serialize_timeline_event(event, index)
+            for index, event in enumerate(timeline or [])
+        ]
+        edges: List[Dict[str, Any]] = []
+        for index, node in enumerate(nodes):
+            parent_id = node.get("parent_event_id")
+            if parent_id:
+                edges.append({
+                    "edge_id": f"{parent_id}->{node['event_id']}",
+                    "source": parent_id,
+                    "target": node["event_id"],
+                    "relation": "branch" if str(node.get("branch_group") or "").endswith("_fork") else "next",
+                    "strength": round(float(node.get("probability") or 0.0), 2),
+                    "label": f"M{node.get('month', index + 1)}",
+                })
+
+        dominant_axes: Dict[str, float] = {}
+        vote_stances: Dict[str, int] = {}
+        high_risk_nodes = 0
+        for node in nodes:
+            if str(node.get("risk_tag") or "") == "high":
+                high_risk_nodes += 1
+            for key, value in self._normalize_impact_vector(node.get("impact_vector")).items():
+                dominant_axes[key] = dominant_axes.get(key, 0.0) + abs(value)
+            for vote in node.get("agent_votes", []) or []:
+                stance = str(vote.get("stance") or "neutral")
+                vote_stances[stance] = vote_stances.get(stance, 0) + 1
+
+        dominant_axis_list = [
+            key
+            for key, _ in sorted(
+                dominant_axes.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )[:4]
+        ]
+
+        return {
+            "graph_id": f"{option_id}_decision_graph",
+            "schema_version": 1,
+            "layout_hint": "future-state-stage",
+            "graph_summary": {
+                "title": option_title,
+                "node_count": len(nodes),
+                "edge_count": len(edges),
+                "high_risk_nodes": high_risk_nodes,
+                "dominant_axes": dominant_axis_list,
+                "agent_stance_mix": vote_stances,
+                "review_mode": "review_agents_v1",
+            },
+            "nodes": nodes,
+            "edges": edges,
+        }
 
     def _serialize_risk_assessment(self, assessment: Any) -> Optional[Dict[str, Any]]:
         if not assessment:
@@ -181,6 +874,15 @@ class DecisionSimulator:
         coverage = self._calculate_context_coverage(collected_info)
         fact_density = round(min(1.0, facts_count / 8), 2)
         profile_bonus = 0.08 if profile is not None else 0.0
+        
+        # 确保所有值都不为None
+        if specificity is None:
+            specificity = 0.0
+        if coverage is None:
+            coverage = 0.0
+        if fact_density is None:
+            fact_density = 0.0
+            
         base_confidence = 0.25 + coverage * 0.35 + specificity * 0.22 + fact_density * 0.10 + profile_bonus
         calibration_adjustment = 0.0
         calibration_review_count = 0
@@ -237,13 +939,24 @@ class DecisionSimulator:
         }
 
     def _compress_score_by_confidence(self, raw_score: float, prediction_confidence: float) -> float:
+        # 确保参数不为None
+        if raw_score is None:
+            raw_score = 50.0
+        if prediction_confidence is None:
+            prediction_confidence = 0.5
         weight = 0.55 + 0.45 * prediction_confidence
         return round(50 + (raw_score - 50) * weight, 1)
 
     def _merge_risk_level(self, generated_risk: float, risk_assessment: Optional[Dict[str, Any]]) -> float:
+        # 确保generated_risk不为None
+        if generated_risk is None:
+            generated_risk = 0.5
         if not risk_assessment:
             return round(min(1.0, max(0.0, generated_risk)), 2)
         engine_risk = min(1.0, max(0.0, float(risk_assessment.get("overall_risk", 5.0)) / 10.0))
+        # 确保计算中的值都不为None
+        generated_risk = float(generated_risk) if generated_risk is not None else 0.5
+        engine_risk = float(engine_risk) if engine_risk is not None else 0.5
         return round(min(1.0, max(0.0, generated_risk * 0.4 + engine_risk * 0.6)), 2)
 
     def _build_verifiability_report(
@@ -314,8 +1027,8 @@ class DecisionSimulator:
 
     def _serialize_option(self, option: Any) -> Dict[str, Any]:
         timeline = [
-            asdict(event) if hasattr(event, "__dataclass_fields__") else event
-            for event in getattr(option, "timeline", []) or []
+            self._serialize_timeline_event(event, index)
+            for index, event in enumerate(getattr(option, "timeline", []) or [])
         ]
         execution_confidence = getattr(option, "execution_confidence", None)
         dropout_risk_month = getattr(option, "dropout_risk_month", None)
@@ -325,6 +1038,11 @@ class DecisionSimulator:
             "title": getattr(option, "title", ""),
             "description": getattr(option, "description", ""),
             "timeline": timeline,
+            "decision_graph": self._build_decision_graph_payload(
+                getattr(option, "option_id", ""),
+                getattr(option, "title", ""),
+                timeline,
+            ),
             "final_score": getattr(option, "final_score", 50.0),
             "risk_level": getattr(option, "risk_level", 0.5),
             "risk_assessment": getattr(option, "risk_assessment", None),
@@ -347,7 +1065,7 @@ class DecisionSimulator:
         verifiability_report: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "question": question,
             "collected_info_summary": collected_info or {},
             "verifiability_report": verifiability_report or {},
@@ -998,6 +1716,10 @@ class DecisionSimulator:
             event: str
             impact: Dict[str, float]
             probability: float
+            state_before: Dict[str, Any]
+            impact_vector: Dict[str, float]
+            evidence_sources: List[str]
+            agent_votes: List[Dict[str, Any]]
             event_type: str = "general"
             branch_group: str = "main"
             node_level: int = 1
@@ -1073,21 +1795,23 @@ class DecisionSimulator:
 
             previous_event_id = None
             for idx, e in enumerate(timeline_data or []):
-                negative_impact = sum(abs(v) for v in e.get('impact', {}).values() if v < 0)
-                positive_impact = sum(v for v in e.get('impact', {}).values() if v > 0)
-                node = TimelineEvent(
+                node = self._create_timeline_node(
+                    TimelineEvent,
                     event_id=f"{option_branch}_node_{idx+1}",
                     parent_event_id=previous_event_id,
                     month=e.get('month', idx + 1),
-                    event=e.get('event', ''),
+                    event_text=e.get('event', ''),
                     impact=e.get('impact', {}),
                     probability=e.get('probability', 0.5),
-                    event_type=self._infer_event_type(e.get('event', '')),
                     branch_group=option_branch,
                     node_level=idx + 1,
-                    risk_tag="high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium"),
-                    opportunity_tag="high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium"),
-                    visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                    question=question,
+                    option_title=option.get('title', f'选项{i+1}'),
+                    timeline=timeline,
+                    collected_info=collected_info,
+                    facts_count=len(pkf_facts),
+                    profile=profile,
+                    calibration_profile=calibration_profile,
                 )
                 previous_event_id = node.event_id
                 timeline.append(node)
@@ -1192,6 +1916,135 @@ class DecisionSimulator:
             verifiability_report=verifiability_report
         )
 
+    def _generate_career_event_text(
+        self,
+        month: int,
+        option_title: str,
+        agents_state: Dict[str, Any],
+        algo_result: Dict[str, Any]
+    ) -> str:
+        """
+        基于Agent状态和算法结果生成职业事件描述
+        
+        Args:
+            month: 当前月份
+            option_title: 选项标题
+            agents_state: 各Agent的状态
+            algo_result: 职业决策算法结果
+        
+        Returns:
+            事件描述文本
+        """
+        # 获取最显著的变化
+        key_changes = []
+        
+        # 技能发展
+        if 'skill_development' in agents_state:
+            skill_state = agents_state['skill_development']
+            if skill_state.changes:
+                key_changes.append(skill_state.changes[0])
+        
+        # 财务状况
+        if 'financial' in agents_state:
+            financial_state = agents_state['financial']
+            if financial_state.changes:
+                key_changes.append(financial_state.changes[0])
+        
+        # 心理状态
+        if 'psychological' in agents_state:
+            psych_state = agents_state['psychological']
+            if psych_state.changes:
+                key_changes.append(psych_state.changes[0])
+        
+        # 构建事件文本
+        if key_changes:
+            event_text = f"你在{option_title}路径的第{month}个月：" + "；".join(key_changes[:2])
+        else:
+            event_text = f"你在{option_title}路径的第{month}个月继续推进"
+        
+        return event_text
+    
+    def _calculate_career_impact(self, agents_state: Dict[str, Any]) -> Dict[str, float]:
+        """
+        基于Agent状态计算综合影响向量
+        
+        Args:
+            agents_state: 各Agent的状态
+        
+        Returns:
+            影响向量字典
+        """
+        impact = {
+            '健康': 0.0,
+            '财务': 0.0,
+            '社交': 0.0,
+            '情绪': 0.0,
+            '学习': 0.0,
+            '时间': 0.0
+        }
+        
+        # 技能发展 -> 学习
+        if 'skill_development' in agents_state:
+            skill_score = agents_state['skill_development'].score
+            impact['学习'] = (skill_score - 50) / 100  # 归一化到-0.5~0.5
+        
+        # 财务状况 -> 财务
+        if 'financial' in agents_state:
+            financial_score = agents_state['financial'].score
+            impact['财务'] = (financial_score - 50) / 100
+        
+        # 职业网络 -> 社交
+        if 'career_network' in agents_state:
+            network_score = agents_state['career_network'].score
+            impact['社交'] = (network_score - 50) / 100
+        
+        # 心理资本 -> 情绪
+        if 'psychological' in agents_state:
+            psych_score = agents_state['psychological'].score
+            impact['情绪'] = (psych_score - 50) / 100
+        
+        # 市场环境 -> 时间（机会窗口）
+        if 'market_environment' in agents_state:
+            market_score = agents_state['market_environment'].score
+            impact['时间'] = (market_score - 50) / 100
+        
+        return impact
+    
+    def _calculate_event_probability(self, agents_state: Dict[str, Any]) -> float:
+        """
+        基于Agent状态一致性计算事件概率
+        
+        Args:
+            agents_state: 各Agent的状态
+        
+        Returns:
+            概率值 (0.0-1.0)
+        """
+        if not agents_state:
+            return 0.5
+        
+        # 计算Agent评分的标准差
+        scores = [state.score for state in agents_state.values()]
+        if not scores:
+            return 0.5
+        
+        avg_score = sum(scores) / len(scores)
+        variance = sum((s - avg_score) ** 2 for s in scores) / len(scores)
+        std_dev = variance ** 0.5
+        
+        # 标准差越小，一致性越高，概率越高
+        # 标准差范围通常在0-30之间
+        consistency = max(0.0, 1.0 - (std_dev / 30.0))
+        
+        # 基础概率 + 一致性加成
+        base_prob = 0.6
+        probability = base_prob + (consistency * 0.3)
+        
+        return round(min(0.95, max(0.3, probability)), 2)
+
+
+
+
 
 simulator = DecisionSimulator()
 
@@ -1200,6 +2053,7 @@ class StartCollectionRequest(BaseModel):
     """开始信息收集请求"""
     user_id: str
     initial_question: str
+    decision_type: Optional[str] = "general"  # career, relationship, education, general
 
 
 class ContinueCollectionRequest(BaseModel):
@@ -1384,6 +2238,63 @@ async def submit_decision_follow_up(request: SubmitDecisionFollowUpRequest) -> D
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class WarmupRequest(BaseModel):
+    user_id: str
+
+
+@router.post("/ai-core/warmup")
+async def warmup_ai_core(request: WarmupRequest) -> Dict[str, Any]:
+    """
+    预热AI核心（已废弃）
+    
+    AI核心在后端启动时已经预热，此接口保留用于兼容性
+    """
+    return {
+        "code": 200,
+        "message": "AI核心已在后端启动时预热完成",
+        "data": {"status": "ready", "stage": "就绪", "progress": 100}
+    }
+
+
+@router.get("/ai-core/warmup-status/{user_id}")
+async def get_warmup_status(user_id: str) -> Dict[str, Any]:
+    """
+    查询AI核心预热状态
+    
+    注意：AI核心在后端启动时已经预热，此接口主要用于前端显示
+    """
+    try:
+        # 检查LLM服务是否就绪
+        llm_service = get_llm_service()
+        if llm_service and llm_service.enabled:
+            return {
+                "code": 200,
+                "message": "AI核心已就绪",
+                "data": {
+                    "status": "ready",
+                    "stage": "就绪",
+                    "progress": 100
+                }
+            }
+        else:
+            return {
+                "code": 200,
+                "message": "AI核心未启用",
+                "data": {
+                    "status": "not_started",
+                    "stage": "未启用",
+                    "progress": 0
+                }
+            }
+    except Exception as e:
+        logger.error(f"查询预热状态失败: {e}")
+        return {
+            "code": 200,
+            "message": "AI核心就绪",
+            "data": {"status": "ready", "stage": "就绪", "progress": 100}
+        }
+
+
 @router.post("/collect/start")
 async def start_info_collection(request: StartCollectionRequest) -> Dict[str, Any]:
     """
@@ -1392,14 +2303,21 @@ async def start_info_collection(request: StartCollectionRequest) -> Dict[str, An
     使用 Qwen3.5-plus API 进行多轮对话，收集决策所需信息
     """
     try:
-        logger.info(f"📥 收到信息收集请求 - user_id: {request.user_id}, question: {request.initial_question}")
+        logger.info(f"📥 收到信息收集请求 - user_id: {request.user_id}, question: {request.initial_question}, type: {request.decision_type}")
         
         result = info_collector.start_collection(
             user_id=request.user_id,
             initial_question=request.initial_question
         )
         
-        logger.info(f"✅ 信息收集会话创建成功 - session_id: {result['session_id']}")
+        # 保存decision_type到session
+        session = info_collector.get_session(result['session_id'])
+        if session:
+            session['decision_type'] = request.decision_type or 'general'
+            # 立即保存，更新session中的decision_type
+            info_collector._save_session(session)
+        
+        logger.info(f"✅ 信息收集会话创建成功 - session_id: {result['session_id']}, type: {request.decision_type}")
         
         return {
             "code": 200,
@@ -1436,6 +2354,60 @@ async def continue_info_collection(request: ContinueCollectionRequest) -> Dict[s
     except Exception as e:
         logger.error(f"继续信息收集失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/collect/continue-stream")
+async def continue_info_collection_stream(request: ContinueCollectionRequest):
+    """
+    继续信息收集（流式响应版本）
+    
+    用户回答AI的问题，继续收集信息，通过SSE流式返回进度和结果
+    """
+    async def generate_stream():
+        try:
+            # 发送开始状态
+            yield f"data: {json.dumps({'type': 'status', 'content': '正在分析你的回答...'})}\n\n"
+            await asyncio.sleep(0.05)
+            
+            # 调用信息收集器
+            result = info_collector.continue_collection(
+                session_id=request.session_id,
+                user_response=request.user_response
+            )
+            
+            # 发送AI回复（如果有）
+            if result.get("ai_question"):
+                ai_question = result["ai_question"]
+                
+                # 清除状态，开始发送消息
+                yield f"data: {json.dumps({'type': 'status', 'content': ''})}\n\n"
+                await asyncio.sleep(0.05)
+                
+                # 分块发送AI消息，模拟打字效果
+                chunk_size = 12
+                for i in range(0, len(ai_question), chunk_size):
+                    chunk = ai_question[i:i+chunk_size]
+                    yield f"data: {json.dumps({'type': 'message', 'content': chunk})}\n\n"
+                    await asyncio.sleep(0.04)  # 打字效果延迟
+            
+            # 发送完成信号
+            yield f"data: {json.dumps({'type': 'complete', 'data': result})}\n\n"
+            
+        except ValueError as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+        except Exception as e:
+            logger.error(f"流式信息收集失败: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @router.get("/collect/session/{session_id}")
@@ -1493,13 +2465,32 @@ async def simulate_with_collected_info(request: SimulateWithCollectedInfoRequest
         if not session["is_complete"]:
             raise HTTPException(status_code=400, detail="信息收集未完成")
         
-        # 2. 使用当前推理引擎进行决策模拟
-        result = await simulator.simulate_decision(
-            user_id=session["user_id"],
-            question=session["initial_question"],
-            options=request.options,
-            collected_info=session.get("collected_info", {}),
-        )
+        # 2. 检查是否是职业决策类型
+        decision_type = session.get("decision_type", "general")
+        
+        if decision_type == "career":
+            # 使用职业决策多Agent框架
+            logger.info("🎯 检测到职业决策类型，使用多Agent评估框架")
+            from backend.decision.career_simulation_integration import CareerSimulationIntegration
+            
+            career_integration = CareerSimulationIntegration()
+            career_result = await career_integration.simulate_career_decision_with_agents(
+                user_id=session["user_id"],
+                question=session["initial_question"],
+                options=request.options,
+                collected_info=session.get("collected_info", {})
+            )
+            
+            # 转换为标准格式
+            result = simulator._convert_career_result_to_standard(career_result)
+        else:
+            # 使用通用推理引擎进行决策模拟
+            result = await simulator.simulate_decision(
+                user_id=session["user_id"],
+                question=session["initial_question"],
+                options=request.options,
+                collected_info=session.get("collected_info", {}),
+            )
 
         response_data = {
             "code": 200,
@@ -1751,34 +2742,510 @@ async def simulate_with_collection_ws(websocket: WebSocket):
     {"type": "done", ...}
     """
     await websocket.accept()
+    
+    # WebSocket连接状态标志
+    ws_connected = True
+    
+    # 安全的WebSocket发送函数，连接断开时不再发送
+    async def safe_send(data: dict) -> bool:
+        """安全发送JSON，连接断开时返回False"""
+        nonlocal ws_connected
+        if not ws_connected:
+            return False
+        try:
+            await websocket.send_json(data)
+            return True
+        except (starlette.websockets.WebSocketDisconnect,
+                websockets.exceptions.ConnectionClosedError,
+                RuntimeError) as e:
+            err_str = str(e)
+            if "close message has been sent" in err_str or "ConnectionClosed" in type(e).__name__ or "Cannot call" in err_str:
+                logger.warning(f"[WS] 连接已断开，停止发送: {type(e).__name__}")
+                ws_connected = False
+                return False
+            raise
+        except Exception:
+            raise
+    
     try:
         while True:
-            payload = await websocket.receive_text()
-            request = json.loads(payload)
+            try:
+                payload = await websocket.receive_text()
+                request = json.loads(payload)
+            except Exception as recv_error:
+                logger.error(f"[WS] 接收消息失败: {recv_error}")
+                await safe_send({"type": "error", "content": f"消息格式错误: {str(recv_error)}"})
+                continue
+                
             session_id = request.get("session_id")
             options = request.get("options", [])
 
             if not session_id or not options:
-                await websocket.send_json({"type": "error", "content": "session_id 和 options 不能为空"})
+                await safe_send({"type": "error", "content": "session_id 和 options 不能为空"})
                 continue
 
             session = info_collector.get_session(session_id)
             if not session:
-                await websocket.send_json({"type": "error", "content": "会话不存在"})
+                await safe_send({"type": "error", "content": "会话不存在"})
                 continue
             if not session.get("is_complete"):
-                await websocket.send_json({"type": "error", "content": "信息收集未完成"})
+                await safe_send({"type": "error", "content": "信息收集未完成"})
                 continue
 
             user_id = session["user_id"]
             question = session["initial_question"]
             collected_info = session.get("collected_info", {})
-            await websocket.send_json({
-                "type": "start",
-                "session_id": session_id,
-                "user_id": user_id,
-                "question": question
-            })
+            decision_type = session.get("decision_type", "general")
+            
+            # 调试日志
+            logger.info(f"[WS推演] session_id={session_id}, decision_type={decision_type}, is_complete={session.get('is_complete')}")
+            logger.info(f"[WS推演] 准备处理推演请求，options数量={len(options)}")
+            
+            # ========== 职业决策使用多Agent框架（流式推演）==========
+            if decision_type == "career":
+                logger.info("[WS推演] 进入职业决策分支")
+                logger.info("🎯 检测到职业决策类型，使用多Agent评估框架（实时流式推演）")
+                try:
+                    if not await safe_send({
+                        "type": "start",
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "question": question,
+                        "decision_type": "career"
+                    }):
+                        logger.warning("[职业推演] 发送start失败，连接已断开")
+                        return
+                    
+                    if not await safe_send({
+                        "type": "status",
+                        "stage": "career_agent_init",
+                        "content": "职业决策模式：正在启动职业决策算法和5个专业Agent..."
+                    }):
+                        logger.warning("[职业推演] 发送状态失败，连接已断开")
+                        return
+                    
+                    # 导入职业决策相关模块
+                    from backend.decision.multi_agent_career_evaluator import (
+                        MultiAgentCareerEvaluator,
+                    )
+                    from backend.decision_algorithm.career_decision_algorithm import (
+                        KnowledgeGraphCareerIntegration
+                    )
+                    
+                    # 初始化职业决策算法
+                    kg_integration = KnowledgeGraphCareerIntegration(user_id)
+                    
+                    # 提前提取一次个人资本，所有选项共享
+                    logger.info("[职业推演] 开始提取个人资本（所有选项共享）...")
+                    personal_capital = kg_integration.extract_personal_capital_from_kg()
+                    logger.info(f"[职业推演] 个人资本提取完成，共 {len(options)} 个选项将共享此数据")
+                    
+                    # 为每个选项创建并行推演任务
+                    simulation_id = f"sim_{user_id}_{int(asyncio.get_event_loop().time())}"
+                    
+                    async def simulate_single_option(option, option_index):
+                        """并行推演单个选项"""
+                        option_id = f"option_{option_index+1}"
+                        option_title = option.get("title", f"选项{option_index+1}")
+                        
+                        try:
+                            if not await safe_send({
+                                "type": "option_start",
+                                "option_id": option_id,
+                                "title": option_title,
+                                "description": option.get("description", "")
+                            }):
+                                logger.warning(f"[职业推演] {option_id} 发送失败，连接已断开")
+                                return False
+                            
+                            if not await safe_send({
+                                "type": "status",
+                                "stage": "career_algorithm",
+                                "option_id": option_id,
+                                "content": f"正在使用职业决策算法分析 {option_title}..."
+                            }):
+                                logger.warning(f"[职业推演] {option_id} 发送状态失败，连接已断开")
+                                return False
+                            
+                            # 使用MultiAgentCareerEvaluator（已优化，共享个人资本）
+                            evaluator = MultiAgentCareerEvaluator(user_id)
+                            evaluator.personal_capital = personal_capital  # 直接使用已提取的个人资本
+                            logger.info(f"[职业推演] {option_id} 创建evaluator，personal_capital={'已设置' if personal_capital else 'None'}")
+                            
+                            # 初始化Agent（传入个人资本，避免重复提取）
+                            context = {
+                                'option_title': option_title,
+                                'option_description': option.get('description', ''),
+                                'question': question,
+                                'collected_info': collected_info,
+                                'personal_capital': personal_capital  # 传入已提取的个人资本
+                            }
+                            
+                            logger.info(f"[职业推演] {option_id} 开始初始化5个Agent...")
+                            await evaluator.initialize_all_agents(context)
+                            logger.info(f"[职业推演] {option_id} Agent初始化完成")
+                            
+                            # 启动心跳机制（避免长时间推演导致连接超时）
+                            last_heartbeat = asyncio.get_event_loop().time()
+                            heartbeat_interval = 10.0  # 每10秒发送一次心跳
+                            
+                            # 推演12个月，每个月实时发送
+                            timeline = []
+                            agents_state = {}
+                            
+                            for month in range(1, 13):
+                                current_time = asyncio.get_event_loop().time()
+                                if current_time - last_heartbeat > heartbeat_interval:
+                                    if not await safe_send({
+                                        "type": "heartbeat",
+                                        "content": f"正在推演第{month}个月...",
+                                        "stage": "career_simulating"
+                                    }):
+                                        logger.warning(f"[职业推演] {option_id} 心跳发送失败，连接已断开")
+                                        return False
+                                    last_heartbeat = current_time
+                                    logger.debug(f"[职业推演] {option_id} 发送心跳 M{month}")
+                                
+                                if not await safe_send({
+                                    "type": "thinking",
+                                    "stage": "month_simulation",
+                                    "option_id": option_id,
+                                    "option_title": option_title,
+                                    "month": month,
+                                    "content": f"正在推演【{option_title}】第{month}个月，职业决策算法和5个Agent正在分析中..."
+                                }):
+                                    logger.warning(f"[职业推演] {option_id} M{month} 发送失败，连接已断开")
+                                    return False
+                                
+                                # 1. 使用职业决策算法计算基础评分
+                                try:
+                                    algo_result = kg_integration.calculate_career_decision_score(
+                                        option_title=option_title,
+                                        current_month=month
+                                    )
+
+                                    # 构建详细的算法评分思考内容
+                                    algo_thinking = f"""============================================================
+职业决策算法评分（第{month}月）
+============================================================
+综合得分: {algo_result.get('total_score', 0):.1f}/100
+
+人力资本（技能+经验）: {algo_result.get('human_capital', 0):.1f}
+社会资本（人脉+声誉）: {algo_result.get('social_capital', 0):.1f}
+心理资本（自信+韧性）: {algo_result.get('psychological_capital', 0):.1f}
+经济资本（储蓄+现金流）: {algo_result.get('economic_capital', 0):.1f}
+市场环境（需求+竞争）: {algo_result.get('market_environment', 0):.1f}
+
+算法分析：综合得分{algo_result.get('total_score', 0):.1f}分，{get_score_assessment(algo_result.get('total_score', 0))}
+"""
+
+                                    if not await safe_send({
+                                        "type": "thinking_chunk",
+                                        "stage": "career_algorithm",
+                                        "option_id": option_id,
+                                        "option_title": option_title,
+                                        "month": month,
+                                        "content": algo_thinking
+                                    }):
+                                        return False
+                                except Exception as algo_error:
+                                    logger.warning(f"职业决策算法计算失败: {algo_error}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    algo_result = {'total_score': 50.0, 'human_capital': 50.0, 'social_capital': 50.0, 'psychological_capital': 50.0, 'economic_capital': 50.0, 'market_environment': 50.0}
+                                
+                                # 2. 5个Agent演化并评估
+                                agent_evaluations = []
+
+                                for agent_name, agent in evaluator.agents.items():
+                                    try:
+                                        # Agent演化到当前月
+                                        state = await agent.evolve(
+                                            month=month,
+                                            context=context,
+                                            other_agents_state=agents_state
+                                        )
+                                        agents_state[agent_name] = state
+
+                                        # 生成Agent的详细思考内容
+                                        agent_display_name = {
+                                            'skill_development': '技能发展Agent',
+                                            'career_network': '职业人脉Agent',
+                                            'financial': '财务状况Agent',
+                                            'psychological': '心理资本Agent',
+                                            'market_environment': '市场环境Agent'
+                                        }.get(agent_name, agent_name)
+
+                                        # 构建详细的思考内容
+                                        thinking_parts = [
+                                            f"\n{'━' * 50}",
+                                            f"{agent_display_name}",
+                                            f"{'━' * 50}",
+                                            f"评分: {state.score:.1f}/100 | 状态: {get_agent_status(state.status)}"
+                                        ]
+
+                                        # 添加关键指标
+                                        if state.key_metrics:
+                                            metrics_lines = []
+                                            for k, v in list(state.key_metrics.items())[:4]:
+                                                metrics_lines.append(f"  • {format_metric_key(k)}: {v}")
+                                            if metrics_lines:
+                                                thinking_parts.append(f"\n关键指标:\n" + "\n".join(metrics_lines))
+
+                                        # 添加主要变化
+                                        if state.changes:
+                                            thinking_parts.append(f"\n变化: {' | '.join(state.changes[:2])}")
+
+                                        # 添加风险
+                                        if state.risks:
+                                            thinking_parts.append(f"\n风险: {' | '.join(state.risks[:2])}")
+
+                                        # 添加机会
+                                        if state.opportunities:
+                                            thinking_parts.append(f"\n机会: {' | '.join(state.opportunities[:2])}")
+
+                                        agent_thinking = "\n".join(thinking_parts)
+
+                                        # 发送Agent详细思考过程
+                                        if not await safe_send({
+                                            "type": "thinking_chunk",
+                                            "stage": "agent_evaluation",
+                                            "option_id": option_id,
+                                            "option_title": option_title,
+                                            "month": month,
+                                            "agent": agent_name,
+                                            "content": agent_thinking
+                                        }):
+                                            return False
+
+                                        agent_evaluations.append({
+                                            'agent_name': agent_name,
+                                            'score': state.score,
+                                            'status': state.status,
+                                            'changes': state.changes,
+                                            'risks': state.risks,
+                                            'opportunities': state.opportunities
+                                        })
+
+                                    except Exception as agent_error:
+                                        logger.error(f"Agent {agent_name} 演化失败: {agent_error}")
+                                        import traceback
+                                        traceback.print_exc()
+                                
+                                # 发送本月综合分析
+                                if agents_state:
+                                    overall_score = sum(s.score for s in agents_state.values()) / len(agents_state)
+                                    critical_count = sum(1 for s in agents_state.values() if s.status == 'critical')
+                                    good_count = sum(1 for s in agents_state.values() if s.status == 'good')
+
+                                    # 构建综合评估
+                                    sorted_agents = sorted(agents_state.items(), key=lambda x: x[1].score)
+                                    weakest = sorted_agents[0]
+                                    strongest = sorted_agents[-1]
+
+                                    # Agent名称中文映射
+                                    agent_name_map = {
+                                        'skill_development': '技能发展',
+                                        'career_network': '职业人脉',
+                                        'financial': '财务状况',
+                                        'psychological': '心理资本',
+                                        'market_environment': '市场环境'
+                                    }
+
+                                    summary_parts = [
+                                        f"\n{'=' * 50}",
+                                        f"【{option_title}】第{month}月综合评估",
+                                        f"{'=' * 50}",
+                                        f"综合得分: {overall_score:.1f}/100 | {get_score_assessment(overall_score)}",
+                                        f"状态分布: {good_count}个良好 | {critical_count}个危险",
+                                        f"",
+                                        f"各维度评分:",
+                                    ]
+
+                                    # 添加各Agent评分
+                                    for name, state in sorted(agents_state.items(), key=lambda x: -x[1].score):
+                                        name_cn = agent_name_map.get(name, name)
+                                        status_icon = 'OK' if state.status == 'good' else ('!' if state.status == 'warning' else 'X')
+                                        summary_parts.append(f"  [{status_icon}] {name_cn}: {state.score:.1f}分")
+
+                                    summary_parts.extend([
+                                        f"",
+                                        f"最强维度: {agent_name_map.get(strongest[0], strongest[0])} ({strongest[1].score:.1f}分)",
+                                        f"最弱维度: {agent_name_map.get(weakest[0], weakest[0])} ({weakest[1].score:.1f}分)",
+                                    ])
+
+                                    if not await safe_send({
+                                        "type": "thinking_chunk",
+                                        "stage": "month_summary",
+                                        "option_id": option_id,
+                                        "option_title": option_title,
+                                        "month": month,
+                                        "content": "\n".join(summary_parts)
+                                    }):
+                                        return False
+                                else:
+                                    # 没有agents_state时发送默认综合评估
+                                    if not await safe_send({
+                                        "type": "thinking_chunk",
+                                        "stage": "month_summary",
+                                        "option_id": option_id,
+                                        "option_title": option_title,
+                                        "month": month,
+                                        "content": f"\n【{option_title}】第{month}月：等待Agent评估完成"
+                                    }):
+                                        return False
+                                
+                                # 3. 生成节点事件描述
+                                event_text = simulator._generate_career_event_text(
+                                    month=month,
+                                    option_title=option_title,
+                                    agents_state=agents_state,
+                                    algo_result=algo_result
+                                )
+                                
+                                # 4. 计算综合impact
+                                impact = simulator._calculate_career_impact(agents_state)
+                                
+                                # 5. 计算概率（基于Agent一致性）
+                                probability = simulator._calculate_event_probability(agents_state)
+                                
+                                # 6. 创建节点
+                                from dataclasses import dataclass
+                                
+                                @dataclass
+                                class TimelineEvent:
+                                    event_id: str
+                                    parent_event_id: Optional[str]
+                                    month: int
+                                    event: str
+                                    impact: Dict[str, float]
+                                    probability: float
+                                    state_before: Dict[str, Any]
+                                    impact_vector: Dict[str, float]
+                                    evidence_sources: List[str]
+                                    agent_votes: List[Dict[str, Any]]
+                                    event_type: str = "career"
+                                    branch_group: str = "main"
+                                    node_level: int = 1
+                                    risk_tag: str = "medium"
+                                    opportunity_tag: str = "medium"
+                                    visual_weight: float = 0.5
+                                
+                                node = TimelineEvent(
+                                    event_id=f"{option_id}_M{month}",
+                                    parent_event_id=f"{option_id}_M{month-1}" if month > 1 else None,
+                                    month=month,
+                                    event=event_text,
+                                    impact=impact,
+                                    probability=probability,
+                                    state_before={'month': month - 1},
+                                    impact_vector=impact,
+                                    evidence_sources=['career_algorithm', 'multi_agent_evaluation'],
+                                    agent_votes=agent_evaluations,
+                                    branch_group=option_id,
+                                    node_level=month
+                                )
+                                
+                                timeline.append(node)
+                                
+                                # 7. 立即发送节点（确保实时显示）
+                                logger.info(f"[职业推演] 发送节点 {option_id} M{month}")
+                                if not await safe_send({
+                                    "type": "node",
+                                    "option_id": option_id,
+                                    "option_title": option_title,
+                                    "node": simulator._serialize_timeline_event(node, month - 1)
+                                }):
+                                    return False
+                                
+                                # 添加小延迟确保前端能处理
+                                await asyncio.sleep(0.05)
+                            
+                            # 选项推演完成
+                            final_score = sum(s.score for s in agents_state.values()) / len(agents_state) if agents_state else 50.0
+                            
+                            if not await safe_send({
+                                "type": "option_complete",
+                                "option_id": option_id,
+                                "title": option_title,
+                                "final_score": final_score,
+                                "risk_level": 0.5
+                            }):
+                                return False
+                            
+                            logger.info(f"[职业推演] 选项 {option_id} 推演完成")
+                            return True
+                            
+                        except Exception as opt_error:
+                            logger.error(f"[职业推演] 选项 {option_id} 推演失败: {opt_error}")
+                            import traceback
+                            traceback.print_exc()
+                            return False
+                    
+                    # 并行推演所有选项
+                    logger.info(f"[职业推演] 开始并行推演 {len(options)} 个选项")
+                    tasks = [
+                        simulate_single_option(option, i)
+                        for i, option in enumerate(options)
+                    ]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    logger.info(f"[职业推演] 所有选项推演完成")
+                    
+                    # 检查连接状态后再发送推荐
+                    if ws_connected:
+                        await safe_send({
+                            "type": "recommendation",
+                            "content": "基于职业决策算法和多Agent评估的综合推荐"
+                        })
+                    
+                    # 检查连接状态后再发送完成消息
+                    if ws_connected:
+                        await safe_send({
+                            "type": "done",
+                            "simulation_id": simulation_id,
+                            "user_id": user_id,
+                            "question": question,
+                            "verifiability_report": {
+                                'data_sources': ['career_knowledge_graph', 'career_algorithm', 'multi_agent_evaluation'],
+                                'agents_used': ['skill_development', 'career_network', 'financial', 'psychological', 'market_environment']
+                            }
+                        })
+                    
+                    logger.info(f"✅ 职业决策推演完成: {simulation_id}")
+                    continue  # 处理下一个请求
+                    
+                except Exception as career_error:
+                    logger.error(f"职业决策推演失败: {career_error}", exc_info=True)
+                    import traceback
+                    traceback.print_exc()
+                    if ws_connected:
+                        await safe_send({
+                            "type": "error",
+                            "content": f"职业决策推演失败: {str(career_error)}"
+                        })
+                    continue
+            
+            # ========== 通用决策使用原有流程 ==========
+            
+            try:
+                # 整个推演流程包裹在try-catch中
+                await websocket.send_json({
+                    "type": "start",
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "question": question
+                })
+            except Exception as main_error:
+                logger.error(f"[WS] 推演流程异常: {main_error}", exc_info=True)
+                try:
+                    await websocket.send_json({
+                        "type": "error",
+                        "content": f"推演异常: {str(main_error)}"
+                    })
+                except:
+                    pass
+                continue
+                
             await websocket.send_json({
                 "type": "status",
                 "stage": "init",
@@ -1884,6 +3351,9 @@ async def simulate_with_collection_ws(websocket: WebSocket):
 
             async def generate_option_timeline(i: int, option: dict):
                 """为单个选项生成时间线并流式推送节点（PKF 已缓存）"""
+                from datetime import datetime
+                print(f"[选项{i+1}] 开始生成时间线: {option.get('title')} - {datetime.now().strftime('%H:%M:%S.%f')}")
+                
                 await websocket.send_json({
                     "type": "option_start",
                     "option_id": f"option_{i+1}",
@@ -1903,7 +3373,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "stage": "option_start",
                     "option_id": f"option_{i+1}",
                     "option_title": option.get("title", f"选项{i+1}"),
-                    "content": f"开始推演 {option.get('title', f'选项{i+1}')} 的主时间线（快速模式）"
+                    "content": f"开始推演 {option.get('title', f'选项{i+1}')} 的主时间线（API分支推演）"
                 })
 
                 stream_buffer = ""
@@ -1921,6 +3391,10 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     event: str
                     impact: Dict[str, float]
                     probability: float
+                    state_before: Dict[str, Any]
+                    impact_vector: Dict[str, float]
+                    evidence_sources: List[str]
+                    agent_votes: List[Dict[str, Any]]
                     event_type: str = "general"
                     branch_group: str = "main"
                     node_level: int = 1
@@ -1943,53 +3417,326 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     personal_note: str = ""
 
                 all_titles = [o.get("title", "") for o in options]
-                async for chunk in simulator.lora_analyzer.stream_timeline_generation(
-                    user_id=user_id,
-                    question=question,
-                    option=option,
-                    profile=profile,
-                    num_events=12,
-                    all_option_titles=all_titles,
-                    collected_info=collected_info
-                ):
-                    stream_buffer += chunk
+                
+                # ========== 直接使用API流式调用，绕过lora_analyzer ==========
+                from backend.llm.llm_service import get_llm_service
+                import concurrent.futures
+                
+                try:
+                    llm_service = get_llm_service()
+                    print(f"[时间线生成] LLM服务获取: {llm_service}")
+                    print(f"[时间线生成] enabled={getattr(llm_service, 'enabled', 'N/A')}, provider={getattr(llm_service, 'provider', 'N/A')}")
+                    
+                    if not llm_service or not getattr(llm_service, "enabled", False):
+                        error_msg = "LLM服务未就绪"
+                        print(f"[时间线生成错误] {error_msg}")
+                        raise RuntimeError(error_msg)
+                    
                     await websocket.send_json({
-                        "type": "thinking_chunk",
-                        "stage": "timeline_generation_stream",
-                        "option_id": f"option_{i+1}",
-                        "option_title": option.get("title", f"选项{i+1}"),
-                        "content": chunk
+                        "type": "status",
+                        "content": f"正在调用API生成时间线...",
+                        "stage": "timeline_generation_stream"
                     })
+                    
+                    # 构建prompt
+                    prompt_messages = [{
+                        "role": "system",
+                        "content": "你是决策推演引擎。输出JSON数组格式的时间线事件。"
+                    }, {
+                        "role": "user", 
+                        "content": f"""决策问题：{question}
+选项：{option.get('title')}
 
-                    incremental_events = simulator.lora_analyzer.extract_incremental_events(stream_buffer, emitted_months)
-                    for e in incremental_events:
-                        idx = len(timeline)
-                        negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
-                        positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                        risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
-                        opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
-                        node = TimelineEvent(
-                            event_id=f"{option_branch}_node_{idx+1}",
-                            parent_event_id=previous_event_id,
-                            month=e['month'],
-                            event=e['event'],
-                            impact=e['impact'],
-                            probability=e['probability'],
-                            event_type=simulator._infer_event_type(e['event']),
-                            branch_group=option_branch,
-                            node_level=idx + 1,
-                            risk_tag=risk_tag,
-                            opportunity_tag=opportunity_tag,
-                            visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
-                        )
-                        previous_event_id = node.event_id
-                        timeline.append(node)
-                        await websocket.send_json({
-                            "type": "node",
-                            "option_id": f"option_{i+1}",
-                            "option_title": option['title'],
-                            "node": asdict(node)
-                        })
+请推演选择这个选项后未来12个月会发生什么，输出JSON数组：
+[{{"month":1,"event":"你...具体事件","impact":{{"健康":0.0,"财务":0.0,"社交":0.0,"情绪":0.0}},"probability":0.8}}]
+
+要求：
+1. 每个事件以"你"开头
+2. 事件要具体，包含数字细节
+3. 事件之间有因果关系
+4. 正负事件各半"""
+                    }]
+                    
+                    # 使用线程池执行流式生成，但通过队列实时传递chunk
+                    import time
+                    start_time = time.time()
+                    print(f"[时间线生成] {time.time():.3f} 开始流式生成 - 选项{i+1}: {option.get('title')}")
+                    chunk_count = 0
+                    first_chunk_time = None
+                    
+                    chunk_queue = queue.Queue()
+                    
+                    def stream_worker():
+                        """在独立线程中执行流式生成，并将chunk放入队列"""
+                        try:
+                            worker_start = time.time()
+                            print(f"[流式线程] {worker_start:.3f} 开始调用LLM API（启用深度思考，实时流式传输）")
+                            print(f"[流式线程] Prompt长度: {len(str(prompt_messages))} 字符")
+                            
+                            # 调用通义千问API，启用深度思考模式，实时传输思考过程和答案
+                            chunk_received = 0
+                            thinking_chunks = 0
+                            answer_chunks = 0
+                            
+                            try:
+                                completion = llm_service.client.chat.completions.create(
+                                    model="qwen-plus",
+                                    messages=prompt_messages,
+                                    temperature=0.45,
+                                    stream=True,
+                                    extra_body={"enable_thinking": True},  # 启用深度思考
+                                    timeout=60
+                                )
+                                
+                                for chunk in completion:
+                                    if chunk.choices and len(chunk.choices) > 0:
+                                        delta = chunk.choices[0].delta
+                                        
+                                        # 实时传输思考过程
+                                        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                                            thinking_chunks += 1
+                                            chunk_received += 1
+                                            if thinking_chunks <= 3:
+                                                print(f"[流式线程] 思考chunk #{thinking_chunks}: '{delta.reasoning_content[:30]}...'")
+                                            # 将思考过程也作为answer类型发送，这样前端能实时看到
+                                            chunk_queue.put({"type": "answer", "content": delta.reasoning_content})
+                                        
+                                        # 实时传输答案内容
+                                        if hasattr(delta, "content") and delta.content:
+                                            answer_chunks += 1
+                                            chunk_received += 1
+                                            if answer_chunks <= 3:
+                                                print(f"[流式线程] 答案chunk #{answer_chunks}: '{delta.content}'")
+                                            chunk_queue.put({"type": "answer", "content": delta.content})
+                                
+                                print(f"[流式线程] 收到 {thinking_chunks} 个思考chunk, {answer_chunks} 个答案chunk")
+                                
+                            except Exception as api_error:
+                                print(f"[流式线程] API调用失败: {api_error}")
+                                import traceback
+                                traceback.print_exc()
+                                chunk_queue.put({"type": "error", "content": str(api_error)})
+                            
+                            chunk_queue.put(None)  # 结束标记
+                            print(f"[流式线程] {time.time():.3f} LLM API调用完成，共收到 {chunk_received} 个chunk，耗时 {time.time()-worker_start:.2f}秒")
+                        except Exception as e:
+                            print(f"[流式生成线程错误] {e}")
+                            import traceback
+                            traceback.print_exc()
+                            chunk_queue.put({"type": "error", "content": str(e)})
+                            chunk_queue.put(None)
+                    
+                    # 启动流式生成线程
+                    stream_thread = threading.Thread(target=stream_worker, daemon=True)
+                    stream_thread.start()
+                    
+                    # 从队列中读取chunk并实时发送
+                    last_heartbeat = asyncio.get_event_loop().time()
+                    heartbeat_interval = 15.0  # 每15秒发送一次心跳（避免30秒超时）
+                    ws_closed = False  # WebSocket关闭标志
+                    
+                    # 增量解析状态
+                    emitted_months: List[int] = []
+                    previous_event_id = None
+                    
+                    try:
+                        while True:
+                            # 检查WebSocket状态
+                            if ws_closed or websocket.client_state.name != "CONNECTED":
+                                print(f"[流式发送] WebSocket已断开，停止发送")
+                                break
+                            
+                            # 使用非阻塞方式从队列获取
+                            chunk_data = None
+                            try:
+                                # 尝试立即获取，不阻塞
+                                chunk_data = chunk_queue.get_nowait()
+                            except queue.Empty:
+                                # 队列为空，检查是否需要发送心跳
+                                current_time = asyncio.get_event_loop().time()
+                                if current_time - last_heartbeat > heartbeat_interval:
+                                    try:
+                                        await websocket.send_json({
+                                            "type": "heartbeat",
+                                            "stage": "timeline_generation_stream",
+                                            "content": f"正在生成中...已收到 {chunk_count} 个token"
+                                        })
+                                        last_heartbeat = current_time
+                                        print(f"[心跳] 发送keepalive心跳")
+                                    except Exception as hb_error:
+                                        print(f"[心跳] 发送失败，WebSocket可能已断开: {hb_error}")
+                                        ws_closed = True
+                                        break
+                                
+                                # 短暂休眠后继续
+                                await asyncio.sleep(0.01)  # 10毫秒
+                                continue
+                            
+                            if chunk_data is None:
+                                # 结束标记
+                                print(f"[时间线生成] 流式生成结束")
+                                break
+                            
+                            if chunk_data.get("type") == "answer":
+                                chunk = chunk_data.get("content", "")
+                                stream_buffer += chunk
+                                chunk_count += 1
+                                
+                                # 记录第一个chunk的时间
+                                if first_chunk_time is None:
+                                    first_chunk_time = time.time()
+                                    print(f"[时间线生成] {first_chunk_time:.3f} 收到第一个chunk，距离开始 {first_chunk_time-start_time:.2f}秒")
+                                
+                                # 实时发送chunk到前端
+                                try:
+                                    await websocket.send_json({
+                                        "type": "thinking_chunk",
+                                        "stage": "timeline_generation_stream",
+                                        "option_id": f"option_{i+1}",
+                                        "option_title": option.get("title", f"选项{i+1}"),
+                                        "content": chunk
+                                    })
+                                except Exception as send_error:
+                                    print(f"[流式发送] 发送chunk失败: {send_error}")
+                                    ws_closed = True
+                                    break
+                                
+                                # 更新心跳时间
+                                last_heartbeat = asyncio.get_event_loop().time()
+                                
+                                # 每个chunk都打印日志（前5个）
+                                if chunk_count <= 5:
+                                    print(f"[时间线生成] {time.time():.3f} 发送chunk #{chunk_count}: '{chunk}' ({len(chunk)}字符)")
+                                elif chunk_count % 50 == 0:
+                                    print(f"[时间线生成] 已发送 {chunk_count} 个chunk，累计 {len(stream_buffer)} 字符")
+                                
+                                # 每收到10个chunk，尝试增量解析节点
+                                if chunk_count % 10 == 0:
+                                    # 打印最近的buffer内容用于调试
+                                    if chunk_count == 10:
+                                        print(f"[增量解析] Buffer前500字符:\n{stream_buffer[:500]}")
+                                    
+                                    print(f"[增量解析] 尝试从 {len(stream_buffer)} 字符中解析节点，已发送月份: {emitted_months}")
+                                    print(f"[增量解析] Buffer包含的关键字: month={stream_buffer.count('month')}, event={stream_buffer.count('event')}, {{={stream_buffer.count('{')}, }}={stream_buffer.count('}')}")
+                                    
+                                    incremental_events = simulator.lora_analyzer.extract_incremental_events(stream_buffer, emitted_months)
+                                    print(f"[增量解析] 解析出 {len(incremental_events)} 个新节点")
+                                    
+                                    if len(incremental_events) == 0 and chunk_count == 10:
+                                        print(f"[增量解析警告] 前10个chunk未解析出节点，可能格式有问题")
+                                        print(f"[增量解析警告] Buffer示例:\n{stream_buffer[:200]}")
+                                    
+                                    for e in incremental_events:
+                                        try:
+                                            idx = len(timeline)
+                                            node = simulator._create_timeline_node(
+                                                TimelineEvent,
+                                                event_id=f"{option_branch}_node_{idx+1}",
+                                                parent_event_id=previous_event_id,
+                                                month=e['month'],
+                                                event_text=e['event'],
+                                                impact=e['impact'],
+                                                probability=e['probability'],
+                                                branch_group=option_branch,
+                                                node_level=idx + 1,
+                                                question=question,
+                                                option_title=option['title'],
+                                                timeline=timeline,
+                                                collected_info=collected_info,
+                                                facts_count=len(pkf_facts_cached),
+                                                profile=profile,
+                                                calibration_profile=calibration_profile,
+                                            )
+                                            previous_event_id = node.event_id
+                                            timeline.append(node)
+                                            
+                                            # 检查WebSocket是否仍然连接
+                                            if ws_closed or websocket.client_state.name != "CONNECTED":
+                                                print(f"[增量节点] WebSocket已断开，停止发送")
+                                                break
+                                            
+                                            try:
+                                                await websocket.send_json({
+                                                    "type": "node",
+                                                    "option_id": f"option_{i+1}",
+                                                    "option_title": option['title'],
+                                                    "node": simulator._serialize_timeline_event(node, idx)
+                                                })
+                                                print(f"[增量节点] ✓ 发送节点 M{e['month']}: {e['event'][:30]}...")
+                                            except Exception as send_error:
+                                                print(f"[增量节点] 发送失败: {send_error}")
+                                                ws_closed = True
+                                                break
+                                        except Exception as node_error:
+                                            print(f"[增量节点] 创建节点失败: {node_error}")
+                                            import traceback
+                                            traceback.print_exc()
+                                            # 继续处理下一个事件
+                                            continue
+                                    
+                            elif chunk_data.get("type") == "error":
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "content": f"推演失败: {chunk_data.get('content')}"
+                                })
+                                break
+                    except Exception as stream_error:
+                        print(f"[流式发送错误] {stream_error}")
+                        import traceback
+                        traceback.print_exc()
+                        # 不再尝试发送错误消息，因为WebSocket可能已关闭
+                        if not ws_closed:
+                            try:
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "content": f"流式发送异常: {str(stream_error)}"
+                                })
+                            except:
+                                pass  # 忽略发送错误
+                    
+                    print(f"[推演完成] 收到 {len(stream_buffer)} 字符，共 {chunk_count} 个chunk")
+                    
+                except Exception as e:
+                    print(f"[推演异常] {e}")
+                    import traceback
+                    traceback.print_exc()
+                    await websocket.send_json({
+                        "type": "error",
+                        "content": f"推演异常: {str(e)}"
+                    })
+                    return  # 退出当前选项的生成
+                
+                # 最后再解析一次，确保所有节点都被提取
+                final_incremental_events = simulator.lora_analyzer.extract_incremental_events(stream_buffer, emitted_months)
+                for e in final_incremental_events:
+                    idx = len(timeline)
+                    node = simulator._create_timeline_node(
+                        TimelineEvent,
+                        event_id=f"{option_branch}_node_{idx+1}",
+                        parent_event_id=previous_event_id,
+                        month=e['month'],
+                        event_text=e['event'],
+                        impact=e['impact'],
+                        probability=e['probability'],
+                        branch_group=option_branch,
+                        node_level=idx + 1,
+                        question=question,
+                        option_title=option['title'],
+                        timeline=timeline,
+                        collected_info=collected_info,
+                        facts_count=len(pkf_facts_cached),
+                        profile=profile,
+                        calibration_profile=calibration_profile,
+                    )
+                    previous_event_id = node.event_id
+                    timeline.append(node)
+                    await websocket.send_json({
+                        "type": "node",
+                        "option_id": f"option_{i+1}",
+                        "option_title": option['title'],
+                        "node": simulator._serialize_timeline_event(node, idx)
+                    })
+                    print(f"[最终节点] 发送节点 M{e['month']}: {e['event'][:30]}...")
 
                 timeline_data = simulator.lora_analyzer._parse_timeline_json(stream_buffer)
 
@@ -1997,23 +3744,23 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                 if not timeline and timeline_data:
                     previous_event_id = None
                     for idx, e in enumerate(timeline_data):
-                        negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
-                        positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                        risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
-                        opportunity_tag = "high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium")
-                        node = TimelineEvent(
+                        node = simulator._create_timeline_node(
+                            TimelineEvent,
                             event_id=f"{option_branch}_node_{idx+1}",
                             parent_event_id=previous_event_id,
                             month=e['month'],
-                            event=e['event'],
+                            event_text=e['event'],
                             impact=e['impact'],
                             probability=e['probability'],
-                            event_type=simulator._infer_event_type(e['event']),
                             branch_group=option_branch,
                             node_level=idx + 1,
-                            risk_tag=risk_tag,
-                            opportunity_tag=opportunity_tag,
-                            visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                            question=question,
+                            option_title=option['title'],
+                            timeline=timeline,
+                            collected_info=collected_info,
+                            facts_count=len(pkf_facts_cached),
+                            profile=profile,
+                            calibration_profile=calibration_profile,
                         )
                         previous_event_id = node.event_id
                         timeline.append(node)
@@ -2021,7 +3768,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                             "type": "node",
                             "option_id": f"option_{i+1}",
                             "option_title": option['title'],
-                            "node": asdict(node)
+                            "node": simulator._serialize_timeline_event(node, idx)
                         })
                 elif not timeline:
                     # 完全没有数据，重试一次
@@ -2036,23 +3783,30 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     if retry_timeline:
                         previous_event_id = None
                         for idx, e in enumerate(retry_timeline):
-                            negative_impact = sum(abs(v) for v in e['impact'].values() if v < 0)
-                            positive_impact = sum(v for v in e['impact'].values() if v > 0)
-                            risk_tag = "high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium")
-                            node = TimelineEvent(
+                            node = simulator._create_timeline_node(
+                                TimelineEvent,
                                 event_id=f"{option_branch}_node_{idx+1}",
                                 parent_event_id=previous_event_id,
-                                month=e['month'], event=e['event'], impact=e['impact'],
+                                month=e['month'],
+                                event_text=e['event'],
+                                impact=e['impact'],
                                 probability=e['probability'],
-                                event_type=simulator._infer_event_type(e['event']),
-                                branch_group=option_branch, node_level=idx + 1,
-                                risk_tag=risk_tag
+                                branch_group=option_branch,
+                                node_level=idx + 1,
+                                question=question,
+                                option_title=option['title'],
+                                timeline=timeline,
+                                collected_info=collected_info,
+                                facts_count=len(pkf_facts_cached),
+                                profile=profile,
+                                calibration_profile=calibration_profile,
                             )
                             previous_event_id = node.event_id
                             timeline.append(node)
                             await websocket.send_json({
                                 "type": "node", "option_id": f"option_{i+1}",
-                                "option_title": option['title'], "node": asdict(node)
+                                "option_title": option['title'],
+                                "node": simulator._serialize_timeline_event(node, idx)
                             })
                 # 如果增量解析已经成功（timeline 不为空），不再重复发送节点
 
@@ -2131,21 +3885,23 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         profile=profile
                     )
                     for branch_idx, b in enumerate(generated_branches):
-                        negative_impact = sum(abs(v) for v in b['impact'].values() if v < 0)
-                        positive_impact = sum(v for v in b['impact'].values() if v > 0)
-                        branch_node = TimelineEvent(
+                        branch_node = simulator._create_timeline_node(
+                            TimelineEvent,
                             event_id=f"{option_branch}_fork_{parent.node_level}_{branch_idx + 1}",
                             parent_event_id=parent.event_id,
                             month=b['month'],
-                            event=b['event'],
+                            event_text=b['event'],
                             impact=b['impact'],
                             probability=b['probability'],
-                            event_type=simulator._infer_event_type(b['event']),
                             branch_group=f"{option_branch}_fork",
                             node_level=parent.node_level + 1,
-                            risk_tag="high" if negative_impact >= 0.25 else ("low" if negative_impact <= 0.15 else "medium"),
-                            opportunity_tag="high" if positive_impact >= 0.5 else ("low" if positive_impact <= 0.1 else "medium"),
-                            visual_weight=max(0.2, min(1.0, positive_impact + negative_impact))
+                            question=question,
+                            option_title=option['title'],
+                            timeline=timeline,
+                            collected_info=collected_info,
+                            facts_count=len(pkf_facts_cached),
+                            profile=profile,
+                            calibration_profile=calibration_profile,
                         )
                         branch_nodes.append(branch_node)
                         timeline.append(branch_node)
@@ -2153,7 +3909,7 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                             "type": "node",
                             "option_id": f"option_{i+1}",
                             "option_title": option['title'],
-                            "node": asdict(branch_node)
+                            "node": simulator._serialize_timeline_event(branch_node, len(timeline) - 1)
                         })
 
                 await websocket.send_json({
@@ -2183,6 +3939,11 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     "risk_level": risk_level,
                     "risk_assessment": risk_assessment,
                     "prediction_trace": prediction_trace,
+                    "decision_graph": simulator._build_decision_graph_payload(
+                        f"option_{i+1}",
+                        option['title'],
+                        timeline,
+                    ),
                     "execution_confidence": self_prediction.get("execution_confidence"),
                     "dropout_risk_month": self_prediction.get("dropout_risk_month"),
                     "personal_note": self_prediction.get("personal_note", ""),
@@ -2203,10 +3964,16 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                     personal_note=self_prediction.get("personal_note", "")
                 )
 
-            # 串行执行（共享同一个 LoRA 模型实例，并行会冲突）
-            for i, option in enumerate(options):
-                opt_result = await generate_option_timeline(i, option)
-                simulated_options.append(opt_result)
+            # 并行执行多Agent推演（每个选项独立API调用，互不干扰）
+            from datetime import datetime
+            print(f"[多Agent推演] 启动 {len(options)} 个并行Agent，同时推演不同选项")
+            print(f"[多Agent推演] 当前时间: {datetime.now().strftime('%H:%M:%S.%f')}")
+            
+            # 使用asyncio.gather并行执行所有选项
+            tasks = [generate_option_timeline(i, option) for i, option in enumerate(options)]
+            print(f"[多Agent推演] 已创建 {len(tasks)} 个任务，开始并发执行")
+            simulated_options = await asyncio.gather(*tasks)
+            print(f"[多Agent推演] 所有任务完成，耗时: {datetime.now().strftime('%H:%M:%S.%f')}")
 
             options_for_rec = [
                 {

@@ -1,6 +1,7 @@
 import type {
   ApiEnvelope,
   CollectedInfo,
+  DecisionGraph,
   DecisionHistoryRecord,
   DecisionOption,
   DecisionRecordPayload,
@@ -16,6 +17,12 @@ import type {
   VerifiabilityReport,
 } from '../types/api';
 import { ApiError, createSocket, postJson, requestJson } from './api';
+import {
+  buildDecisionGraphEdges,
+  buildDecisionGraphSummary,
+  buildFallbackDecisionGraph,
+  normalizeDecisionGraphNode,
+} from '../utils/decisionGraph';
 
 function asObject(value: unknown) {
   return typeof value === 'object' && value !== null
@@ -83,8 +90,82 @@ function normalizeCollectedInfo(value: unknown) {
 }
 
 function normalizeTimelineEvent(value: unknown, index: number): TimelineEvent {
-  const source = asObject(value) || {};
-  const impactSource = asObject(source.impact);
+  return normalizeDecisionGraphNode((asObject(value) || {}) as Partial<TimelineEvent>, index);
+}
+
+function normalizeDecisionGraph(
+  value: unknown,
+  optionId: string,
+  title: string,
+  timeline: TimelineEvent[],
+): DecisionGraph {
+  const source = asObject(value);
+  if (!source) {
+    return buildFallbackDecisionGraph(optionId, title, timeline);
+  }
+
+  const nodes = Array.isArray(source.nodes)
+    ? source.nodes.map((item, nodeIndex) =>
+        normalizeDecisionGraphNode((asObject(item) || {}) as Partial<TimelineEvent>, nodeIndex),
+      )
+    : timeline.map((item, nodeIndex) => normalizeDecisionGraphNode(item, nodeIndex));
+
+  const edges = Array.isArray(source.edges)
+    ? source.edges.reduce<DecisionGraph['edges']>((result, item, edgeIndex) => {
+        const payload = asObject(item);
+        if (!payload) {
+          return result;
+        }
+
+        const sourceId = asString(payload.source);
+        const targetId = asString(payload.target);
+        if (!sourceId || !targetId) {
+          return result;
+        }
+
+        result.push({
+          edge_id: asString(payload.edge_id) || `edge_${edgeIndex + 1}`,
+          source: sourceId,
+          target: targetId,
+          relation: asString(payload.relation) || 'next',
+          strength: asNumber(payload.strength) || 0,
+          label: asString(payload.label) || undefined,
+        });
+        return result;
+      }, [])
+    : buildDecisionGraphEdges(nodes);
+
+  const summarySource = asObject(source.graph_summary);
+  const graphSummary = summarySource
+    ? {
+        title: asString(summarySource.title) || title,
+        node_count: asNumber(summarySource.node_count) || nodes.length,
+        edge_count: asNumber(summarySource.edge_count) || edges.length,
+        high_risk_nodes: asNumber(summarySource.high_risk_nodes) || 0,
+        dominant_axes: asStringArray(summarySource.dominant_axes),
+        agent_stance_mix: Object.entries(asObject(summarySource.agent_stance_mix) || {}).reduce<
+          Record<string, number>
+        >((result, [key, item]) => {
+          const next = asNumber(item);
+          if (key && next !== undefined) {
+            result[key] = next;
+          }
+          return result;
+        }, {}),
+        review_mode: asString(summarySource.review_mode) || undefined,
+      }
+    : buildDecisionGraphSummary(nodes, edges, title);
+
+  return {
+    graph_id: asString(source.graph_id) || `${optionId}_decision_graph`,
+    schema_version: asNumber(source.schema_version) || 1,
+    layout_hint: asString(source.layout_hint) || undefined,
+    graph_summary: graphSummary,
+    nodes,
+    edges,
+  };
+}
+/*
   const impact = Object.entries(impactSource || {}).reduce<Record<string, number>>(
     (result, entry) => {
       const [key, item] = entry;
@@ -115,6 +196,7 @@ function normalizeTimelineEvent(value: unknown, index: number): TimelineEvent {
     probability: asNumber(source.probability) || 0,
   };
 }
+*/
 
 function normalizeRiskAssessment(value: unknown): DecisionOption['risk_assessment'] {
   const source = asObject(value);
@@ -217,6 +299,9 @@ function normalizePredictionTrace(value: unknown): DecisionOption['prediction_tr
 
 function normalizeDecisionOption(value: unknown, index: number): DecisionOption {
   const source = asObject(value) || {};
+  const optionId = asString(source.option_id) || `option_${index + 1}`;
+  const title = asString(source.title) || `选项 ${index + 1}`;
+  source.title = asString(source.title) || title || `Option ${index + 1}`;
   const timeline = Array.isArray(source.timeline)
     ? source.timeline.map((item, itemIndex) =>
         normalizeTimelineEvent(item, itemIndex),
@@ -224,10 +309,16 @@ function normalizeDecisionOption(value: unknown, index: number): DecisionOption 
     : [];
 
   return {
-    option_id: asString(source.option_id) || `option_${index + 1}`,
+    option_id: optionId,
     title: asString(source.title) || `选项 ${index + 1}`,
     description: asString(source.description),
     timeline,
+    decision_graph: normalizeDecisionGraph(
+      source.decision_graph,
+      optionId,
+      asString(source.title) || `Option ${index + 1}`,
+      timeline,
+    ),
     final_score: asNumber(source.final_score) || 0,
     risk_level: asNumber(source.risk_level) || 0,
     risk_assessment: normalizeRiskAssessment(source.risk_assessment),
@@ -429,6 +520,7 @@ export async function submitDecisionFollowUp(payload: {
 export async function startDecisionCollection(payload: {
   user_id: string;
   initial_question: string;
+  decision_type?: 'career' | 'relationship' | 'education' | 'general';
 }) {
   const result = await postJson<
     ApiEnvelope<{ session_id: string; message: string }>
@@ -599,25 +691,36 @@ export function openDecisionSimulationSocket(
   const socket = createSocket('/ws/decision-simulate');
 
   socket.addEventListener('open', () => {
+    console.log('[WebSocket] 连接已建立');
     socket.send(JSON.stringify(payload));
   });
 
   socket.addEventListener('message', (event) => {
     try {
       const parsed = JSON.parse(String(event.data)) as Record<string, unknown>;
+      console.log('[WebSocket] 收到消息:', parsed.type, parsed);
       if (parsed.type === 'error') {
         handlers.onError?.(String(parsed.content || '推演流式连接异常'));
       }
       handlers.onEvent?.(parsed);
     } catch (error) {
+      console.error('[WebSocket] 解析消息失败:', error, event.data);
       handlers.onError?.(
         error instanceof Error ? error.message : '解析推演事件失败',
       );
     }
   });
 
-  socket.addEventListener('error', () => {
+  socket.addEventListener('error', (event) => {
+    console.error('[WebSocket] 连接错误:', event);
     handlers.onError?.('推演连接异常，请稍后重试');
+  });
+
+  socket.addEventListener('close', (event) => {
+    console.log('[WebSocket] 连接已关闭:', event.code, event.reason);
+    if (event.code !== 1000 && event.code !== 1001) {
+      handlers.onError?.(`连接异常关闭 (${event.code}): ${event.reason || '未知原因'}`);
+    }
   });
 
   return () => {
@@ -628,4 +731,108 @@ export function openDecisionSimulationSocket(
       socket.close();
     }
   };
+}
+
+
+// ── 流式信息采集 ──────────────────────────────────────────
+export async function* streamDecisionCollection(payload: {
+  session_id: string;
+  user_response: string;
+}): AsyncGenerator<{
+  type: 'status' | 'progress' | 'message' | 'complete';
+  content?: string;
+  progress?: { current: number; total: number; stage: string };
+  data?: {
+    round?: number;
+    phase?: string;
+    ai_question?: string;
+    is_complete?: boolean;
+    collected_info?: CollectedInfo;
+  };
+}> {
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  
+  try {
+    const response = await fetch(`${API_BASE}/api/decision/enhanced/collect/continue-stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new ApiError(`HTTP ${response.status}`, response.status);
+    }
+
+    if (!response.body) {
+      throw new ApiError('No response body', 500);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim() || !line.startsWith('data: ')) continue;
+        
+        try {
+          const data = JSON.parse(line.slice(6));
+          yield data;
+        } catch (e) {
+          console.warn('Failed to parse SSE data:', line);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Stream error:', error);
+    throw error;
+  }
+}
+
+
+// ── AI核心预热 ──────────────────────────────────────────
+export async function warmupAICore(userId: string): Promise<void> {
+  try {
+    await postJson('/api/decision/enhanced/ai-core/warmup', { user_id: userId });
+  } catch (error) {
+    // 预热失败不影响使用
+    console.warn('AI核心预热失败:', error);
+  }
+}
+
+export async function getWarmupStatus(userId: string): Promise<{
+  status: 'not_started' | 'warming' | 'ready' | 'error';
+  stage: string;
+  progress: number;
+}> {
+  try {
+    const result = await requestJson<ApiEnvelope<{
+      status: string;
+      stage: string;
+      progress: number;
+    }>>(`/api/decision/enhanced/ai-core/warmup-status/${encodeURIComponent(userId)}`);
+    
+    if (result.code === 200 && result.data) {
+      return {
+        status: result.data.status as any,
+        stage: result.data.stage || '未知',
+        progress: result.data.progress || 0,
+      };
+    }
+    
+    return { status: 'ready', stage: '就绪', progress: 100 };
+  } catch (error) {
+    console.warn('获取预热状态失败:', error);
+    return { status: 'ready', stage: '就绪', progress: 100 };
+  }
 }

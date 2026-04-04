@@ -1114,14 +1114,14 @@ struct DecisionDungeon2DMap {
         }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
       } else if (this.optionSummaries.length > 0) {
         this.buildOptionTabs()
-        if (this.structuredRecommendation) { this.buildRecommendation() }
+        this.buildRecommendation()
         this.buildSimulationOverview()
         this.buildEvidencePanels()
         this.buildCalibrationPanel()
         this.buildMiniTimeline()
-        if (this.streamStatus) { this.buildStatusBar() }
+        this.buildStatusBar()
         this.buildNodeCards()
-        if (this.showDetail && this.selectedNodeId) { this.buildDetailPanel() }
+        this.buildDetailPanel()
       } else {
         Column({ space: 10 }) {
           Text('等待推演数据...').fontSize(15).fontColor(Theme.Color.TextSecondary)
@@ -1240,10 +1240,8 @@ struct DecisionDungeon2DMap {
 
   @Builder
   buildSimulationOverview() {
-    if (!this.getActiveOption()) {
-      return
-    }
-
+    Column() {
+    if (this.getActiveOption()) {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Column({ space: 6 }) {
@@ -1270,8 +1268,8 @@ struct DecisionDungeon2DMap {
         this.OverviewInfoCard('当前状态', this.streamStatus === '' ? '已生成完整推演' : this.streamStatus)
         this.OverviewInfoCard(
           '高风险月份',
-          option.dropout_risk_month && option.dropout_risk_month > 0
-            ? `第 ${option.dropout_risk_month} 月更易摇摆`
+          this.getActiveOption()!.dropout_risk_month && this.getActiveOption()!.dropout_risk_month! > 0
+            ? `第 ${this.getActiveOption()!.dropout_risk_month} 月更易摇摆`
             : '暂无明显掉线月'
         )
       }.width('100%')
@@ -1281,21 +1279,21 @@ struct DecisionDungeon2DMap {
           Row() {
             Text('当前焦点事件').fontSize(11).fontWeight(600).fontColor(Theme.Color.TextPrimary)
             Blank()
-            Text(`第 ${focusNode.month} 月`)
+            Text(`第 ${this.getSelectedOrFirstNode()!.month} 月`)
               .fontSize(10).fontColor(Theme.Color.TextTertiary)
           }.width('100%')
-          Text(focusNode.description)
+          Text(this.getSelectedOrFirstNode()!.description)
             .fontSize(11).lineHeight(18).fontColor(Theme.Color.TextSecondary)
           Row({ space: 6 }) {
-            Text(`${(focusNode.probability * 100).toFixed(0)}% 概率`)
-              .fontSize(10).fontColor(this.confidenceColor(focusNode.probability))
+            Text(`${(this.getSelectedOrFirstNode()!.probability * 100).toFixed(0)}% 概率`)
+              .fontSize(10).fontColor(this.confidenceColor(this.getSelectedOrFirstNode()!.probability))
               .padding({ left: 6, right: 6, top: 3, bottom: 3 })
               .backgroundColor(Theme.Color.BackgroundTertiary)
               .borderRadius(Theme.Radius.round)
-            Text(focusNode.isBranch ? '分支节点' : '主链节点')
-              .fontSize(10).fontColor(focusNode.isBranch ? Theme.Color.Warning : Theme.Color.Primary)
+            Text(this.getSelectedOrFirstNode()!.isBranch ? '分支节点' : '主链节点')
+              .fontSize(10).fontColor(this.getSelectedOrFirstNode()!.isBranch ? Theme.Color.Warning : Theme.Color.Primary)
               .padding({ left: 6, right: 6, top: 3, bottom: 3 })
-              .backgroundColor(focusNode.isBranch ? 'rgba(245,158,11,0.10)' : 'rgba(10,89,247,0.08)')
+              .backgroundColor(this.getSelectedOrFirstNode()!.isBranch ? 'rgba(245,158,11,0.10)' : 'rgba(10,89,247,0.08)')
               .borderRadius(Theme.Radius.round)
           }.width('100%')
         }
@@ -1312,6 +1310,8 @@ struct DecisionDungeon2DMap {
     .shadow(Theme.Shadow.Soft)
     .alignItems(HorizontalAlign.Start)
     .margin({ left: 16, right: 16, top: 8, bottom: 6 })
+    }
+    }
   }
 
   @Builder
@@ -1345,6 +1345,7 @@ struct DecisionDungeon2DMap {
 
   @Builder
   buildRecommendation() {
+    Column() {
     if (this.structuredRecommendation) {
       Column({ space: 8 }) {
         Text(`建议: ${this.structuredRecommendation!.recommended_option}`)
@@ -1361,10 +1362,12 @@ struct DecisionDungeon2DMap {
       .backgroundColor('rgba(10, 89, 247, 0.04)')
       .border({ width: { bottom: 0.5 }, color: Theme.Color.BorderLight })
     }
+    }
   }
 
   @Builder
   buildEvidencePanels() {
+    Column() {
     if (this.hasEvidencePanels()) {
       Column({ space: 10 }) {
         if (this.verifiabilityReport) {
@@ -1578,10 +1581,12 @@ struct DecisionDungeon2DMap {
       }
       .width('100%').padding({ left: 16, right: 16, top: 8, bottom: 6 })
     }
+    }
   }
 
   @Builder
   buildCalibrationPanel() {
+    Column() {
     if (this.getActiveOption()) {
       Column({ space: 10 }) {
         Row() {
@@ -1741,11 +1746,13 @@ struct DecisionDungeon2DMap {
       .alignItems(HorizontalAlign.Start)
       .margin({ left: 16, right: 16, top: 8, bottom: 6 })
     }
+    }
   }
 
   @Builder
   buildStatusBar() {
     Column({ space: 6 }) {
+      if (this.streamStatus) {
       Row({ space: 8 }) {
         LoadingProgress().width(14).height(14).color(Theme.Color.Primary)
         Text(this.streamStatus).fontSize(11).fontColor(Theme.Color.Primary).layoutWeight(1)
@@ -1794,6 +1801,7 @@ struct DecisionDungeon2DMap {
         .backgroundColor(Theme.Color.BackgroundSecondary)
         .borderRadius(Theme.Radius.m)
         .border({ width: 0.5, color: Theme.Color.BorderLight })
+      }
       }
     }
     .width('100%').padding({ left: 16, right: 16, top: 6, bottom: 6 })
@@ -1995,6 +2003,7 @@ struct DecisionDungeon2DMap {
   @Builder
   buildDetailPanel() {
     Column({ space: 12 }) {
+      if (this.showDetail && this.selectedNodeId) {
       // 拖拽条
       Row() {
         Row().width(40).height(4).backgroundColor(Theme.Color.BorderMedium).borderRadius(2)
@@ -2109,6 +2118,7 @@ struct DecisionDungeon2DMap {
             }
           }.padding({ left: 20, right: 20, bottom: 20 })
         }.constraintSize({ maxHeight: 300 }).scrollBar(BarState.Off)
+      }
       }
     }
     .width('100%')

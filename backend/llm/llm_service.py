@@ -8,9 +8,17 @@ from enum import Enum
 import json
 from dotenv import load_dotenv
 
-# 加载 backend/.env
-_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-load_dotenv(_env_path)
+# 加载环境变量 - 先加载根目录的.env，再加载backend/.env
+_root_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+_backend_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+
+# 先加载根目录的.env（优先级低）
+if os.path.exists(_root_env_path):
+    load_dotenv(_root_env_path)
+    
+# 再加载backend/.env（优先级高，会覆盖根目录的同名变量）
+if os.path.exists(_backend_env_path):
+    load_dotenv(_backend_env_path, override=True)
 
 
 class LLMProvider(Enum):
@@ -157,7 +165,7 @@ class LLMService:
             "messages": messages,
             "temperature": temperature,
             "extra_body": extra_body,
-            "timeout": 20
+            "timeout": 45
         }
         
         # 添加 JSON 响应格式支持

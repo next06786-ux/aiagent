@@ -222,7 +222,7 @@ struct Index {
       title: '增强决策推演',
       subtitle: '双阶段采集',
       description: '先自由表达，再由 AI 追问补全信息，最后进入可验证的时间线推演',
-      route: 'pages/QuickDecisionInput',
+      route: 'pages/EnhancedDecisionFlow',
       gradient: ['#9C27B0', '#E91E63']
     }
   ];
@@ -698,7 +698,7 @@ struct Index {
                 '知识星图',
                 'GPU渲染',
                 '高性能3D星图',
-                'pages/KnowledgeStarMapGL',
+                'pages/KnowledgeStarMap',
                 Theme.Gradient.Ocean,
                 'network'
               )
@@ -754,7 +754,7 @@ struct Index {
                 '决策副本',
                 '个性化闯关',
                 '描述你的决策问题，AI生成个性化副本，像游戏一样探索未来',
-                'pages/QuickDecisionInput',
+                'pages/EnhancedDecisionFlow',
                 ['#9C27B0', '#E91E63'],
                 'universe',
                 true

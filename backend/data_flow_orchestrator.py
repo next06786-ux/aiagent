@@ -2,7 +2,7 @@
 数据流协调器
 将感知层数据流经5层架构，应用于6个生活领域
 自动将数据存入RAG记忆系统
-自动构建信息知识图谱（以信息节点为单位）
+自动构建知识图谱（支持人物关系、升学规划、职业发展三种视图）
 """
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -23,7 +23,7 @@ try:
     INFO_KG_AVAILABLE = True
 except ImportError:
     INFO_KG_AVAILABLE = False
-    print("⚠️ 信息知识图谱模块不可用")
+    print("⚠️ 知识图谱模块不可用")
 
 
 @dataclass
@@ -51,7 +51,7 @@ class LifeDomainInsight:
 
 
 class DataFlowOrchestrator:
-    """数据流协调器 - 连接5层架构 + RAG记忆系统 + 信息知识图谱"""
+    """数据流协调器 - 连接5层架构 + RAG记忆系统 + 知识图谱"""
     
     def __init__(self, perception_layer, meta_agent, knowledge_graph, 
                  reinforcement_learner, multimodal_fusion, rag_system=None,
@@ -66,7 +66,7 @@ class DataFlowOrchestrator:
         # RAG记忆系统（核心记忆中枢）
         self.rag_system = rag_system
         
-        # 信息知识图谱系统（以信息节点为中心）
+        # 知识图谱系统（支持人物关系、升学规划、职业发展三种视图）
         self.info_kg_system = info_kg_system
         
         # 信息提取器
@@ -998,7 +998,7 @@ class DataFlowOrchestrator:
         except Exception as e:
             print(f"Failed to store insights memory: {e}")
     
-    # ==================== 信息知识图谱自动化构建 ====================
+    # ==================== 知识图谱自动化构建 ====================
     
     async def _extract_and_build_knowledge_graph(
         self,

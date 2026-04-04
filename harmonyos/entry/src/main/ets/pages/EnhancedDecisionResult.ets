@@ -10,11 +10,22 @@ import { getAuthService } from '../service/AuthService'
 interface TimelineEvent {
   month: number
   event: string
-  impact: Record<string, number>
+  impact?: Record<string, number>
+  impact_vector?: Record<string, number>
   probability: number
   event_id: string
   risk_tag: string
   branch_group: string
+  agent_votes?: AgentVote[]
+  evidence_sources?: string[]
+}
+
+interface AgentVote {
+  agent_id: string
+  agent_name: string
+  stance: string
+  score: number
+  confidence: number
 }
 
 interface RiskAssessment {
@@ -31,6 +42,8 @@ interface DecisionOption {
   final_score: number
   risk_level: number
   risk_assessment: RiskAssessment | null
+  branch_agent_id?: string
+  branch_strategy?: string
 }
 
 interface SimulationData {
@@ -56,7 +69,15 @@ struct EnhancedDecisionResult {
   aboutToAppear() {
     const params = router.getParams() as Record<string, Object>
     if (params?.simulationData) {
-      this.simulationData = params.simulationData as SimulationData
+      if (typeof params.simulationData === 'string') {
+        try {
+          this.simulationData = JSON.parse(params.simulationData as string) as SimulationData
+        } catch (error) {
+          console.error('解析决策推演数据失败:', error)
+        }
+      } else {
+        this.simulationData = params.simulationData as SimulationData
+      }
     }
   }
 
@@ -130,6 +151,30 @@ struct EnhancedDecisionResult {
       else if (v < 0) parts.push(`${k}-`)
     }
     return parts.join(' ')
+  }
+
+  voteTone(stance: string): string {
+    if (stance === 'support') return '#34C759'
+    if (stance === 'challenge') return '#FF3B30'
+    return '#FF9500'
+  }
+
+  private enterParallelLife() {
+    const option = this.selectedOption()
+    if (!this.simulationData || !option) return
+
+    try {
+      router.pushUrl({
+        url: 'pages/ParallelLifeGame',
+        params: {
+          simulationId: this.simulationData.simulation_id,
+          branchId: option.branch_agent_id || option.option_id,
+          sourceQuestion: this.simulationData.question
+        }
+      })
+    } catch (error) {
+      console.error('进入平行人生失败:', error)
+    }
   }
 
   private navigateBack() {
@@ -216,6 +261,35 @@ struct EnhancedDecisionResult {
             .borderRadius(16).margin({ left: 16, right: 16 })
             .alignItems(HorizontalAlign.Start)
 
+            Column({ space: 10 }) {
+              Text('分支体验入口')
+                .fontSize(16)
+                .fontWeight(700)
+                .fontColor('#5A8CFF')
+              Text(`将当前分支“${this.selectedOption()?.title ?? ''}”注入平行人生，用真实选择回写决策画像。`)
+                .fontSize(14)
+                .fontColor('#444')
+                .lineHeight(22)
+              if (this.selectedOption()?.branch_strategy) {
+                Text(`分支策略：${this.selectedOption()?.branch_strategy}`)
+                  .fontSize(12)
+                  .fontColor('#7B8191')
+              }
+              Button('体验当前分支')
+                .width('100%')
+                .height(44)
+                .fontSize(14)
+                .fontWeight(600)
+                .fontColor('#FFFFFF')
+                .backgroundColor('#5A8CFF')
+                .borderRadius(14)
+                .onClick(() => this.enterParallelLife())
+            }
+            .width('100%').padding(20)
+            .backgroundColor('rgba(90,140,255,0.08)')
+            .borderRadius(16).margin({ left: 16, right: 16 })
+            .alignItems(HorizontalAlign.Start)
+
             // 底部间距
             Column().height(40)
           }
@@ -269,10 +343,27 @@ struct EnhancedDecisionResult {
               }
 
               // 影响维度
-              Text(this.impactText(node.impact))
+              Text(this.impactText(node.impact ?? node.impact_vector ?? {}))
                 .fontSize(12).fontColor('#666')
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                 .backgroundColor('#F5F7FA').borderRadius(8)
+
+              if ((node.agent_votes?.length ?? 0) > 0) {
+                Scroll() {
+                  Row({ space: 8 }) {
+                    ForEach(node.agent_votes ?? [], (vote: AgentVote) => {
+                      Text(`${vote.agent_name} ${vote.stance}`)
+                        .fontSize(10)
+                        .fontColor(this.voteTone(vote.stance))
+                        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                        .backgroundColor(`${this.voteTone(vote.stance)}18`)
+                        .borderRadius(12)
+                    })
+                  }
+                }
+                .scrollable(ScrollDirection.Horizontal)
+                .scrollBar(BarState.Off)
+              }
 
               // 反馈按钮
               Row({ space: 10 }) {
