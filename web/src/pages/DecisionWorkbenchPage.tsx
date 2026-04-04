@@ -626,7 +626,7 @@ export function DecisionWorkbenchPage() {
           <GlassCard title="最近推演" subtitle="点击打开历史图谱">
             <div className="history-grid">
               {history.map(item => (
-                <article key={item.simulation_id || item.session_id || `history-${Math.random()}`} className="history-card">
+                <article key={item.simulation_id || `history-${Math.random()}`} className="history-card">
                   <div className="module-accent history-accent-primary" />
                   <div className="history-card-body">
                     <div className="history-card-top">

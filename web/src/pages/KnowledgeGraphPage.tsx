@@ -581,6 +581,8 @@ export default function KnowledgeGraphPage() {
           if (result.success && result.data) {
             const careerData = result.data;
             const payload: KnowledgeGraphView = {
+              view_mode: 'career',
+              title: '职业发展图谱',
               nodes: careerData.nodes.map((n: any) => ({
                 id: n.id,
                 name: n.label,
@@ -597,7 +599,7 @@ export default function KnowledgeGraphPage() {
                 weight: e.weight || 1
               })),
               summary: {
-                user_id: userId,
+                user_id: user?.user_id || '',
                 view_mode: 'career',
                 node_count: careerData.nodes.length,
                 link_count: careerData.edges.length,

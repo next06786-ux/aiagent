@@ -461,7 +461,7 @@ export async function getDecisionHistory(userId: string) {
 
   return Array.isArray(result.data)
     ? result.data.map((item) => ({
-        session_id: asString(asObject(item)?.session_id),
+        simulation_id: asString(asObject(item)?.session_id) || asString(asObject(item)?.simulation_id),
         question: asString(asObject(item)?.question) || '未命名推演',
         options_count: asNumber(asObject(item)?.options_count) || 0,
         recommendation: asString(asObject(item)?.recommendation),
