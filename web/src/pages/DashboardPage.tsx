@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
 import { StatusPill } from '../components/common/StatusPill'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { API_BASE_URL } from '../services/api'
 
@@ -92,13 +93,14 @@ export default function DashboardPage() {
   const filtered = tab === 0 ? insights : insights.filter(i => i.type === typeFilter[tab])
 
   return (
-    <AppShell title="智能仪表盘" subtitle="感知数据 · 预测分析 · 异常检测"
+    <AppShell
       actions={
         <button className="button button-ghost" onClick={() => navigate('/insights')}>
           查看洞察详情
         </button>
       }
     >
+      <PageHeader title="智能仪表盘" subtitle="感知数据 · 预测分析 · 异常检测" />
       {/* metrics */}
       <section className="metrics-grid">
         {metrics.map(m => <MetricCard key={m.title} m={m} />)}

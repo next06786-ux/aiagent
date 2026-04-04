@@ -597,9 +597,11 @@ export default function KnowledgeGraphPage() {
                 weight: e.weight || 1
               })),
               summary: {
+                user_id: userId,
+                view_mode: 'career',
                 node_count: careerData.nodes.length,
                 link_count: careerData.edges.length,
-                view_mode: 'career'
+                top_nodes: []
               }
             };
             console.log('[KG] career data loaded, nodes:', payload.nodes.length);

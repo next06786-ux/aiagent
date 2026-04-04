@@ -598,7 +598,7 @@ export function DecisionSimulationPage() {
                 fontSize: 13,
                 color: '#64748b',
               }}>
-                正在处理选项 {currentOptionIndex + 1} / {optionsCount || config.options?.length || 0}
+                正在处理选项 {currentOptionIndex + 1} / {config.options?.length || 0}
               </div>
             )}
 
@@ -749,7 +749,7 @@ export function DecisionSimulationPage() {
         </div>
       )}
       
-      {wsPhase === 'running' && !showThinkingPanel && (thinkingContent.size > 0 || agentThinkings.size > 0) && (
+      {wsPhase === 'running' && !showThinkingPanel && thinkingContent.size > 0 && (
         <button
           onClick={() => setShowThinkingPanel(true)}
           style={{
@@ -774,7 +774,7 @@ export function DecisionSimulationPage() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
           </svg>
-          {agentThinkings.size > 0 ? `5个Agent思考 (${agentThinkings.size})` : `显示思考过程 (${thinkingContent.size})`}
+          显示思考过程 ({thinkingContent.size})
         </button>
       )}
 

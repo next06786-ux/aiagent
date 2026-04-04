@@ -179,7 +179,7 @@ function DecisionEventNode({ data, selected }: NodeProps) {
 }
 
 //  自定义节点：AI机器人指示器
-interface AgentBotData {
+interface AgentBotData extends Record<string, unknown> {
   branchName: string;
   color: string;
   thinkingText: string;
@@ -389,7 +389,7 @@ function buildLayout(nodes: DecisionGraphNode[], accent: string, agentProgress?:
               color,
               thinkingText: progress.thinking,
               isActive: true,
-            } as AgentBotData,
+            },
             draggable: false,
           });
         }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { API_BASE_URL } from '../services/api'
 
@@ -53,7 +54,7 @@ export default function LearningProgressPage() {
       .finally(() => setLoading(false))
   }, [userId])
 
-  if (loading) return <AppShell title="学习进度"><p style={{ color: 'var(--text-tertiary)' }}>加载中…</p></AppShell>
+  if (loading) return <AppShell><PageHeader title="学习进度" /><p style={{ color: 'var(--text-tertiary)' }}>加载中…</p></AppShell>
   if (!data) return null
 
   const total = data.positive_feedback + data.negative_feedback + data.neutral_feedback || 1
@@ -61,7 +62,8 @@ export default function LearningProgressPage() {
   const negRate = data.negative_feedback / total
 
   return (
-    <AppShell title="学习进度" subtitle="强化学习 · 智能体成长追踪">
+    <AppShell>
+      <PageHeader title="学习进度" subtitle="强化学习 · 智能体成长追踪" />
       <section className="metrics-grid">
         {[
           { label: '总交互次数', value: data.total_interactions.toLocaleString(), tone: 'primary' },

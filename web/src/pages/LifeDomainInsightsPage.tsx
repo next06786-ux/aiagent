@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { API_BASE_URL } from '../services/api'
 
@@ -93,13 +94,14 @@ export default function LifeDomainInsightsPage() {
     : []
 
   return (
-    <AppShell title="生活领域洞察" subtitle="多维感知 · 跨域分析 · 个性化建议"
+    <AppShell
       actions={
         <button className="button button-primary" onClick={run} disabled={loading}>
           {loading ? '分析中…' : result ? '重新分析' : '开始分析'}
         </button>
       }
     >
+      <PageHeader title="生活领域洞察" subtitle="多维感知 · 跨域分析 · 个性化建议" />
       {!result && !loading && (
         <div className="empty-state-block" style={{ textAlign: 'center', padding: 48 }}>
           <p style={{ fontSize: 32, margin: '0 0 12px' }}>🔍</p>

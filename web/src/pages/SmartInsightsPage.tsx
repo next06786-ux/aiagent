@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
 import { StatusPill } from '../components/common/StatusPill'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { API_BASE_URL } from '../services/api'
 
@@ -81,7 +82,8 @@ export default function SmartInsightsPage() {
   const filtered = category === 'all' ? insights : insights.filter(i => i.category === category)
 
   return (
-    <AppShell title="智能洞察" subtitle="涌现发现 · 级联效应 · 行为模式分析">
+    <AppShell>
+      <PageHeader title="智能洞察" subtitle="涌现发现 · 级联效应 · 行为模式分析" />
       {loading && <div className="app-loading-screen" style={{ minHeight: 300 }}><p>加载中…</p></div>}
       {error && <p style={{ color: 'var(--danger)', padding: 16 }}>{error}</p>}
 

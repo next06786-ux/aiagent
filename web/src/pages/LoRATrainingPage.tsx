@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
 import { StatusPill } from '../components/common/StatusPill'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { getLoraStatus, getLoraProgress, triggerLoraTraining } from '../services/decision'
 
@@ -61,7 +62,8 @@ export default function LoRATrainingPage() {
   const pct = Math.round((progress?.progress ?? 0) * 100)
 
   return (
-    <AppShell title="个性模型训练" subtitle="保留训练能力，但当前决策推演默认走云端/API 主链">
+    <AppShell>
+      <PageHeader title="个性模型训练" subtitle="保留训练能力，但当前决策推演默认走云端/API 主链" />
       {loading && <p style={{ color: 'var(--text-tertiary)' }}>加载中…</p>}
 
       {status && (

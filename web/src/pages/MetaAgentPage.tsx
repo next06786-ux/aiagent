@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
 import { StatusPill } from '../components/common/StatusPill'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { API_BASE_URL } from '../services/api'
 
@@ -129,7 +130,8 @@ export default function MetaAgentPage() {
   const reset = () => { setPhase('input'); setAgents(INIT_AGENTS.map(a => ({ ...a, status: 'idle', progress: 0 }))) }
 
   return (
-    <AppShell title="多智能体协调" subtitle="多个 AI 智能体并行分析，Meta 智能体综合决策">
+    <AppShell>
+      <PageHeader title="多智能体协调" subtitle="多个 AI 智能体并行分析，Meta 智能体综合决策" />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
 
         {/* left: input + agents */}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { GlassCard } from '../components/common/GlassCard';
 import { AppShell } from '../components/shell/AppShell';
 import { StatusPill } from '../components/common/StatusPill';
+import { PageHeader } from '../components/common/PageHeader';
 import { useAuth } from '../hooks/useAuth';
 
 // HarmonyOS 6 - 纯净几何图标组件
@@ -90,7 +91,8 @@ export function ProfilePage() {
   }
 
   return (
-    <AppShell title="个人中心" subtitle="账号信息 · 资料维护 · 安全设置">
+    <AppShell>
+      <PageHeader title="个人中心" subtitle="账号信息 · 资料维护 · 安全设置" />
       {/* HarmonyOS 6 - 纯净渐变英雄卡片 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 24, padding: '28px 32px',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/shell/AppShell'
 import { GlassCard } from '../components/common/GlassCard'
 import { StatusPill } from '../components/common/StatusPill'
+import { PageHeader } from '../components/common/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import { API_BASE_URL } from '../services/api'
 
@@ -83,13 +84,14 @@ export default function EmergenceDashboardPage() {
   ] as const
 
   return (
-    <AppShell title="涌现综合报告" subtitle="跨域风险评估 · 行动计划 · 进展追踪"
+    <AppShell
       actions={
         <button className="button button-ghost" onClick={() => navigate('/emergence-patterns')}>
           查看模式详情
         </button>
       }
     >
+      <PageHeader title="涌现综合报告" subtitle="跨域风险评估 · 行动计划 · 进展追踪" />
       {loading && <p style={{ color: 'var(--text-tertiary)' }}>加载中…</p>}
       {!loading && !report && (
         <div className="empty-state-block" style={{ padding: 48, textAlign: 'center' }}>

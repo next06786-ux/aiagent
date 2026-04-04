@@ -1,17 +1,19 @@
 import { Link } from 'react-router-dom';
+import { AppShell } from '../components/shell/AppShell';
 import { GlassCard } from '../components/common/GlassCard';
 import { StatusPill } from '../components/common/StatusPill';
-import { AppShell } from '../components/shell/AppShell';
+import { PageHeader } from '../components/common/PageHeader';
 import { featureModules } from '../data/features';
 
 const groups = ['核心闭环', '图谱与洞察', '代理与成长'] as const;
 
 export function ModulesPage() {
   return (
-    <AppShell
-      title="能力地图"
-      subtitle="Web 端功能迁移清单，哪些已经可用，哪些仍在排期，一目了然。"
-    >
+    <AppShell>
+      <PageHeader
+        title="能力地图"
+        subtitle="Web 端功能迁移清单，哪些已经可用，哪些仍在排期，一目了然。"
+      />
       <div className="stack-layout">
         {groups.map((group) => (
           <GlassCard

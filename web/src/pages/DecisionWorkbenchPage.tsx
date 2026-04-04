@@ -67,7 +67,7 @@ export function DecisionWorkbenchPage() {
     if (user?.user_id && phase === 'input') {
       // 延迟加载历史记录，不阻塞页面渲染
       const timer = setTimeout(() => {
-        getDecisionHistory(user.user_id, 5).then(setHistory).catch(() => {});
+        getDecisionHistory(user.user_id).then(setHistory).catch(() => {});
       }, 500);
       return () => clearTimeout(timer);
     }
@@ -298,13 +298,6 @@ export function DecisionWorkbenchPage() {
 
   // 启动模拟时的状态
   const [simulatingStatus, setSimulatingStatus] = useState('');
-
-  // ── 阶段3：确认选项，发起 WebSocket 推演 ─────────────────
-  function handleAddOption() {
-    if (!optionInput.trim()) return;
-    setOptions(prev => [...prev, { title: optionInput.trim(), description: '' }]);
-    setOptionInput('');
-  }
 
   // ── 渲染 ─────────────────────────────────────────────────
   return (
