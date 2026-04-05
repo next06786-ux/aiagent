@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { GlobalAIFloatingButton } from '../ai/GlobalAIFloatingButton';
 
 interface AppShellProps extends PropsWithChildren {
   showNav?: boolean;
@@ -48,6 +49,9 @@ export function AppShell({
           </nav>
         )}
       </main>
+
+      {/* 全局AI悬浮按钮 */}
+      <GlobalAIFloatingButton />
     </div>
   );
 }

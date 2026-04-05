@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from backend.decision.future_os_service import FutureOSService
 from backend.vertical.career.career_knowledge_graph import career_kg, UserSkillProfile
+from backend.vertical.education.education_knowledge_graph import education_kg, EducationUserProfile
 
 
 router = APIRouter(prefix="/api/v5/future-os", tags=["future-os"])
@@ -65,6 +66,22 @@ class UpdateSkillRequest(BaseModel):
     mastery: float  # 0-1
 
 
+# 教育知识图谱相关请求模型
+class EducationGraphRequest(BaseModel):
+    """教育升学知识图谱请求"""
+    user_id: str
+    gpa: float = 3.5                      # 当前GPA
+    gpa_max: float = 4.0                  # GPA满分
+    ranking_percent: float = 0.2          # 年级排名百分比
+    sat_act: float = 0.0                  # SAT/ACT成绩
+    research_experience: float = 0.5      # 科研经历 (0-1)
+    publications: int = 0                 # 发表论文数
+    target_major: str = ""                # 目标专业
+    target_level: str = "master"          # 目标学历：bachelor/master/phd
+    search_keyword: str = ""              # 搜索关键词
+    location: str = ""                    # 地理位置
+
+
 @router.get("/knowledge/{user_id}")
 async def get_future_os_knowledge_view(
     user_id: str,
@@ -72,15 +89,88 @@ async def get_future_os_knowledge_view(
     question: str = "",
     session_id: Optional[str] = None,
 ):
+    """获取知识星图视图（三级缓存架构）"""
+    import time
+    start_time = time.time()
+    print(f"[KG API] 📥 收到请求 - user_id={user_id}, view={view}, question={question or '(空)'}, session_id={session_id or '(空)'}")
+    
     try:
+        view_start = time.time()
         payload = service.get_graph_view(user_id, view, question, session_id)
+        view_time = time.time() - view_start
+        
+        total_time = time.time() - start_time
+        print(f"[KG API] ✅ 请求完成 - 视图耗时={view_time:.3f}s, 总耗时={total_time:.3f}s, 节点数={len(payload.get('nodes', []))}")
+        
         return {"success": True, "data": payload}
     except Exception as exc:
+        error_time = time.time() - start_time
+        print(f"[KG API] ❌ 请求失败 - 错误={str(exc)}, 耗时={error_time:.3f}s")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "message": str(exc), "data": {"nodes": [], "links": [], "summary": {}}}
 
 
 @router.delete("/knowledge/{user_id}/cache")
 async def clear_knowledge_graph_cache(user_id: str):
+    """清除知识图谱缓存"""
+    try:
+        # 清除L1内存缓存
+        from backend.decision.future_os_service import _l1_cache
+        _l1_cache.clear()
+        
+        # 清除L2 Redis缓存
+        from backend.decision.future_os_service import _get_redis_client
+        redis_client = _get_redis_client()
+        if redis_client:
+            # 删除该用户的所有视图缓存
+            pattern = f"kg_view:{user_id}:*"
+            keys = redis_client.keys(pattern)
+            if keys:
+                redis_client.delete(*keys)
+        
+        return {"success": True, "message": f"已清除用户 {user_id} 的所有缓存"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+@router.get("/cache/stats")
+async def get_cache_stats():
+    """获取缓存统计信息"""
+    try:
+        from backend.decision.future_os_service import _l1_cache, _get_redis_client
+        
+        # L1统计
+        l1_stats = _l1_cache.stats()
+        
+        # L2统计
+        l2_stats = {"status": "unavailable"}
+        try:
+            redis_client = _get_redis_client()
+            if redis_client:
+                info = redis_client.info("stats")
+                l2_stats = {
+                    "status": "connected",
+                    "total_commands": info.get("total_commands_processed", 0),
+                    "keyspace_hits": info.get("keyspace_hits", 0),
+                    "keyspace_misses": info.get("keyspace_misses", 0),
+                }
+                if l2_stats["keyspace_hits"] + l2_stats["keyspace_misses"] > 0:
+                    hit_rate = l2_stats["keyspace_hits"] / (l2_stats["keyspace_hits"] + l2_stats["keyspace_misses"])
+                    l2_stats["hit_rate"] = f"{hit_rate:.2%}"
+        except Exception as e:
+            l2_stats = {"status": "error", "message": str(e)}
+        
+        return {
+            "success": True,
+            "data": {
+                "l1_memory_cache": l1_stats,
+                "l2_redis_cache": l2_stats,
+                "architecture": "三级缓存：L1(内存) → L2(Redis) → L3(计算)"
+            }
+        }
+    except Exception as e:
+        return {"success": False, "message": str(e)}
     """清除知识图谱缓存"""
     try:
         import redis
@@ -309,29 +399,37 @@ async def get_reachable_jobs(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-        
-        # 获取可达岗位
-        reachable = career_kg.get_reachable_jobs(user_profile, jobs, min_match_score)
-        
+
+
+@router.post("/education-graph")
+async def get_education_knowledge_graph(request: EducationGraphRequest):
+    """
+    获取教育升学决策知识图谱
+    - 第一圈：学业层（GPA、排名、标化）
+    - 第二圈：目标学校层（冲刺/匹配/保底）
+    - 第三圈：规划行动层（备考任务、申请策略）
+    """
+    try:
+        user_profile = EducationUserProfile(
+            student_id=request.user_id,
+            gpa=request.gpa, gpa_max=request.gpa_max,
+            ranking_percent=request.ranking_percent,
+            sat_act=request.sat_act,
+            research_experience=request.research_experience,
+            publications=request.publications,
+            target_major=request.target_major,
+            target_level=request.target_level
+        )
+        graph_data = education_kg.build_education_graph(
+            user_profile=user_profile,
+            search_keyword=request.search_keyword,
+            location=request.location
+        )
         return {
             "success": True,
-            "data": {
-                "reachable_jobs": [
-                    {
-                        "title": item["job"].title,
-                        "company": item["job"].company,
-                        "salary_range": f"{item['job'].salary_min}-{item['job'].salary_max}万",
-                        "match_score": item["match_score"],
-                        "missing_skills": item["missing_skills"]
-                    }
-                    for item in reachable
-                ],
-                "total": len(reachable)
-            },
-            "message": f"找到{len(reachable)}个可达岗位"
+            "data": graph_data,
+            "message": "已生成教育升学知识图谱"
         }
-    
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

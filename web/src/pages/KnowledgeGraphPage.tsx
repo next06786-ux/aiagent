@@ -236,7 +236,7 @@ function buildGraphInScene(
   console.log('[KG] buildGraphInScene start, nodes:', data.nodes.length, 'mode:', mode);
   const { scene } = ref;
   
-  // 立即清除旧图谱对象
+  // 淡出旧图谱对象（立即清除）
   const toRemove = scene.children.filter(c => c.userData.g);
   toRemove.forEach(c => {
     scene.remove(c);
@@ -409,23 +409,48 @@ function buildGraphInScene(
 
     return { id: n.id, name: n.name, type: n.type, category: n.category, mesh, mat, halo, ring, label, connections: conn[i], node: n };
   });
+  
   ref.nodes = metas;
   console.log(`[KG] buildGraphInScene done: ${metas.length} nodes, ${fe.length} edges`);
 
-  // 边：每条边单独一条 Line（贝塞尔曲线）
+  // 相机快速过渡到新位置
   if (metas.length > 0 && ref.camera && ref.controls) {
     const bounds = new THREE.Box3();
     metas.forEach(meta => bounds.expandByPoint(meta.mesh.position));
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z, 10);
-    ref.camera.position.set(center.x + radius * 0.9, center.y + radius * 0.55, center.z + radius * 1.25);
-    ref.camera.lookAt(center);
-    ref.controls.target.copy(center);
-    ref.controls.update();
+    
+    const targetPos = new THREE.Vector3(
+      center.x + radius * 0.9, 
+      center.y + radius * 0.55, 
+      center.z + radius * 1.25
+    );
+    
+    // 快速平滑过渡相机位置
+    const currentPos = ref.camera.position.clone();
+    const currentTarget = ref.controls.target.clone();
+    const duration = 300; // 从600ms减少到300ms
+    const startTime = performance.now();
+    
+    const animateCamera = () => {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      
+      ref.camera.position.lerpVectors(currentPos, targetPos, eased);
+      ref.controls.target.lerpVectors(currentTarget, center, eased);
+      ref.camera.lookAt(ref.controls.target);
+      ref.controls.update();
+      
+      if (progress < 1) {
+        requestAnimationFrame(animateCamera);
+      }
+    };
+    animateCamera();
   }
 
-  fe.forEach(([a, b]) => {
+  fe.forEach(([a, b], edgeIndex) => {
     const pa = fn[a], pb = fn[b];
     // 跳过含 NaN/Infinity 的节点
     if (!isFinite(pa.x) || !isFinite(pa.y) || !isFinite(pa.z) ||
@@ -504,7 +529,12 @@ function buildGraphInScene(
 }
 
 
+// ── 全局缓存（组件外部，跨页面保持） ────────────────────────────────
+const globalGraphCache = new Map<string, KnowledgeGraphView>();
+
 export default function KnowledgeGraphPage() {
+  console.log('[KG] 🎬 组件函数执行开始，时间:', performance.now());
+  
   const location = useLocation();
   const { user, isLoading: authLoading } = useAuth();
   const routeState = (location.state || {}) as { question?: string; view?: GraphViewMode };
@@ -516,8 +546,35 @@ export default function KnowledgeGraphPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // 缓存不同视图的数据，避免重复加载
-  const graphCacheRef = useRef<Map<string, KnowledgeGraphView>>(new Map());
+  console.log('[KG] 📊 组件状态初始化完成，时间:', performance.now());
+  
+  // 视图切换处理函数 - 立即清空图谱和场景
+  const handleViewModeChange = (newMode: GraphViewMode) => {
+    if (newMode === viewMode) return;
+    console.log('[KG] 🔄 切换视图:', viewMode, '→', newMode);
+    
+    // 立即清空 Three.js 场景
+    const ref = threeRef.current;
+    if (ref) {
+      const toRemove = ref.scene.children.filter(c => c.userData.g);
+      toRemove.forEach(c => {
+        ref.scene.remove(c);
+        if ((c as THREE.Mesh).geometry) (c as THREE.Mesh).geometry.dispose();
+        if ((c as THREE.Mesh).material) {
+          const m = (c as THREE.Mesh).material;
+          if (Array.isArray(m)) m.forEach(x => x.dispose()); else (m as THREE.Material).dispose();
+        }
+      });
+      ref.nodes = [];
+      ref.edgeMats = [];
+    }
+    
+    setGraph(null); // 清空数据状态
+    setViewMode(newMode); // 触发数据加载
+  };
+  
+  // 使用全局缓存（跨页面保持）
+  const graphCacheRef = useRef(globalGraphCache);
 
   // Three.js refs
   const mountRef = useRef<HTMLDivElement>(null);
@@ -536,35 +593,62 @@ export default function KnowledgeGraphPage() {
 
   // ── 数据加载（优化切换体验） ──────────────────────────────────────────────
   useEffect(() => {
-    console.log('[KG] data effect, authLoading:', authLoading, 'user_id:', user?.user_id, 'viewMode:', viewMode);
-    if (authLoading || !user?.user_id) return;
+    const effectStartTime = performance.now();
+    console.log('[KG] 🔄 Effect触发 -', {
+      时间: new Date().toLocaleTimeString(),
+      authLoading,
+      user_id: user?.user_id,
+      viewMode,
+      question: question || '(空)',
+    });
+    
+    if (authLoading || !user?.user_id) {
+      console.log('[KG] ⏸️  等待认证...');
+      return;
+    }
     
     // 生成缓存key
     const cacheKey = `${viewMode}-${question}`;
+    console.log('[KG] 🔑 缓存Key:', cacheKey);
     
-    // 先设置加载状态，清空当前图谱（避免闪现旧视图）
-    setIsLoading(true);
-    setGraph(null);
+    // 检查缓存
+    const cacheCheckStart = performance.now();
+    const cached = graphCacheRef.current.get(cacheKey);
+    const cacheCheckTime = performance.now() - cacheCheckStart;
     
-    // 使用 setTimeout 延迟一帧，确保UI更新
-    const timer = setTimeout(() => {
-      // 检查缓存
-      const cached = graphCacheRef.current.get(cacheKey);
-      if (cached) {
-        console.log('[KG] using cached data for', cacheKey);
-        setGraph(cached);
-        setSelectedNode(cached.nodes[0] || null);
-        setIsLoading(false);
-        return;
-      }
-      
-      // 没有缓存，加载数据
+    if (cached) {
+      console.log('[KG] ⚡ 缓存命中!', {
+        耗时: `${cacheCheckTime.toFixed(2)}ms`,
+        节点数: cached.nodes.length,
+        连接数: cached.links.length,
+        总耗时: `${(performance.now() - effectStartTime).toFixed(2)}ms`,
+      });
+      // 直接使用缓存，不清空图谱，不显示加载状态
+      setGraph(cached);
+      setSelectedNode(cached.nodes[0] || null);
       setError('');
+      return;
+    }
     
+    // 缓存未命中，清空图谱并显示加载状态
+    console.log('[KG] 📡 缓存未命中，从服务器加载', {
+      缓存检查耗时: `${cacheCheckTime.toFixed(2)}ms`,
+      当前缓存数量: graphCacheRef.current.size,
+    });
+    
+    const loadStartTime = performance.now();
+    setIsLoading(true);
+    setGraph(null); // 立即清空图谱
+    setError('');
     // 职业视图使用不同的API
     if (viewMode === 'career') {
       const endpoint = `${API_BASE_URL}/api/v5/future-os/career-graph`;
+      console.log('[KG] 🚀 发起职业视图请求', {
+        endpoint,
+        发起时间: new Date().toLocaleTimeString(),
+      });
       
+      const requestStartTime = performance.now();
       fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -576,8 +660,21 @@ export default function KnowledgeGraphPage() {
           target_direction: 'Python工程师'
         })
       })
-        .then(res => res.json())
+        .then(res => {
+          const responseTime = performance.now() - requestStartTime;
+          console.log('[KG] 📥 收到职业视图响应', {
+            状态: res.status,
+            响应时间: `${responseTime.toFixed(2)}ms`,
+          });
+          return res.json();
+        })
         .then(result => {
+          const parseTime = performance.now() - requestStartTime;
+          console.log('[KG] 📊 解析职业视图数据', {
+            解析耗时: `${parseTime.toFixed(2)}ms`,
+            success: result.success,
+          });
+          
           if (result.success && result.data) {
             const careerData = result.data;
             const payload: KnowledgeGraphView = {
@@ -606,7 +703,15 @@ export default function KnowledgeGraphPage() {
                 top_nodes: []
               }
             };
-            console.log('[KG] career data loaded, nodes:', payload.nodes.length);
+            
+            const totalTime = performance.now() - loadStartTime;
+            console.log('[KG] ✅ 职业视图加载完成', {
+              节点数: payload.nodes.length,
+              连接数: payload.links.length,
+              总耗时: `${totalTime.toFixed(2)}ms`,
+              网络耗时: `${(performance.now() - requestStartTime).toFixed(2)}ms`,
+            });
+            
             graphCacheRef.current.set(cacheKey, payload);
             setGraph(payload);
             setSelectedNode(payload.nodes[0] || null);
@@ -615,61 +720,105 @@ export default function KnowledgeGraphPage() {
           }
         })
         .catch(e => {
-          console.error('[KG] career load error:', e);
+          const errorTime = performance.now() - loadStartTime;
+          console.error('[KG] ❌ 职业视图加载失败', {
+            错误: e instanceof Error ? e.message : String(e),
+            耗时: `${errorTime.toFixed(2)}ms`,
+          });
           setGraph(null);
           setError(formatError(endpoint, e instanceof Error ? e.message : '加载失败'));
         })
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          const finalTime = performance.now() - effectStartTime;
+          console.log('[KG] 🏁 职业视图Effect完成', {
+            总耗时: `${finalTime.toFixed(2)}ms`,
+          });
+          setIsLoading(false);
+        });
       return;
     }
     
     // 人物关系/升学规划视图
     const endpoint = `${API_BASE_URL}/api/v5/future-os/knowledge/${user.user_id}?view=${viewMode}`;
+    console.log('[KG] 🚀 发起人物/信号视图请求', {
+      endpoint,
+      viewMode,
+      question: question || '(空)',
+      发起时间: new Date().toLocaleTimeString(),
+    });
+    
+    const requestStartTime = performance.now();
     getFutureOsGraphView(user.user_id, { view: viewMode, question })
       .then(payload => {
-        console.log('[KG] data loaded, nodes:', payload.nodes.length, 'links:', payload.links.length);
+        const totalTime = performance.now() - loadStartTime;
+        const networkTime = performance.now() - requestStartTime;
+        console.log('[KG] ✅ 人物/信号视图加载完成', {
+          节点数: payload.nodes.length,
+          连接数: payload.links.length,
+          总耗时: `${totalTime.toFixed(2)}ms`,
+          网络耗时: `${networkTime.toFixed(2)}ms`,
+          视图模式: payload.view_mode,
+        });
+        
         graphCacheRef.current.set(cacheKey, payload);
+        console.log('[KG] 💾 已缓存视图，当前缓存数:', graphCacheRef.current.size);
         setGraph(payload); 
         setSelectedNode(payload.nodes[0] || null);
       })
       .catch(e => {
-        console.error('[KG] load error:', e);
+        const errorTime = performance.now() - loadStartTime;
+        console.error('[KG] ❌ 人物/信号视图加载失败', {
+          错误: e instanceof Error ? e.message : String(e),
+          耗时: `${errorTime.toFixed(2)}ms`,
+        });
         setGraph(null);
         setError(formatError(endpoint, e instanceof Error ? e.message : '加载失败'));
       })
-      .finally(() => setIsLoading(false));
-    }, 16); // 延迟一帧（约16ms）
-    
-    return () => clearTimeout(timer);
+      .finally(() => {
+        const finalTime = performance.now() - effectStartTime;
+        console.log('[KG] 🏁 人物/信号视图Effect完成', {
+          总耗时: `${finalTime.toFixed(2)}ms`,
+        });
+        setIsLoading(false);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.user_id, viewMode, question]);
 
   // ── Three.js 初始化（只跑一次） ───────────────────────────
   useEffect(() => {
+    console.log('[KG] 🎨 Three.js初始化Effect触发，时间:', performance.now());
     const mount = mountRef.current;
-    if (!mount) return;
+    if (!mount) {
+      console.log('[KG] ⚠️ mountRef未就绪');
+      return;
+    }
 
-    // 等一帧确保 DOM 有尺寸
+    // 立即初始化，不等待下一帧
     let cancelled = false;
+    const initStartTime = performance.now();
+    
     const init = () => {
       if (cancelled || !mountRef.current) return;
       const W = mount.clientWidth || 800;
       const H = mount.clientHeight || 600;
-      console.log('[KG] Three.js init, size:', W, H);
+      console.log('[KG] 🎨 开始Three.js初始化, size:', W, 'x', H, '时间:', performance.now());
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(W, H);
       renderer.setClearColor(0x060d1a, 1);
       mount.appendChild(renderer.domElement);
+      console.log('[KG] ✅ WebGL渲染器创建完成，耗时:', `${(performance.now() - initStartTime).toFixed(2)}ms`);
 
       const scene = new THREE.Scene();
+      
       // 星空背景粒子
       const starGeo = new THREE.BufferGeometry();
       const starPos = new Float32Array(3000);
       for (let i = 0; i < 3000; i++) starPos[i] = (Math.random() - 0.5) * 300;
       starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
       scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.18, transparent: true, opacity: 0.55 })));
+      console.log('[KG] ✅ 星空背景创建完成，耗时:', `${(performance.now() - initStartTime).toFixed(2)}ms`);
 
       scene.add(new THREE.AmbientLight(0x223366, 1.2));
       const pl = new THREE.PointLight(0x4488ff, 6, 120); pl.position.set(10, 15, 10); scene.add(pl);
@@ -693,6 +842,7 @@ export default function KnowledgeGraphPage() {
       };
       const ref = { renderer, scene, camera, controls, raf: -1, nodes: [] as NodeMeta[], edgeMats: [] as THREE.ShaderMaterial[], clock };
       threeRef.current = ref;
+      console.log('[KG] ✅ Three.js核心对象创建完成，耗时:', `${(performance.now() - initStartTime).toFixed(2)}ms`);
 
       const animate = () => {
         ref.raf = requestAnimationFrame(animate);
@@ -731,16 +881,19 @@ export default function KnowledgeGraphPage() {
         renderer.render(scene, camera);
       };
       animate();
+      console.log('[KG] ✅ 动画循环启动完成，耗时:', `${(performance.now() - initStartTime).toFixed(2)}ms`);
 
       // Three.js 初始化完成后，立即渲染已有数据
       if (pendingGraphRef.current) {
-        console.log('[KG] consuming pending graph on init');
+        console.log('[KG] 🔄 发现待渲染数据，立即构建场景');
         const { data, mode } = pendingGraphRef.current;
         pendingGraphRef.current = null;  // 清除pending，避免重复
         buildGraphInScene(ref, data, mode);
       } else {
-        console.log('[KG] no pending graph at init time');
+        console.log('[KG] ℹ️ 暂无待渲染数据');
       }
+      
+      console.log('[KG] ✅ Three.js完整初始化完成，总耗时:', `${(performance.now() - initStartTime).toFixed(2)}ms`);
 
       const ro = new ResizeObserver(() => {
         const nW = mount.clientWidth || 800;
@@ -804,29 +957,45 @@ export default function KnowledgeGraphPage() {
       };
     };
 
-    // 用 rAF 确保 DOM 已布局完成
-    let rafId = requestAnimationFrame(init);
+    // 声明 cleanupRef 在 init 之前
     let cleanupRef: (() => void) | undefined;
+    
+    // 立即初始化，不等待rAF（DOM已经准备好了）
+    console.log('[KG] 🚀 立即调用init，时间:', performance.now());
+    init();
+    console.log('[KG] ✅ init调用完成，时间:', performance.now());
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
       cleanupRef?.();
     };
   }, []);
 
   // ── 图谱重建（数据变化时，防抖优化） ────────────────────────────────
   const buildGraph = useCallback((data: KnowledgeGraphView, mode: GraphViewMode) => {
-    console.log('[KG] buildGraph called, nodes:', data.nodes.length, 'mode:', mode, 'threeRef:', !!threeRef.current);
+    const buildStartTime = performance.now();
+    console.log('[KG] 🎨 开始构建3D场景', {
+      '节点数': data.nodes.length,
+      '连接数': data.links.length,
+      '视图模式': mode,
+      'Three.js就绪': !!threeRef.current,
+    });
+    
     const ref = threeRef.current;
     if (!ref) {
-      console.log('[KG] threeRef null, storing pending');
+      console.log('[KG] ⏸️  Three.js未就绪，暂存数据');
       pendingGraphRef.current = { data, mode };
       return;
     }
+    
     // 清除pending，避免重复渲染
     pendingGraphRef.current = null;
     buildGraphInScene(ref, data, mode);
+    
+    const buildTime = performance.now() - buildStartTime;
+    console.log('[KG] ✅ 3D场景构建完成', {
+      耗时: `${buildTime.toFixed(2)}ms`,
+    });
   }, []);
 
   // 使用 useRef 追踪当前渲染的视图，避免重复渲染
@@ -838,9 +1007,15 @@ export default function KnowledgeGraphPage() {
   useEffect(() => {
     // 只有当数据或模式真正改变时才重建
     if (graph && (lastRenderedRef.current.graph !== graph || lastRenderedRef.current.mode !== viewMode)) {
-      console.log('[KG] rebuilding graph, mode:', viewMode, 'nodes:', graph.nodes.length);
+      console.log('[KG] 🔄 检测到数据变化，触发重建', {
+        视图模式: viewMode,
+        节点数: graph.nodes.length,
+        是否首次渲染: !lastRenderedRef.current.graph,
+      });
       lastRenderedRef.current = { graph, mode: viewMode };
       buildGraph(graph, viewMode);
+    } else if (graph) {
+      console.log('[KG] ⏭️  数据未变化，跳过重建');
     }
   }, [graph, viewMode, buildGraph]);
 
@@ -897,19 +1072,19 @@ export default function KnowledgeGraphPage() {
           <button
             className={`button ${viewMode === 'people' ? 'button-primary' : 'button-ghost'}`}
             style={{ padding: '6px 14px', fontSize: 13, transition: 'all 0.2s ease' }}
-            onClick={() => setViewMode('people')}
+            onClick={() => handleViewModeChange('people')}
             disabled={isLoading}
           >人物关系</button>
           <button
             className={`button ${viewMode === 'signals' ? 'button-primary' : 'button-ghost'}`}
             style={{ padding: '6px 14px', fontSize: 13, transition: 'all 0.2s ease' }}
-            onClick={() => setViewMode('signals')}
+            onClick={() => handleViewModeChange('signals')}
             disabled={isLoading}
           >升学规划</button>
           <button
             className={`button ${viewMode === 'career' ? 'button-primary' : 'button-ghost'}`}
             style={{ padding: '6px 14px', fontSize: 13, transition: 'all 0.2s ease' }}
-            onClick={() => setViewMode('career')}
+            onClick={() => handleViewModeChange('career')}
             disabled={isLoading}
           >职业发展</button>
           <input

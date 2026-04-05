@@ -20,6 +20,7 @@ import LifeDomainInsightsPage from './pages/LifeDomainInsightsPage';
 import MetaAgentPage from './pages/MetaAgentPage';
 import EmergenceDashboardPage from './pages/EmergenceDashboardPage';
 import DashboardPage from './pages/DashboardPage';
+import RelationshipDecisionPage from './pages/RelationshipDecisionPage';
 
 function ProtectedLayout() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -71,6 +72,7 @@ function AppRoutes() {
         <Route path="/decision/history" element={<DecisionHistoryPage />} />
         <Route path="/decision/simulation" element={<DecisionSimulationPage />} />
         <Route path="/modules" element={<ModulesPage />} />
+        <Route path="/relationship" element={<RelationshipDecisionPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/knowledge-graph" element={<KnowledgeGraphPage />} />
         <Route path="/insights" element={<SmartInsightsPage />} />

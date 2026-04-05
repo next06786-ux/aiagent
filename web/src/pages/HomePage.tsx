@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { AICoreModal } from '../components/ai/AICoreModal';
+import { GlobalAIFloatingButton } from '../components/ai/GlobalAIFloatingButton';
 import { GlassCard } from '../components/common/GlassCard';
 import { MetricCard } from '../components/common/MetricCard';
 import { StatusPill } from '../components/common/StatusPill';
@@ -8,6 +9,9 @@ import { featureModules } from '../data/features';
 import { useAuth } from '../hooks/useAuth';
 import { listConversations } from '../services/chat';
 import { getFutureOsHistory } from '../services/futureOs';
+import { API_BASE_URL } from '../services/api';
+import { testApiConnection } from '../utils/networkDiagnostics';
+import '../styles/homepage-side-text.css';
 
 interface PentagramNode {
   id: string;
@@ -48,6 +52,13 @@ export function HomePage() {
     }
 
     let active = true;
+    
+    // 网络诊断和预热
+    console.log('[HomePage] 🔥 开始网络诊断和API预热');
+    testApiConnection(API_BASE_URL).then(() => {
+      console.log('[HomePage] ✅ 网络诊断完成');
+    });
+    
     Promise.allSettled([
       getFutureOsHistory(user.user_id),
       listConversations(user.user_id),
@@ -157,7 +168,7 @@ export function HomePage() {
 
     const cx = W / 2, cy = H / 2;
 
-    // 节点位置（与 CSS top/left 对应）- HarmonyOS 6 纯净色调
+    // 节点位置（与 CSS top/left 对应）HarmonyOS 6 纯净色调
     const nodePositions = [
       { top: '5%',  left: '50%', color: '#4facfe' },  // 华为蓝青渐变
       { top: '24%', left: '84%', color: '#43e97b' },  // 清新绿蓝渐变
@@ -170,7 +181,7 @@ export function HomePage() {
       color: n.color,
     }));
 
-    // ── 六边形网格背景 ──────────────────────────────────────
+    // ── 六边形网格背�?──────────────────────────────────────
     const hexR = 28;
     const hexW = hexR * Math.sqrt(3);
     const hexH = hexR * 2;
@@ -238,7 +249,7 @@ export function HomePage() {
 
     interface Particle {
       nodeIdx: number;
-      t: number;       // 0→1 沿路径进度
+      t: number;       // 0到1 沿路径进度
       speed: number;
       size: number;
       opacity: number;
@@ -253,7 +264,7 @@ export function HomePage() {
     ];
 
     const particles: Particle[] = [];
-    // 初始化粒子，每条线 8 个，错开相位
+    // 初始化粒子，每条路8 个，错开相位
     nodePositions.forEach((_, ni) => {
       for (let i = 0; i < 8; i++) {
         particles.push({
@@ -278,8 +289,7 @@ export function HomePage() {
 
       ctx.clearRect(0, 0, W, H);
 
-      // 重绘静态背景
-      drawField();
+      // 重绘静态背景      drawField();
 
       // 节点实际坐标
       const nodes = nodePositions.map(n => ({
@@ -330,38 +340,28 @@ export function HomePage() {
         <div className="shell-glow shell-glow-accent" />
       </div>
       <section className="hero-card pentagram-hero harmony-fullscreen">
-        <div className="hero-copy harmony-enter-fade-up">
-          <p className="eyebrow" style={{ color: '#0A59F7', fontWeight: 700 }}>AI Ritual Interface</p>
-          <h2>以 AI 核心为中心，把主要能力组织成“五角法阵”式的首页中枢。</h2>
-          <p style={{ color: '#8b8b98', lineHeight: 1.8 }}>
-            中心承载智能核心，外圈五个球体分别映射高频功能。视觉上更贴近鸿蒙端的仪式感、
-            神秘感和系统中控台气质，交互上仍然保持一键直达真实页面。
+        {/* 左侧文案 - 与法阵融合 */}
+        <div className="pentagram-side-text pentagram-side-left harmony-enter-fade-left">
+          <div className="side-text-glow" />
+          <p className="side-text-label">智能感知</p>
+          <h3 className="side-text-title">知识星图</h3>
+          <p className="side-text-desc">
+            多维关系映射<br/>
+            记忆网络构建<br/>
+            智能关联发现
           </p>
+        </div>
 
-          <div className="hero-actions harmony-enter-fade-up harmony-delay-2">
-            <button 
-              className="button button-primary harmony-card-shimmer" 
-              onClick={() => navigate('/decision')}
-              style={{
-                background: 'linear-gradient(135deg, #0A59F7, #6B48FF)',
-                color: '#fff',
-                boxShadow: '0 6px 20px rgba(10, 89, 247, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
-              }}
-            >
-              激活决策副本
-            </button>
-            <button 
-              className="button button-ghost harmony-card-shimmer" 
-              onClick={() => navigate('/modules')}
-              style={{
-                background: 'rgba(255, 255, 255, 0.95)',
-                border: '1px solid rgba(0, 0, 0, 0.08)',
-                color: '#1A1A1A'
-              }}
-            >
-              查看全部能力
-            </button>
-          </div>
+        {/* 右侧文案 - 与法阵融合 */}
+        <div className="pentagram-side-text pentagram-side-right harmony-enter-fade-right">
+          <div className="side-text-glow" />
+          <p className="side-text-label">决策引擎</p>
+          <h3 className="side-text-title">智能决策</h3>
+          <p className="side-text-desc">
+            多路径分析<br/>
+            历史追溯校准<br/>
+            最优方案推荐
+          </p>
         </div>
 
         <div className="hero-side harmony-enter-fade-scale harmony-delay-3">
@@ -381,7 +381,7 @@ export function HomePage() {
               }}
             />
 
-            {/* 同心轨道环 */}
+            {/* 同心轨道线 */}
             <div className="pentagram-ring pentagram-ring-outer" />
             <div className="pentagram-ring pentagram-ring-mid" />
             <div className="pentagram-ring pentagram-ring-inner" />
@@ -400,6 +400,7 @@ export function HomePage() {
                   } as CSSProperties
                 }
                 onClick={() => {
+                  console.log('[HomePage] 🖱️ 节点点击:', node.title, '时间:', performance.now());
                   if (node.id === 'profile') {
                     setProfileMenuOpen(v => !v);
                   } else {
@@ -533,7 +534,7 @@ export function HomePage() {
       <section className="two-column-grid">
         <GlassCard
           title="核心法阵入口"
-          subtitle="五个球体都对应真实功能，不是装饰性的静态图。"
+          subtitle="五个球体都对应真实功能，不是装饰性的静态图标"
         >
           <div className="summary-groups">
             <div>
@@ -551,7 +552,7 @@ export function HomePage() {
           </div>
         </GlassCard>
 
-        <GlassCard title="Web 化原则" subtitle="继续按 Harmony 端的价值判断推进。">
+        <GlassCard title="Web 化原则" subtitle="继续沿 Harmony 端的价值判断推进">
           <ul className="plain-list">
             <li>首页先做品牌感和结构辨识度，让用户一眼知道这是 AI 中枢而不是普通后台。</li>
             <li>功能球必须可点击并直达真实模块，不做只有概念没有落点的展示。</li>
@@ -612,7 +613,12 @@ export function HomePage() {
       </div>
 
       {/* AI 核心悬浮窗 */}
-      <AICoreModal isOpen={isAICoreOpen} onClose={() => setIsAICoreOpen(false)} />
+      {isAICoreOpen && (
+        <AICoreModal onClose={() => setIsAICoreOpen(false)} />
+      )}
+
+      {/* 全局 AI 悬浮按钮 */}
+      <GlobalAIFloatingButton />
     </div>
   );
 }

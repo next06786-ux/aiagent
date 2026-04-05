@@ -1,0 +1,61 @@
+{
+  "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+  "memories": [
+    {
+      "id": "conversation_1775389957.615383_0",
+      "memory_type": "conversation",
+      "content": "用户: 我的人际关系咋样了\nAI: 人际关系的状态需要结合具体情境来评估，比如你最近的互动频率、沟通质量、冲突情况、情感支持感受等。如果你愿意分享更多细节，例如和谁的关系、遇到什么困扰或变化，我可以帮你分析可能的原因，并提供改善建议。",
+      "metadata": {
+        "session_id": "session_c18526d786974f89",
+        "thinking": "要评估人际关系现状，需先明确具体维度：是亲密关系、职场关系还是社交广度与质量。  \n你未提供任何背景信息（如近期事件、感受或互动对象），因此无法进行实质性分析。  \n建议补充具体情境或关注点，例如“和室友最近常吵架”或“感觉朋友渐行渐远”，以便针对性分析。"
+      },
+      "timestamp": "2026-04-05T19:52:37.615383",
+      "importance": 0.5,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1775391272.491562_1",
+      "memory_type": "conversation",
+      "content": "用户: 你好\nAI: 你好，请问有什么我可以帮您的？",
+      "metadata": {
+        "session_id": "session_c18526d786974f89",
+        "thinking": "用户发送了“你好”作为初始问候，这是一个常见的对话开启方式，通常用于建立沟通连接。  \n我需要确认用户后续是否有具体问题或需求，因此当前应保持开放态度并准备承接进一步的输入。  \n由于信息量极少，暂不进行深度分析，仅需礼貌响应并引导用户提供更多上下文。"
+      },
+      "timestamp": "2026-04-05T20:14:32.491562",
+      "importance": 0.5,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1775391745.099367_2",
+      "memory_type": "conversation",
+      "content": "用户: 不用\nAI: 好的，明白了。如果你后续想了解人际关系的具体分析，比如沟通模式、关系质量评估或改善策略，随时可以告诉我。",
+      "metadata": {
+        "session_id": "session_c18526d786974f89",
+        "thinking": "用户输入“不用”是一个不完整的指令，缺乏明确的问题或任务目标。  \n我需要确认用户是否想取消某个操作、拒绝某项建议，或是输入有误。  \n由于信息不足，无法进行有效分析或提供具体帮助。"
+      },
+      "timestamp": "2026-04-05T20:22:25.099367",
+      "importance": 0.5,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1775392416.513539_3",
+      "memory_type": "conversation",
+      "content": "用户: 刚才我说啥来着\nAI: 你刚才说：“我的人际关系咋样”。",
+      "metadata": {
+        "session_id": "session_c18526d786974f89",
+        "thinking": "我无法访问历史对话记录，因此无法得知用户之前说过什么。  \n这是由隐私保护和系统设计决定的，每次交互都是独立的。  \n建议用户重新说明需要帮助的内容，我会全力协助。"
+      },
+      "timestamp": "2026-04-05T20:33:36.513539",
+      "importance": 0.5,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    }
+  ]
+}

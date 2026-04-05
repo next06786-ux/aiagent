@@ -299,6 +299,28 @@ export function DecisionWorkbenchPage() {
   // 启动模拟时的状态
   const [simulatingStatus, setSimulatingStatus] = useState('');
 
+  // ── 根据决策类型获取问题模板提示 ────────────────────────────
+  const placeholderByType: Record<string, string> = {
+    career: '例如：我要不要在今年离开现在的工作，去做更适合我的方向？',
+    relationship: '例如：我和相处了两年的女朋友之间出现了一些价值观冲突，该如何处理？',
+    education: '例如：我是985高校的大三学生，纠结是考研还是直接就业？',
+    general: '例如：我正在考虑是否要换城市发展？',
+  };
+
+  const decisionTypeLabel: Record<string, string> = {
+    career: '职业发展',
+    relationship: '人际关系',
+    education: '教育升学',
+    general: '通用决策',
+  };
+
+  const decisionTypeColor: Record<string, string> = {
+    career: '#4facfe',
+    relationship: '#FF6B6B',
+    education: '#43e97b',
+    general: '#a18cd1',
+  };
+
   // ── 渲染 ─────────────────────────────────────────────────
   return (
     <AppShell>
@@ -385,6 +407,33 @@ export function DecisionWorkbenchPage() {
               </div>
             )}
             <div className="form-stack">
+              {/* 当前决策类型指示 */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 16px',
+                borderRadius: 20,
+                background: `${decisionTypeColor[decisionType]}18`,
+                border: `1px solid ${decisionTypeColor[decisionType]}40`,
+                marginBottom: 12,
+                width: 'fit-content',
+              }}>
+                <div style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: decisionTypeColor[decisionType],
+                }} />
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: decisionTypeColor[decisionType],
+                }}>
+                  {decisionTypeLabel[decisionType]}决策
+                </span>
+              </div>
+              
               {/* 决策类型选择 */}
               <label className="field-block">
                 <span>决策类型</span>
@@ -461,12 +510,12 @@ export function DecisionWorkbenchPage() {
               </label>
               
               <label className="field-block">
-                <span>当前问题</span>
+                <span>当前问题（{decisionTypeLabel[decisionType]}）</span>
                 <textarea
                   className="textarea" rows={5}
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
-                  placeholder="例如：我要不要在今年离开现在的工作，去做更适合我的方向？"
+                  placeholder={placeholderByType[decisionType]}
                 />
               </label>
               {error && <div className="form-error">{error}</div>}

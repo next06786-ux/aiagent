@@ -178,15 +178,17 @@ class StartupManager:
             _systems['knowledge_graphs'][default_user] = None
         try:
             # 初始化 RAG 系统
-            # 轻量服务器模式：跳过 sentence-transformers embedding 模型加载
-            if ENABLE_LOCAL_MODEL:
+            # 默认使用生产级RAG（sentence-transformers + FAISS）
+            # 如果依赖缺失，自动降级到轻量级RAG
+            try:
                 import os
-                os.environ['HF_HUB_OFFLINE'] = '1'
+                os.environ['HF_HUB_OFFLINE'] = '1'  # 离线模式，避免自动下载
                 from backend.learning.production_rag_system import ProductionRAGSystem
                 _systems['rag_systems'][default_user] = ProductionRAGSystem(default_user, use_gpu=False)
-                StartupManager.print_success(f"RAG 系统初始化完成 ({default_user})")
-            else:
-                # 轻量模式：使用关键词检索的简化 RAG，不加载 embedding 模型
+                StartupManager.print_success(f"RAG 系统初始化完成（生产级，{default_user}）")
+            except (ImportError, RuntimeError) as e:
+                # 降级到轻量级RAG
+                StartupManager.print_warning(f"生产级RAG不可用，降级到轻量级: {e}")
                 from backend.learning.unified_rag_system import UnifiedRAGSystem
                 _systems['rag_systems'][default_user] = UnifiedRAGSystem(default_user)
                 StartupManager.print_success(f"RAG 系统初始化完成（轻量模式，{default_user}）")
@@ -194,6 +196,50 @@ class StartupManager:
         except Exception as e:
             StartupManager.print_warning(f"RAG 系统初始化失败: {e}")
             _systems['rag_systems'][default_user] = None
+    @staticmethod
+    async def warmup_services():
+        """预热服务（连接池、缓存等）- 非阻塞，失败不影响启动"""
+        print("\n  预热服务...\n")
+        
+        # 使用超时保护，避免预热阻塞启动
+        async def warmup_with_timeout():
+            # 1. 预热Redis连接池（非阻塞）
+            try:
+                from backend.decision.future_os_service import _get_redis_client
+                redis_client = _get_redis_client()
+                if redis_client:
+                    # 使用短超时，避免阻塞
+                    redis_client.ping()
+                    StartupManager.print_success("Redis连接池已预热")
+            except Exception as e:
+                # Redis预热失败不影响启动
+                StartupManager.print_warning(f"Redis预热跳过: {e}")
+            
+            # 2. 预热节点分类缓存（非阻塞）
+            try:
+                from backend.decision.future_os_service import _load_cache
+                cache = _load_cache()
+                StartupManager.print_success(f"节点分类缓存已加载: {len(cache)} 条")
+            except Exception as e:
+                # 缓存加载失败不影响启动
+                StartupManager.print_warning(f"节点分类缓存跳过: {e}")
+            
+            # 3. LLM服务预热已移到main.py的startup_event中异步执行
+            # 这里不再预热，避免重复
+            try:
+                if _systems['llm_service'] and _systems['llm_service'].enabled:
+                    StartupManager.print_success("LLM服务已就绪（将在后台预热）")
+            except Exception as e:
+                StartupManager.print_warning(f"LLM服务检查失败: {e}")
+        
+        try:
+            # 5秒超时保护
+            await asyncio.wait_for(warmup_with_timeout(), timeout=5.0)
+        except asyncio.TimeoutError:
+            StartupManager.print_warning("预热超时，跳过剩余预热任务")
+        except Exception as e:
+            StartupManager.print_warning(f"预热过程出错: {e}")
+    
     @staticmethod
     async def startup():
         """执行完整的启动流程"""
@@ -214,19 +260,31 @@ class StartupManager:
         total = len(tasks)
         
         # 并行初始化关键系统
+        step_start = datetime.now()
         print("  初始化关键系统...\n")
         results = await asyncio.gather(*[task[1]() for task in tasks])
+        step_elapsed = (datetime.now() - step_start).total_seconds()
+        print(f"\n  ⏱️  关键系统初始化耗时: {step_elapsed:.2f}秒\n")
         
         # 初始化默认用户系统
-        print("\n  初始化默认用户系统...\n")
+        step_start = datetime.now()
+        print("  初始化默认用户系统...\n")
         await StartupManager.init_default_user_systems()
+        step_elapsed = (datetime.now() - step_start).total_seconds()
+        print(f"\n  ⏱️  用户系统初始化耗时: {step_elapsed:.2f}秒\n")
+        
+        # 预热服务
+        step_start = datetime.now()
+        await StartupManager.warmup_services()
+        step_elapsed = (datetime.now() - step_start).total_seconds()
+        print(f"\n  ⏱️  服务预热耗时: {step_elapsed:.2f}秒\n")
         
         # 计算耗时
         elapsed = (datetime.now() - start_time).total_seconds()
         
         # 打印总结
         StartupManager.print_header("✨ 系统启动完成")
-        print(f"  启动耗时: {elapsed:.2f} 秒")
+        print(f"  总启动耗时: {elapsed:.2f} 秒")
         print(f"  LLM 服务: {'✅ 就绪' if _init_status['llm_service'] else '⚠️  未就绪'}")
         print(f"  知识图谱: {'✅ 就绪' if _init_status['knowledge_graph'] else '⚠️  未就绪'}")
         print(f"  RAG 系统: {'✅ 就绪' if _init_status['rag_system'] else '⚠️  未就绪'}")
@@ -290,3 +348,16 @@ def get_init_status():
     """获取初始化状态"""
     return _init_status.copy()
 
+
+async def _test_llm_async():
+    """异步测试LLM（预热）"""
+    try:
+        await asyncio.sleep(1)  # 等待1秒后再测试
+        if _systems['llm_service']:
+            _systems['llm_service'].chat(
+                [{"role": "user", "content": "测试"}],
+                temperature=0.1
+            )
+            logger.info("LLM服务预热完成")
+    except Exception as e:
+        logger.warning(f"LLM预热测试失败: {e}")

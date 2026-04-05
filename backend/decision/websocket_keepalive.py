@@ -4,7 +4,7 @@ WebSocket Keepalive 机制
 """
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

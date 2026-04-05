@@ -1,8 +1,15 @@
 const rawBaseUrl =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() ||
-  'http://localhost:6006';
+  'http://127.0.0.1:6006'; // 默认使用 127.0.0.1 而不是 localhost
 
 export const API_BASE_URL = rawBaseUrl.replace(/\/+$/, '');
+
+// 启动时诊断
+console.log('[API] 配置信息:', {
+  'VITE_API_BASE_URL': import.meta.env.VITE_API_BASE_URL,
+  'API_BASE_URL': API_BASE_URL,
+  '是否使用localhost': API_BASE_URL.includes('localhost'),
+});
 export const WS_BASE_URL = API_BASE_URL.replace(/^http:\/\//, 'ws://').replace(
   /^https:\/\//,
   'wss://',
@@ -28,18 +35,29 @@ export async function requestJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(buildUrl(path), {
+  const startTime = performance.now();
+  const url = buildUrl(path);
+  console.log('[API] 🚀 发起请求:', url, '时间:', startTime);
+  
+  const response = await fetch(url, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      'Connection': 'keep-alive',
       ...(init?.headers || {}),
     },
   });
+  
+  const fetchTime = performance.now() - startTime;
+  console.log('[API] 📥 收到响应:', url, '耗时:', `${fetchTime.toFixed(2)}ms`, '状态:', response.status);
 
   const contentType = response.headers.get('content-type') || '';
   const payload = contentType.includes('application/json')
     ? await response.json()
     : await response.text();
+  
+  const totalTime = performance.now() - startTime;
+  console.log('[API] ✅ 解析完成:', url, '总耗时:', `${totalTime.toFixed(2)}ms`);
 
   if (!response.ok) {
     const message =

@@ -1,0 +1,112 @@
+/* 法阵两侧的产品文案样式 */
+.pentagram-side-text {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.pentagram-side-left {
+  top: 35%;
+  left: 8%;
+  transform: translateY(-50%);
+}
+
+.pentagram-side-right {
+  top: 35%;
+  right: 8%;
+  transform: translateY(-50%);
+  text-align: right;
+}
+
+.side-text-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(10, 89, 247, 0.15) 0%, transparent 70%);
+  filter: blur(40px);
+  animation: pulse-glow 4s ease-in-out infinite;
+}
+
+.side-text-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(10, 89, 247, 0.8);
+  margin-bottom: 12px;
+  opacity: 0.9;
+}
+
+.side-text-title {
+  font-size: 48px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 20px;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+
+.side-text-desc {
+  font-size: 18px;
+  line-height: 2.2;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 500;
+}
+
+/* 动画 */
+.harmony-enter-fade-left {
+  animation: fadeInLeft 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+.harmony-enter-fade-right {
+  animation: fadeInRight 0.8s ease-out forwards;
+  opacity: 0;
+  animation-delay: 0.2s;
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px) translateY(-50%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(-50%);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px) translateY(-50%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(-50%);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* 响应式 */
+@media (max-width: 1400px) {
+  .pentagram-side-text {
+    display: none;
+  }
+}

@@ -115,15 +115,23 @@ from backend.startup_manager import StartupManager
 @app.on_event("startup")
 async def startup_event():
     """应用启动时初始化所有系统"""
+    import time
+    overall_start = time.time()
+    
+    # StartupManager启动
+    manager_start = time.time()
     await StartupManager.startup()
+    print(f"⏱️  StartupManager耗时: {time.time() - manager_start:.2f}秒\n")
     
     # 启动岗位数据调度器
+    scheduler_start = time.time()
     try:
         from backend.vertical.career.job_scheduler import start_job_scheduler
         start_job_scheduler()
         print("✅ 岗位数据调度器已启动")
     except Exception as e:
         print(f"⚠️ 岗位数据调度器启动失败: {e}")
+    print(f"⏱️  岗位调度器耗时: {time.time() - scheduler_start:.2f}秒\n")
     
     # 本地 GPU 模型相关：仅在 ENABLE_LOCAL_MODEL=true 时加载
     import os
@@ -151,6 +159,7 @@ async def startup_event():
         print("ℹ️  ENABLE_LOCAL_MODEL=false，跳过本地模型加载（GPU/LoRA 功能暂停）")
     
     # 预初始化 default_user 知识图谱（轻量，始终执行）
+    kg_start = time.time()
     try:
         from backend.knowledge.information_knowledge_graph import InformationKnowledgeGraph
         global info_kg_systems
@@ -159,8 +168,10 @@ async def startup_event():
         print("知识图谱预加载完成")
     except Exception as e:
         print(f"知识图谱预初始化失败: {e}")
+    print(f"⏱️  知识图谱初始化耗时: {time.time() - kg_start:.2f}秒\n")
 
     # 预初始化 LLM 服务（避免首次请求时初始化延迟）
+    llm_start = time.time()
     try:
         from backend.llm.llm_service import get_llm_service
         print("预初始化 LLM 服务...")
@@ -168,29 +179,47 @@ async def startup_event():
         if llm and llm.enabled:
             print(f"LLM 服务已就绪: {llm.provider.value}")
             
-            # 预热LLM连接 - 发送一个真实的dummy请求，初始化HTTP连接池
-            try:
-                print("🔥 预热 LLM 连接...")
-                llm.chat(
-                    messages=[{"role": "user", "content": "hello"}],
-                    temperature=0.1
-                )
-                print("✅ LLM 连接预热完成")
-            except Exception as e:
-                print(f"⚠️ LLM 连接预热失败: {e}")
+            # 异步预热LLM连接 - 不阻塞启动，在后台完成
+            async def warmup_llm_async():
+                """后台异步预热LLM连接"""
+                import asyncio
+                await asyncio.sleep(2)  # 等待2秒让其他服务先启动
+                try:
+                    print("🔥 后台预热 LLM 连接...")
+                    warmup_start = time.time()
+                    
+                    # 使用更短的消息减少延迟
+                    response = llm.chat(
+                        messages=[{"role": "user", "content": "hi"}],
+                        temperature=0.1
+                    )
+                    
+                    elapsed = time.time() - warmup_start
+                    print(f"✅ LLM 连接预热完成（耗时 {elapsed:.1f}秒）")
+                except Exception as e:
+                    print(f"⚠️ LLM 连接预热失败: {e}")
+            
+            # 启动异步预热任务（不等待完成）
+            import asyncio
+            asyncio.create_task(warmup_llm_async())
+            print("ℹ️  LLM连接正在后台预热（约需50秒）...")
         else:
             print("ℹ️  LLM 服务未启用")
     except Exception as e:
         print(f"⚠️ LLM 服务预初始化失败: {e}")
+    print(f"⏱️  LLM服务初始化耗时: {time.time() - llm_start:.2f}秒\n")
     
     # 预初始化数据库连接
+    db_start = time.time()
     try:
         from backend.database.connection import db_connection
         print("✅ 数据库连接预初始化完成")
     except Exception as e:
         print(f"⚠️ 数据库连接预初始化失败: {e}")
+    print(f"⏱️  数据库连接耗时: {time.time() - db_start:.2f}秒\n")
     
     # 预热AI核心决策系统
+    decision_start = time.time()
     try:
         print("🔥 预热 AI 核心决策系统...")
         
@@ -217,6 +246,9 @@ async def startup_event():
         print("✅ AI 核心决策系统预热完成")
     except Exception as e:
         print(f"⚠️ AI 核心决策系统预热失败: {e}")
+    print(f"⏱️  决策系统预热耗时: {time.time() - decision_start:.2f}秒\n")
+    
+    print(f"🎉 总启动耗时: {time.time() - overall_start:.2f}秒\n")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1362,12 +1394,13 @@ async def websocket_chat(websocket: WebSocket):
                 
                 # 保存用户消息到数据库
                 from backend.conversation.conversation_storage import ConversationStorage
-                ConversationStorage.save_message(
+                save_result = ConversationStorage.save_message(
                     user_id=user_id,
                     session_id=session_id,
                     role="user",
                     content=message
                 )
+                print(f"💾 [保存] 用户消息已保存: user_id={user_id}, session_id={session_id}, 结果={save_result}")
                 
                 # 【实时洞察分析】从用户消息中提取情绪、话题、意图等数据
                 try:
@@ -1407,10 +1440,59 @@ async def websocket_chat(websocket: WebSocket):
                 llm_service = get_or_init_llm_service()
                 
                 # 发送进度：分析中
-                await websocket.send_json({"type": "progress", "content": "🔄 正在分析你的问题..."})
+                await websocket.send_json({"type": "progress", "content": "正在分析你的问题..."})
                 await asyncio.sleep(0.3)
                 
-                # 第一步：生成思考过程
+                # 【智能路由】检测用户意图，提供导航建议
+                navigation_data = None
+                has_navigation = False
+                try:
+                    from backend.ai_core.intent_router import intent_router
+                    intent_result = intent_router.analyze_intent(message)
+                    
+                    if intent_result["has_navigation_intent"]:
+                        # 生成导航提示
+                        nav_prompt = intent_router.generate_navigation_prompt(intent_result)
+                        if nav_prompt:
+                            has_navigation = True
+                            navigation_data = {
+                                "type": "navigation",
+                                "content": nav_prompt,
+                                "routes": intent_result["suggested_routes"],
+                                "primary_route": intent_result["primary_route"]
+                            }
+                            # 发送导航建议
+                            await websocket.send_json(navigation_data)
+                            await asyncio.sleep(0.5)
+                            print(f"[智能路由] 已发送导航建议: {intent_result['primary_route']['name']}")
+                except Exception as e:
+                    print(f"[智能路由] 意图识别失败: {e}")
+                
+                # 如果有导航建议，跳过思考过程，直接完成
+                if has_navigation:
+                    # 清空思考过程（避免显示旧的思考内容）
+                    await websocket.send_json({"type": "thinking", "content": ""})
+                    
+                    # 发送导航提示作为回答
+                    if navigation_data:
+                        await websocket.send_json({"type": "answer", "content": navigation_data["content"]})
+                    
+                    # 发送完成信号
+                    await websocket.send_json({"type": "done"})
+                    print(f"[WebSocket] 会话 {session_id} 完成（仅导航）")
+                    
+                    # 保存导航消息到数据库
+                    from backend.conversation.conversation_storage import ConversationStorage
+                    ConversationStorage.save_message(
+                        user_id=user_id,
+                        session_id=session_id,
+                        role="assistant",
+                        content=navigation_data["content"] if navigation_data else "",
+                        thinking=""
+                    )
+                    continue
+                
+                # 第一步：生成思考过程（仅在无导航时）
                 thinking_prompt = f"""请分析这个问题并说明你的思考过程：
 
 {message}
@@ -1453,34 +1535,74 @@ async def websocket_chat(websocket: WebSocket):
                         {"role": "system", "content": "你是LifeSwarm智能助手，帮助用户分析问题和辅助决策。回复要简洁专业，使用纯文字，不要使用任何emoji表情符号。请根据对话上下文连贯地回答。"},
                     ]
                     
-                    # 加载当前会话的历史消息作为上下文（最近10轮）
+                    # 【长期记忆】从RAG系统检索相关历史记忆（跨会话）
+                    relevant_memories = []
+                    try:
+                        if systems.get('rag'):
+                            from backend.learning.production_rag_system import MemoryType
+                            # 检索相关的对话记忆
+                            relevant_memories = systems['rag'].retrieve_memories(
+                                query=message,
+                                memory_types=[MemoryType.CONVERSATION],
+                                top_k=3  # 最多3条相关记忆
+                            )
+                            if relevant_memories:
+                                print(f"🧠 [长期记忆] 检索到 {len(relevant_memories)} 条相关记忆")
+                                # 将记忆作为系统上下文加入
+                                memory_context = "\n".join([
+                                    f"[历史记忆 {i+1}] {mem['content'][:200]}"
+                                    for i, mem in enumerate(relevant_memories)
+                                ])
+                                messages.append({
+                                    "role": "system",
+                                    "content": f"以下是用户的相关历史记忆，可以帮助你更好地理解用户：\n{memory_context}"
+                                })
+                    except Exception as mem_err:
+                        print(f"⚠️ RAG记忆检索失败: {mem_err}")
+                    
+                    # 【短期记忆】加载当前会话的历史消息作为上下文（最近10轮）
                     try:
                         from backend.database.models import ConversationHistory, Database
                         from backend.database.config import DatabaseConfig
                         db = Database(DatabaseConfig.get_database_url())
                         db_session = db.get_session()
+                        
+                        print(f"🔍 [查询] 查询历史: user_id={user_id}, session_id={session_id}")
+                        
                         history_rows = db_session.query(ConversationHistory).filter(
                             ConversationHistory.user_id == user_id,
                             ConversationHistory.session_id == session_id
                         ).order_by(ConversationHistory.timestamp.desc()).limit(20).all()
+                        
+                        print(f"📚 [查询] 找到 {len(history_rows)} 条历史记录")
+                        
                         db_session.close()
                         
                         # 倒序取出后反转为正序
+                        history_count = 0
                         for row in reversed(history_rows):
                             if row.role in ('user', 'assistant') and row.content:
                                 # 跳过当前这条用户消息（已经在最后加了）和错误回复
                                 if row.content == message:
+                                    print(f"  ⏭️  跳过当前消息: {row.content[:50]}")
                                     continue
                                 if '无法回答' in (row.content or ''):
+                                    print(f"  ⏭️  跳过错误回复: {row.content[:50]}")
                                     continue
                                 messages.append({"role": row.role, "content": row.content})
+                                history_count += 1
+                                print(f"  ✓ 加载历史 [{row.role}]: {row.content[:50]}...")
+                        
+                        print(f"💬 [短期记忆] 成功加载了 {history_count} 条会话历史")
                     except Exception as hist_err:
                         print(f"⚠️ 加载历史上下文失败: {hist_err}")
+                        import traceback
+                        traceback.print_exc()
                     
                     # 当前用户消息
                     messages.append({"role": "user", "content": message})
                     
-                    print(f"📝 发送 {len(messages)} 条消息给LLM（含 {len(messages)-2} 条历史）")
+                    print(f"📝 发送 {len(messages)} 条消息给LLM（含长期记忆+短期记忆）")
                     final_response = llm_service.chat(messages, temperature=0.7)
                     print(f"回答: {final_response[:100]}...")
                 except Exception as e:
@@ -1504,13 +1626,14 @@ async def websocket_chat(websocket: WebSocket):
                 
                 # 保存AI回复到数据库
                 from backend.conversation.conversation_storage import ConversationStorage
-                ConversationStorage.save_message(
+                save_result = ConversationStorage.save_message(
                     user_id=user_id,
                     session_id=session_id,
                     role="assistant",
                     content=final_response,
                     thinking=thinking_text
                 )
+                print(f"💾 [保存] AI回复已保存: session_id={session_id}, 结果={save_result}")
                 
                 # 同时保存到RAG系统（用于LoRA训练）
                 try:
@@ -6211,6 +6334,11 @@ app.include_router(enhanced_decision_router)
 from backend.decision.future_os_api import router as future_os_router
 app.include_router(future_os_router)
 
+# 注册 AI 核心智能路由 API（意图识别 + 功能导航）
+from backend.ai_core.ai_core_api import router as ai_core_router
+app.include_router(ai_core_router)
+print("AI 核心智能路由 API 已加载")
+
 # 在 app 级别注册决策推演 WebSocket（与 /ws/chat 同级，确保反向代理兼容）
 from backend.decision.enhanced_decision_api import simulate_with_collection_ws as _decision_ws_handler
 @app.websocket("/ws/decision-simulate")
@@ -6240,6 +6368,33 @@ print("   - GET /api/v5/future-os/history/{user_id}")
 print("   - GET /api/v5/future-os/simulations/{simulation_id}")
 print("   - POST /api/v5/future-os/parallel-life/branch")
 print("   - POST /api/v5/future-os/parallel-life/complete")
+
+# 注册人际关系决策 API
+from backend.decision.relationship_api import router as relationship_router
+app.include_router(relationship_router)
+print("人际关系决策 API 已加载")
+print("   - GET /api/v5/relationship/people/{user_id}")
+print("   - POST /api/v5/relationship/analyze")
+print("   - POST /api/v5/relationship/strategy")
+print("   - POST /api/v5/relationship/simulate")
+print("   - POST /api/v5/relationship/influence")
+print("   - POST /api/v5/relationship/conflict")
+print("   - POST /api/v5/relationship/emotional-account")
+print("   - POST /api/v5/relationship/update")
+print("   - GET /api/v5/relationship/summary/{user_id}")
+
+# 注册教育升学决策 API
+from backend.decision.education_api import router as education_router
+app.include_router(education_router)
+print("教育升学决策 API 已加载")
+print("   - GET /api/v5/education/schools")
+print("   - GET /api/v5/education/majors")
+print("   - POST /api/v5/education/analyze")
+print("   - POST /api/v5/education/admission-probability")
+print("   - POST /api/v5/education/roi")
+print("   - POST /api/v5/education/simulate")
+print("   - GET /api/v5/education/profile/{user_id}")
+print("   - POST /api/v5/education/compare")
 
 # ==================== 智能洞察 API ====================
 
@@ -6756,6 +6911,11 @@ def _residual_analyzer_status() -> Dict[str, Any]:
 from backend.game.parallel_life_api import router as game_router
 app.include_router(game_router)
 print('平行人生游戏 API 已加载')
+
+# 知识图谱感知RAG API
+from backend.learning.kg_rag_api import router as kg_rag_router
+app.include_router(kg_rag_router)
+print('知识图谱感知RAG API 已加载')
 
 # Agent 状态查询接口
 @app.get("/api/agent/status/{user_id}")

@@ -499,3 +499,71 @@ export interface ParallelLifeCompletionResult {
   updated_profile: PersonalizationProfile;
   next_hint: string;
 }
+
+// ==================== 知识图谱感知RAG类型 ====================
+
+export interface KGRAGContextRequest {
+  user_id: string;
+  query: string;
+  max_nodes?: number;
+  mode?: 'hybrid' | 'graph_first' | 'vector_only' | 'graph_only';
+}
+
+export interface KGRAGNode {
+  id: string;
+  name: string;
+  type: string;
+  category: string;
+  confidence: number;
+  influence_score: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface KGRAGContextResponse {
+  success: boolean;
+  context_text: string;
+  nodes_count: number;
+  influence_summary: Record<string, number>;
+  reasoning: string;
+  relationships_count: number;
+  nodes?: KGRAGNode[];
+}
+
+export interface KGRAGChatRequest {
+  user_id: string;
+  query: string;
+  conversation_history?: Array<{ role: string; content: string }>;
+  use_kg_context?: boolean;
+}
+
+export interface KGRAGChatResponse {
+  success: boolean;
+  kg_context: {
+    context_text: string;
+    nodes_count: number;
+    influence_summary: Record<string, number>;
+    reasoning: string;
+    relationships_count: number;
+  };
+  answer: string;
+  enhanced_prompt: string;
+}
+
+export interface KGRAGEnhanceRequest {
+  user_id: string;
+  query: string;
+  conversation_history: Array<{ role: string; content: string }>;
+}
+
+export interface KGRAGEnhanceResponse {
+  success: boolean;
+  enhanced_prompt: string;
+  kg_context: {
+    context_text: string;
+    nodes_count: number;
+    influence_summary: Record<string, number>;
+    reasoning: string;
+    relationships_count: number;
+  };
+  summary: string;
+}

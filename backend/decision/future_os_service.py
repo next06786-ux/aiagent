@@ -4,6 +4,7 @@ import json
 import os
 import re
 import uuid
+import time
 from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
@@ -14,6 +15,97 @@ from sqlalchemy import text
 from backend.database.config import DatabaseConfig
 from backend.database.models import Database
 from backend.knowledge.information_knowledge_graph import InformationKnowledgeGraph
+
+
+# ==================== 三级缓存架构 ====================
+# L1: 内存LRU缓存（最快，纳秒级）
+# L2: Redis缓存（快，毫秒级）
+# L3: 文件持久化（冷启动恢复）
+
+class MemoryCache:
+    """L1内存缓存 - 最快的缓存层"""
+    def __init__(self, maxsize=100, ttl_seconds=300):
+        self._cache = {}
+        self._timestamps = {}
+        self.maxsize = maxsize
+        self.ttl_seconds = ttl_seconds
+        self.hits = 0
+        self.misses = 0
+    
+    def get(self, key: str) -> Optional[Any]:
+        """获取缓存，检查TTL"""
+        if key not in self._cache:
+            self.misses += 1
+            return None
+        
+        # 检查是否过期
+        if time.time() - self._timestamps[key] > self.ttl_seconds:
+            del self._cache[key]
+            del self._timestamps[key]
+            self.misses += 1
+            return None
+        
+        self.hits += 1
+        return self._cache[key]
+    
+    def set(self, key: str, value: Any):
+        """设置缓存，LRU淘汰"""
+        # 如果缓存满了，删除最老的
+        if len(self._cache) >= self.maxsize:
+            oldest_key = min(self._timestamps.keys(), key=lambda k: self._timestamps[k])
+            del self._cache[oldest_key]
+            del self._timestamps[oldest_key]
+        
+        self._cache[key] = value
+        self._timestamps[key] = time.time()
+    
+    def clear(self):
+        """清空缓存"""
+        self._cache.clear()
+        self._timestamps.clear()
+    
+    def stats(self) -> Dict[str, Any]:
+        """缓存统计"""
+        hit_rate = self.hits / (self.hits + self.misses) if (self.hits + self.misses) > 0 else 0
+        return {
+            "size": len(self._cache),
+            "maxsize": self.maxsize,
+            "ttl_seconds": self.ttl_seconds,
+            "hits": self.hits,
+            "misses": self.misses,
+            "hit_rate": f"{hit_rate:.2%}"
+        }
+
+# 全局L1缓存实例
+_l1_cache = MemoryCache(maxsize=100, ttl_seconds=300)  # 5分钟TTL
+
+
+# ── 全局连接池 ─────────────────────────────────────────
+_redis_client = None
+_neo4j_connections = {}
+
+def _get_redis_client():
+    """获取全局Redis客户端（连接池）"""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis
+            _redis_client = redis.Redis(
+                host=os.getenv("REDIS_HOST", "localhost"),
+                port=int(os.getenv("REDIS_PORT", 6379)),
+                db=int(os.getenv("REDIS_DB", 0)),
+                decode_responses=True,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+                max_connections=50  # 连接池
+            )
+            # 测试连接
+            _redis_client.ping()
+            print("[KG] Redis连接池已初始化")
+        except Exception as e:
+            print(f"[KG] Redis连接失败: {e}")
+            _redis_client = None
+    return _redis_client
 
 
 
@@ -43,15 +135,27 @@ _llm_classify_cache: Dict[str, str] = _load_cache()
 print(f"[KG] 节点分类缓存已加载: {len(_llm_classify_cache)} 条")
 
 
-def _llm_classify_nodes(nodes: List[Dict[str, Any]]) -> Dict[str, str]:
+def _llm_classify_nodes(nodes: List[Dict[str, Any]], async_mode: bool = True) -> Dict[str, str]:
     """
-    用 LLM 批量判断所有节点是 person（人物）还是 signal（信号/概念/事件）。
-    有缓存，同一节点不重复调用。分批处理，每批最多 20 个。
-    返回 {node_id: "person" | "signal"}
+    用 LLM 批量判断节点属于哪个视图：person（人物）/ signal（信号）/ career（职业）
+    
+    智能增量分类：
+    - 已缓存的节点：立即返回
+    - 未缓存的节点：
+      - async_mode=True: 不返回（后台异步LLM分类，完成后自动显示）
+      - async_mode=False: 同步等待LLM分类（阻塞）
+    
+    Args:
+        nodes: 节点列表
+        async_mode: 是否异步模式（默认True，新节点后台分类）
+    
+    Returns:
+        {node_id: "person" | "signal" | "career"}  # 只包含已缓存的节点
     """
     result: Dict[str, str] = {}
     uncached: List[Dict[str, Any]] = []
 
+    # 1. 从L3文件缓存获取已分类的节点
     for node in nodes:
         key = f"{node.get('name','')}|{node.get('type','')}|{node.get('category','')}"
         if key in _llm_classify_cache:
@@ -59,6 +163,50 @@ def _llm_classify_nodes(nodes: List[Dict[str, Any]]) -> Dict[str, str]:
         else:
             uncached.append(node)
 
+    # 2. 如果没有新节点，直接返回
+    if not uncached:
+        print(f"[KG] 所有 {len(nodes)} 个节点已缓存，无需分类")
+        return result
+    
+    print(f"[KG] 发现 {len(uncached)} 个新节点需要分类（已缓存 {len(result)} 个）")
+    
+    # 3. 异步模式：只返回已缓存的，新节点后台LLM分类
+    if async_mode:
+        # 启动后台异步任务进行精确分类
+        print(f"[KG] 后台异步分类已启动，新节点将在分类完成后显示")
+        import asyncio
+        asyncio.create_task(_classify_nodes_background(uncached))
+        
+        # 只返回已缓存的节点分类结果
+        return result
+    
+    # 4. 同步模式：立即LLM分类（阻塞）
+    return _classify_nodes_sync(uncached, result)
+
+
+async def _classify_nodes_background(uncached: List[Dict[str, Any]]):
+    """后台异步精确分类节点"""
+    try:
+        print(f"[KG] 后台任务开始：精确分类 {len(uncached)} 个节点")
+        await asyncio.sleep(1)  # 延迟1秒，让主请求先返回
+        
+        # 调用同步分类逻辑
+        _classify_nodes_sync(uncached, {})
+        
+        print(f"[KG] 后台分类完成：{len(uncached)} 个节点已更新缓存")
+        print(f"[KG] 提示：刷新页面或重新打开视图即可看到新节点")
+        
+        # TODO: 通过WebSocket推送更新通知前端自动刷新
+        # await notify_frontend_update(user_id, "knowledge_graph_updated")
+        
+    except Exception as e:
+        print(f"[KG] 后台分类失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _classify_nodes_sync(uncached: List[Dict[str, Any]], result: Dict[str, str]) -> Dict[str, str]:
+    """同步LLM分类节点（阻塞）"""
     if not uncached:
         return result
 
@@ -66,36 +214,50 @@ def _llm_classify_nodes(nodes: List[Dict[str, Any]]) -> Dict[str, str]:
         from backend.llm.llm_service import get_llm_service
         llm = get_llm_service()
         if not llm or not llm.enabled:
+            print(f"[KG] LLM未启用，新节点将标记为signal")
             for node in uncached:
                 result[node["id"]] = "signal"
+                key = f"{node.get('name','')}|{node.get('type','')}|{node.get('category','')}"
+                _llm_classify_cache[key] = "signal"
+            _save_cache(_llm_classify_cache)
             return result
 
         # 分批处理，每批 20 个，避免超时
         BATCH = 20
+        total_batches = (len(uncached) + BATCH - 1) // BATCH
+        
         for batch_start in range(0, len(uncached), BATCH):
             batch = uncached[batch_start: batch_start + BATCH]
+            batch_num = batch_start // BATCH + 1
+            
             items = "\n".join(
                 f'{i+1}. 名称="{n.get("name","")}" 类型="{n.get("type","")}" 分类="{n.get("category","")}"'
                 for i, n in enumerate(batch)
             )
-            prompt = f"""判断每个节点是"人物"还是"信号"。
-人物：真实具体的人（家人/朋友/同事/导师等）。
-信号：概念/事件/习惯/目标/情绪/技能/抽象词等。
+            prompt = f"""判断每个节点属于哪个类别：
+1. 人物(person)：真实具体的人（家人/朋友/同事/导师等）
+2. 职业(career)：技能/岗位/项目/工作/公司等职业相关
+3. 信号(signal)：概念/事件/习惯/目标/情绪等其他内容
 
 {items}
 
-只返回JSON，格式：{{"results":[{{"id":1,"label":"人物"}},{{"id":2,"label":"信号"}}]}}"""
+只返回JSON，格式：{{"results":[{{"id":1,"label":"人物"}},{{"id":2,"label":"职业"}},{{"id":3,"label":"信号"}}]}}"""
 
             try:
-                # 临时提高超时
-                original_timeout = getattr(llm.client, '_timeout', None)
+                print(f"[KG] 批次 {batch_num}/{total_batches} 调用LLM...")
+                start_time = time.time()
+                
                 response = llm.chat(
                     [{"role": "user", "content": prompt}],
                     temperature=0.0,
                     response_format="json_object",
                 )
+                
+                elapsed = time.time() - start_time
+                print(f"[KG] 批次 {batch_num}/{total_batches} 完成，耗时 {elapsed:.1f}秒")
+                
             except Exception as e:
-                print(f"[KG] 批次 {batch_start//BATCH+1} LLM 调用失败: {e}，该批标记为 signal")
+                print(f"[KG] 批次 {batch_num} LLM 调用失败: {e}，该批标记为 signal")
                 for node in batch:
                     result[node["id"]] = "signal"
                     key = f"{node.get('name','')}|{node.get('type','')}|{node.get('category','')}"
@@ -108,7 +270,7 @@ def _llm_classify_nodes(nodes: List[Dict[str, Any]]) -> Dict[str, str]:
                 continue
 
             try:
-                # 提取 JSON（有时模型会在 JSON 前后加文字）
+                # 提取 JSON
                 raw = response.strip()
                 start = raw.find('{')
                 end = raw.rfind('}') + 1
@@ -122,9 +284,16 @@ def _llm_classify_nodes(nodes: List[Dict[str, Any]]) -> Dict[str, str]:
                     result[node["id"]] = "signal"
                 continue
 
+            # 映射标签到类别
             for i, node in enumerate(batch):
                 label = id_to_label.get(i + 1, "信号")
-                role = "person" if label in ("人物", "person", "Person") else "signal"
+                if label in ("人物", "person", "Person"):
+                    role = "person"
+                elif label in ("职业", "career", "Career"):
+                    role = "career"
+                else:
+                    role = "signal"
+                
                 result[node["id"]] = role
                 key = f"{node.get('name','')}|{node.get('type','')}|{node.get('category','')}"
                 _llm_classify_cache[key] = role
@@ -134,6 +303,8 @@ def _llm_classify_nodes(nodes: List[Dict[str, Any]]) -> Dict[str, str]:
 
     except Exception as e:
         print(f"[KG] LLM 分流整体失败: {e}")
+        import traceback
+        traceback.print_exc()
         for node in uncached:
             if node["id"] not in result:
                 result[node["id"]] = "signal"
@@ -300,19 +471,14 @@ class FutureOSService:
         """加载知识图谱导出数据，带Redis缓存"""
         cache_key = f"kg_export:{user_id}"
         
-        # 1. 尝试从Redis缓存读取
+        # 1. 尝试从Redis缓存读取（使用全局连接池）
         try:
-            import redis
-            redis_client = redis.Redis(
-                host=os.getenv("REDIS_HOST", "localhost"),
-                port=int(os.getenv("REDIS_PORT", 6379)),
-                db=int(os.getenv("REDIS_DB", 0)),
-                decode_responses=True
-            )
-            cached = redis_client.get(cache_key)
-            if cached:
-                print(f"[Cache Hit] 从Redis加载知识图谱: {user_id}")
-                return json.loads(cached)
+            redis_client = _get_redis_client()
+            if redis_client:
+                cached = redis_client.get(cache_key)
+                if cached:
+                    print(f"[Cache Hit] 从Redis加载知识图谱: {user_id}")
+                    return json.loads(cached)
         except Exception as e:
             print(f"[Cache Miss] Redis读取失败: {e}")
         
@@ -322,14 +488,16 @@ class FutureOSService:
             try:
                 export_data = info_kg.export()
                 
-                # 3. 写入Redis缓存，TTL 5分钟
+                # 3. 写入Redis缓存，TTL 5分钟（使用全局连接池）
                 try:
-                    redis_client.setex(
-                        cache_key,
-                        300,  # 5分钟过期
-                        json.dumps(export_data, ensure_ascii=False)
-                    )
-                    print(f"[Cache Write] 知识图谱已缓存: {user_id}")
+                    redis_client = _get_redis_client()
+                    if redis_client:
+                        redis_client.setex(
+                            cache_key,
+                            300,  # 5分钟过期
+                            json.dumps(export_data, ensure_ascii=False)
+                        )
+                        print(f"[Cache Write] 知识图谱已缓存: {user_id}")
                 except Exception as e:
                     print(f"[Cache Write Failed] {e}")
                 
@@ -429,7 +597,7 @@ class FutureOSService:
                 }
             
             # 从问题中推断求职方向
-            target_direction = None
+            target_direction = "Python工程师"  # 默认方向
             if question:
                 # 提取关键词
                 if "Python" in question or "python" in question.lower():
@@ -441,21 +609,21 @@ class FutureOSService:
                 elif "后端" in question:
                     target_direction = "后端工程师"
             
-            # 构建用户技能画像
+            # 分类技能：已掌握、部分掌握、缺失
+            mastered_skills = [skill for skill, level in user_skills.items() if level >= 0.7]
+            partial_skills = [skill for skill, level in user_skills.items() if 0.3 <= level < 0.7]
+            missing_skills = []  # 缺失技能由图谱构建器自动推断
+            
+            # 构建用户技能画像（使用正确的参数）
             user_profile = UserSkillProfile(
-                user_id=user_id,
-                skills=user_skills,
-                current_position=current_position,
-                years_experience=years_experience,
+                mastered_skills=mastered_skills,
+                partial_skills=partial_skills,
+                missing_skills=missing_skills,
                 target_direction=target_direction
             )
             
-            # 构建职业知识图谱
-            graph_data = career_kg.build_career_graph(
-                user_profile=user_profile,
-                search_keyword=target_direction,
-                location="北京"
-            )
+            # 构建职业知识图谱（只传user_profile参数）
+            graph_data = career_kg.build_career_graph(user_profile=user_profile)
             
             # 转换为知识星图的格式
             return {
@@ -487,6 +655,110 @@ class FutureOSService:
                 "summary": {
                     "user_id": user_id,
                     "view_mode": "career",
+                    "node_count": 0,
+                    "link_count": 0,
+                    "error": str(e)
+                }
+            }
+
+    def _build_education_graph_view(
+        self,
+        user_id: str,
+        question: str = ""
+    ) -> Dict[str, Any]:
+        """
+        构建教育升学知识图谱视图
+
+        整合学业数据、目标学校、申请规划，展示升学决策图谱
+        """
+        try:
+            from backend.vertical.education.education_knowledge_graph import (
+                education_kg, EducationUserProfile
+            )
+
+            # 从用户画像中获取学业信息
+            profile = self._safe_profile_snapshot(user_id)
+
+            # 尝试从知识图谱中提取学业信息
+            export = self._load_graph_export(user_id)
+            info_nodes = list(export.get("information") or [])
+
+            # 提取学业节点
+            gpa = profile.get("gpa", 3.5)
+            ranking = profile.get("ranking_percent", 0.2)
+            research = profile.get("research", 0.5)
+
+            for node in info_nodes:
+                node_type = node.get("type", "")
+                node_name = node.get("name", "")
+                if node_type in ["gpa", "GPA", "score", "成绩"]:
+                    try:
+                        gpa = float(node.get("score", gpa))
+                    except:
+                        pass
+                if node_type in ["research", "科研", "publication"]:
+                    research = max(research, 0.6)
+
+            # 从问题中推断关键词
+            target_major = ""
+            location = ""
+            keywords = ["人工智能", "计算机", "金融", "经济", "工程", "医学", "理科", "文科"]
+            for kw in keywords:
+                if kw in question:
+                    target_major = kw
+                    break
+
+            # 构建学生学业档案
+            user_profile = EducationUserProfile(
+                student_id=user_id,
+                gpa=gpa,
+                gpa_max=4.0,
+                ranking_percent=ranking,
+                sat_act=profile.get("sat", 0),
+                gre_gmat=profile.get("gre", 0),
+                toefl_ielts=profile.get("toefl", 0),
+                research_experience=research,
+                publications=profile.get("publications", 0),
+                target_major=target_major,
+                target_level=profile.get("target_level", "master")
+            )
+
+            # 构建教育知识图谱
+            graph_data = education_kg.build_education_graph(
+                user_profile=user_profile,
+                search_keyword=target_major,
+                location=location
+            )
+
+            # 转换为知识星图的格式
+            return {
+                "view_mode": "signals",
+                "title": "教育升学决策视图",
+                "nodes": graph_data["nodes"],
+                "links": graph_data["edges"],
+                "summary": {
+                    "user_id": user_id,
+                    "view_mode": "signals",
+                    "node_count": len(graph_data["nodes"]),
+                    "link_count": len(graph_data["edges"]),
+                    "top_nodes": [],
+                    "metadata": graph_data["metadata"]
+                }
+            }
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[教育图谱] 构建失败: {e}，返回空图谱")
+
+            return {
+                "view_mode": "signals",
+                "title": "教育升学决策视图",
+                "nodes": [],
+                "links": [],
+                "summary": {
+                    "user_id": user_id,
+                    "view_mode": "signals",
                     "node_count": 0,
                     "link_count": 0,
                     "error": str(e)
@@ -712,32 +984,63 @@ class FutureOSService:
         question: str = "",
         session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """获取知识图谱视图，带Redis缓存"""
+        """
+        获取知识图谱视图 - 三级缓存架构
+        L1: 内存缓存（最快）→ L2: Redis缓存 → L3: 计算生成
+        """
+        import time
+        func_start = time.time()
+        
         # 生成缓存key（包含所有参数）
         cache_key = f"kg_view:{user_id}:{view_mode}:{question}:{session_id or 'all'}"
+        print(f"[KG Service] 🔑 缓存Key: {cache_key}")
         
-        # 1. 尝试从Redis缓存读取
+        # L1: 尝试从内存缓存读取（最快，纳秒级）
+        l1_start = time.time()
+        cached = _l1_cache.get(cache_key)
+        l1_time = time.time() - l1_start
+        
+        if cached:
+            total_time = time.time() - func_start
+            print(f"[L1 Hit] ⚡ 从内存加载视图: {view_mode}, L1耗时={l1_time*1000:.2f}ms, 总耗时={total_time*1000:.2f}ms")
+            return cached
+        
+        print(f"[L1 Miss] 内存缓存未命中, 检查耗时={l1_time*1000:.2f}ms")
+        
+        # L2: 尝试从Redis缓存读取（快，毫秒级）
+        l2_start = time.time()
         try:
-            import redis
-            redis_client = redis.Redis(
-                host=os.getenv("REDIS_HOST", "localhost"),
-                port=int(os.getenv("REDIS_PORT", 6379)),
-                db=int(os.getenv("REDIS_DB", 0)),
-                decode_responses=True
-            )
-            cached = redis_client.get(cache_key)
-            if cached:
-                print(f"[Cache Hit] 从Redis加载视图: {view_mode}")
-                return json.loads(cached)
+            redis_client = _get_redis_client()
+            if redis_client:
+                cached_str = redis_client.get(cache_key)
+                l2_time = time.time() - l2_start
+                
+                if cached_str:
+                    result = json.loads(cached_str)
+                    total_time = time.time() - func_start
+                    print(f"[L2 Hit] 🔥 从Redis加载视图: {view_mode}, L2耗时={l2_time*1000:.2f}ms, 总耗时={total_time*1000:.2f}ms")
+                    # 回填到L1缓存
+                    _l1_cache.set(cache_key, result)
+                    return result
+                else:
+                    print(f"[L2 Miss] Redis缓存未命中, 检查耗时={l2_time*1000:.2f}ms")
         except Exception as e:
-            print(f"[Cache Miss] Redis读取失败: {e}")
+            l2_time = time.time() - l2_start
+            print(f"[L2 Miss] Redis读取失败: {e}, 耗时={l2_time*1000:.2f}ms")
         
-        # 2. 缓存未命中，计算视图数据
-        # 如果是职业视图，使用职业知识图谱
+        # L3: 缓存未命中，计算视图数据
+        print(f"[L3 Compute] 🔨 开始计算视图: {view_mode}")
+        compute_start = time.time()
+        
+        # career 视图：职业知识图谱
         if view_mode == "career":
             result = self._build_career_graph_view(user_id, question)
+        # signals 视图：教育升学知识图谱
+        elif view_mode == "signals":
+            result = self._build_education_graph_view(user_id, question)
+        # people 视图：人物关系图谱
         else:
-            view_key = "people" if view_mode == "people" else "signals"
+            view_key = "people"
             export = self._load_graph_export(user_id)
             info_nodes = list(export.get("information") or [])
             relationships = list(export.get("relationships") or [])
@@ -750,16 +1053,28 @@ class FutureOSService:
                     info_nodes, relationships
                 )
         
-        # 3. 写入Redis缓存，TTL 3分钟
+        elapsed = time.time() - compute_start
+        total_time = time.time() - func_start
+        print(f"[L3 Compute] ✅ 视图计算完成, 计算耗时={elapsed:.3f}s, 总耗时={total_time:.3f}s")
+        
+        # 写入L1内存缓存（最快）
+        cache_write_start = time.time()
+        _l1_cache.set(cache_key, result)
+        
+        # 写入L2 Redis缓存，TTL 30分钟
         try:
-            redis_client.setex(
-                cache_key,
-                180,  # 3分钟过期
-                json.dumps(result, ensure_ascii=False)
-            )
-            print(f"[Cache Write] 视图已缓存: {view_mode}")
+            redis_client = _get_redis_client()
+            if redis_client:
+                redis_client.setex(
+                    cache_key,
+                    1800,  # 30分钟过期
+                    json.dumps(result, ensure_ascii=False)
+                )
+                cache_write_time = time.time() - cache_write_start
+                print(f"[Cache Write] 💾 视图已缓存到L1+L2: {view_mode}, 写入耗时={cache_write_time*1000:.2f}ms")
         except Exception as e:
-            print(f"[Cache Write Failed] {e}")
+            cache_write_time = time.time() - cache_write_start
+            print(f"[Cache Write Failed] ❌ 缓存写入失败: {e}, 耗时={cache_write_time*1000:.2f}ms")
         
         return result
     
@@ -772,8 +1087,10 @@ class FutureOSService:
         info_nodes: List[Dict],
         relationships: List[Dict]
     ) -> Dict[str, Any]:
-        """处理图谱视图数据（从get_graph_view中提取）"""
-        """处理图谱视图数据（从get_graph_view中提取）"""
+        """
+        处理图谱视图数据（从get_graph_view中提取）
+        优化：只在必要时才调用LLM分类
+        """
         
         if session_id:
             allowed_ids = {
@@ -786,19 +1103,27 @@ class FutureOSService:
                 info_nodes = [node for node in info_nodes if node["id"] in allowed_ids]
                 relationships = [rel for rel in relationships if rel.get("source") in allowed_ids and rel.get("target") in allowed_ids]
 
-        # ── 全部用 LLM 智能分流 ──────────────────────────────
-        llm_labels = _llm_classify_nodes(info_nodes)
+        # ── LLM智能分流（增量式，异步后台分类） ──────────────────────────────
+        # 异步模式：有新节点时后台分类，不阻塞视图加载
+        llm_labels = _llm_classify_nodes(info_nodes, async_mode=True)
         people_ids = {nid for nid, label in llm_labels.items() if label == "person"}
+        career_ids = {nid for nid, label in llm_labels.items() if label == "career"}
 
-        filtered_nodes = [node for node in info_nodes if (node["id"] in people_ids) == (view_key == "people")]
+        # 根据视图类型过滤节点
+        if view_key == "people":
+            filtered_nodes = [node for node in info_nodes if node["id"] in people_ids]
+        elif view_key == "career":
+            filtered_nodes = [node for node in info_nodes if node["id"] in career_ids]
+        else:  # signals
+            filtered_nodes = [node for node in info_nodes if node["id"] not in people_ids and node["id"] not in career_ids]
+        
         if not filtered_nodes:
             filtered_nodes = info_nodes[:16]
 
         filtered_ids = {node["id"] for node in filtered_nodes}
         filtered_links = [rel for rel in relationships if rel.get("source") in filtered_ids and rel.get("target") in filtered_ids]
 
-        # 若过滤后无连线，将主节点的人物邻居也纳入展示，避免图谱孤立无边
-        # 注意：只引入同类型节点（人物视图只引入人物邻居）
+        # 若过滤后无连线，将主节点的同类型邻居也纳入展示
         if not filtered_links and relationships:
             neighbor_ids: set = set()
             all_node_ids = {n["id"] for n in info_nodes}
@@ -809,11 +1134,15 @@ class FutureOSService:
                 if tgt in filtered_ids and src in all_node_ids:
                     neighbor_ids.add(src)
             neighbor_ids -= filtered_ids
-            # 只取同类型节点：人物视图只加人物，信号视图只加非人物
+            
+            # 只取同类型节点
             if view_key == "people":
                 extra_nodes = [n for n in info_nodes if n["id"] in neighbor_ids and n["id"] in people_ids][:30]
-            else:
-                extra_nodes = [n for n in info_nodes if n["id"] in neighbor_ids and n["id"] not in people_ids][:30]
+            elif view_key == "career":
+                extra_nodes = [n for n in info_nodes if n["id"] in neighbor_ids and n["id"] in career_ids][:30]
+            else:  # signals
+                extra_nodes = [n for n in info_nodes if n["id"] in neighbor_ids and n["id"] not in people_ids and n["id"] not in career_ids][:30]
+            
             filtered_nodes = filtered_nodes + extra_nodes
             filtered_ids = {n["id"] for n in filtered_nodes}
             filtered_links = [rel for rel in relationships if rel.get("source") in filtered_ids and rel.get("target") in filtered_ids]

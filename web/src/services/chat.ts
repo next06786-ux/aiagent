@@ -52,6 +52,7 @@ interface ChatSocketHandlers {
   onProgress?: (progress: string) => void;
   onThinking?: (thinking: string) => void;
   onAnswer?: (answer: string) => void;
+  onNavigation?: (navData: any) => void;
   onDone?: () => void;
   onError?: (message: string) => void;
 }
@@ -96,6 +97,10 @@ export function openChatSocket(
         case 'answer':
           answer = content;
           handlers.onAnswer?.(answer);
+          break;
+        case 'navigation':
+          // 处理导航建议
+          handlers.onNavigation?.(parsed);
           break;
         case 'done':
           handlers.onDone?.();

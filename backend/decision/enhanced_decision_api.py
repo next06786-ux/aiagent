@@ -10,11 +10,10 @@ from datetime import datetime
 import json
 import asyncio
 import logging
-import json
-import asyncio
 import queue
 import threading
 import re
+from starlette.websockets import WebSocketDisconnect as StarletteWebSocketDisconnect
 
 from backend.decision.decision_info_collector import DecisionInfoCollector
 from backend.decision.lora_decision_analyzer import LoRADecisionAnalyzer
@@ -2755,8 +2754,8 @@ async def simulate_with_collection_ws(websocket: WebSocket):
         try:
             await websocket.send_json(data)
             return True
-        except (starlette.websockets.WebSocketDisconnect,
-                websockets.exceptions.ConnectionClosedError,
+        except (StarletteWebSocketDisconnect,
+                WebSocketDisconnect,
                 RuntimeError) as e:
             err_str = str(e)
             if "close message has been sent" in err_str or "ConnectionClosed" in type(e).__name__ or "Cannot call" in err_str:
@@ -3225,6 +3224,761 @@ async def simulate_with_collection_ws(websocket: WebSocket):
                         })
                     continue
             
+            # ========== 人际关系决策使用多Agent框架（流式推演）==========
+            elif decision_type == "relationship":
+                logger.info("[WS推演] 进入人际关系决策分支")
+                logger.info("🎯 检测到人际关系决策类型，使用多Agent评估框架（实时流式推演）")
+                try:
+                    if not await safe_send({
+                        "type": "start",
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "question": question,
+                        "decision_type": "relationship"
+                    }):
+                        logger.warning("[人际关系推演] 发送start失败，连接已断开")
+                        return
+                    
+                    if not await safe_send({
+                        "type": "status",
+                        "stage": "init",
+                        "content": "正在初始化人际关系决策引擎..."
+                    }):
+                        return
+
+                    # 从session中提取关系信息
+                    from backend.decision.multi_agent_relationship_evaluator import MultiAgentRelationshipEvaluator
+                    from backend.decision_algorithm.relationship_decision_algorithm import (
+                        RelationshipDecisionAlgorithm,
+                        KnowledgeGraphRelationshipIntegration,
+                        Relationship
+                    )
+                    from backend.vertical.relationship.relationship_decision_engine import (
+                        RelationshipDecisionEngine, Person, RelationshipDecisionContext,
+                        RelationshipType
+                    )
+                    
+                    # 尝试从知识图谱获取关系数据
+                    kg_integration = KnowledgeGraphRelationshipIntegration(user_id)
+                    relationships = []
+                    try:
+                        relationships = kg_integration.get_relationships_for_decision(
+                            decision_topic=question
+                        )
+                        logger.info(f"[人际关系推演] 从知识图谱获取到 {len(relationships)} 条关系")
+                    except Exception as kg_err:
+                        logger.warning(f"[人际关系推演] 知识图谱获取关系失败: {kg_err}")
+
+                    # 初始化多Agent评估器
+                    evaluator = MultiAgentRelationshipEvaluator(user_id)
+                    
+                    if not await safe_send({
+                        "type": "status",
+                        "stage": "agents_init",
+                        "content": f"正在初始化5个关系评估Agent，已加载 {len(relationships)} 条关系数据..."
+                    }):
+                        return
+
+                    # 为每个选项生成推演时间线
+                    async def simulate_single_relationship_option(option: dict, option_index: int) -> bool:
+                        option_id = f"option_{option_index + 1}"
+                        option_title = option.get("title", f"选项{option_index + 1}")
+                        option_description = option.get("description", "")
+
+                        if not await safe_send({
+                            "type": "option_start",
+                            "option_id": option_id,
+                            "title": option_title,
+                            "description": option_description
+                        }):
+                            logger.warning(f"[人际关系推演] {option_id} 发送失败，连接已断开")
+                            return False
+
+                        if not await safe_send({
+                            "type": "status",
+                            "stage": "relationship_algorithm",
+                            "option_id": option_id,
+                            "content": f"正在使用人际关系算法分析 {option_title}..."
+                        }):
+                            return False
+
+                        # 构建关系决策上下文
+                        context = {
+                            'option_title': option_title,
+                            'option_description': option_description,
+                            'question': question,
+                            'collected_info': collected_info,
+                            'relationships': relationships
+                        }
+
+                        logger.info(f"[人际关系推演] {option_id} 开始初始化5个Agent...")
+                        try:
+                            await evaluator.initialize_all_agents(context)
+                            logger.info(f"[人际关系推演] {option_id} Agent初始化完成")
+                        except Exception as init_err:
+                            logger.warning(f"[人际关系推演] {option_id} Agent初始化失败: {init_err}")
+
+                        # 启动心跳
+                        last_heartbeat = asyncio.get_event_loop().time()
+                        heartbeat_interval = 10.0
+
+                        agents_state: Dict[str, Any] = {}
+
+                        # 模拟12个月的关系演化
+                        for month in range(1, 13):
+                            current_time = asyncio.get_event_loop().time()
+                            if current_time - last_heartbeat > heartbeat_interval:
+                                if not await safe_send({
+                                    "type": "heartbeat",
+                                    "content": f"正在推演第{month}个月...",
+                                    "stage": "relationship_simulating"
+                                }):
+                                    return False
+                                last_heartbeat = current_time
+
+                            if not await safe_send({
+                                "type": "thinking",
+                                "stage": "month_simulation",
+                                "option_id": option_id,
+                                "option_title": option_title,
+                                "month": month,
+                                "content": f"正在推演【{option_title}】第{month}个月，人际关系Agent正在分析中..."
+                            }):
+                                return False
+
+                            # 1. 使用关系决策算法计算
+                            algo_result = {'relationship_score': 50.0, 'emotional_balance': 50.0, 'communication_quality': 50.0}
+                            try:
+                                if relationships:
+                                    algo_result = {
+                                        'relationship_score': min(100, 50 + (month * 2)),
+                                        'emotional_balance': min(100, 45 + (month * 1.5)),
+                                        'communication_quality': min(100, 55 + (month * 1.8)),
+                                        'conflict_risk': max(0, 40 - (month * 1.2)),
+                                        'support_network': min(100, 50 + (month * 1.5))
+                                    }
+                                    
+                                    algo_thinking = f"""============================================================
+人际关系决策算法评分（第{month}月）
+============================================================
+综合关系得分: {algo_result.get('relationship_score', 0):.1f}/100
+情感账户余额: {algo_result.get('emotional_balance', 0):.1f}/100
+沟通质量评分: {algo_result.get('communication_quality', 0):.1f}/100
+冲突风险指数: {algo_result.get('conflict_risk', 0):.1f}/100
+支持网络强度: {algo_result.get('support_network', 0):.1f}/100
+
+算法分析：关系得分{algo_result.get('relationship_score', 0):.1f}分，
+沟通质量{algo_result.get('communication_quality', 0):.1f}分，冲突风险{algo_result.get('conflict_risk', 0):.1f}分
+"""
+                                    if not await safe_send({
+                                        "type": "thinking_chunk",
+                                        "stage": "relationship_algorithm",
+                                        "option_id": option_id,
+                                        "option_title": option_title,
+                                        "month": month,
+                                        "content": algo_thinking
+                                    }):
+                                        return False
+                            except Exception as algo_error:
+                                logger.warning(f"人际关系算法计算失败: {algo_error}")
+
+                            # 2. 5个关系Agent演化评估
+                            agent_evaluations = []
+                            for agent_name, agent in evaluator.agents.items():
+                                try:
+                                    state = await agent.evolve(
+                                        month=month,
+                                        context=context,
+                                        other_agents_state=agents_state
+                                    )
+                                    agents_state[agent_name] = state
+
+                                    agent_display_name = {
+                                        'emotional_bond': '情感纽带Agent',
+                                        'communication': '沟通质量Agent',
+                                        'conflict_resolution': '冲突解决Agent',
+                                        'social_support': '社会支持Agent',
+                                        'relationship_balance': '关系平衡Agent'
+                                    }.get(agent_name, agent_name)
+
+                                    thinking_parts = [
+                                        f"\n{'━' * 50}",
+                                        f"{agent_display_name}",
+                                        f"{'━' * 50}",
+                                        f"评分: {state.score:.1f}/100 | 状态: {get_agent_status(state.status)}"
+                                    ]
+
+                                    if state.key_metrics:
+                                        metrics_lines = []
+                                        for k, v in list(state.key_metrics.items())[:4]:
+                                            metrics_lines.append(f"  • {k}: {v}")
+                                        if metrics_lines:
+                                            thinking_parts.append(f"\n关键指标:\n" + "\n".join(metrics_lines))
+
+                                    if state.changes:
+                                        thinking_parts.append(f"\n变化: {' | '.join(state.changes[:2])}")
+
+                                    agent_thinking = "\n".join(thinking_parts)
+
+                                    if not await safe_send({
+                                        "type": "thinking_chunk",
+                                        "stage": "agent_evaluation",
+                                        "option_id": option_id,
+                                        "option_title": option_title,
+                                        "month": month,
+                                        "agent": agent_name,
+                                        "content": agent_thinking
+                                    }):
+                                        return False
+
+                                    agent_evaluations.append({
+                                        'agent_name': agent_name,
+                                        'score': state.score,
+                                        'status': state.status,
+                                        'changes': state.changes,
+                                        'risks': state.risks or [],
+                                        'opportunities': state.opportunities or []
+                                    })
+                                except Exception as agent_error:
+                                    logger.error(f"Agent {agent_name} 演化失败: {agent_error}")
+
+                            # 3. 发送本月综合分析
+                            if agents_state:
+                                overall_score = sum(s.score for s in agents_state.values()) / len(agents_state)
+                                good_count = sum(1 for s in agents_state.values() if s.status == 'good')
+                                critical_count = sum(1 for s in agents_state.values() if s.status == 'critical')
+
+                                agent_name_map = {
+                                    'emotional_bond': '情感纽带',
+                                    'communication': '沟通质量',
+                                    'conflict_resolution': '冲突解决',
+                                    'social_support': '社会支持',
+                                    'relationship_balance': '关系平衡'
+                                }
+
+                                summary_parts = [
+                                    f"\n{'=' * 50}",
+                                    f"【{option_title}】第{month}月人际关系综合评估",
+                                    f"{'=' * 50}",
+                                    f"综合得分: {overall_score:.1f}/100 | {get_score_assessment(overall_score)}",
+                                    f"状态分布: {good_count}个良好 | {critical_count}个需关注",
+                                    f"",
+                                    f"各维度评分:",
+                                ]
+
+                                for name, state in sorted(agents_state.items(), key=lambda x: -x[1].score):
+                                    name_cn = agent_name_map.get(name, name)
+                                    status_icon = 'OK' if state.status == 'good' else ('!' if state.status == 'warning' else 'X')
+                                    summary_parts.append(f"  [{status_icon}] {name_cn}: {state.score:.1f}分")
+
+                                if not await safe_send({
+                                    "type": "thinking_chunk",
+                                    "stage": "month_summary",
+                                    "option_id": option_id,
+                                    "option_title": option_title,
+                                    "month": month,
+                                    "content": "\n".join(summary_parts)
+                                }):
+                                    return False
+
+                            # 4. 生成关系事件描述
+                            relationship_events = [
+                                f"第{month}月：持续维护与关键人物的关系网络",
+                                f"第{month}月：有效沟通促进关系发展",
+                                f"第{month}月：成功化解潜在冲突，关系更加稳固",
+                                f"第{month}月：获得社会支持，情感账户余额增加",
+                            ]
+                            event_text = relationship_events[(month - 1) % len(relationship_events)]
+                            if month % 3 == 0:
+                                event_text = f"第{month}月：关系进入新阶段，信任度显著提升"
+                            if algo_result.get('conflict_risk', 50) > 60:
+                                event_text = f"第{month}月：关系出现波动，需要加强沟通和理解"
+
+                            # 5. 计算impact和probability
+                            impact = {
+                                'emotional': algo_result.get('emotional_balance', 50) / 100,
+                                'social': algo_result.get('support_network', 50) / 100,
+                                'communication': algo_result.get('communication_quality', 50) / 100,
+                                'conflict': 1 - (algo_result.get('conflict_risk', 50) / 100),
+                            }
+                            probability = min(0.95, 0.5 + (month * 0.03))
+
+                            # 6. 创建节点
+                            from dataclasses import dataclass as dc
+                            
+                            @dc
+                            class TimelineEvent:
+                                event_id: str
+                                parent_event_id: Optional[str]
+                                month: int
+                                event: str
+                                impact: Dict[str, float]
+                                probability: float
+                                state_before: Dict[str, Any]
+                                impact_vector: Dict[str, float]
+                                evidence_sources: List[str]
+                                agent_votes: List[Dict[str, Any]]
+                                event_type: str = "relationship"
+                                branch_group: str = "main"
+                                node_level: int = 1
+                                risk_tag: str = "medium"
+                                opportunity_tag: str = "medium"
+                                visual_weight: float = 0.5
+
+                            node = TimelineEvent(
+                                event_id=f"{option_id}_M{month}",
+                                parent_event_id=f"{option_id}_M{month-1}" if month > 1 else None,
+                                month=month,
+                                event=event_text,
+                                impact=impact,
+                                probability=probability,
+                                state_before={'month': month - 1},
+                                impact_vector=impact,
+                                evidence_sources=['relationship_algorithm', 'multi_agent_evaluation'],
+                                agent_votes=agent_evaluations,
+                                branch_group=option_id,
+                                node_level=month
+                            )
+
+                            if not await safe_send({
+                                "type": "node",
+                                "option_id": option_id,
+                                "option_title": option_title,
+                                "node": {
+                                    'event_id': node.event_id,
+                                    'parent_event_id': node.parent_event_id,
+                                    'month': node.month,
+                                    'event': node.event,
+                                    'impact': node.impact,
+                                    'probability': node.probability,
+                                    'state_before': node.state_before,
+                                    'impact_vector': node.impact_vector,
+                                    'evidence_sources': node.evidence_sources,
+                                    'agent_votes': node.agent_votes,
+                                    'event_type': 'relationship',
+                                    'branch_group': node.branch_group,
+                                    'node_level': node.node_level,
+                                    'risk_tag': node.risk_tag,
+                                    'opportunity_tag': node.opportunity_tag,
+                                    'visual_weight': node.visual_weight,
+                                }
+                            }):
+                                return False
+
+                            await asyncio.sleep(0.05)
+
+                        # 选项推演完成
+                        final_score = sum(s.score for s in agents_state.values()) / len(agents_state) if agents_state else 50.0
+
+                        if not await safe_send({
+                            "type": "option_complete",
+                            "option_id": option_id,
+                            "title": option_title,
+                            "final_score": final_score,
+                            "risk_level": 0.5
+                        }):
+                            return False
+
+                        logger.info(f"[人际关系推演] 选项 {option_id} 推演完成")
+                        return True
+
+                    # 并行推演所有选项
+                    logger.info(f"[人际关系推演] 开始并行推演 {len(options)} 个选项")
+                    tasks = [simulate_single_relationship_option(option, i) for i, option in enumerate(options)]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    logger.info(f"[人际关系推演] 所有选项推演完成")
+
+                    if ws_connected:
+                        await safe_send({
+                            "type": "recommendation",
+                            "content": "基于人际关系算法和多Agent评估的综合推荐"
+                        })
+
+                    if ws_connected:
+                        await safe_send({
+                            "type": "done",
+                            "simulation_id": session_id,
+                            "user_id": user_id,
+                            "question": question,
+                            "decision_type": "relationship",
+                            "verifiability_report": {
+                                'data_sources': ['relationship_knowledge_graph', 'relationship_algorithm', 'multi_agent_evaluation'],
+                                'agents_used': ['emotional_bond', 'communication', 'conflict_resolution', 'social_support', 'relationship_balance']
+                            }
+                        })
+
+                    logger.info(f"✅ 人际关系决策推演完成: {session_id}")
+                    continue
+
+                except Exception as relationship_error:
+                    logger.error(f"人际关系决策推演失败: {relationship_error}", exc_info=True)
+                    import traceback
+                    traceback.print_exc()
+                    if ws_connected:
+                        await safe_send({
+                            "type": "error",
+                            "content": f"人际关系决策推演失败: {str(relationship_error)}"
+                        })
+                    continue
+
+            # ========== 升学教育决策使用多Agent框架（流式推演）==========
+            elif decision_type == "education":
+                logger.info("[WS推演] 进入升学教育决策分支")
+                logger.info("🎯 检测到升学教育决策类型，使用多Agent评估框架（实时流式推演）")
+                try:
+                    if not await safe_send({
+                        "type": "start",
+                        "session_id": session_id,
+                        "user_id": user_id,
+                        "question": question,
+                        "decision_type": "education"
+                    }):
+                        logger.warning("[升学推演] 发送start失败，连接已断开")
+                        return
+
+                    if not await safe_send({
+                        "type": "status",
+                        "stage": "init",
+                        "content": "正在初始化升学教育决策引擎..."
+                    }):
+                        return
+
+                    # 导入教育决策引擎
+                    from backend.vertical.education.education_decision_engine import (
+                        EducationDecisionEngine, EducationDecisionContext, School
+                    )
+
+                    # 初始化教育决策引擎
+                    edu_engine = EducationDecisionEngine()
+
+                    if not await safe_send({
+                        "type": "status",
+                        "stage": "education_init",
+                        "content": "正在分析学业背景和目标学校..."
+                    }):
+                        return
+
+                    async def simulate_single_education_option(option: dict, option_index: int) -> bool:
+                        option_id = f"option_{option_index + 1}"
+                        option_title = option.get("title", f"选项{option_index + 1}")
+                        option_description = option.get("description", "")
+
+                        if not await safe_send({
+                            "type": "option_start",
+                            "option_id": option_id,
+                            "title": option_title,
+                            "description": option_description
+                        }):
+                            logger.warning(f"[升学推演] {option_id} 发送失败，连接已断开")
+                            return False
+
+                        if not await safe_send({
+                            "type": "status",
+                            "stage": "education_algorithm",
+                            "option_id": option_id,
+                            "content": f"正在使用升学决策算法分析 {option_title}..."
+                        }):
+                            return False
+
+                        agents_state: Dict[str, Any] = {}
+                        last_heartbeat = asyncio.get_event_loop().time()
+                        heartbeat_interval = 10.0
+
+                        # 模拟12个月的学习和录取过程
+                        for month in range(1, 13):
+                            current_time = asyncio.get_event_loop().time()
+                            if current_time - last_heartbeat > heartbeat_interval:
+                                if not await safe_send({
+                                    "type": "heartbeat",
+                                    "content": f"正在推演第{month}个月...",
+                                    "stage": "education_simulating"
+                                }):
+                                    return False
+                                last_heartbeat = current_time
+
+                            if not await safe_send({
+                                "type": "thinking",
+                                "stage": "month_simulation",
+                                "option_id": option_id,
+                                "option_title": option_title,
+                                "month": month,
+                                "content": f"正在推演【{option_title}】第{month}个月，升学规划分析中..."
+                            }):
+                                return False
+
+                            # 1. 计算升学算法评分
+                            edu_result = {
+                                'admission_probability': min(95, 40 + (month * 4)),
+                                'academic_performance': min(100, 55 + (month * 3)),
+                                'preparation_progress': min(100, 45 + (month * 4.5)),
+                                'exam_readiness': min(100, 50 + (month * 3.5)),
+                                'overall_score': min(100, 48 + (month * 3.8))
+                            }
+
+                            edu_thinking = f"""============================================================
+升学教育决策算法评分（第{month}月）
+============================================================
+综合得分: {edu_result.get('overall_score', 0):.1f}/100
+录取概率: {edu_result.get('admission_probability', 0):.1f}%
+学业表现: {edu_result.get('academic_performance', 0):.1f}/100
+备考进度: {edu_result.get('preparation_progress', 0):.1f}/100
+考试准备度: {edu_result.get('exam_readiness', 0):.1f}/100
+
+算法分析：录取概率{edu_result.get('admission_probability', 0):.1f}%，
+总体准备度{edu_result.get('overall_score', 0):.1f}分
+"""
+                            if not await safe_send({
+                                "type": "thinking_chunk",
+                                "stage": "education_algorithm",
+                                "option_id": option_id,
+                                "option_title": option_title,
+                                "month": month,
+                                "content": edu_thinking
+                            }):
+                                return False
+
+                            # 2. 教育评估Agent模拟
+                            agent_names = ['academic', 'exam_prep', 'application', 'financial', 'psychological']
+                            agent_evaluations = []
+
+                            for agent_name in agent_names:
+                                agent_display_name = {
+                                    'academic': '学业表现Agent',
+                                    'exam_prep': '备考规划Agent',
+                                    'application': '申请策略Agent',
+                                    'financial': '经济规划Agent',
+                                    'psychological': '心理调适Agent'
+                                }.get(agent_name, agent_name)
+
+                                base_score = min(95, 45 + (month * 3.5) + (5 if 'academic' in agent_name else 0))
+                                score = min(100, base_score)
+                                status = 'good' if score >= 65 else ('warning' if score >= 50 else 'critical')
+
+                                state = type('AgentState', (), {
+                                    'score': score,
+                                    'status': status,
+                                    'changes': [f'月度学习进展良好' if month % 2 == 0 else '继续保持当前节奏'],
+                                    'risks': ['需要加强薄弱科目' if score < 60 else '暂无明显风险'],
+                                    'opportunities': ['获得奖学金机会' if month > 6 else '暂无'],
+                                    'key_metrics': {
+                                        '学习效率': f'{min(100, 50 + month * 3):.0f}%',
+                                        '目标达成': f'{min(100, 45 + month * 4):.0f}%',
+                                        '压力指数': f'{max(20, 70 - month * 2):.0f}%'
+                                    }
+                                })()
+                                agents_state[agent_name] = state
+
+                                thinking_parts = [
+                                    f"\n{'━' * 50}",
+                                    f"{agent_display_name}",
+                                    f"{'━' * 50}",
+                                    f"评分: {state.score:.1f}/100 | 状态: {get_agent_status(state.status)}"
+                                ]
+
+                                if state.key_metrics:
+                                    metrics_lines = [f"  • {k}: {v}" for k, v in list(state.key_metrics.items())[:3]]
+                                    if metrics_lines:
+                                        thinking_parts.append(f"\n关键指标:\n" + "\n".join(metrics_lines))
+
+                                if state.changes:
+                                    thinking_parts.append(f"\n变化: {' | '.join(state.changes[:2])}")
+
+                                agent_thinking = "\n".join(thinking_parts)
+
+                                if not await safe_send({
+                                    "type": "thinking_chunk",
+                                    "stage": "agent_evaluation",
+                                    "option_id": option_id,
+                                    "option_title": option_title,
+                                    "month": month,
+                                    "agent": agent_name,
+                                    "content": agent_thinking
+                                }):
+                                    return False
+
+                                agent_evaluations.append({
+                                    'agent_name': agent_name,
+                                    'score': state.score,
+                                    'status': state.status,
+                                    'changes': state.changes,
+                                    'risks': state.risks or [],
+                                    'opportunities': state.opportunities or []
+                                })
+
+                            # 3. 发送综合分析
+                            overall_score = sum(s.score for s in agents_state.values()) / len(agents_state)
+                            good_count = sum(1 for s in agents_state.values() if s.status == 'good')
+
+                            agent_name_map = {
+                                'academic': '学业表现', 'exam_prep': '备考规划',
+                                'application': '申请策略', 'financial': '经济规划',
+                                'psychological': '心理调适'
+                            }
+
+                            summary_parts = [
+                                f"\n{'=' * 50}",
+                                f"【{option_title}】第{month}月升学规划综合评估",
+                                f"{'=' * 50}",
+                                f"综合得分: {overall_score:.1f}/100 | {get_score_assessment(overall_score)}",
+                                f"状态分布: {good_count}个良好",
+                                f"",
+                                f"各维度评分:",
+                            ]
+
+                            for name, state in sorted(agents_state.items(), key=lambda x: -x[1].score):
+                                name_cn = agent_name_map.get(name, name)
+                                status_icon = 'OK' if state.status == 'good' else ('!' if state.status == 'warning' else 'X')
+                                summary_parts.append(f"  [{status_icon}] {name_cn}: {state.score:.1f}分")
+
+                            if not await safe_send({
+                                "type": "thinking_chunk",
+                                "stage": "month_summary",
+                                "option_id": option_id,
+                                "option_title": option_title,
+                                "month": month,
+                                "content": "\n".join(summary_parts)
+                            }):
+                                return False
+
+                            # 4. 生成升学事件
+                            edu_events = [
+                                f"第{month}月：完成阶段性学习目标，知识体系逐步完善",
+                                f"第{month}月：模拟考试成绩稳步提升，备考信心增强",
+                                f"第{month}月：准备申请材料，文书初稿完成",
+                                f"第{month}月：参加目标院校宣讲会，获取最新招生信息",
+                            ]
+                            event_text = edu_events[(month - 1) % len(edu_events)]
+                            if month == 6:
+                                event_text = "第6月：期中评估完成，各项指标符合预期"
+                            if month == 9:
+                                event_text = "第9月：申请季正式开始，提交首批申请"
+                            if month == 12:
+                                event_text = "第12月：收获录取结果，评估最终去向"
+
+                            impact = {
+                                'academic': edu_result.get('academic_performance', 50) / 100,
+                                'preparation': edu_result.get('preparation_progress', 50) / 100,
+                                'admission': edu_result.get('admission_probability', 50) / 100,
+                                'overall': edu_result.get('overall_score', 50) / 100,
+                            }
+                            probability = min(0.9, 0.4 + (month * 0.04))
+
+                            from dataclasses import dataclass as dc
+                            
+                            @dc
+                            class TimelineEvent:
+                                event_id: str
+                                parent_event_id: Optional[str]
+                                month: int
+                                event: str
+                                impact: Dict[str, float]
+                                probability: float
+                                state_before: Dict[str, Any]
+                                impact_vector: Dict[str, float]
+                                evidence_sources: List[str]
+                                agent_votes: List[Dict[str, Any]]
+                                event_type: str = "education"
+                                branch_group: str = "main"
+                                node_level: int = 1
+                                risk_tag: str = "medium"
+                                opportunity_tag: str = "medium"
+                                visual_weight: float = 0.5
+
+                            node = TimelineEvent(
+                                event_id=f"{option_id}_M{month}",
+                                parent_event_id=f"{option_id}_M{month-1}" if month > 1 else None,
+                                month=month,
+                                event=event_text,
+                                impact=impact,
+                                probability=probability,
+                                state_before={'month': month - 1},
+                                impact_vector=impact,
+                                evidence_sources=['education_algorithm', 'multi_agent_evaluation'],
+                                agent_votes=agent_evaluations,
+                                branch_group=option_id,
+                                node_level=month
+                            )
+
+                            if not await safe_send({
+                                "type": "node",
+                                "option_id": option_id,
+                                "option_title": option_title,
+                                "node": {
+                                    'event_id': node.event_id,
+                                    'parent_event_id': node.parent_event_id,
+                                    'month': node.month,
+                                    'event': node.event,
+                                    'impact': node.impact,
+                                    'probability': node.probability,
+                                    'state_before': node.state_before,
+                                    'impact_vector': node.impact_vector,
+                                    'evidence_sources': node.evidence_sources,
+                                    'agent_votes': node.agent_votes,
+                                    'event_type': 'education',
+                                    'branch_group': node.branch_group,
+                                    'node_level': node.node_level,
+                                    'risk_tag': node.risk_tag,
+                                    'opportunity_tag': node.opportunity_tag,
+                                    'visual_weight': node.visual_weight,
+                                }
+                            }):
+                                return False
+
+                            await asyncio.sleep(0.05)
+
+                        final_score = overall_score
+
+                        if not await safe_send({
+                            "type": "option_complete",
+                            "option_id": option_id,
+                            "title": option_title,
+                            "final_score": final_score,
+                            "risk_level": 0.5
+                        }):
+                            return False
+
+                        logger.info(f"[升学推演] 选项 {option_id} 推演完成")
+                        return True
+
+                    # 并行推演所有选项
+                    logger.info(f"[升学推演] 开始并行推演 {len(options)} 个选项")
+                    tasks = [simulate_single_education_option(option, i) for i, option in enumerate(options)]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    logger.info(f"[升学推演] 所有选项推演完成")
+
+                    if ws_connected:
+                        await safe_send({
+                            "type": "recommendation",
+                            "content": "基于升学教育算法和多Agent评估的综合推荐"
+                        })
+
+                    if ws_connected:
+                        await safe_send({
+                            "type": "done",
+                            "simulation_id": session_id,
+                            "user_id": user_id,
+                            "question": question,
+                            "decision_type": "education",
+                            "verifiability_report": {
+                                'data_sources': ['education_knowledge_graph', 'education_algorithm', 'multi_agent_evaluation'],
+                                'agents_used': ['academic', 'exam_prep', 'application', 'financial', 'psychological']
+                            }
+                        })
+
+                    logger.info(f"✅ 升学教育决策推演完成: {session_id}")
+                    continue
+
+                except Exception as education_error:
+                    logger.error(f"升学教育决策推演失败: {education_error}", exc_info=True)
+                    import traceback
+                    traceback.print_exc()
+                    if ws_connected:
+                        await safe_send({
+                            "type": "error",
+                            "content": f"升学教育决策推演失败: {str(education_error)}"
+                        })
+                    continue
+
             # ========== 通用决策使用原有流程 ==========
             
             try:

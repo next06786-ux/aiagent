@@ -69,8 +69,8 @@ def main():
             "uvicorn",
             "backend.main:app",
             "--host", "0.0.0.0",
-            "--port", str(backend_port),
-            "--reload"  # 自动重载（开发模式）
+            "--port", str(backend_port)
+            # 关闭 --reload 避免Windows上的multiprocessing错误
         ])
     except KeyboardInterrupt:
         print("\n\n✅ 服务器已停止")

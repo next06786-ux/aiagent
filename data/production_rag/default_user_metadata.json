@@ -196,6 +196,34 @@
       "access_count": 0,
       "last_access": null,
       "related_memories": []
+    },
+    {
+      "id": "conversation_1775391754.156018_14",
+      "memory_type": "conversation",
+      "content": "不用",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "response": "好的，明白了。如果你后续想了解人际关系的具体分析，比如沟通模式、关系质量评估或改善策略，随时可以告诉我。"
+      },
+      "timestamp": "2026-04-05T20:22:34.156018",
+      "importance": 0.7,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1775392426.851163_15",
+      "memory_type": "conversation",
+      "content": "刚才我说啥来着",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "response": "你刚才说：“我的人际关系咋样”。"
+      },
+      "timestamp": "2026-04-05T20:33:46.851163",
+      "importance": 0.7,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
     }
   ]
 }

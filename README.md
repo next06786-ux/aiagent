@@ -19,3 +19,4 @@ git config --global url."https://mirror.ghproxy.com/https://".insteadOf "https:/
 git config --global --unset url."https://mirror.ghproxy.com/https://".insteadOf
 
 git config --global --unset url."https://github.moeyy.xyz/https://".insteadOf "https://"
+

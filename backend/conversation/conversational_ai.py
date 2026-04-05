@@ -2,6 +2,7 @@
 对话式AI接口
 让用户像聊天一样使用整个系统
 支持流式输出思考过程和回复内容
+默认融入知识图谱感知RAG架构
 """
 from typing import Dict, List, Any, Optional, AsyncGenerator
 from dataclasses import dataclass, field
@@ -9,6 +10,133 @@ from datetime import datetime
 from enum import Enum
 import re
 import json
+
+
+# ==================== 知识图谱感知RAG ====================
+
+def get_kg_rag_context(user_id: str, query: str, max_nodes: int = 10) -> Dict[str, Any]:
+    """
+    获取知识图谱感知RAG上下文
+    
+    数据来源：
+    1. 对话历史记忆（RAG向量检索）
+    2. 知识图谱节点和关系（图检索）
+    
+    Returns:
+        {
+            "context_text": "可读上下文",
+            "nodes": [...],
+            "influence_summary": {...},
+            "reasoning": "..."
+        }
+    """
+    try:
+        from backend.learning.knowledge_graph_rag import KnowledgeGraphAwareRAG, RetrievalMode
+        
+        kg_rag = KnowledgeGraphAwareRAG(user_id)
+        context = kg_rag.retrieve(
+            query=query,
+            max_nodes=max_nodes,
+            mode=RetrievalMode.HYBRID,
+            include_reasoning=True
+        )
+        
+        return {
+            "context_text": context.to_prompt() if hasattr(context, 'to_prompt') else str(context),
+            "nodes": [
+                {
+                    "id": n.id,
+                    "name": n.name,
+                    "type": n.node_type,
+                    "category": n.category,
+                    "confidence": n.confidence,
+                    "influence_score": n.influence_score
+                }
+                for n in context.nodes
+            ],
+            "influence_summary": context.influence_summary,
+            "reasoning": context.reasoning_path,
+            "relationships_count": len(context.relationships),
+            "has_context": len(context.nodes) > 0
+        }
+    except Exception as e:
+        print(f"⚠️ 获取知识图谱RAG上下文失败: {e}")
+        return {
+            "context_text": "",
+            "nodes": [],
+            "influence_summary": {},
+            "reasoning": "",
+            "relationships_count": 0,
+            "has_context": False
+        }
+
+
+def build_rag_enhanced_prompt(user_id: str, message: str, system_instruction: str = "") -> str:
+    """
+    构建包含RAG上下文的增强Prompt
+    
+    RAG数据来源：
+    1. 对话历史记忆（向量检索）
+    2. 知识图谱（图检索）
+    """
+    # 获取RAG上下文
+    rag_context = get_kg_rag_context(user_id, message)
+    
+    # 默认系统指令
+    if not system_instruction:
+        system_instruction = """你是一个智能生活助手，基于用户的个人知识图谱和对话历史提供帮助。
+你的回答应该：
+1. 结合用户知识图谱中的具体信息
+2. 分析各因素对用户的影响
+3. 给出有依据的建议
+4. 如果信息不足，基于通用知识回答"""
+    
+    prompt_parts = [
+        system_instruction,
+        "",
+        "=" * 50,
+        "【用户个人数据 - RAG检索结果】",
+        "=" * 50,
+    ]
+    
+    # 添加知识图谱上下文
+    if rag_context["has_context"]:
+        prompt_parts.append("")
+        prompt_parts.append("## 知识图谱上下文")
+        
+        # 影响力分析
+        if rag_context["influence_summary"]:
+            prompt_parts.append("### 因素影响力分析：")
+            sorted_inf = sorted(rag_context["influence_summary"].items(), key=lambda x: x[1], reverse=True)
+            for cat, score in sorted_inf[:5]:
+                prompt_parts.append(f"- **{cat}**: {score:.1%}")
+        
+        # 节点列表
+        if rag_context["nodes"]:
+            prompt_parts.append("")
+            prompt_parts.append(f"### 相关节点（共 {len(rag_context['nodes'])} 个）：")
+            for node in rag_context["nodes"][:10]:
+                prompt_parts.append(
+                    f"- [{node['type']}] {node['name']} "
+                    f"(影响: {node['influence_score']:.2f}, 置信度: {node['confidence']:.2f})"
+                )
+        
+        # 推理路径
+        if rag_context["reasoning"]:
+            prompt_parts.append("")
+            prompt_parts.append("### 推理路径：")
+            prompt_parts.append(rag_context["reasoning"])
+    else:
+        prompt_parts.append("（当前没有相关的知识图谱数据，将基于通用知识回答）")
+    
+    prompt_parts.extend([
+        "",
+        "=" * 50,
+        f"【用户当前问题】: {message}",
+        "=" * 50,
+    ])
+    
+    return "\n".join(prompt_parts)
 
 
 class IntentType(Enum):
@@ -322,15 +450,17 @@ class ConversationalAI:
         self,
         user_id: str,
         message: str,
-        user_data: Optional[Dict[str, Any]] = None
+        user_data: Optional[Dict[str, Any]] = None,
+        use_rag: bool = True
     ) -> str:
         """
-        对话接口
+        对话接口 - 默认使用RAG增强
         
         Args:
             user_id: 用户ID
             message: 用户消息
             user_data: 可选的用户数据
+            use_rag: 是否使用知识图谱感知RAG（默认True）
         
         Returns:
             系统响应
@@ -345,44 +475,58 @@ class ConversationalAI:
             'timestamp': datetime.now().isoformat()
         })
         
-        # 识别意图
-        intent = self.intent_recognizer.recognize(message)
-        context.last_intent = intent
-        
-        # 提取实体
-        entities = self.intent_recognizer.extract_entities(message)
-        
-        # 根据意图处理
-        if intent == IntentType.CASUAL:
-            response = self.response_generator.generate(intent, {}, context)
-        
-        elif intent == IntentType.QUERY:
-            # 查询知识图谱
-            kg_answer = self.knowledge_graph.query(message)
-            result = {'kg_answer': kg_answer}
-            response = self.response_generator.generate(intent, result, context)
-        
-        elif intent == IntentType.FEEDBACK:
-            # 处理反馈
-            feedback_type = self._parse_feedback(message)
-            self.evolving_system.receive_feedback(feedback_type)
-            result = {}
-            response = self.response_generator.generate(intent, result, context)
-        
+        # 【核心】如果启用RAG，使用知识图谱感知RAG构建增强Prompt
+        if use_rag:
+            # 获取RAG上下文
+            rag_context = get_kg_rag_context(user_id, message)
+            
+            # 构建增强的prompt
+            enhanced_prompt = build_rag_enhanced_prompt(user_id, message)
+            
+            # 发送给LLM
+            try:
+                from backend.llm.llm_service import get_llm_service
+                llm = get_llm_service()
+                if llm:
+                    response = llm.chat([
+                        {"role": "system", "content": """你是一个智能生活助手，基于用户的个人知识图谱和对话历史提供帮助。
+回答要求：
+1. 结合用户知识图谱中的具体信息
+2. 分析各因素对用户的影响
+3. 给出有依据的建议
+4. 如果信息不足，基于通用知识回答"""},
+                        {"role": "user", "content": enhanced_prompt}
+                    ], temperature=0.3)
+                else:
+                    response = self._generate_fallback_response(message, rag_context)
+            except Exception as e:
+                print(f"LLM调用失败，使用降级响应: {e}")
+                response = self._generate_fallback_response(message, rag_context)
         else:
-            # 需要系统分析
-            if user_data is None:
-                user_data = self._extract_data_from_message(message, entities)
+            # 不使用RAG的原始逻辑
+            intent = self.intent_recognizer.recognize(message)
+            context.last_intent = intent
+            entities = self.intent_recognizer.extract_entities(message)
             
-            # 使用自进化系统处理
-            result = await self.evolving_system.process_user_input(user_data)
-            
-            # 如果是查询意图，也查询知识图谱
-            if intent == IntentType.QUERY:
+            if intent == IntentType.CASUAL:
+                response = self.response_generator.generate(intent, {}, context)
+            elif intent == IntentType.QUERY:
                 kg_answer = self.knowledge_graph.query(message)
-                result['kg_answer'] = kg_answer
-            
-            response = self.response_generator.generate(intent, result, context)
+                result = {'kg_answer': kg_answer}
+                response = self.response_generator.generate(intent, result, context)
+            elif intent == IntentType.FEEDBACK:
+                feedback_type = self._parse_feedback(message)
+                self.evolving_system.receive_feedback(feedback_type)
+                result = {}
+                response = self.response_generator.generate(intent, result, context)
+            else:
+                if user_data is None:
+                    user_data = self._extract_data_from_message(message, entities)
+                result = await self.evolving_system.process_user_input(user_data)
+                if intent == IntentType.QUERY:
+                    kg_answer = self.knowledge_graph.query(message)
+                    result['kg_answer'] = kg_answer
+                response = self.response_generator.generate(intent, result, context)
         
         # 记录响应
         context.conversation_history.append({
@@ -393,24 +537,49 @@ class ConversationalAI:
         
         return response
     
+    def _generate_fallback_response(self, message: str, rag_context: Dict) -> str:
+        """当LLM不可用时，生成基于RAG上下文的降级响应"""
+        if rag_context.get("has_context"):
+            lines = [f"基于你的个人知识图谱，我分析如下：", ""]
+            
+            if rag_context["influence_summary"]:
+                sorted_inf = sorted(rag_context["influence_summary"].items(), key=lambda x: x[1], reverse=True)
+                lines.append("**主要影响因素：**")
+                for cat, score in sorted_inf[:3]:
+                    lines.append(f"- {cat}: {score:.1%}")
+                lines.append("")
+            
+            if rag_context["nodes"]:
+                lines.append(f"**相关节点（{len(rag_context['nodes'])}个）：**")
+                for node in rag_context["nodes"][:5]:
+                    lines.append(f"- [{node['type']}] {node['name']}")
+                lines.append("")
+            
+            lines.append(f"你的问题「{message}」需要结合上述信息进行分析。")
+            lines.append("（当前AI服务不可用，请稍后再试）")
+            
+            return "\n".join(lines)
+        else:
+            return f"收到你的问题：{message}。当前没有相关知识图谱数据，请先在系统中补充相关信息。"
+    
     async def chat_stream(
         self,
         user_id: str,
         message: str,
-        user_data: Optional[Dict[str, Any]] = None
+        user_data: Optional[Dict[str, Any]] = None,
+        use_rag: bool = True
     ) -> AsyncGenerator[Dict[str, str], None]:
         """
-        流式对话接口 - 支持实时思考过程和回复
+        流式对话接口 - 默认使用知识图谱感知RAG + 智能导航
         
         Args:
             user_id: 用户ID
             message: 用户消息
             user_data: 可选的用户数据
+            use_rag: 是否使用知识图谱感知RAG（默认True）
         
         Yields:
             包含 type 和 content 的字典
-            - type: 'start', 'progress', 'thinking_chunk', 'answer_chunk', 'done', 'error'
-            - content: 对应的内容
         """
         try:
             # 获取上下文
@@ -429,88 +598,168 @@ class ConversationalAI:
                 'content': f'开始处理: {message[:50]}...'
             }
             
-            # 识别意图
-            intent = self.intent_recognizer.recognize(message)
-            context.last_intent = intent
+            # 【智能导航】分析用户意图，检测是否需要导航
+            try:
+                from backend.ai_core.intent_router import intent_router
+                intent_result = intent_router.analyze_intent(message)
+                
+                if intent_result["has_navigation_intent"]:
+                    # 发送导航建议
+                    navigation_prompt = intent_router.generate_navigation_prompt(intent_result)
+                    if navigation_prompt:
+                        yield {
+                            'type': 'navigation',
+                            'content': navigation_prompt,
+                            'routes': intent_result["suggested_routes"],
+                            'primary_route': intent_result["primary_route"]
+                        }
+            except Exception as e:
+                print(f"意图识别失败: {e}")
             
-            # 提取实体
-            entities = self.intent_recognizer.extract_entities(message)
-            
-            # 发送进度
-            yield {
-                'type': 'progress',
-                'content': f'意图识别: {intent.value}'
-            }
-            
-            # 根据意图处理
-            thinking_process = ""
-            response_content = ""
-            
-            if intent == IntentType.CASUAL:
-                thinking_process = "这是一个闲聊消息，直接生成友好回复。"
-                # 先输出思考过程
+            # 【核心】如果启用RAG，使用知识图谱感知RAG
+            if use_rag:
+                # 1. 获取RAG上下文
                 yield {
-                    'type': 'thinking',
-                    'content': thinking_process
-                }
-                response_content = self.response_generator.generate(intent, {}, context)
-            
-            elif intent == IntentType.QUERY:
-                thinking_process = "用户在查询信息，查询知识图谱..."
-                yield {
-                    'type': 'thinking',
-                    'content': thinking_process
+                    'type': 'progress',
+                    'content': '🔍 正在检索知识图谱和对话记忆...'
                 }
                 
-                # 查询知识图谱
-                kg_answer = self.knowledge_graph.query(message)
-                result = {'kg_answer': kg_answer}
-                response_content = self.response_generator.generate(intent, result, context)
-            
-            elif intent == IntentType.FEEDBACK:
-                thinking_process = "用户在提供反馈，分析反馈类型..."
-                yield {
-                    'type': 'thinking',
-                    'content': thinking_process
-                }
+                rag_context = get_kg_rag_context(user_id, message)
                 
-                feedback_type = self._parse_feedback(message)
-                self.evolving_system.receive_feedback(feedback_type)
-                response_content = self.response_generator.generate(intent, {}, context)
-            
-            else:
-                # 需要系统分析
-                thinking_process = "分析用户数据，调用多个智能体进行处理..."
-                yield {
-                    'type': 'thinking',
-                    'content': thinking_process
-                }
-                
-                if user_data is None:
-                    user_data = self._extract_data_from_message(message, entities)
-                
-                # 使用自进化系统处理
-                result = await self.evolving_system.process_user_input(user_data)
-                
-                if intent == IntentType.QUERY:
-                    kg_answer = self.knowledge_graph.query(message)
-                    result['kg_answer'] = kg_answer
-                
-                response_content = self.response_generator.generate(intent, result, context)
-            
-            # 流式输出回复内容（逐字符）
-            for i, char in enumerate(response_content):
-                yield {
-                    'type': 'answer_chunk',
-                    'content': char
-                }
-                
-                # 每10个字符发送一次，避免过多消息
-                if (i + 1) % 10 == 0:
+                if rag_context.get("has_context"):
+                    # 有RAG上下文，发送分析结果
                     yield {
-                        'type': 'progress',
-                        'content': f'已生成 {i + 1}/{len(response_content)} 字符'
+                        'type': 'thinking',
+                        'content': f"📊 知识图谱分析完成\n" +
+                                  f"   - 发现 {len(rag_context['nodes'])} 个相关节点\n" +
+                                  f"   - {rag_context['relationships_count']} 条关系\n" +
+                                  f"   - 主要因素: {', '.join(list(rag_context['influence_summary'].keys())[:3])}"
                     }
+                else:
+                    yield {
+                        'type': 'thinking',
+                        'content': "📊 知识图谱中没有找到直接相关的信息，将基于通用知识回答"
+                    }
+                
+                # 2. 构建增强Prompt
+                yield {
+                    'type': 'progress',
+                    'content': '🧠 构建增强上下文...'
+                }
+                
+                # 3. 调用LLM
+                yield {
+                    'type': 'progress',
+                    'content': '💬 正在生成回答...'
+                }
+                
+                try:
+                    from backend.llm.llm_service import get_llm_service
+                    llm = get_llm_service()
+                    
+                    if llm:
+                        # 构建消息
+                        enhanced_prompt = build_rag_enhanced_prompt(user_id, message)
+                        messages = [
+                            {"role": "system", "content": """你是一个智能生活助手，基于用户的个人知识图谱和对话历史提供帮助。
+回答要求：
+1. 结合用户知识图谱中的具体信息
+2. 分析各因素对用户的影响
+3. 给出有依据的建议
+4. 如果信息不足，基于通用知识回答"""},
+                            {"role": "user", "content": enhanced_prompt}
+                        ]
+                        
+                        # 流式调用（如果支持）
+                        try:
+                            response_generator = llm.chat_stream(messages, temperature=0.3)
+                            response_content = ""
+                            for chunk in response_generator:
+                                response_content += chunk
+                                yield {
+                                    'type': 'answer_chunk',
+                                    'content': chunk
+                                }
+                        except Exception:
+                            # 不支持流式，一次性获取
+                            response_content = llm.chat(messages, temperature=0.3)
+                            # 模拟流式输出
+                            for i, char in enumerate(response_content):
+                                yield {
+                                    'type': 'answer_chunk',
+                                    'content': char
+                                }
+                                if (i + 1) % 20 == 0:
+                                    yield {
+                                        'type': 'progress',
+                                        'content': f'已生成 {i + 1}/{len(response_content)} 字符'
+                                    }
+                    else:
+                        # LLM不可用，使用降级响应
+                        response_content = self._generate_fallback_response(message, rag_context)
+                        for i, char in enumerate(response_content):
+                            yield {
+                                'type': 'answer_chunk',
+                                'content': char
+                            }
+                except Exception as e:
+                    print(f"LLM调用失败: {e}")
+                    response_content = self._generate_fallback_response(message, rag_context)
+                    for char in response_content:
+                        yield {
+                            'type': 'answer_chunk',
+                            'content': char
+                        }
+            else:
+                # 不使用RAG的原始逻辑
+                intent = self.intent_recognizer.recognize(message)
+                context.last_intent = intent
+                entities = self.intent_recognizer.extract_entities(message)
+                
+                thinking_process = ""
+                response_content = ""
+                
+                if intent == IntentType.CASUAL:
+                    thinking_process = "这是一个闲聊消息，直接生成友好回复。"
+                    yield {'type': 'thinking', 'content': thinking_process}
+                    response_content = self.response_generator.generate(intent, {}, context)
+                
+                elif intent == IntentType.QUERY:
+                    thinking_process = "用户在查询信息，查询知识图谱..."
+                    yield {'type': 'thinking', 'content': thinking_process}
+                    kg_answer = self.knowledge_graph.query(message)
+                    result = {'kg_answer': kg_answer}
+                    response_content = self.response_generator.generate(intent, result, context)
+                
+                elif intent == IntentType.FEEDBACK:
+                    thinking_process = "用户在提供反馈，分析反馈类型..."
+                    yield {'type': 'thinking', 'content': thinking_process}
+                    feedback_type = self._parse_feedback(message)
+                    self.evolving_system.receive_feedback(feedback_type)
+                    response_content = self.response_generator.generate(intent, {}, context)
+                
+                else:
+                    thinking_process = "分析用户数据，调用多个智能体进行处理..."
+                    yield {'type': 'thinking', 'content': thinking_process}
+                    if user_data is None:
+                        user_data = self._extract_data_from_message(message, entities)
+                    result = await self.evolving_system.process_user_input(user_data)
+                    if intent == IntentType.QUERY:
+                        kg_answer = self.knowledge_graph.query(message)
+                        result['kg_answer'] = kg_answer
+                    response_content = self.response_generator.generate(intent, result, context)
+                
+                # 流式输出
+                for i, char in enumerate(response_content):
+                    yield {
+                        'type': 'answer_chunk',
+                        'content': char
+                    }
+                    if (i + 1) % 10 == 0:
+                        yield {
+                            'type': 'progress',
+                            'content': f'已生成 {i + 1}/{len(response_content)} 字符'
+                        }
             
             # 记录完整响应
             context.conversation_history.append({

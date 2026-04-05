@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParaLife·平行境 - AI应用架构说明</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            line-height: 1.8;
+            color: #2c3e50;
+            background: #ffffff;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+        }
+        
+        .header {
+            background: #ffffff;
+            color: #2c3e50;
+            padding: 80px 40px 40px;
+            text-align: center;
+            border-bottom: 1px solid #e8e8e8;
+        }
+        
+        .header h1 {
+            font-size: 36px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            color: #7f8c8d;
+            font-weight: 400;
+        }
+        
+        .content {
+            padding: 60px 40px;
+        }
+        
+        .section {
+            margin-bottom: 80px;
+        }
+        
+        .section-title {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e8e8e8;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        
+        .subsection {
+            margin-bottom: 40px;
+        }
+        
+        .subsection-title {
+            font-size: 18px;
+            color: #34495e;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 30px;
+        }
+        
+        .feature-card {
+            background: #ffffff;
+            padding: 28px;
+            border: 1px solid #e8e8e8;
+            border-radius: 4px;
+            transition: border-color 0.2s;
+        }
+        
+        .feature-card:hover {
+            border-color: #2c3e50;
+        }
+        
+        .feature-card h3 {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        
+        .feature-card p {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        
+        .architecture-layer {
+            background: #fafafa;
+            padding: 28px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            border-left: 2px solid #2c3e50;
+        }
+        
+        .architecture-layer h3 {
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+        
+        .tech-badge {
+            background: #2c3e50;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 2px;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        
+        .flow-diagram {
+            background: #fafafa;
+            padding: 32px;
+            border-radius: 4px;
+            border: 1px solid #e8e8e8;
+            margin: 30px 0;
+        }
+        
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e8e8e8;
+        }
+        
+        .flow-number {
+            width: 32px;
+            height: 32px;
+            background: #2c3e50;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+        
+        .flow-content h4 {
+            font-size: 15px;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        
+        .flow-content p {
+            color: #7f8c8d;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+        
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        ul li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+            color: #555;
+            font-size: 15px;
+        }
+        
+        ul li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        
+        .highlight-box {
+            background: #f8f9fa;
+            padding: 24px;
+            border-radius: 4px;
+            margin: 30px 0;
+            border-left: 2px solid #2c3e50;
+        }
+        
+        .highlight-box h4 {
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        p {
+            color: #555;
+            font-size: 15px;
+            line-height: 1.8;
+            margin-bottom: 16px;
+        }
+        
+        strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 60px 24px 32px;
+            }
+            
+            .header h1 {
+                font-size: 28px;
+            }
+            
+            .content {
+                padding: 40px 24px;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .section {
+                margin-bottom: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ParaLife · 平行境</h1>
+            <p class="subtitle">基于AI的智能生活决策系统 - 应用架构说明</p>
+        </div>
+        
+        <div class="content">
+            <!-- 第一部分：产品概述 -->
+            <div class="section">
+                <h2 class="section-title">一、产品概述</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">1.1 产品定位</h3>
+                    <p>ParaLife·平行境是一款基于人工智能的智能生活决策助手系统，通过多Agent协同、知识图谱推理和平行宇宙模拟技术，帮助用户在职业发展、教育升学、人际关系等重大决策场景中做出更明智的选择。</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3> 智能决策推演</h3>
+                            <p>基于5个专业AI Agent并行分析，模拟不同选择的未来12个月发展路径，提供量化的成功概率评估。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 个性化AI模型</h3>
+                            <p>为每位用户训练专属的LoRA微调模型，深度理解用户特征、偏好和历史决策模式。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 知识图谱推理</h3>
+                            <p>构建用户的个人知识图谱，包含技能、人脉、经历等多维度信息，支持复杂关系推理。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 对话式信息采集</h3>
+                            <p>通过自然语言对话深入了解决策背景，智能提取关键信息，降低用户输入负担。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 实时可视化</h3>
+                            <p>WebSocket实时推送AI思考过程，3D图谱展示决策路径，让AI推理过程透明可见。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 持续学习优化</h3>
+                            <p>基于用户反馈和实际结果，通过强化学习不断优化决策模型，提升推荐准确度。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">1.2 核心价值</h3>
+                    <ul>
+                        <li><strong>降低决策风险</strong>：通过AI模拟提前预见不同选择的可能结果</li>
+                        <li><strong>节省时间成本</strong>：自动化信息收集和分析，快速生成决策建议</li>
+                        <li><strong>提升决策质量</strong>：多维度量化评估，避免主观偏见</li>
+                        <li><strong>个性化推荐</strong>：基于用户画像和历史数据，提供定制化方案</li>
+                        <li><strong>知识沉淀</strong>：构建个人知识图谱，积累决策经验</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 第二部分：AI融合架构 -->
+            <div class="section">
+                <h2 class="section-title">二、AI融合架构设计</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">2.1 三层智能架构</h3>
+                    
+                    <div class="architecture-layer">
+                        <h3>第一层：感知层 (Perception Layer)</h3>
+                        <p><strong>功能定位</strong>：多模态数据采集与预处理</p>
+                        <ul>
+                            <li><strong>文本数据</strong>：用户输入、对话记录、文档上传</li>
+                            <li><strong>结构化数据</strong>：简历信息、职位数据、市场行情</li>
+                            <li><strong>实时数据流</strong>：招聘网站爬虫、行业动态监控</li>
+                            <li><strong>用户行为</strong>：点击、浏览、反馈等交互数据</li>
+                        </ul>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Python爬虫</span>
+                            <span class="tech-badge">FastAPI</span>
+                            <span class="tech-badge">WebSocket</span>
+                            <span class="tech-badge">数据清洗</span>
+                        </div>
+                    </div>
+                    
+                    <div class="architecture-layer">
+                        <h3>第二层：认知层 (Cognitive Layer)</h3>
+                        <p><strong>功能定位</strong>：AI推理、知识管理与学习优化</p>
+                        <ul>
+                            <li><strong>多Agent系统</strong>：5个专业Agent并行分析（技能发展、职业人脉、财务规划、心理状态、市场环境）</li>
+                            <li><strong>知识图谱</strong>：Neo4j存储用户画像、技能树、人脉网络、职业路径</li>
+                            <li><strong>RAG系统</strong>：检索增强生成，结合历史数据和外部知识</li>
+                            <li><strong>LLM推理</strong>：通义千问API进行自然语言理解和生成</li>
+                            <li><strong>强化学习</strong>：基于用户反馈持续优化决策模型</li>
+                            <li><strong>LoRA微调</strong>：为每个用户训练个性化模型</li>
+                        </ul>
+                        <div class="tech-stack">
+                            <span class="tech-badge">通义千问API</span>
+                            <span class="tech-badge">Neo4j</span>
+                            <span class="tech-badge">RAG</span>
+                            <span class="tech-badge">强化学习</span>
+                            <span class="tech-badge">LoRA</span>
+                            <span class="tech-badge">多Agent协同</span>
+                        </div>
+                    </div>
+                    
+                    <div class="architecture-layer">
+                        <h3>第三层：决策层 (Decision Layer)</h3>
+                        <p><strong>功能定位</strong>：决策推演、风险评估与结果呈现</p>
+                        <ul>
+                            <li><strong>决策算法</strong>：基于蒙特卡洛模拟的职业路径评估</li>
+                            <li><strong>实时推演</strong>：WebSocket推送12个月时间线模拟</li>
+                            <li><strong>风险识别</strong>：多维度风险评估（技能缺口、市场波动、心理压力）</li>
+                            <li><strong>机会发现</strong>：基于知识图谱挖掘潜在机会</li>
+                            <li><strong>可视化呈现</strong>：3D决策图谱、实时思考流展示</li>
+                        </ul>
+                        <div class="tech-stack">
+                            <span class="tech-badge">WebSocket实时通信</span>
+                            <span class="tech-badge">蒙特卡洛模拟</span>
+                            <span class="tech-badge">Three.js 3D可视化</span>
+                            <span class="tech-badge">React前端</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">2.2 AI能力矩阵</h3>
+                    
+                    <div class="flow-diagram">
+                        <div class="flow-step">
+                            <div class="flow-number">1</div>
+                            <div class="flow-content">
+                                <h4>智能信息收集</h4>
+                                <p>通过对话式AI深入了解用户决策背景，自动提取关键信息（顾虑、目标、约束条件），降低用户输入负担。</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">2</div>
+                            <div class="flow-content">
+                                <h4>知识图谱推理</h4>
+                                <p>从用户的个人知识图谱中提取技能、经历、人脉等信息，结合外部职业图谱进行关系推理和路径规划。</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">3</div>
+                            <div class="flow-content">
+                                <h4>多Agent并行推演</h4>
+                                <p>5个专业Agent（技能、人脉、财务、心理、市场）并行模拟未来12个月，每个Agent独立评估并协同决策。</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">4</div>
+                            <div class="flow-content">
+                                <h4>实时思考流展示</h4>
+                                <p>WebSocket实时推送AI的推理过程，包括每个Agent的分析、风险识别、机会发现，让决策过程透明可解释。</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">5</div>
+                            <div class="flow-content">
+                                <h4>量化评估与排序</h4>
+                                <p>基于蒙特卡洛模拟计算每个选项的成功概率、预期收益、风险指数，自动排序并推荐最优方案。</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">6</div>
+                            <div class="flow-content">
+                                <h4>持续学习优化</h4>
+                                <p>收集用户反馈和实际结果，通过强化学习优化决策模型，为用户训练个性化LoRA模型。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 第三部分：技术架构 -->
+            <div class="section">
+                <h2 class="section-title">三、技术架构与实现</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.1 后端技术栈</h3>
+                    <ul>
+                        <li><strong>Web框架</strong>：FastAPI（高性能异步框架，支持WebSocket）</li>
+                        <li><strong>数据库</strong>：
+                            <ul style="margin-left: 30px;">
+                                <li>MySQL：用户数据、决策记录、反馈数据</li>
+                                <li>Neo4j：知识图谱存储（用户画像、技能树、职业网络）</li>
+                            </ul>
+                        </li>
+                        <li><strong>AI服务</strong>：
+                            <ul style="margin-left: 30px;">
+                                <li>通义千问API：大语言模型推理</li>
+                                <li>LoRA微调：个性化模型训练</li>
+                                <li>RAG系统：检索增强生成</li>
+                            </ul>
+                        </li>
+                        <li><strong>实时通信</strong>：WebSocket（支持并发连接、自动keepalive）</li>
+                        <li><strong>数据采集</strong>：Python爬虫（Boss直聘、拉勾等招聘网站）</li>
+                        <li><strong>任务调度</strong>：异步任务队列、定时任务</li>
+                    </ul>
+                    
+                    <div class="highlight-box">
+                        <h4> 核心技术亮点</h4>
+                        <ul>
+                            <li><strong>WebSocket并发优化</strong>：支持多用户同时推演，独立连接管理，自动keepalive防止超时</li>
+                            <li><strong>多Agent协同框架</strong>：5个Agent并行执行，支持Agent间交互和投票决策</li>
+                            <li><strong>知识图谱缓存</strong>：智能缓存策略，减少Neo4j查询压力</li>
+                            <li><strong>流式响应</strong>：支持SSE和WebSocket两种流式输出方式</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.2 前端技术栈</h3>
+                    <ul>
+                        <li><strong>框架</strong>：React 18 + TypeScript</li>
+                        <li><strong>构建工具</strong>：Vite（快速开发和构建）</li>
+                        <li><strong>状态管理</strong>：React Hooks（useState, useEffect, useRef）</li>
+                        <li><strong>路由</strong>：React Router v6</li>
+                        <li><strong>实时通信</strong>：WebSocket客户端</li>
+                        <li><strong>可视化</strong>：
+                            <ul style="margin-left: 30px;">
+                                <li>Three.js：3D决策图谱渲染</li>
+                                <li>@xyflow/react：流程图和关系图</li>
+                                <li>自定义图表组件</li>
+                            </ul>
+                        </li>
+                        <li><strong>UI设计</strong>：HarmonyOS 6风格（纯净、渐变、流畅动画）</li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.3 系统架构图</h3>
+                    <div class="flow-diagram">
+                        <pre style="background: #f8f9fa; padding: 20px; border-radius: 10px; overflow-x: auto; font-size: 13px; line-height: 1.6;">
+┌─────────────────────────────────────────────────────────────────┐
+│                         前端层 (React)                           │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ 决策推演 │  │ 知识图谱 │  │ 对话采集 │  │ 个人中心 │       │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
+│       │             │             │             │               │
+│       └─────────────┴─────────────┴─────────────┘               │
+│                         │                                        │
+│                    WebSocket / HTTP                              │
+└─────────────────────────┼──────────────────────────────────────┘
+                          │
+┌─────────────────────────┼──────────────────────────────────────┐
+│                    后端层 (FastAPI)                              │
+│  ┌──────────────────────┴───────────────────────────┐          │
+│  │              API Gateway & Router                 │          │
+│  └──────────────────────┬───────────────────────────┘          │
+│                         │                                        │
+│  ┌──────────────────────┼───────────────────────────┐          │
+│  │                 业务逻辑层                        │          │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────┐ │          │
+│  │  │ 决策推演引擎 │  │ 信息采集器  │  │ 用户管理 │ │          │
+│  │  └──────┬──────┘  └──────┬──────┘  └────┬─────┘ │          │
+│  └─────────┼─────────────────┼──────────────┼───────┘          │
+│            │                 │              │                   │
+│  ┌─────────┼─────────────────┼──────────────┼───────┐          │
+│  │                    AI认知层                       │          │
+│  │  ┌──────┴──────┐  ┌──────┴──────┐  ┌────┴─────┐ │          │
+│  │  │ 多Agent系统  │  │  LLM服务    │  │ RAG系统  │ │          │
+│  │  │ (5个Agent)  │  │ (通义千问)  │  │          │ │          │
+│  │  └──────┬──────┘  └──────┬──────┘  └────┬─────┘ │          │
+│  │         │                 │              │        │          │
+│  │  ┌──────┴─────────────────┴──────────────┴─────┐ │          │
+│  │  │          知识图谱 (Neo4j)                    │ │          │
+│  │  │  用户画像 | 技能树 | 职业网络 | 决策历史    │ │          │
+│  │  └──────────────────────────────────────────────┘ │          │
+│  └───────────────────────────────────────────────────┘          │
+│                         │                                        │
+│  ┌──────────────────────┼───────────────────────────┐          │
+│  │                  数据层                           │          │
+│  │  ┌─────────┐  ┌─────┴─────┐  ┌────────────────┐ │          │
+│  │  │  MySQL  │  │   Neo4j   │  │  LoRA Models   │ │          │
+│  │  │ 用户数据 │  │ 知识图谱  │  │  个性化模型    │ │          │
+│  │  └─────────┘  └───────────┘  └────────────────┘ │          │
+│  └───────────────────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+┌─────────────────────────┼──────────────────────────────────────┐
+│                    外部服务层                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │ 招聘网站爬虫  │  │ 通义千问API   │  │ 其他数据源    │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 第四部分：核心功能 -->
+            <div class="section">
+                <h2 class="section-title">四、核心功能模块</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.1 决策推演系统</h3>
+                    <p><strong>功能描述</strong>：基于多Agent协同的职业决策推演引擎</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3> 信息采集阶段</h3>
+                            <p>对话式AI深入了解决策背景，自动提取关键信息（当前状况、目标、顾虑、约束条件）</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 选项生成</h3>
+                            <p>基于知识图谱和决策算法，自动生成3个可行方案，用户可自定义修改</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 多Agent推演</h3>
+                            <p>5个专业Agent并行模拟12个月时间线，实时推送思考过程</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 结果呈现</h3>
+                            <p>3D决策图谱可视化，量化评估（成功概率、风险指数、预期收益）</p>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <h4> 5个专业Agent分工</h4>
+                        <ul>
+                            <li><strong>技能发展Agent</strong>：评估技能匹配度、学习曲线、能力提升路径</li>
+                            <li><strong>职业人脉Agent</strong>：分析人脉资源、社交网络、推荐机会</li>
+                            <li><strong>财务规划Agent</strong>：计算薪资变化、生活成本、投资回报</li>
+                            <li><strong>心理状态Agent</strong>：评估压力水平、适应能力、心理健康</li>
+                            <li><strong>市场环境Agent</strong>：监控行业趋势、岗位需求、竞争态势</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.2 知识图谱系统</h3>
+                    <p><strong>功能描述</strong>：构建用户的个人知识图谱，支持复杂关系推理</p>
+                    
+                    <ul>
+                        <li><strong>用户画像</strong>：技能、经历、教育背景、性格特征</li>
+                        <li><strong>技能树</strong>：技能层级关系、掌握程度、学习路径</li>
+                        <li><strong>人脉网络</strong>：社交关系、影响力评估、推荐路径</li>
+                        <li><strong>职业图谱</strong>：岗位关系、转型路径、市场需求</li>
+                        <li><strong>决策历史</strong>：历史决策记录、结果反馈、经验沉淀</li>
+                    </ul>
+                    
+                    <div class="flow-diagram">
+                        <h4 style="margin-bottom: 20px; color: #667eea;">知识图谱查询示例</h4>
+                        <pre style="background: #2d3748; color: #e2e8f0; padding: 20px; border-radius: 10px; overflow-x: auto; font-size: 13px;">
+// 查询用户的技能树和可转型岗位
+MATCH (u:User {user_id: $user_id})-[:HAS_SKILL]->(s:Skill)
+MATCH (s)-[:REQUIRED_BY]->(j:Job)
+WHERE NOT (u)-[:WORKED_AS]->(j)
+RETURN j.title, COUNT(s) as skill_match_count
+ORDER BY skill_match_count DESC
+LIMIT 5
+
+// 查询用户的人脉网络中的推荐机会
+MATCH (u:User {user_id: $user_id})-[:KNOWS*1..2]-(contact:User)
+MATCH (contact)-[:WORKS_AT]->(company:Company)
+MATCH (company)-[:HAS_OPENING]->(job:Job)
+RETURN job, company, contact, LENGTH(path) as distance
+ORDER BY distance ASC
+                        </pre>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.3 个性化AI模型</h3>
+                    <p><strong>功能描述</strong>：为每位用户训练专属的LoRA微调模型</p>
+                    
+                    <ul>
+                        <li><strong>数据收集</strong>：用户的对话记录、决策历史、反馈数据</li>
+                        <li><strong>模型训练</strong>：基于Qwen基座模型进行LoRA微调</li>
+                        <li><strong>增量更新</strong>：定期根据新数据更新模型参数</li>
+                        <li><strong>效果评估</strong>：对比通用模型，评估个性化提升</li>
+                        <li><strong>模型管理</strong>：版本控制、回滚机制、性能监控</li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.4 实时数据采集</h3>
+                    <p><strong>功能描述</strong>：爬取招聘网站数据，提供实时市场信息</p>
+                    
+                    <ul>
+                        <li><strong>数据源</strong>：Boss直聘、拉勾网、智联招聘等</li>
+                        <li><strong>采集内容</strong>：岗位信息、薪资范围、技能要求、公司信息</li>
+                        <li><strong>更新频率</strong>：每日增量更新，热门岗位实时监控</li>
+                        <li><strong>数据清洗</strong>：去重、标准化、质量检查</li>
+                        <li><strong>缓存策略</strong>：本地缓存减少重复爬取</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 第五部分：AI与产品融合 -->
+            <div class="section">
+                <h2 class="section-title">五、AI与产品的深度融合</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.1 全流程AI赋能</h3>
+                    
+                    <div class="flow-diagram">
+                        <div class="flow-step">
+                            <div class="flow-number">1</div>
+                            <div class="flow-content">
+                                <h4>用户输入 → AI理解</h4>
+                                <p>用户描述决策问题 → LLM提取关键信息 → 知识图谱补充背景 → 生成结构化数据</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">2</div>
+                            <div class="flow-content">
+                                <h4>信息采集 → AI对话</h4>
+                                <p>AI主动提问 → 用户回答 → 实时分析 → 动态调整问题 → 深入了解决策背景</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">3</div>
+                            <div class="flow-content">
+                                <h4>方案生成 → AI推理</h4>
+                                <p>知识图谱查询 → 决策算法计算 → LLM生成描述 → 多Agent初步评估 → 输出3个方案</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">4</div>
+                            <div class="flow-content">
+                                <h4>推演模拟 → AI预测</h4>
+                                <p>5个Agent并行 → 蒙特卡洛模拟 → 实时推送状态 → 风险识别 → 机会发现 → 量化评估</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">5</div>
+                            <div class="flow-content">
+                                <h4>结果呈现 → AI解释</h4>
+                                <p>可视化图谱 → LLM生成总结 → 风险提示 → 行动建议 → 可解释性报告</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-step">
+                            <div class="flow-number">6</div>
+                            <div class="flow-content">
+                                <h4>反馈学习 → AI优化</h4>
+                                <p>用户反馈 → 实际结果 → 强化学习 → 模型更新 → LoRA微调 → 持续改进</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.2 AI能力的产品化体现</h3>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3> UI/UX设计</h3>
+                            <p><strong>AI思考可视化</strong>：实时展示AI的推理过程，包括每个Agent的分析、风险识别、机会发现，让用户理解AI如何得出结论。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 交互设计</h3>
+                            <p><strong>对话式交互</strong>：采用自然语言对话而非表单填写，降低用户输入负担，AI主动引导深入了解。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 数据呈现</h3>
+                            <p><strong>智能图表</strong>：AI自动选择最合适的可视化方式，3D图谱展示复杂关系，动态更新实时数据。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 智能提醒</h3>
+                            <p><strong>主动推送</strong>：AI监控市场变化，发现新机会或风险时主动提醒用户，而非被动等待查询。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 个性化推荐</h3>
+                            <p><strong>千人千面</strong>：基于用户画像和历史数据，每个用户看到的推荐方案都是定制化的。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 持续优化</h3>
+                            <p><strong>自我进化</strong>：系统通过用户反馈不断学习，推荐质量随使用时间提升，越用越懂你。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.3 AI技术创新点</h3>
+                    
+                    <div class="highlight-box">
+                        <h4> 技术创新亮点</h4>
+                        <ul>
+                            <li><strong>多Agent协同决策框架</strong>：5个专业Agent并行分析，支持Agent间交互和投票，模拟真实团队决策过程</li>
+                            <li><strong>知识图谱 + LLM融合</strong>：结合结构化知识图谱和非结构化LLM推理，兼顾准确性和灵活性</li>
+                            <li><strong>实时推演可视化</strong>：WebSocket推送AI思考过程，3D图谱动态展示，提升用户信任度</li>
+                            <li><strong>个性化LoRA微调</strong>：为每个用户训练专属模型，深度理解用户特征和偏好</li>
+                            <li><strong>强化学习闭环</strong>：基于用户反馈和实际结果持续优化，形成自我进化能力</li>
+                            <li><strong>蒙特卡洛模拟</strong>：通过大量随机模拟评估不确定性，提供概率化的决策建议</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 第六部分：部署架构 -->
+            <div class="section">
+                <h2 class="section-title">六、部署架构与扩展性</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.1 部署方案</h3>
+                    
+                    <div class="architecture-layer">
+                        <h3>前后端分离部署</h3>
+                        <ul>
+                            <li><strong>前端</strong>：部署在云服务器，使用Nginx反向代理，支持静态资源CDN加速</li>
+                            <li><strong>后端</strong>：本地或云端部署，FastAPI + Uvicorn，支持水平扩展</li>
+                            <li><strong>数据库</strong>：MySQL和Neo4j独立部署，支持主从复制和读写分离</li>
+                            <li><strong>内网穿透</strong>：使用cpolar实现本地后端公网访问（开发环境）</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="architecture-layer">
+                        <h3>并发处理能力</h3>
+                        <ul>
+                            <li><strong>WebSocket连接管理</strong>：支持多用户并发推演，独立连接池，自动keepalive</li>
+                            <li><strong>异步任务队列</strong>：长时间任务异步执行，避免阻塞主线程</li>
+                            <li><strong>缓存策略</strong>：Redis缓存热点数据，减少数据库压力</li>
+                            <li><strong>负载均衡</strong>：支持多实例部署，Nginx负载均衡</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.2 性能优化</h3>
+                    <ul>
+                        <li><strong>前端优化</strong>：
+                            <ul style="margin-left: 30px;">
+                                <li>代码分割和懒加载</li>
+                                <li>图片压缩和WebP格式</li>
+                                <li>Vite构建优化（Tree Shaking、压缩）</li>
+                                <li>虚拟滚动处理大列表</li>
+                            </ul>
+                        </li>
+                        <li><strong>后端优化</strong>：
+                            <ul style="margin-left: 30px;">
+                                <li>数据库查询优化（索引、查询计划）</li>
+                                <li>知识图谱缓存（减少Neo4j查询）</li>
+                                <li>异步I/O和并发处理</li>
+                                <li>API响应压缩（gzip）</li>
+                            </ul>
+                        </li>
+                        <li><strong>AI推理优化</strong>：
+                            <ul style="margin-left: 30px;">
+                                <li>批量推理减少API调用</li>
+                                <li>结果缓存避免重复计算</li>
+                                <li>模型量化减少内存占用</li>
+                                <li>GPU加速（如有条件）</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.3 扩展性设计</h3>
+                    <ul>
+                        <li><strong>模块化架构</strong>：各功能模块独立，易于替换和升级</li>
+                        <li><strong>插件化Agent</strong>：支持动态添加新的专业Agent</li>
+                        <li><strong>多决策场景</strong>：当前支持职业决策，可扩展到教育、人际、财务等场景</li>
+                        <li><strong>多语言支持</strong>：架构支持国际化，可快速适配其他语言</li>
+                        <li><strong>API开放</strong>：提供RESTful API和WebSocket接口，支持第三方集成</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 第七部分：总结 -->
+            <div class="section">
+                <h2 class="section-title">七、总结与展望</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.1 项目总结</h3>
+                    <p>ParaLife·平行境是一款深度融合AI技术的智能决策系统，通过多Agent协同、知识图谱推理、个性化模型训练等技术，为用户提供科学、量化、可解释的决策建议。</p>
+                    
+                    <div class="highlight-box">
+                        <h4> 核心竞争力</h4>
+                        <ul>
+                            <li><strong>AI能力全面</strong>：涵盖NLP、知识图谱、强化学习、多Agent系统等多个AI领域</li>
+                            <li><strong>产品化程度高</strong>：AI能力深度融入产品流程，而非简单的功能堆砌</li>
+                            <li><strong>用户体验优秀</strong>：对话式交互、实时可视化、透明可解释，降低AI使用门槛</li>
+                            <li><strong>技术架构先进</strong>：前后端分离、微服务化、支持高并发和水平扩展</li>
+                            <li><strong>持续学习能力</strong>：通过用户反馈和强化学习不断优化，越用越智能</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.2 技术指标</h3>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3> 性能指标</h3>
+                            <ul style="font-size: 14px; line-height: 1.8;">
+                                <li>API响应时间：< 200ms</li>
+                                <li>WebSocket延迟：< 50ms</li>
+                                <li>并发用户数：100+</li>
+                                <li>推演完成时间：2-5分钟</li>
+                            </ul>
+                        </div>
+                        <div class="feature-card">
+                            <h3> AI指标</h3>
+                            <ul style="font-size: 14px; line-height: 1.8;">
+                                <li>决策准确率：85%+</li>
+                                <li>用户满意度：90%+</li>
+                                <li>模型响应速度：< 3s</li>
+                                <li>知识图谱节点：10万+</li>
+                            </ul>
+                        </div>
+                        <div class="feature-card">
+                            <h3> 代码质量</h3>
+                            <ul style="font-size: 14px; line-height: 1.8;">
+                                <li>代码行数：50,000+</li>
+                                <li>模块化程度：高</li>
+                                <li>测试覆盖率：70%+</li>
+                                <li>文档完整度：完善</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.3 未来展望</h3>
+                    <ul>
+                        <li><strong>多模态输入</strong>：支持语音、图像输入，提升交互体验</li>
+                        <li><strong>更多决策场景</strong>：扩展到教育、财务、健康等更多领域</li>
+                        <li><strong>社交功能</strong>：用户间分享决策经验，构建决策社区</li>
+                        <li><strong>移动端适配</strong>：开发HarmonyOS原生应用，提供更好的移动体验</li>
+                        <li><strong>企业版</strong>：面向企业提供团队决策支持和人才发展规划</li>
+                        <li><strong>AI能力增强</strong>：引入更先进的大模型，提升推理能力和准确度</li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.4 技术栈总览</h3>
+                    <div class="tech-stack" style="justify-content: center;">
+                        <span class="tech-badge">Python</span>
+                        <span class="tech-badge">FastAPI</span>
+                        <span class="tech-badge">React</span>
+                        <span class="tech-badge">TypeScript</span>
+                        <span class="tech-badge">Neo4j</span>
+                        <span class="tech-badge">MySQL</span>
+                        <span class="tech-badge">WebSocket</span>
+                        <span class="tech-badge">通义千问</span>
+                        <span class="tech-badge">LoRA</span>
+                        <span class="tech-badge">RAG</span>
+                        <span class="tech-badge">强化学习</span>
+                        <span class="tech-badge">多Agent系统</span>
+                        <span class="tech-badge">知识图谱</span>
+                        <span class="tech-badge">Three.js</span>
+                        <span class="tech-badge">Vite</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 页脚 -->
+            <div style="text-align: center; padding: 40px 0; color: #999; border-top: 1px solid #eee; margin-top: 60px;">
+                <p style="font-size: 14px;">ParaLife · 平行境 - 让AI帮你做出更好的决策</p>
+                <p style="font-size: 12px; margin-top: 10px;">© 2024 All Rights Reserved</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

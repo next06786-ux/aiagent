@@ -116,4 +116,22 @@ export const featureModules: FeatureModule[] = [
     group: '代理与成长',
     gradient: ['#F093FB', '#F5576C'],
   },
+  {
+    slug: 'relationship-decision',
+    title: '人际关系决策',
+    summary: '人物关系图谱、多Agent推演、支持/反对分析、沟通策略生成。',
+    route: '/relationship',
+    status: 'live',
+    group: '核心闭环',
+    gradient: ['#FF6B6B', '#FF69B4'],
+  },
+  {
+    slug: 'education-decision',
+    title: '教育升学决策',
+    summary: '升学路径规划、录取概率分析、申请策略优化、多Agent推演模拟。',
+    route: '/decision',
+    status: 'live',
+    group: '核心闭环',
+    gradient: ['#43E97B', '#38F9D7'],
+  },
 ];

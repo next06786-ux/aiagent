@@ -1,21 +1,49 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { createConversation, openChatSocket } from '../../services/chat';
+import { useAICoreSession } from '../../hooks/useAICoreSession';
+import { openChatSocket } from '../../services/chat';
 import './AICoreModal.css';
 
 interface AICoreModalProps {
-  isOpen: boolean;
   onClose: () => void;
 }
 
-export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  thinking?: string;
+  navigation?: {
+    prompt: string;
+    routes: Array<{
+      module: string;
+      name: string;
+      path: string;
+      confidence: number;
+      reason: string;
+      description: string;
+      view_mode?: string;
+    }>;
+    primary_route?: any;
+  };
+}
+
+export function AICoreModal({ onClose }: AICoreModalProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string; thinking?: string }>>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string>('');
+  
+  // 使用共享会话管理
+  const {
+    sessionId,
+    messages,
+    isLoading,
+    setIsLoading,
+    addMessage,
+    updateLastMessage,
+    clearSession,
+  } = useAICoreSession(user?.user_id);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeSocketRef = useRef<(() => void) | null>(null);
@@ -25,30 +53,21 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 打开时聚焦输入框并创建会话
+  // 打开时聚焦输入框
   useEffect(() => {
-    if (isOpen && user?.user_id) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-      
-      // 如果没有会话ID,创建一个新会话
-      if (!sessionId) {
-        createConversation(user.user_id)
-          .then(id => setSessionId(id))
-          .catch(err => console.error('创建会话失败:', err));
-      }
-    }
-  }, [isOpen, user, sessionId]);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
 
   // ESC 关闭
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isOpen, onClose]);
+  }, [onClose]);
 
   // 清理WebSocket连接
   useEffect(() => {
@@ -66,13 +85,12 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
     const userMessage = input.trim();
     setInput('');
     
-    // 添加用户消息
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    // 添加用户消息到共享会话
+    addMessage({ role: 'user', content: userMessage });
     setIsLoading(true);
 
     // 添加一个空的助手消息用于流式更新
-    const assistantMsgIndex = messages.length + 1;
-    setMessages(prev => [...prev, { role: 'assistant', content: '', thinking: '' }]);
+    addMessage({ role: 'assistant', content: '', thinking: '' });
 
     try {
       // 关闭之前的连接
@@ -82,6 +100,7 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
 
       let currentThinking = '';
       let currentAnswer = '';
+      let currentNavigation: any = null;
 
       closeSocketRef.current = openChatSocket(
         {
@@ -93,26 +112,31 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
         {
           onThinking: (thinking) => {
             currentThinking = thinking;
-            setMessages(prev => {
-              const newMessages = [...prev];
-              newMessages[assistantMsgIndex] = {
-                role: 'assistant',
-                content: currentAnswer,
-                thinking: currentThinking,
-              };
-              return newMessages;
+            updateLastMessage({
+              content: currentAnswer,
+              thinking: currentThinking,
+              navigation: currentNavigation,
             });
           },
           onAnswer: (answer) => {
             currentAnswer = answer;
-            setMessages(prev => {
-              const newMessages = [...prev];
-              newMessages[assistantMsgIndex] = {
-                role: 'assistant',
-                content: currentAnswer,
-                thinking: currentThinking,
-              };
-              return newMessages;
+            updateLastMessage({
+              content: currentAnswer,
+              thinking: currentThinking,
+              navigation: currentNavigation,
+            });
+          },
+          onNavigation: (navData: any) => {
+            // 处理导航建议
+            currentNavigation = {
+              prompt: navData.content,
+              routes: navData.routes || [],
+              primary_route: navData.primary_route,
+            };
+            updateLastMessage({
+              content: currentAnswer,
+              thinking: currentThinking,
+              navigation: currentNavigation,
             });
           },
           onDone: () => {
@@ -120,13 +144,8 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
             closeSocketRef.current = null;
           },
           onError: (error) => {
-            setMessages(prev => {
-              const newMessages = [...prev];
-              newMessages[assistantMsgIndex] = {
-                role: 'assistant',
-                content: `抱歉，我遇到了一些问题：${error}`,
-              };
-              return newMessages;
+            updateLastMessage({
+              content: `抱歉，我遇到了一些问题：${error}`,
             });
             setIsLoading(false);
             closeSocketRef.current = null;
@@ -134,13 +153,8 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
         }
       );
     } catch (error) {
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[assistantMsgIndex] = {
-          role: 'assistant',
-          content: '抱歉，我遇到了一些问题。请稍后再试。',
-        };
-        return newMessages;
+      updateLastMessage({
+        content: '抱歉，我遇到了一些问题。请稍后再试。',
       });
       setIsLoading(false);
     }
@@ -160,8 +174,6 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
     { label: '平行人生', action: () => navigate('/parallel-life') },
     { label: '涌现洞察', action: () => navigate('/emergence-dashboard') },
   ];
-
-  if (!isOpen) return null;
 
   return (
     <>
@@ -186,10 +198,24 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
             </div>
           </div>
 
-          {/* 关闭按钮 */}
-          <button onClick={onClose} className="ai-modal-close-btn" aria-label="关闭">
-            ×
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* 清空会话按钮 */}
+            {messages.length > 0 && (
+              <button
+                onClick={clearSession}
+                className="ai-modal-action-btn"
+                aria-label="清空会话"
+                title="清空会话"
+              >
+                🗑️
+              </button>
+            )}
+            
+            {/* 关闭按钮 */}
+            <button onClick={onClose} className="ai-modal-close-btn" aria-label="关闭">
+              ×
+            </button>
+          </div>
         </div>
 
         {/* 快捷功能栏 */}
@@ -234,17 +260,50 @@ export function AICoreModal({ isOpen, onClose }: AICoreModalProps) {
 
                 {/* 消息内容 */}
                 <div className="message-content-wrapper">
-                  {/* 思考过程 */}
-                  {msg.thinking && (
+                  {/* 导航建议 */}
+                  {msg.navigation && (
+                    <div className="message-navigation">
+                      <div className="navigation-prompt">{msg.navigation.prompt}</div>
+                      {msg.navigation.routes && msg.navigation.routes.length > 0 && (
+                        <div className="navigation-actions">
+                          {msg.navigation.routes.map((route: any, idx: number) => (
+                            <button
+                              key={idx}
+                              className={`navigation-btn ${idx === 0 ? 'primary' : ''}`}
+                              onClick={() => {
+                                if (route.view_mode) {
+                                  navigate(route.path, { state: { view: route.view_mode } });
+                                } else {
+                                  navigate(route.path);
+                                }
+                                onClose();
+                              }}
+                            >
+                              <span className="nav-btn-name">{route.name}</span>
+                              <span className="nav-btn-desc">{route.description}</span>
+                              {route.confidence && (
+                                <span className="nav-btn-confidence">{Math.round(route.confidence * 100)}% 匹配</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* 思考过程（仅在无导航时显示） */}
+                  {msg.thinking && !msg.navigation && (
                     <div className="message-thinking">
                       <span className="thinking-label">思考中：</span>{msg.thinking}
                     </div>
                   )}
                   
-                  {/* 回答内容 */}
-                  <div className="message-bubble">
-                    {msg.content || (msg.role === 'assistant' && isLoading ? '...' : '')}
-                  </div>
+                  {/* 回答内容（仅在无导航或有额外内容时显示） */}
+                  {(msg.content || (msg.role === 'assistant' && isLoading)) && !msg.navigation && (
+                    <div className="message-bubble">
+                      {msg.content || '...'}
+                    </div>
+                  )}
                 </div>
               </div>
             ))
