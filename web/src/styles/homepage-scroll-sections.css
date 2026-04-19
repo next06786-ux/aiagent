@@ -1,0 +1,497 @@
+/* ═══════════════════════════════════════════════════════════
+   Google Antigravity 风格的滚动内容区域
+   ═══════════════════════════════════════════════════════════ */
+
+/* 滚动容器 */
+.scroll-content-wrapper {
+  position: relative;
+  width: 100%;
+  background: linear-gradient(180deg, #0a0e1a 0%, #050810 100%);
+  overflow-x: hidden;
+}
+
+/* ── 通用滚动触发动画 ────────────────────────────────────── */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(60px);
+  transition: opacity 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+
+/* ── Section 1: 功能特性网格 ────────────────────────────── */
+.features-showcase {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 120px 80px;
+  position: relative;
+}
+
+.showcase-header {
+  text-align: center;
+  margin-bottom: 80px;
+}
+
+.showcase-eyebrow {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(10, 89, 247, 0.8);
+  margin-bottom: 16px;
+}
+
+.showcase-title {
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 24px;
+  letter-spacing: -2px;
+}
+
+.showcase-subtitle {
+  font-size: 20px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* 功能卡片网格 */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.feature-card-modern {
+  position: relative;
+  background: rgba(13, 27, 42, 0.4);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 48px 36px;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow: hidden;
+}
+
+.feature-card-modern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--card-color-start), var(--card-color-end));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.feature-card-modern:hover {
+  transform: translateY(-8px);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+}
+
+.feature-card-modern:hover::before {
+  opacity: 1;
+}
+
+.feature-icon-wrapper {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--card-color-start), var(--card-color-end));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  transition: transform 0.4s ease;
+}
+
+.feature-card-modern:hover .feature-icon-wrapper {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.feature-icon-wrapper svg {
+  width: 32px;
+  height: 32px;
+  color: white;
+}
+
+.feature-card-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 12px;
+  letter-spacing: -0.5px;
+}
+
+.feature-card-desc {
+  font-size: 15px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 24px;
+}
+
+.feature-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--card-color-start);
+  transition: gap 0.3s ease;
+}
+
+.feature-card-modern:hover .feature-card-link {
+  gap: 12px;
+}
+
+.feature-card-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Section 2: 大图展示区 ────────────────────────────────── */
+.visual-showcase {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 120px 80px;
+  position: relative;
+}
+
+.visual-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  max-width: 1400px;
+  margin: 0 auto;
+  align-items: center;
+}
+
+.visual-text {
+  padding-right: 40px;
+}
+
+.visual-eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(107, 72, 255, 0.8);
+  margin-bottom: 16px;
+}
+
+.visual-title {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #ffffff;
+  margin-bottom: 24px;
+  letter-spacing: -1.5px;
+}
+
+.visual-description {
+  font-size: 18px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 32px;
+}
+
+.visual-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.visual-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(10, 89, 247, 0.3);
+}
+
+.visual-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(13, 27, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+}
+
+.visual-media-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.1), rgba(107, 72, 255, 0.1));
+  position: relative;
+  overflow: hidden;
+}
+
+.visual-media-placeholder::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 70%
+  );
+  animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+/* ── Section 3: 数据统计 ────────────────────────────────────── */
+.stats-showcase {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  padding: 120px 80px;
+  position: relative;
+}
+
+.stats-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 48px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 40px 24px;
+  border-radius: 20px;
+  background: rgba(13, 27, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.4s ease;
+}
+
+.stat-item:hover {
+  background: rgba(13, 27, 42, 0.5);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-4px);
+}
+
+.stat-number {
+  font-size: 64px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+}
+
+.stat-description {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Section 4: CTA 区域 ────────────────────────────────────── */
+.cta-showcase {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 80px;
+  position: relative;
+}
+
+.cta-content {
+  text-align: center;
+  max-width: 800px;
+  position: relative;
+  z-index: 2;
+}
+
+.cta-title {
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.8) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 24px;
+  letter-spacing: -2px;
+}
+
+.cta-subtitle {
+  font-size: 22px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 48px;
+}
+
+.cta-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.cta-button-primary {
+  padding: 18px 40px;
+  background: #000000;
+  border: none;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cta-button-primary:hover {
+  background: #1a1a1a;
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+}
+
+.cta-button-secondary {
+  padding: 18px 40px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cta-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+/* 背景装饰 */
+.cta-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(10, 89, 247, 0.2) 0%, transparent 70%);
+  filter: blur(80px);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: pulse-glow 4s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* ── 响应式 ────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .features-showcase,
+  .visual-showcase,
+  .stats-showcase,
+  .cta-showcase {
+    padding: 80px 40px;
+  }
+
+  .showcase-title {
+    font-size: 48px;
+  }
+
+  .visual-content {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .visual-title {
+    font-size: 42px;
+  }
+
+  .cta-title {
+    font-size: 56px;
+  }
+}
+
+@media (max-width: 768px) {
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-title {
+    font-size: 36px;
+  }
+
+  .visual-title {
+    font-size: 32px;
+  }
+
+  .cta-title {
+    font-size: 40px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

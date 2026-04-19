@@ -1,0 +1,275 @@
+/* LLM 切换器样式 */
+
+.llm-switcher {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.llm-switcher-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.llm-switcher-header h3 {
+  margin: 0;
+  font-size: 24px;
+  color: #333;
+}
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 16px;
+}
+
+.error {
+  text-align: center;
+  padding: 40px;
+  color: #f44336;
+  font-size: 16px;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
+.success-message {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.current-provider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.current-provider .label {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.current-provider .value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.providers-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.provider-card {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s;
+}
+
+.provider-card.active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+}
+
+.provider-card.available:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.provider-card.unavailable {
+  opacity: 0.6;
+  background: #f5f5f5;
+}
+
+.provider-header {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.provider-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.provider-info {
+  flex: 1;
+}
+
+.provider-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.provider-description {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.provider-status {
+  margin-bottom: 12px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.available {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-badge.unavailable {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.remote-url-input {
+  margin-bottom: 12px;
+}
+
+.remote-url-input input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  transition: border-color 0.2s;
+}
+
+.remote-url-input input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.remote-url-input input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.provider-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.test-btn,
+.switch-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.test-btn {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.test-btn:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.switch-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.switch-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.test-btn:disabled,
+.switch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.llm-switcher-footer {
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.llm-switcher-footer .tip {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .providers-list {
+    grid-template-columns: 1fr;
+  }
+
+  .llm-switcher-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .current-provider {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

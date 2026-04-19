@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 测试和临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# 数据文件（可选，根据需要调整）
+backend/data/chroma/
+backend/data/decision_sessions/
+*.db
+*.sqlite
+
+# 构建产物
+web/dist/
+web/build/
+*.egg-info/
+dist/
+build/
+
+# 环境变量（敏感信息）
+.env.local
+.env.*.local
+
+# 文档
+*.md
+docs/
+
+# 测试文件
+test_*.py
+test_*.html
+*_test.py
+tests/

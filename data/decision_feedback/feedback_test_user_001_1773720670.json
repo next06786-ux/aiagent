@@ -1,0 +1,13 @@
+{
+  "feedback_id": "feedback_test_user_001_1773720670",
+  "user_id": "test_user_001",
+  "simulation_id": "sim_test_user_001_1773720669",
+  "question": "毕业后应该选择什么？",
+  "predicted_option": "工作",
+  "actual_option": "工作",
+  "predicted_score": 75.0,
+  "actual_satisfaction": 0,
+  "feedback_time": "2026-03-17T12:11:10.455511",
+  "feedback_text": null,
+  "used_for_training": false
+}

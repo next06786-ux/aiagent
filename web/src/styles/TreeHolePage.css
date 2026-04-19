@@ -1,0 +1,251 @@
+/* 树洞页面 2.5D 地图样式 */
+
+/* 光线动画 */
+@keyframes lightRay {
+  0%, 100% {
+    opacity: 0.12;
+    transform: skewX(-15deg) translateX(0);
+  }
+  50% {
+    opacity: 0.18;
+    transform: skewX(-15deg) translateX(15px);
+  }
+}
+
+.tree-hole-map-container {
+  position: relative;
+  height: 100%;
+  perspective: 1200px;
+  transform-style: preserve-3d;
+}
+
+.tree-hole-map-scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform: rotateX(15deg);
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tree-hole-map-scene:hover {
+  transform: rotateX(12deg) scale(1.02);
+}
+
+/* 地面网格效果 */
+.tree-hole-ground {
+  position: absolute;
+  inset: 0;
+  background: 
+    linear-gradient(90deg, rgba(10, 89, 247, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(10, 89, 247, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  animation: gridMove 20s linear infinite;
+}
+
+@keyframes gridMove {
+  0% { background-position: 0 0; }
+  100% { background-position: 60px 60px; }
+}
+
+/* 树洞节点 3D 效果 */
+.tree-hole-node {
+  position: absolute;
+  transform-style: preserve-3d;
+  transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1), 
+              top 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s ease,
+              filter 0.3s ease;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
+  pointer-events: none;
+  will-change: left, top;
+}
+
+.tree-hole-node button {
+  pointer-events: auto;
+  z-index: 10;
+  cursor: pointer !important;
+}
+
+.tree-hole-node::before {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70%;
+  height: 15px;
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.25), transparent);
+  border-radius: 50%;
+  filter: blur(6px);
+  opacity: 0.5;
+  transition: none;
+  pointer-events: none;
+}
+
+/* 连接路径 */
+.tree-hole-path {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tree-hole-path line {
+  stroke: rgba(10, 89, 247, 0.15);
+  stroke-width: 3;
+  stroke-dasharray: 10, 5;
+  animation: pathFlow 2s linear infinite;
+}
+
+@keyframes pathFlow {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 15; }
+}
+
+/* 装饰性粒子 */
+.tree-hole-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 200, 0.4);
+  pointer-events: none;
+  animation: particleFloat 5s ease-in-out infinite;
+}
+
+@keyframes particleFloat {
+  0%, 100% { 
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  50% { 
+    transform: translate(15px, -20px) scale(1.3);
+    opacity: 0.6;
+  }
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 加载动画 */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 弹窗动画 */
+.tree-hole-modal-overlay {
+  animation: overlayFadeIn 0.3s ease-out;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.tree-hole-modal-content {
+  animation: modalSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes modalSlideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 消息卡片 */
+.tree-hole-message {
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(10, 89, 247, 0.04);
+  border: 1px solid rgba(10, 89, 247, 0.08);
+  transition: all 0.3s;
+}
+
+.tree-hole-message:hover {
+  background: rgba(10, 89, 247, 0.08);
+  border-color: rgba(10, 89, 247, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(10, 89, 247, 0.1);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .tree-hole-map-scene {
+    transform: rotateX(10deg);
+  }
+}
+
+/* 时间线样式 */
+.timeline-container {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 时间线拖动时的光标 */
+.timeline-dragging {
+  cursor: grabbing !important;
+}
+
+/* 树洞流动动画 */
+@keyframes treeHoleFlow {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.tree-hole-node.flowing {
+  animation: treeHoleFlow 3s ease-in-out infinite;
+}
+
+/* 时间线标记点脉冲动画 */
+@keyframes timelineMarkerPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 12px rgba(139, 90, 43, 0.8), 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 0 0 20px rgba(139, 90, 43, 1), 0 4px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* 平滑滚动 */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}

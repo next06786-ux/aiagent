@@ -1,0 +1,1286 @@
+/* ========================================================
+   智慧洞察页面 - 模仿主界面风格
+   三层混合架构可视化展示
+   ======================================================== */
+
+/* ── 页面容器 ────────────────────────────────────────── */
+.insights-page {
+  background: #ffffff;
+  color: #1a1a1a;
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ── 滚动进度条 ─────────────────────────────────────── */
+.insights-scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0A59F7, #6B48FF, #00C8FF);
+  z-index: 1000;
+  transition: width 0.1s ease-out;
+}
+
+/* ── 背景粒子画布 ────────────────────────────────────── */
+.insights-particles-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* ── 背景渐变球 ────────────────────────────────────── */
+.insights-background {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.insights-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  animation: insightsBlobFloat 25s ease-in-out infinite;
+}
+
+.insights-blob-1 {
+  width: 600px;
+  height: 600px;
+  top: -200px;
+  left: -150px;
+  background: radial-gradient(circle, rgba(10, 89, 247, 0.08), transparent 70%);
+  animation-delay: 0s;
+}
+
+.insights-blob-2 {
+  width: 500px;
+  height: 500px;
+  top: 40%;
+  right: -150px;
+  background: radial-gradient(circle, rgba(107, 72, 255, 0.06), transparent 70%);
+  animation-delay: -8s;
+}
+
+.insights-blob-3 {
+  width: 400px;
+  height: 400px;
+  bottom: 10%;
+  left: 30%;
+  background: radial-gradient(circle, rgba(0, 200, 255, 0.04), transparent 70%);
+  animation-delay: -16s;
+}
+
+@keyframes insightsBlobFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(50px, -80px) scale(1.1);
+  }
+  66% {
+    transform: translate(-40px, 50px) scale(0.95);
+  }
+}
+
+/* ── 主容器 ────────────────────────────────────────── */
+.insights-container {
+  position: relative;
+  z-index: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 80px 48px;
+}
+
+/* ── 标题区 ────────────────────────────────────────── */
+.insights-hero {
+  text-align: center;
+  margin-bottom: 80px;
+}
+
+.insights-title {
+  font-size: 64px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+.insights-subtitle {
+  font-size: 18px;
+  color: rgba(0, 0, 0, 0.5);
+  margin: 0;
+  letter-spacing: 0.05em;
+}
+
+/* ── 视图切换按钮 ────────────────────────────────────── */
+.insights-view-switcher {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 60px;
+}
+
+.insights-view-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 40px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(10, 89, 247, 0.15);
+  border-radius: 20px;
+  font-size: 17px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+/* 按钮背景渐变效果 */
+.insights-view-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.05), rgba(107, 72, 255, 0.05));
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+/* 按钮光泽效果 */
+.insights-view-btn::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%);
+  opacity: 0;
+  transition: all 0.6s ease;
+  z-index: 0;
+}
+
+.insights-view-btn:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 16px 40px rgba(10, 89, 247, 0.15);
+  border-color: rgba(10, 89, 247, 0.3);
+  color: rgba(0, 0, 0, 0.9);
+}
+
+.insights-view-btn:hover::before {
+  opacity: 1;
+}
+
+.insights-view-btn:hover::after {
+  opacity: 0.3;
+  transform: translate(25%, 25%);
+}
+
+.insights-view-btn.active {
+  background: rgba(255, 255, 255, 0.98);
+  color: #0A59F7;
+  border-color: rgba(10, 89, 247, 0.25);
+  box-shadow: 0 12px 32px rgba(10, 89, 247, 0.2);
+  transform: translateY(-2px);
+}
+
+.insights-view-btn.active::before {
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.08), rgba(107, 72, 255, 0.08));
+  opacity: 1;
+}
+
+.insights-view-btn.active::after {
+  opacity: 0.15;
+}
+
+.insights-view-btn.active:hover {
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 16px 48px rgba(10, 89, 247, 0.25);
+  border-color: rgba(10, 89, 247, 0.35);
+}
+
+/* 确保内容在装饰层之上 */
+.insights-view-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+.insights-view-btn .view-icon {
+  width: 24px;
+  height: 24px;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.insights-view-btn:hover .view-icon {
+  transform: rotate(15deg) scale(1.1);
+}
+
+.insights-view-btn.active .view-icon {
+  transform: rotate(0deg) scale(1.05);
+}
+
+/* ── 跨领域综合分析区域 ────────────────────────────────── */
+.insights-cross-domain-section {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(10, 89, 247, 0.08);
+}
+
+/* ── 滚动显示动画 ────────────────────────────────────── */
+.insights-reveal {
+  opacity: 0;
+  transform: translateY(60px);
+  animation: insightsReveal 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.insights-reveal-scale {
+  opacity: 0;
+  transform: scale(0.92);
+  animation: insightsRevealScale 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes insightsReveal {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes insightsRevealScale {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── 加载状态 ────────────────────────────────────────── */
+.insights-loading-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 500px;
+}
+
+.insights-loading-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 24px;
+  padding: 60px 80px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(10, 89, 247, 0.08);
+  max-width: 600px;
+  width: 100%;
+}
+
+.insights-loading-spinner {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 32px;
+  border: 4px solid rgba(10, 89, 247, 0.1);
+  border-top-color: #0A59F7;
+  border-radius: 50%;
+  animation: insightsSpin 1s linear infinite;
+}
+
+@keyframes insightsSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.insights-loading-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 12px 0;
+}
+
+.insights-loading-desc {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.5);
+  margin: 0 0 40px 0;
+}
+
+/* ── 三层分析进度 ────────────────────────────────────── */
+.insights-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: left;
+}
+
+.insights-stage {
+  opacity: 0;
+  animation: insightsStageAppear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes insightsStageAppear {
+  to {
+    opacity: 1;
+  }
+}
+
+.insights-stage-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.insights-stage-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(10, 89, 247, 0.1);
+  font-size: 16px;
+}
+
+.insights-icon-check {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.insights-icon-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(10, 89, 247, 0.2);
+  border-top-color: #0A59F7;
+  border-radius: 50%;
+  animation: insightsSpin 0.8s linear infinite;
+}
+
+.insights-icon-pending {
+  color: rgba(0, 0, 0, 0.3);
+  font-size: 20px;
+}
+
+.insights-stage-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.insights-stage-progress {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0A59F7;
+  min-width: 45px;
+  text-align: right;
+}
+
+.insights-stage-bar {
+  height: 6px;
+  background: rgba(10, 89, 247, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.insights-stage-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0A59F7, #6B48FF);
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── 错误状态 ────────────────────────────────────────── */
+.insights-error {
+  text-align: center;
+  padding: 80px 40px;
+}
+
+.insights-error-icon {
+  font-size: 64px;
+  margin-bottom: 24px;
+}
+
+.insights-error-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 12px 0;
+}
+
+.insights-error-message {
+  font-size: 16px;
+  color: rgba(0, 0, 0, 0.5);
+  margin: 0 0 32px 0;
+}
+
+.insights-retry-btn {
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.insights-retry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(10, 89, 247, 0.3);
+}
+
+/* ── 分析结果 ────────────────────────────────────────── */
+.insights-results {
+  display: flex;
+  flex-direction: column;
+  gap: 60px;
+}
+
+/* ── 综合评分区 ────────────────────────────────────────── */
+.insights-scores-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+}
+
+.insights-score-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.insights-score-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(10, 89, 247, 0.12);
+  border-color: rgba(10, 89, 247, 0.2);
+}
+
+.insights-score-main {
+  grid-column: 1 / -1;
+  padding: 48px;
+}
+
+.insights-score-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 24px;
+}
+
+.insights-score-circle {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 24px;
+}
+
+.insights-score-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.insights-score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 36px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.insights-score-grade {
+  display: inline-block;
+  padding: 8px 24px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.insights-score-bar-container {
+  height: 8px;
+  background: rgba(10, 89, 247, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+
+.insights-score-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.insights-score-bar-feasibility {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.insights-score-bar-risk {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.insights-score-number {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+/* ── 内容区块 ────────────────────────────────────────── */
+.insights-section {
+  margin-bottom: 60px;
+}
+
+.insights-section-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 32px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.insights-title-icon {
+  font-size: 36px;
+}
+
+/* ── 关键发现网格 ────────────────────────────────────────── */
+.insights-findings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.insights-finding-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 16px;
+  padding: 28px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
+  animation: insightsFindingAppear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes insightsFindingAppear {
+  to {
+    opacity: 1;
+  }
+}
+
+.insights-finding-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(10, 89, 247, 0.12);
+  border-color: rgba(10, 89, 247, 0.2);
+}
+
+.insights-finding-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.insights-finding-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 12px 0;
+}
+
+.insights-finding-desc {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.6);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── LLM深度洞察 ────────────────────────────────────────── */
+.insights-llm-card {
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.05), rgba(107, 72, 255, 0.05));
+  border: 1px solid rgba(10, 89, 247, 0.15);
+  border-radius: 20px;
+  padding: 40px;
+}
+
+.insights-llm-block {
+  margin-bottom: 32px;
+}
+
+.insights-llm-block:last-child {
+  margin-bottom: 0;
+}
+
+.insights-llm-subtitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0A59F7;
+  margin: 0 0 16px 0;
+}
+
+.insights-llm-text {
+  font-size: 15px;
+  color: rgba(0, 0, 0, 0.7);
+  line-height: 1.8;
+  margin: 0;
+}
+
+.insights-llm-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.insights-llm-list li {
+  font-size: 15px;
+  color: rgba(0, 0, 0, 0.7);
+  line-height: 1.8;
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.insights-llm-list li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: #0A59F7;
+  font-weight: bold;
+}
+
+/* ── 综合建议 ────────────────────────────────────────── */
+.insights-recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.insights-recommendation-card {
+  display: flex;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
+  animation: insightsRecAppear 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes insightsRecAppear {
+  to {
+    opacity: 1;
+  }
+}
+
+.insights-recommendation-card:hover {
+  transform: translateX(8px);
+  box-shadow: 0 12px 24px rgba(10, 89, 247, 0.12);
+  border-color: rgba(10, 89, 247, 0.2);
+}
+
+.insights-rec-priority {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.insights-rec-priority[data-priority="high"] {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.insights-rec-priority[data-priority="medium"] {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.insights-rec-priority[data-priority="low"] {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.insights-rec-content {
+  flex: 1;
+}
+
+.insights-rec-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.insights-rec-desc {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.6);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── 行动计划 ────────────────────────────────────────── */
+.insights-action-plan {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.insights-action-block {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 16px;
+  padding: 28px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.insights-action-block:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(10, 89, 247, 0.12);
+  border-color: rgba(10, 89, 247, 0.2);
+}
+
+.insights-action-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(10, 89, 247, 0.1);
+}
+
+.insights-action-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.insights-action-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.7);
+  line-height: 1.6;
+}
+
+.insights-action-list li:last-child {
+  margin-bottom: 0;
+}
+
+.insights-action-list li:before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #0A59F7;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* ── 响应式设计 ────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .insights-container {
+    padding: 60px 32px;
+  }
+
+  .insights-title {
+    font-size: 48px;
+  }
+
+  .insights-scores-section {
+    grid-template-columns: 1fr;
+  }
+
+  .insights-score-main {
+    grid-column: 1;
+  }
+
+  .insights-findings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insights-action-plan {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .insights-container {
+    padding: 40px 24px;
+  }
+
+  .insights-title {
+    font-size: 36px;
+  }
+
+  .insights-subtitle {
+    font-size: 14px;
+  }
+
+  .insights-section-title {
+    font-size: 24px;
+  }
+
+  .insights-loading-card {
+    padding: 40px 32px;
+  }
+
+  .insights-recommendation-card {
+    flex-direction: column;
+  }
+
+  .insights-rec-priority {
+    width: 100%;
+    height: 48px;
+  }
+}
+
+/* ── 性能优化 ────────────────────────────────────────── */
+.insights-page * {
+  will-change: auto;
+}
+
+.insights-score-card,
+.insights-finding-card,
+.insights-recommendation-card,
+.insights-action-block {
+  contain: layout style paint;
+}
+
+/* ── 打印样式 ────────────────────────────────────────── */
+@media print {
+  .insights-particles-canvas,
+  .insights-background,
+  .insights-scroll-progress {
+    display: none;
+  }
+
+  .insights-page {
+    background: white;
+  }
+
+  .insights-score-card,
+  .insights-finding-card,
+  .insights-recommendation-card,
+  .insights-action-block,
+  .insights-llm-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+
+/* ========================================================
+   Agent小人物界面样式
+   ======================================================== */
+
+/* ── Agent选择区域 ────────────────────────────────────── */
+.insights-agents-section {
+  margin: 60px 0;
+}
+
+.insights-section-desc {
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+  margin-top: 12px;
+  margin-bottom: 40px;
+}
+
+.insights-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 32px;
+  margin-top: 40px;
+}
+
+/* ── Agent卡片 ────────────────────────────────────── */
+.insights-agent-card {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 24px;
+  padding: 32px 24px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: insightsRevealScale 0.6s ease-out backwards;
+  position: relative;
+  overflow: hidden;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 卡片背景渐变 */
+.insights-agent-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(10, 89, 247, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 0;
+}
+
+/* 卡片装饰圆点 */
+.insights-agent-card::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%);
+  opacity: 0;
+  transition: all 0.4s ease;
+  z-index: 0;
+}
+
+.insights-agent-card:hover {
+  transform: translateY(-12px) scale(1.02);
+  box-shadow: 0 24px 48px rgba(10, 89, 247, 0.2);
+  border-color: currentColor;
+  border-width: 3px;
+}
+
+.insights-agent-card:hover::before {
+  opacity: 1;
+}
+
+.insights-agent-card:hover::after {
+  opacity: 0.08;
+  transform: translate(-20px, 20px);
+}
+
+/* 确保内容在装饰层之上 */
+.insights-agent-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Agent信息 ────────────────────────────────────── */
+.insights-agent-name {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+  transition: all 0.3s ease;
+}
+
+.insights-agent-card:hover .insights-agent-name {
+  color: currentColor;
+  transform: scale(1.05);
+}
+
+.insights-agent-desc {
+  font-size: 15px;
+  color: #666;
+  line-height: 1.7;
+  margin-bottom: 28px;
+  min-height: 52px;
+  transition: color 0.3s ease;
+}
+
+.insights-agent-card:hover .insights-agent-desc {
+  color: #444;
+}
+
+.insights-agent-btn {
+  padding: 14px 36px;
+  border: none;
+  border-radius: 14px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 按钮光泽效果 */
+.insights-agent-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.insights-agent-btn:hover::before {
+  left: 100%;
+}
+
+.insights-agent-btn:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.insights-agent-btn:active {
+  transform: translateY(-1px) scale(1.02);
+}
+
+/* ── 返回按钮 ────────────────────────────────────── */
+.insights-back-btn {
+  background: #f3f4f6;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insights-back-btn:hover {
+  background: #e5e7eb;
+  transform: translateX(-4px);
+}
+
+/* ── 报告头部 ────────────────────────────────────── */
+.insights-report-header {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 20px;
+  padding: 40px;
+  margin-bottom: 32px;
+  border: 1px solid #e5e7eb;
+}
+
+.insights-report-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+}
+
+.insights-report-meta {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.insights-report-type {
+  background: #0A59F7;
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.insights-report-confidence {
+  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ── 决策逻辑卡片 ────────────────────────────────────── */
+.insights-logic-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 32px;
+}
+
+.insights-logic-block {
+  margin-bottom: 32px;
+}
+
+.insights-logic-block:last-child {
+  margin-bottom: 0;
+}
+
+.insights-logic-subtitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+}
+
+.insights-logic-steps {
+  list-style: none;
+  counter-reset: step-counter;
+  padding: 0;
+}
+
+.insights-logic-steps li {
+  counter-increment: step-counter;
+  position: relative;
+  padding-left: 48px;
+  margin-bottom: 16px;
+  line-height: 1.6;
+  color: #4b5563;
+}
+
+.insights-logic-steps li::before {
+  content: counter(step-counter);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ── 影响因素条形图 ────────────────────────────────────── */
+.insights-influence-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.insights-influence-item {
+  display: grid;
+  grid-template-columns: 120px 1fr 60px;
+  gap: 12px;
+  align-items: center;
+}
+
+.insights-influence-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.insights-influence-bar-bg {
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.insights-influence-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0A59F7, #6B48FF);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.insights-influence-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0A59F7;
+  text-align: right;
+}
+
+/* ── 数据来源网格 ────────────────────────────────────── */
+.insights-sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.insights-source-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.insights-source-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+}
+
+.insights-source-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.insights-source-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.insights-source-count {
+  font-size: 14px;
+  color: #666;
+}
+
+/* ── 发现卡片重要性标识 ────────────────────────────────────── */
+.insights-finding-icon[data-importance="high"] {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.insights-finding-icon[data-importance="medium"] {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.insights-finding-icon[data-importance="low"] {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+/* ── 推荐卡片类别标签 ────────────────────────────────────── */
+.insights-rec-category {
+  display: inline-block;
+  background: #f3f4f6;
+  color: #666;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}

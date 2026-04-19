@@ -1,0 +1,264 @@
+/* 简化版 Live2D 风格动画 */
+.simple-live2d {
+  width: 180px;
+  height: 220px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.character-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+}
+
+/* 整体浮动动画 */
+.simple-live2d .character-svg {
+  animation: character-float 3s ease-in-out infinite;
+}
+
+@keyframes character-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* 悬停时跳跃 */
+.simple-live2d.hovered .character-svg {
+  animation: character-jump 0.6s ease-out;
+}
+
+@keyframes character-jump {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-20px) scale(1.05);
+  }
+  60% {
+    transform: translateY(-15px) scale(1.03);
+  }
+  100% {
+    transform: translateY(-10px) scale(1.02);
+  }
+}
+
+/* 头部轻微摇摆 */
+.head-group {
+  transform-origin: 90px 80px;
+  animation: head-sway 4s ease-in-out infinite;
+}
+
+@keyframes head-sway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-2deg);
+  }
+  75% {
+    transform: rotate(2deg);
+  }
+}
+
+/* 眼睛眨眼动画 */
+.eye {
+  animation: eye-blink 4s ease-in-out infinite;
+}
+
+@keyframes eye-blink {
+  0%, 96%, 100% {
+    transform: scaleY(1);
+  }
+  98% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* 虹膜移动 */
+.iris {
+  animation: iris-look 6s ease-in-out infinite;
+}
+
+@keyframes iris-look {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(1px, -0.5px);
+  }
+  40% {
+    transform: translate(0, 0.5px);
+  }
+  60% {
+    transform: translate(-1px, 0);
+  }
+  80% {
+    transform: translate(0.5px, -0.5px);
+  }
+}
+
+/* 嘴巴微笑动画 */
+.mouth {
+  animation: mouth-smile 3s ease-in-out infinite;
+}
+
+@keyframes mouth-smile {
+  0%, 100% {
+    d: path("M 80 72 Q 90 78 100 72");
+  }
+  50% {
+    d: path("M 78 72 Q 90 80 102 72");
+  }
+}
+
+/* 脸颊红晕闪烁 */
+.blush {
+  animation: blush-pulse 2s ease-in-out infinite;
+}
+
+@keyframes blush-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* 身体呼吸动画 */
+.body {
+  transform-origin: 90px 140px;
+  animation: body-breathe 3s ease-in-out infinite;
+}
+
+@keyframes body-breathe {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.02);
+  }
+}
+
+/* 手臂摆动 */
+.left-arm {
+  transform-origin: 60px 115px;
+  animation: arm-swing-left 2.5s ease-in-out infinite;
+}
+
+.right-arm {
+  transform-origin: 120px 115px;
+  animation: arm-swing-right 2.5s ease-in-out infinite;
+}
+
+@keyframes arm-swing-left {
+  0%, 100% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(-25deg);
+  }
+}
+
+@keyframes arm-swing-right {
+  0%, 100% {
+    transform: rotate(20deg);
+  }
+  50% {
+    transform: rotate(25deg);
+  }
+}
+
+/* 悬停时右手挥手 */
+.simple-live2d.hovered .right-arm {
+  animation: arm-wave 0.8s ease-in-out;
+}
+
+@keyframes arm-wave {
+  0%, 100% {
+    transform: rotate(20deg);
+  }
+  25% {
+    transform: rotate(-40deg);
+  }
+  50% {
+    transform: rotate(-30deg);
+  }
+  75% {
+    transform: rotate(-40deg);
+  }
+}
+
+/* 手部跟随 */
+.left-hand {
+  animation: hand-move-left 2.5s ease-in-out infinite;
+}
+
+.right-hand {
+  animation: hand-move-right 2.5s ease-in-out infinite;
+}
+
+@keyframes hand-move-left {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-2px, 3px);
+  }
+}
+
+@keyframes hand-move-right {
+  0%, 100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(2px, 3px);
+  }
+}
+
+/* 徽章动画 */
+.badge {
+  animation: badge-bounce 2s ease-in-out infinite;
+}
+
+@keyframes badge-bounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* 学士帽流苏摆动 */
+.tassel {
+  transform-origin: 95px 25px;
+  animation: tassel-swing 2s ease-in-out infinite;
+}
+
+@keyframes tassel-swing {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(15deg);
+  }
+}
+
+/* 头发轻微飘动 */
+.hair {
+  animation: hair-flow 3s ease-in-out infinite;
+}
+
+@keyframes hair-flow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
+}

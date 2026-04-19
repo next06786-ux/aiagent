@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>择境 ChoiceRealm - 软件说明文档</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Georgia', 'Times New Roman', 'Songti SC', 'SimSun', serif;
+            line-height: 1.9;
+            color: #1a1a1a;
+            background: #fafafa;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 40px rgba(0,0,0,0.05);
+        }
+        
+        .header {
+            background: #2c2c2c;
+            color: #f5f5f5;
+            padding: 60px 50px 50px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .header h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            font-weight: 400;
+            letter-spacing: 8px;
+            font-family: 'Georgia', serif;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.85;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        
+        .header .version {
+            margin-top: 24px;
+            font-size: 13px;
+            opacity: 0.7;
+            letter-spacing: 1px;
+        }
+        
+        .content {
+            padding: 50px 50px;
+        }
+        
+        .section {
+            margin-bottom: 70px;
+        }
+        
+        .section-title {
+            font-size: 24px;
+            color: #1a1a1a;
+            margin-bottom: 35px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #333;
+            font-weight: 400;
+            letter-spacing: 3px;
+        }
+        
+        .subsection {
+            margin-bottom: 45px;
+        }
+        
+        .subsection-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 24px;
+            font-weight: 400;
+            padding-left: 16px;
+            border-left: 3px solid #666;
+            letter-spacing: 1px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .feature-card {
+            background: #ffffff;
+            padding: 30px;
+            border: 1px solid #d0d0d0;
+            transition: all 0.3s;
+        }
+        
+        .feature-card:hover {
+            border-color: #666;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        
+        .feature-card h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 14px;
+            font-weight: 400;
+            letter-spacing: 1px;
+        }
+        
+        .feature-card p {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+        
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        
+        .tech-badge {
+            background: #333;
+            color: #f5f5f5;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            border: 1px solid #333;
+        }
+        
+        .highlight-box {
+            background: #f9f9f9;
+            padding: 30px;
+            margin: 30px 0;
+            border-left: 3px solid #333;
+            border-top: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .highlight-box h4 {
+            color: #1a1a1a;
+            margin-bottom: 18px;
+            font-size: 16px;
+            font-weight: 400;
+            letter-spacing: 1px;
+        }
+        
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        ul li {
+            padding: 10px 0;
+            padding-left: 28px;
+            position: relative;
+            color: #555;
+            font-size: 15px;
+        }
+        
+        ul li:before {
+            content: "·";
+            position: absolute;
+            left: 8px;
+            color: #333;
+            font-weight: normal;
+            font-size: 20px;
+        }
+        
+        p {
+            color: #555;
+            font-size: 15px;
+            line-height: 1.8;
+            margin-bottom: 16px;
+        }
+        
+        strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        code {
+            background: #f0f0f0;
+            padding: 3px 8px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+        
+        pre {
+            background: #2a2a2a;
+            color: #d4d4d4;
+            padding: 24px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.7;
+            margin: 24px 0;
+            border: 1px solid #1a1a1a;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        
+        .toc {
+            background: #fafafa;
+            padding: 28px;
+            margin-bottom: 50px;
+            border: 1px solid #d0d0d0;
+        }
+        
+        .toc h3 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+        
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .toc ul li {
+            padding: 8px 0;
+            padding-left: 0;
+        }
+        
+        .toc ul li:before {
+            content: none;
+        }
+        
+        .toc a {
+            color: #333;
+            text-decoration: none;
+            transition: color 0.3s;
+            letter-spacing: 0.5px;
+        }
+        
+        .toc a:hover {
+            color: #000;
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 60px 24px 32px;
+            }
+            
+            .header h1 {
+                font-size: 32px;
+            }
+            
+            .content {
+                padding: 40px 24px;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>择境 ChoiceRealm</h1>
+            <p class="subtitle">基于AI的智能决策推演系统 - 完整软件说明文档</p>
+            <p class="version">版本 1.0.0 | 生成日期: 2024年</p>
+        </div>
+        
+        <div class="content">
+            <!-- 目录 -->
+            <div class="toc">
+                <h3>📑 目录</h3>
+                <ul>
+                    <li><a href="#overview">一、系统概述</a></li>
+                    <li><a href="#architecture">二、系统架构</a></li>
+                    <li><a href="#features">三、核心功能</a></li>
+                    <li><a href="#tech-stack">四、技术栈</a></li>
+                    <li><a href="#ai-integration">五、AI能力集成</a></li>
+                    <li><a href="#deployment">六、部署说明</a></li>
+                    <li><a href="#api">七、API接口</a></li>
+                </ul>
+            </div>
+
+            <!-- 第一部分：系统概述 -->
+            <div class="section" id="overview">
+                <h2 class="section-title">一、系统概述</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">1.1 产品定位</h3>
+                    <p><strong>择境 ChoiceRealm</strong> 是一款基于人工智能的智能决策推演系统，通过多Agent协同、知识图谱推理和平行宇宙模拟技术，帮助用户在职业发展、教育升学、人际关系等重大决策场景中做出更明智的选择。</p>
+                    
+                    <div class="highlight-box">
+                        <h4>核心理念</h4>
+                        <p>通过AI模拟不同选择的未来发展路径，让用户在做出决策前就能"看到"各种可能的结果，从而降低决策风险，提升决策质量。</p>
+                    </div>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>多Agent协同推演</h3>
+                            <p>5个专业AI Agent（技能发展、职业人脉、财务规划、心理状态、市场环境）并行分析，模拟不同选择的未来12个月发展路径。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>个性化知识图谱</h3>
+                            <p>构建用户的个人知识图谱，包含技能树、人脉网络、学习路径、职业发展等多维度信息，支持复杂关系推理。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>对话式信息采集</h3>
+                            <p>通过自然语言对话深入了解决策背景，智能提取关键信息，降低用户输入负担。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>实时可视化</h3>
+                            <p>WebSocket实时推送AI思考过程，3D图谱展示决策路径，让AI推理过程透明可见。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>三大垂直领域</h3>
+                            <p>专注职业发展、教育升学、人际关系三大决策场景，提供专业化的决策支持。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>智能洞察引擎</h3>
+                            <p>自动分析用户行为模式，发现潜在机会和风险，提供主动式决策建议。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">1.2 核心价值</h3>
+                    <ul>
+                        <li><strong>降低决策风险</strong>：通过AI模拟提前预见不同选择的可能结果</li>
+                        <li><strong>节省时间成本</strong>：自动化信息收集和分析，快速生成决策建议</li>
+                        <li><strong>提升决策质量</strong>：多维度量化评估，避免主观偏见</li>
+                        <li><strong>个性化推荐</strong>：基于用户画像和历史数据，提供定制化方案</li>
+                        <li><strong>知识沉淀</strong>：构建个人知识图谱，积累决策经验</li>
+                        <li><strong>透明可解释</strong>：实时展示AI推理过程，让决策依据清晰可见</li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">1.3 应用场景</h3>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>职业决策</h3>
+                            <p>跳槽、转行、晋升、创业等职业发展决策，评估不同选择的成功概率、薪资变化、技能匹配度等。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>教育升学</h3>
+                            <p>考研、留学、专业选择、院校选择等教育决策，分析录取概率、学习路径、就业前景等。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>人际关系</h3>
+                            <p>人脉拓展、关系维护、团队协作等社交决策，评估关系强度、网络价值、协作效果等。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二部分：系统架构 -->
+            <div class="section" id="architecture">
+                <h2 class="section-title">二、系统架构</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">2.1 整体架构</h3>
+                    <p>择境采用前后端分离的架构设计，后端基于FastAPI构建高性能异步服务，前端使用React构建现代化Web应用。</p>
+                    
+                    <pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                      前端层 (React + TypeScript)                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ 决策推演 │  │ 知识图谱 │  │ AI对话   │  │ 智能洞察 │       │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
+│       │             │             │             │               │
+│       └─────────────┴─────────────┴─────────────┘               │
+│                    WebSocket / HTTP API                          │
+└─────────────────────────┼──────────────────────────────────────┘
+                          │
+┌─────────────────────────┼──────────────────────────────────────┐
+│                   后端层 (FastAPI + Python)                      │
+│  ┌──────────────────────┴───────────────────────────┐          │
+│  │           API Gateway & WebSocket Manager         │          │
+│  └──────────────────────┬───────────────────────────┘          │
+│                         │                                        │
+│  ┌──────────────────────┼───────────────────────────┐          │
+│  │                  业务逻辑层                       │          │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────┐ │          │
+│  │  │ 决策推演引擎 │  │ 信息采集器  │  │ 用户管理 │ │          │
+│  │  │ 多Agent协同  │  │ 对话分析    │  │ 认证授权 │ │          │
+│  │  └──────┬──────┘  └──────┬──────┘  └────┬─────┘ │          │
+│  └─────────┼─────────────────┼──────────────┼───────┘          │
+│            │                 │              │                   │
+│  ┌─────────┼─────────────────┼──────────────┼───────┐          │
+│  │                   AI认知层                        │          │
+│  │  ┌──────┴──────┐  ┌──────┴──────┐  ┌────┴─────┐ │          │
+│  │  │ 多Agent系统  │  │  LLM服务    │  │ 洞察引擎 │ │          │
+│  │  │ 5个专业Agent │  │ 通义千问API │  │ 模式识别 │ │          │
+│  │  └──────┬──────┘  └──────┬──────┘  └────┬─────┘ │          │
+│  │         │                 │              │        │          │
+│  │  ┌──────┴─────────────────┴──────────────┴─────┐ │          │
+│  │  │       知识图谱层 (Neo4j)                     │ │          │
+│  │  │  用户画像 | 技能树 | 职业网络 | 决策历史    │ │          │
+│  │  └──────────────────────────────────────────────┘ │          │
+│  └───────────────────────────────────────────────────┘          │
+│                         │                                        │
+│  ┌──────────────────────┼───────────────────────────┐          │
+│  │                   数据层                          │          │
+│  │  ┌─────────┐  ┌─────┴─────┐  ┌────────────────┐ │          │
+│  │  │  MySQL  │  │   Neo4j   │  │  数据缓存      │ │          │
+│  │  │ 用户数据 │  │ 知识图谱  │  │  Redis/本地    │ │          │
+│  │  └─────────┘  └───────────┘  └────────────────┘ │          │
+│  └───────────────────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+┌─────────────────────────┼──────────────────────────────────────┐
+│                    外部服务层                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │ 招聘数据源    │  │ 通义千问API   │  │ 教育数据源    │         │
+│  │ Boss/拉勾    │  │ LLM推理服务   │  │ 院校/专业    │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+                    </pre>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">2.2 核心模块</h3>
+                    
+                    <div class="feature-card">
+                        <h3>决策推演引擎</h3>
+                        <p><strong>位置</strong>: <code>backend/decision/</code></p>
+                        <p><strong>功能</strong>: 核心决策推演逻辑，包括信息采集、选项生成、多Agent模拟、结果评估</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">career_simulation_api.py</span>
+                            <span class="tech-badge">multi_agent_career_evaluator.py</span>
+                            <span class="tech-badge">decision_info_collector.py</span>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>知识图谱系统</h3>
+                        <p><strong>位置</strong>: <code>backend/knowledge/</code> + <code>backend/vertical/</code></p>
+                        <p><strong>功能</strong>: 构建和管理用户知识图谱，支持三大垂直领域（职业、教育、人际关系）</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">information_knowledge_graph.py</span>
+                            <span class="tech-badge">neo4j_career_kg.py</span>
+                            <span class="tech-badge">neo4j_education_kg.py</span>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>智能洞察引擎</h3>
+                        <p><strong>位置</strong>: <code>backend/emergence/</code></p>
+                        <p><strong>功能</strong>: 分析用户行为模式，发现涌现现象，生成智能洞察</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">smart_insight_engine.py</span>
+                            <span class="tech-badge">emergence_detector.py</span>
+                            <span class="tech-badge">conversation_analyzer.py</span>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>AI核心服务</h3>
+                        <p><strong>位置</strong>: <code>backend/ai_core/</code> + <code>backend/llm/</code></p>
+                        <p><strong>功能</strong>: LLM服务封装、意图识别、智能路由</p>
+                        <div class="tech-stack">
+                            <span class="tech-badge">llm_service.py</span>
+                            <span class="tech-badge">intent_router.py</span>
+                            <span class="tech-badge">ai_core_api.py</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">2.3 数据流</h3>
+                    <div class="highlight-box">
+                        <h4>典型决策推演流程</h4>
+                        <ol style="list-style: decimal; padding-left: 20px;">
+                            <li><strong>用户输入</strong>: 用户描述决策问题（如"我应该跳槽吗？"）</li>
+                            <li><strong>信息采集</strong>: AI通过对话深入了解背景（当前状况、目标、顾虑）</li>
+                            <li><strong>知识提取</strong>: 从知识图谱提取用户画像、技能树、人脉网络</li>
+                            <li><strong>选项生成</strong>: 基于算法生成3个可行方案</li>
+                            <li><strong>多Agent推演</strong>: 5个Agent并行模拟12个月时间线</li>
+                            <li><strong>实时推送</strong>: WebSocket推送每月Agent状态到前端</li>
+                            <li><strong>结果评估</strong>: 量化评分、风险识别、机会发现</li>
+                            <li><strong>推荐输出</strong>: 排序推荐最优方案，提供行动建议</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第三部分：核心功能 -->
+            <div class="section" id="features">
+                <h2 class="section-title">三、核心功能</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.1 决策推演系统</h3>
+                    <p>系统的核心功能，通过多Agent协同模拟不同决策选项的未来发展路径。</p>
+                    
+                    <div class="highlight-box">
+                        <h4>5个专业Agent分工</h4>
+                        <ul>
+                            <li><strong>技能发展Agent</strong>: 评估技能匹配度、学习曲线、能力提升路径，计算技能差距和学习进度</li>
+                            <li><strong>职业人脉Agent</strong>: 分析人脉资源、社交网络、内推机会，评估人脉质量和行业连接</li>
+                            <li><strong>财务规划Agent</strong>: 计算薪资变化、生活成本、投资回报，监控财务跑道和现金流</li>
+                            <li><strong>心理状态Agent</strong>: 评估压力水平、自我效能、适应能力，监测动力和韧性变化</li>
+                            <li><strong>市场环境Agent</strong>: 监控行业趋势、岗位需求、竞争态势，分析市场波动和机会窗口</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>阶段1: 信息采集</h3>
+                            <p>通过对话式AI深入了解决策背景，自动提取关键信息（当前状况、目标、顾虑、约束条件），降低用户输入负担。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>阶段2: 选项生成</h3>
+                            <p>基于知识图谱和决策算法，自动生成3个可行方案，用户可自定义修改和调整。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>阶段3: 并行推演</h3>
+                            <p>5个Agent并行模拟12个月时间线，每个Agent独立评估并在关键节点协同决策。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>阶段4: 结果呈现</h3>
+                            <p>3D决策图谱可视化，量化评估（成功概率、风险指数、预期收益），实时展示AI思考过程。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.2 知识图谱系统</h3>
+                    <p>构建用户的个人知识图谱，支持复杂关系推理和路径规划。</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>用户画像</h3>
+                            <p>技能、经历、教育背景、性格特征、价值观等多维度信息，形成完整的个人档案。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>技能树</h3>
+                            <p>技能层级关系、掌握程度、学习路径、技能依赖关系，支持技能缺口分析。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>人脉网络</h3>
+                            <p>社交关系、影响力评估、推荐路径、关系强度，支持人脉价值分析。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>职业图谱</h3>
+                            <p>岗位关系、转型路径、市场需求、薪资范围，支持职业规划和机会发现。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>教育图谱</h3>
+                            <p>院校关系、专业路径、录取要求、就业前景，支持升学决策和路径规划。</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>决策历史</h3>
+                            <p>历史决策记录、结果反馈、经验沉淀，支持决策模式分析和持续优化。</p>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <h4>知识图谱查询示例</h4>
+                        <pre>
+// 查询用户的技能树和可转型岗位
+MATCH (u:User {user_id: $user_id})-[:HAS_SKILL]->(s:Skill)
+MATCH (s)-[:REQUIRED_BY]->(j:Job)
+WHERE NOT (u)-[:WORKED_AS]->(j)
+RETURN j.title, COUNT(s) as skill_match_count
+ORDER BY skill_match_count DESC
+LIMIT 5
+
+// 查询用户的人脉网络中的推荐机会
+MATCH (u:User {user_id: $user_id})-[:KNOWS*1..2]-(contact:User)
+MATCH (contact)-[:WORKS_AT]->(company:Company)
+MATCH (company)-[:HAS_OPENING]->(job:Job)
+RETURN job, company, contact, LENGTH(path) as distance
+ORDER BY distance ASC</pre>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.3 智能洞察引擎</h3>
+                    <p>自动分析用户行为模式，发现涌现现象，生成主动式决策建议。</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>职业洞察</h3>
+                            <p>职业机会识别、技能缺口分析、职业风险预警、市场趋势监测</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>关系洞察</h3>
+                            <p>关系强度评估、人脉拓展建议、关系冲突预警、导师机会发现</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>学习洞察</h3>
+                            <p>学习进度追踪、学业风险识别、学习效率分析、录取机会评估</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>决策洞察</h3>
+                            <p>决策模式识别、决策质量评估、决策偏差分析、决策时机建议</p>
+                        </div>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <h4>涌现现象检测</h4>
+                        <ul>
+                            <li><strong>模式识别</strong>: 发现用户行为中的重复模式和规律</li>
+                            <li><strong>协同效应</strong>: 识别多个行为组合产生的增益效果</li>
+                            <li><strong>反馈循环</strong>: 检测正向或负向的反馈环路</li>
+                            <li><strong>临界点预警</strong>: 预测即将发生的重大变化</li>
+                            <li><strong>级联效应</strong>: 追踪一个变化引发的连锁反应</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">3.4 AI对话系统</h3>
+                    <p>基于大语言模型的智能对话系统，支持自然语言交互和意图识别。</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>对话式采集</h3>
+                            <p>通过自然对话收集决策信息，智能提问引导用户深入思考</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>意图识别</h3>
+                            <p>自动识别用户意图，智能路由到相应功能模块</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>信息提取</h3>
+                            <p>从对话中提取关键实体、关系、情感等结构化信息</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>上下文管理</h3>
+                            <p>维护对话上下文，支持多轮对话和话题切换</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第四部分：技术栈 -->
+            <div class="section" id="tech-stack">
+                <h2 class="section-title">四、技术栈</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.1 后端技术</h3>
+                    
+                    <div class="feature-card">
+                        <h3>核心框架</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Python 3.9+</span>
+                            <span class="tech-badge">FastAPI</span>
+                            <span class="tech-badge">Uvicorn</span>
+                            <span class="tech-badge">Pydantic</span>
+                        </div>
+                        <p style="margin-top: 16px;">FastAPI提供高性能异步API服务，支持WebSocket实时通信和自动API文档生成。</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>数据库</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">MySQL 8.0</span>
+                            <span class="tech-badge">Neo4j 5.x</span>
+                            <span class="tech-badge">SQLAlchemy</span>
+                        </div>
+                        <p style="margin-top: 16px;">MySQL存储用户数据和决策记录，Neo4j构建知识图谱，支持复杂关系查询。</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>AI服务</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">通义千问API</span>
+                            <span class="tech-badge">LangChain</span>
+                            <span class="tech-badge">Transformers</span>
+                        </div>
+                        <p style="margin-top: 16px;">集成阿里云通义千问大语言模型，提供自然语言理解和生成能力。</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>数据采集</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Requests</span>
+                            <span class="tech-badge">BeautifulSoup4</span>
+                            <span class="tech-badge">Selenium</span>
+                        </div>
+                        <p style="margin-top: 16px;">爬取招聘网站、教育机构等外部数据源，提供实时市场信息。</p>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.2 前端技术</h3>
+                    
+                    <div class="feature-card">
+                        <h3>核心框架</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">React 18</span>
+                            <span class="tech-badge">TypeScript</span>
+                            <span class="tech-badge">Vite</span>
+                            <span class="tech-badge">React Router v6</span>
+                        </div>
+                        <p style="margin-top: 16px;">现代化React应用，TypeScript提供类型安全，Vite提供快速开发体验。</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>可视化</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">Three.js</span>
+                            <span class="tech-badge">@xyflow/react</span>
+                            <span class="tech-badge">D3.js</span>
+                        </div>
+                        <p style="margin-top: 16px;">3D知识图谱渲染、决策流程图、数据可视化图表。</p>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>状态管理</h3>
+                        <div class="tech-stack">
+                            <span class="tech-badge">React Hooks</span>
+                            <span class="tech-badge">Context API</span>
+                            <span class="tech-badge">WebSocket</span>
+                        </div>
+                        <p style="margin-top: 16px;">轻量级状态管理，WebSocket实现实时数据推送。</p>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">4.3 开发工具</h3>
+                    <ul>
+                        <li><strong>版本控制</strong>: Git + GitHub</li>
+                        <li><strong>代码规范</strong>: ESLint + Prettier + Black</li>
+                        <li><strong>测试框架</strong>: Pytest + Jest</li>
+                        <li><strong>容器化</strong>: Docker + Docker Compose</li>
+                        <li><strong>CI/CD</strong>: GitHub Actions</li>
+                        <li><strong>API文档</strong>: FastAPI自动生成Swagger文档</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 第五部分：AI能力集成 -->
+            <div class="section" id="ai-integration">
+                <h2 class="section-title">五、AI能力集成</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.1 大语言模型集成</h3>
+                    <p>系统集成阿里云通义千问大语言模型，提供强大的自然语言理解和生成能力。</p>
+                    
+                    <div class="highlight-box">
+                        <h4>LLM服务配置</h4>
+                        <pre>
+# backend/llm/llm_service.py
+class LLMService:
+    def __init__(self):
+        self.provider = LLMProvider.DASHSCOPE
+        self.api_key = os.getenv("DASHSCOPE_API_KEY")
+        self.model = "qwen-plus"
+        
+    def chat(self, messages, temperature=0.7):
+        """对话接口"""
+        response = dashscope.Generation.call(
+            model=self.model,
+            messages=messages,
+            temperature=temperature
+        )
+        return response.output.text</pre>
+                    </div>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>对话理解</h3>
+                            <p>理解用户意图、提取关键信息、识别情感倾向</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>内容生成</h3>
+                            <p>生成决策建议、风险分析、行动计划</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>知识推理</h3>
+                            <p>基于知识图谱进行逻辑推理和路径规划</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.2 多Agent协同机制</h3>
+                    <p>5个专业Agent独立演化并在关键节点协同决策，模拟真实的决策过程。</p>
+                    
+                    <div class="highlight-box">
+                        <h4>Agent协同流程</h4>
+                        <ol style="list-style: decimal; padding-left: 20px;">
+                            <li><strong>独立演化</strong>: 每个Agent基于自己的专业领域独立评估</li>
+                            <li><strong>状态共享</strong>: Agent之间共享当前状态，相互影响</li>
+                            <li><strong>交互检测</strong>: 识别Agent间的协同效应和冲突</li>
+                            <li><strong>决策点投票</strong>: 在关键决策点，所有Agent投票决定</li>
+                            <li><strong>综合评估</strong>: 汇总所有Agent的评估结果</li>
+                        </ol>
+                    </div>
+                    
+                    <pre>
+# Agent协同示例
+async def simulate_month(self, month, context):
+    # 第一轮：独立演化
+    agents_state = {}
+    for agent_name, agent in self.agents.items():
+        state = await agent.evolve(month, context, agents_state)
+        agents_state[agent_name] = state
+    
+    # 第二轮：检测交互
+    interactions = self._detect_interactions(month, agents_state)
+    
+    # 第三轮：识别决策点
+    decision_points = self._identify_decision_points(month, agents_state)
+    
+    return {
+        'month': month,
+        'agents_state': agents_state,
+        'interactions': interactions,
+        'decision_points': decision_points
+    }</pre>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.3 知识图谱推理</h3>
+                    <p>基于Neo4j图数据库构建用户知识图谱，支持复杂关系查询和路径规划。</p>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>关系推理</h3>
+                            <p>通过图遍历算法发现隐藏的关系和机会</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>路径规划</h3>
+                            <p>计算从当前状态到目标状态的最优路径</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>相似度匹配</h3>
+                            <p>基于图结构计算用户与目标的相似度</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>影响力分析</h3>
+                            <p>评估节点在网络中的重要性和影响力</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">5.4 智能洞察生成</h3>
+                    <p>通过模式识别和涌现检测，自动发现用户行为中的规律和异常。</p>
+                    
+                    <div class="highlight-box">
+                        <h4>洞察生成流程</h4>
+                        <ol style="list-style: decimal; padding-left: 20px;">
+                            <li><strong>数据采集</strong>: 收集用户对话、行为、决策记录</li>
+                            <li><strong>特征提取</strong>: 提取情感、主题、实体、意图等特征</li>
+                            <li><strong>模式识别</strong>: 识别重复模式、趋势变化、异常行为</li>
+                            <li><strong>涌现检测</strong>: 发现协同效应、反馈循环、临界点</li>
+                            <li><strong>洞察生成</strong>: 生成可操作的建议和预警</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第六部分：部署说明 -->
+            <div class="section" id="deployment">
+                <h2 class="section-title">六、部署说明</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.1 环境要求</h3>
+                    <ul>
+                        <li><strong>操作系统</strong>: Linux / macOS / Windows</li>
+                        <li><strong>Python</strong>: 3.9 或更高版本</li>
+                        <li><strong>Node.js</strong>: 16.x 或更高版本</li>
+                        <li><strong>MySQL</strong>: 8.0 或更高版本</li>
+                        <li><strong>Neo4j</strong>: 5.x 或更高版本</li>
+                        <li><strong>内存</strong>: 建议 8GB 以上</li>
+                        <li><strong>存储</strong>: 建议 20GB 以上可用空间</li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.2 快速启动</h3>
+                    
+                    <div class="highlight-box">
+                        <h4>步骤一：克隆项目</h4>
+                        <pre>
+git clone https://github.com/your-repo/choicerealm.git
+cd choicerealm</pre>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <h4>步骤二：配置环境变量</h4>
+                        <pre>
+# backend/.env
+DASHSCOPE_API_KEY=your_api_key_here
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_password
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=choicerealm
+BACKEND_PORT=6006</pre>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <h4>步骤三：安装依赖</h4>
+                        <pre>
+# 后端依赖
+cd backend
+pip install -r requirements.txt
+
+# 前端依赖
+cd ../web
+npm install</pre>
+                    </div>
+                    
+                    <div class="highlight-box">
+                        <h4>步骤四：启动服务</h4>
+                        <pre>
+# 启动后端
+cd backend
+python start_server.py
+
+# 启动前端（新终端）
+cd web
+npm run dev</pre>
+                    </div>
+                    
+                    <p style="margin-top: 24px;">访问 <code>http://localhost:5173</code> 即可使用系统。</p>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.3 Docker部署</h3>
+                    
+                    <div class="highlight-box">
+                        <h4>使用Docker Compose一键部署</h4>
+                        <pre>
+# 构建并启动所有服务
+docker-compose up -d
+
+# 查看服务状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down</pre>
+                    </div>
+                    
+                    <p>Docker Compose会自动启动以下服务：</p>
+                    <ul>
+                        <li>后端API服务（端口6006）</li>
+                        <li>前端Web服务（端口5173）</li>
+                        <li>MySQL数据库（端口3306）</li>
+                        <li>Neo4j图数据库（端口7474/7687）</li>
+                    </ul>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">6.4 生产环境部署</h3>
+                    
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <h3>反向代理</h3>
+                            <p>使用Nginx作为反向代理，配置HTTPS和负载均衡</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>进程管理</h3>
+                            <p>使用Supervisor或PM2管理后端进程，确保服务稳定运行</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>数据备份</h3>
+                            <p>定期备份MySQL和Neo4j数据库，防止数据丢失</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>监控告警</h3>
+                            <p>配置日志收集和性能监控，及时发现和处理问题</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第七部分：API接口 -->
+            <div class="section" id="api">
+                <h2 class="section-title">七、API接口</h2>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.1 认证接口</h3>
+                    
+                    <div class="feature-card">
+                        <h3>用户注册</h3>
+                        <p><code>POST /api/auth/register</code></p>
+                        <pre>
+// 请求体
+{
+  "username": "user001",
+  "email": "user@example.com",
+  "password": "password123",
+  "nickname": "昵称"
+}
+
+// 响应
+{
+  "code": 200,
+  "message": "注册成功",
+  "data": {
+    "user_id": "xxx",
+    "username": "user001",
+    "token": "xxx"
+  }
+}</pre>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>用户登录</h3>
+                        <p><code>POST /api/auth/login</code></p>
+                        <pre>
+// 请求体
+{
+  "username": "user001",
+  "password": "password123"
+}
+
+// 响应
+{
+  "code": 200,
+  "message": "登录成功",
+  "data": {
+    "user_id": "xxx",
+    "username": "user001",
+    "token": "xxx"
+  }
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.2 决策推演接口</h3>
+                    
+                    <div class="feature-card">
+                        <h3>创建决策会话</h3>
+                        <p><code>POST /api/v5/decision/session</code></p>
+                        <pre>
+// 请求体
+{
+  "user_id": "user001",
+  "question": "我应该跳槽吗？",
+  "domain": "career"
+}
+
+// 响应
+{
+  "session_id": "session_xxx",
+  "status": "collecting",
+  "created_at": "2024-01-01T00:00:00"
+}</pre>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>WebSocket推演</h3>
+                        <p><code>WS /api/v5/decision/simulate/{session_id}</code></p>
+                        <pre>
+// 连接后接收实时消息
+{
+  "type": "agent_state_update",
+  "option_id": "opt1",
+  "month": 1,
+  "agents": {
+    "skill_development": {
+      "score": 65,
+      "status": "warning",
+      "changes": ["技能进度提升"],
+      "risks": ["学习时间不足"]
+    }
+  }
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.3 知识图谱接口</h3>
+                    
+                    <div class="feature-card">
+                        <h3>获取知识图谱</h3>
+                        <p><code>GET /api/v5/knowledge-graph/{user_id}</code></p>
+                        <pre>
+// 响应
+{
+  "nodes": [
+    {
+      "id": "node_1",
+      "type": "skill",
+      "name": "Python",
+      "level": 8
+    }
+  ],
+  "edges": [
+    {
+      "source": "node_1",
+      "target": "node_2",
+      "type": "REQUIRES"
+    }
+  ]
+}</pre>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>添加知识节点</h3>
+                        <p><code>POST /api/v5/knowledge-graph/node</code></p>
+                        <pre>
+// 请求体
+{
+  "user_id": "user001",
+  "name": "Python",
+  "type": "skill",
+  "category": "programming",
+  "attributes": {
+    "level": 8,
+    "years": 3
+  }
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.4 智能洞察接口</h3>
+                    
+                    <div class="feature-card">
+                        <h3>获取洞察列表</h3>
+                        <p><code>GET /api/v5/insights/{user_id}</code></p>
+                        <pre>
+// 响应
+{
+  "insights": [
+    {
+      "insight_id": "insight_xxx",
+      "category": "career_opportunity",
+      "level": "suggestion",
+      "title": "职业发展窗口期",
+      "description": "你最近频繁讨论职业话题...",
+      "recommendations": ["使用职业决策功能"],
+      "confidence": 0.75,
+      "impact_score": 80
+    }
+  ]
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="subsection">
+                    <h3 class="subsection-title">7.5 健康检查</h3>
+                    
+                    <div class="feature-card">
+                        <h3>系统状态</h3>
+                        <p><code>GET /health</code></p>
+                        <pre>
+// 响应
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T00:00:00",
+  "services": {
+    "fastapi": "✓ 就绪",
+    "llm": "✓ 就绪",
+    "knowledge_graph": "✓ 就绪",
+    "database": "✓ 就绪"
+  }
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="highlight-box">
+                    <h4>API文档</h4>
+                    <p>系统提供完整的Swagger API文档，启动后端服务后访问：</p>
+                    <ul>
+                        <li><strong>Swagger UI</strong>: <code>http://localhost:6006/docs</code></li>
+                        <li><strong>ReDoc</strong>: <code>http://localhost:6006/redoc</code></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 页脚 -->
+            <div style="text-align: center; padding: 40px 0; border-top: 1px solid #e0e0e0; margin-top: 60px; color: #666;">
+                <p style="margin-bottom: 8px;">择境 ChoiceRealm - 智能决策推演系统</p>
+                <p style="font-size: 13px;">© 2024 All Rights Reserved</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="择境 ChoiceRealm - AI 决策管理平台，智能推演人生选择。"
+    />
+    <title>择境 · ChoiceRealm</title>
+    
+    <!-- Live2D Cubism 4 Core - 只需要这一个 -->
+    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+    
+    <!-- 检查加载状态 -->
+    <script>
+      window.addEventListener('load', function() {
+        console.log('Live2D Cubism 4 Core:', typeof window.Live2DCubismCore !== 'undefined' ? '✓ Loaded' : '✗ Not loaded');
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+  </html>

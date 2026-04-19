@@ -1,0 +1,21 @@
+# ninja log v6
+2603	3466	7961443496121377	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+26	776	7958151674764189	CMakeFiles/starmap_render.dir/shader_utils.cpp.o	3690977d1f21acca
+10	1416	7958147319308866	CMakeFiles/starmap_render.dir/napi_init.cpp.o	36dec27eb8821b98
+3137	3474	7961443501465392	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e
+7	26	7961954030864374	clean	57746c6217a6fbb4
+174	2602	7961443471833343	CMakeFiles/nebulachat.dir/nebula_chat_renderer.cpp.o	66b04b4d588703a6
+22	3137	7961443470312401	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
+68	2481	7957259499195824	CMakeFiles/nebulachat.dir/nebula_napi.cpp.o	68741ac6f3a6220e
+123	2273	7961955023274292	CMakeFiles/starmap_render.dir/shader_utils.cpp.o	3690977d1f21acca
+138	2901	7961955023425049	CMakeFiles/nebulachat.dir/nebula_napi.cpp.o	68741ac6f3a6220e
+156	3235	7961955023597800	CMakeFiles/nebulachat.dir/nebula_chat_renderer.cpp.o	66b04b4d588703a6
+92	3274	7961955022964162	CMakeFiles/starmap_render.dir/napi_init.cpp.o	36dec27eb8821b98
+3235	3605	7961955054398172	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+108	3938	7961955023124168	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
+3939	4180	7961955061434278	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e
+153	1242	7964841465596725	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e
+178	1277	7964841465845981	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+189	12397	7966298275838171	CMakeFiles/starmap_render.dir/shader_utils.cpp.o	3690977d1f21acca
+25	14941	7966298274192329	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
+14942	15853	7966298423367105	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e

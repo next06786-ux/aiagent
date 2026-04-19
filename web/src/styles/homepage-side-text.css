@@ -1,0 +1,214 @@
+/* 法阵两侧的产品文案样式 - 统一到左侧 */
+.pentagram-side-text {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  max-width: 380px;
+}
+
+.pentagram-side-left {
+  top: 50%;
+  left: 12%;
+  transform: translateY(-50%);
+}
+
+.pentagram-side-right {
+  display: none;
+}
+
+/* 品牌大标题 - 择境（竖向） */
+.brand-title {
+  font-size: clamp(72px, 8vw, 96px);
+  font-weight: 900;
+  margin: 0 0 16px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  position: relative;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.95) 0%, 
+    rgba(0, 0, 0, 0.85) 40%,
+    rgba(0, 0, 0, 0.75) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.15);
+  filter: blur(0.3px);
+  opacity: 0;
+  animation: brandFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.2s;
+}
+
+/* 品牌副标题 - ChoiceRealm（竖向） */
+.brand-subtitle {
+  font-size: clamp(14px, 1.6vw, 18px);
+  font-weight: 500;
+  margin: 0 0 32px;
+  letter-spacing: 0.2em;
+  line-height: 1.6;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.6) 0%, 
+    rgba(0, 0, 0, 0.45) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: blur(0.2px);
+  opacity: 0;
+  animation: brandFadeIn 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.5s;
+}
+
+/* 分隔线 */
+.divider-line {
+  width: 2px;
+  height: 60px;
+  margin: 0 0 40px;
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.4) 0%, 
+    rgba(0, 0, 0, 0.15) 100%);
+  opacity: 0;
+  animation: brandFadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.8s;
+}
+
+/* 品牌渐入动画 */
+@keyframes brandFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 大标题样式 - 黑色渐变 */
+.side-text-title-large {
+  font-size: clamp(42px, 4.5vw, 58px);
+  font-weight: 700;
+  margin: 0 0 24px;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  position: relative;
+  background: linear-gradient(135deg, 
+    rgba(0, 0, 0, 0.85) 0%, 
+    rgba(0, 0, 0, 0.7) 50%,
+    rgba(0, 0, 0, 0.6) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.1);
+  filter: blur(0.2px);
+}
+
+/* 功能列表样式 - 黑色渐变 */
+.side-text-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.side-text-features p {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.9;
+  letter-spacing: 0.1em;
+  position: relative;
+  background: linear-gradient(135deg, 
+    rgba(0, 0, 0, 0.65) 0%, 
+    rgba(0, 0, 0, 0.5) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 
+    0 1px 4px rgba(0, 0, 0, 0.08);
+  filter: blur(0.15px);
+}
+
+/* 移除装饰线，让文字更简洁 */
+.pentagram-side-left .side-text-features p,
+.pentagram-side-right .side-text-features p {
+  padding: 0;
+}
+
+/* 动画 - 更柔和 */
+.harmony-enter-fade-left {
+  animation: fadeInLeft 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+.harmony-enter-fade-right {
+  animation: fadeInRight 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+  animation-delay: 0.3s;
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px) translateY(-50%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(-50%);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px) translateY(-50%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) translateY(-50%);
+  }
+}
+
+/* 响应式 */
+@media (max-width: 1600px) {
+  .brand-title {
+    font-size: clamp(60px, 7vw, 80px);
+    margin-bottom: 12px;
+  }
+  
+  .brand-subtitle {
+    font-size: clamp(12px, 1.4vw, 16px);
+    margin-bottom: 28px;
+  }
+  
+  .divider-line {
+    height: 50px;
+    margin-bottom: 32px;
+  }
+  
+  .side-text-title-large {
+    font-size: clamp(36px, 4vw, 50px);
+  }
+  
+  .side-text-features p {
+    font-size: 14px;
+  }
+  
+  .pentagram-side-text {
+    max-width: 340px;
+  }
+  
+  .pentagram-side-left {
+    left: 8%;
+  }
+}
+
+@media (max-width: 1400px) {
+  .pentagram-side-text {
+    display: none;
+  }
+}

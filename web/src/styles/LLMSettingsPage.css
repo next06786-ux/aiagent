@@ -1,0 +1,113 @@
+/* LLM 设置页面样式 */
+
+.llm-settings-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 40px 20px;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.page-header h1 {
+  font-size: 36px;
+  color: #333;
+  margin: 0 0 12px 0;
+  font-weight: 700;
+}
+
+.page-description {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.page-content {
+  max-width: 1200px;
+  margin: 0 auto 40px;
+}
+
+.help-section {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.help-section h3 {
+  font-size: 24px;
+  color: #333;
+  margin: 0 0 24px 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.help-item {
+  margin-bottom: 32px;
+}
+
+.help-item:last-child {
+  margin-bottom: 0;
+}
+
+.help-item h4 {
+  font-size: 18px;
+  color: #333;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.help-item p {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+}
+
+.help-item ul {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.help-item li {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.8;
+  margin-bottom: 6px;
+}
+
+.help-item li:last-child {
+  margin-bottom: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .llm-settings-page {
+    padding: 20px 12px;
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+  }
+
+  .page-description {
+    font-size: 14px;
+  }
+
+  .help-section {
+    padding: 24px 16px;
+  }
+
+  .help-section h3 {
+    font-size: 20px;
+  }
+
+  .help-item h4 {
+    font-size: 16px;
+  }
+}

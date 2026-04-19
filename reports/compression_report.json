@@ -1,0 +1,17 @@
+{
+  "evaluation_type": "base_model_compression",
+  "models": {
+    "fp16": "/root/autodl-tmp/models/base/Qwen3.5-9B",
+    "quantized": "models/qwen-obr"
+  },
+  "sections": {
+    "perplexity": {
+      "dataset": "wikitext2",
+      "ppl_fp16": 9.2702,
+      "ppl_quantized": 2408797.199,
+      "ppl_increase": 2408787.9287,
+      "ppl_increase_pct": 25984097.83,
+      "recommendation": "✗ 精度损失过大，不建议部署"
+    }
+  }
+}

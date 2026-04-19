@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+.pnpm-debug.log*
+
+# 环境变量（敏感信息）
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据文件
+backend/data/
+*.db
+*.sqlite
+
+# 模型文件（太大）
+*.pt
+*.pth
+*.bin
+*.onnx
+models/
+
+# 构建产物
+web/dist/
+web/build/
+dist/
+build/
+
+# 日志
+*.log
+
+# 测试文件
+test_*.py
+test_*.html
+quick_diagnose.py
+diagnose_ai_core.md
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar.gz

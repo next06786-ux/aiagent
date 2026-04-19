@@ -1,0 +1,10 @@
+{
+  "modelVersion": "6.0.2",
+  "name": "visionagent",
+  "version": "1.0.0",
+  "description": "VisionAgent - 24/7 Vision AI Agent for HarmonyOS",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}

@@ -1,0 +1,137 @@
+/* ========================================================
+   Video Showcase - Scroll-driven animation
+   Inspired by antigravity.google
+   ======================================================== */
+
+.video-showcase-container {
+  width: 95vw;
+  max-width: 1200px;
+  max-height: 85vh;
+  aspect-ratio: 16 / 9;
+  will-change: transform, opacity, filter;
+}
+
+/* 嵌入模式 - 作为页面内容滚动 */
+.video-showcase-embedded {
+  position: relative;
+  width: 100%;
+  max-width: 1500px;
+  padding: 20px;
+  margin: 40px 0;
+  pointer-events: auto;
+}
+
+.video-showcase-embedded .video-showcase-container {
+  width: 100%;
+  max-width: none;
+  aspect-ratio: 16 / 8;
+}
+
+.video-showcase-embedded .video-placeholder-icon {
+  width: 180px;
+  height: 180px;
+}
+
+.video-showcase-embedded .video-placeholder-text {
+  font-size: 24px;
+}
+
+.video-showcase-frame {
+  width: 100%;
+  height: 100%;
+  border-radius: 32px;
+  overflow: hidden;
+  box-shadow: 
+    0 40px 120px rgba(0, 0, 0, 0.2),
+    0 15px 50px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.video-showcase-inner-black {
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.video-showcase-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.video-placeholder-icon {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.video-showcase-inner-black:hover .video-placeholder-icon {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.1);
+}
+
+.video-placeholder-text {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+/* Close button */
+.video-showcase-close {
+  position: absolute;
+  top: -24px;
+  right: -24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+}
+
+.video-showcase-close:hover {
+  transform: scale(1.1) rotate(90deg);
+  background: #fff;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .video-showcase-container {
+    width: 95vw;
+    max-width: none;
+  }
+  
+  .video-showcase-close {
+    width: 44px;
+    height: 44px;
+    top: -18px;
+    right: -18px;
+  }
+  
+  .video-placeholder-icon {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .video-placeholder-text {
+    font-size: 14px;
+  }
+}

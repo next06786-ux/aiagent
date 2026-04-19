@@ -1,0 +1,392 @@
+{
+  "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+  "memories": [
+    {
+      "id": "experience_1776594340.559616_0",
+      "memory_type": "experience",
+      "content": "和张三在大学时是同学，一起参加过多次编程竞赛，他现在在字节跳动工作，我们经常交流技术话题",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "relationship",
+        "tags": [
+          "张三",
+          "大学同学",
+          "字节跳动",
+          "技术交流"
+        ],
+        "people": [
+          "张三"
+        ],
+        "relationship_type": "friend",
+        "interaction_type": "regular_contact",
+        "sentiment": "positive",
+        "related_entities": [
+          "张三",
+          "字节跳动"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.559616",
+      "importance": 0.85,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "experience_1776594340.671425_1",
+      "memory_type": "experience",
+      "content": "李四是我的研究生导师王教授介绍认识的，他在阿里巴巴做算法工程师，给了我很多职业发展建议",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "relationship",
+        "tags": [
+          "李四",
+          "阿里巴巴",
+          "算法工程师",
+          "职业建议"
+        ],
+        "people": [
+          "李四",
+          "王教授"
+        ],
+        "relationship_type": "colleague",
+        "interaction_type": "mentorship",
+        "sentiment": "positive",
+        "related_entities": [
+          "李四",
+          "阿里巴巴",
+          "王教授"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.671425",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "experience_1776594340.706177_2",
+      "memory_type": "experience",
+      "content": "女朋友在上海工作，我们经常视频通话，她很支持我的职业选择，周末会一起去看电影或散步",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "relationship",
+        "tags": [
+          "女朋友",
+          "上海",
+          "视频通话",
+          "周末活动"
+        ],
+        "people": [
+          "女朋友"
+        ],
+        "relationship_type": "close_friends",
+        "interaction_type": "regular_contact",
+        "sentiment": "positive",
+        "related_entities": [
+          "女朋友"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.706177",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "experience_1776594340.742735_3",
+      "memory_type": "experience",
+      "content": "父母一直很关心我的工作和生活，每周都会打电话问候，他们希望我能找到稳定的工作",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "relationship",
+        "tags": [
+          "父母",
+          "家人",
+          "电话问候",
+          "工作关心"
+        ],
+        "people": [
+          "父亲",
+          "母亲"
+        ],
+        "relationship_type": "family",
+        "interaction_type": "regular_contact",
+        "sentiment": "positive",
+        "related_entities": [
+          "父亲",
+          "母亲"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.742735",
+      "importance": 0.9,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "experience_1776594340.778002_4",
+      "memory_type": "experience",
+      "content": "在字节跳动实习期间，学会了如何进行代码审查和团队协作，导师赵丽颖给了我很多指导",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "career",
+        "tags": [
+          "字节跳动",
+          "实习",
+          "代码审查",
+          "团队协作"
+        ],
+        "people": [
+          "赵丽颖"
+        ],
+        "duration": "3个月",
+        "outcome": "positive",
+        "related_entities": [
+          "字节跳动",
+          "赵丽颖"
+        ],
+        "learnings": [
+          "代码审查",
+          "团队协作"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.778002",
+      "importance": 0.85,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "knowledge_1776594340.813915_5",
+      "memory_type": "knowledge",
+      "content": "Python 是一种高级编程语言，适合数据分析、Web开发和机器学习，我已经掌握了 Django 和 Flask 框架",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "career",
+        "category": "programming_language",
+        "tags": [
+          "Python",
+          "Django",
+          "Flask",
+          "编程"
+        ],
+        "source": "user_experience",
+        "verified": true,
+        "related_skills": [
+          "数据分析",
+          "Web开发",
+          "机器学习"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.813915",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "knowledge_1776594340.852297_6",
+      "memory_type": "knowledge",
+      "content": "机器学习算法包括监督学习、无监督学习和强化学习，我在研究生期间主要研究深度学习和自然语言处理",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "education",
+        "category": "academic_knowledge",
+        "tags": [
+          "机器学习",
+          "深度学习",
+          "NLP",
+          "研究生"
+        ],
+        "source": "academic",
+        "verified": true,
+        "related_skills": [
+          "深度学习",
+          "自然语言处理"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.852297",
+      "importance": 0.85,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "knowledge_1776594340.886803_7",
+      "memory_type": "knowledge",
+      "content": "清华大学计算机系的研究生项目注重理论与实践结合，导师王教授在自然语言处理领域有深入研究",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "education",
+        "category": "school_info",
+        "tags": [
+          "清华大学",
+          "计算机系",
+          "研究生",
+          "王教授"
+        ],
+        "source": "personal_experience",
+        "verified": true,
+        "related_entities": [
+          "清华大学",
+          "王教授"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.886803",
+      "importance": 0.75,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "knowledge_1776594340.922852_8",
+      "memory_type": "knowledge",
+      "content": "字节跳动的技术栈主要是 Go 和 Python，团队氛围很好，注重技术创新和快速迭代",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "career",
+        "category": "company_info",
+        "tags": [
+          "字节跳动",
+          "Go",
+          "Python",
+          "技术栈"
+        ],
+        "source": "internship_experience",
+        "verified": true,
+        "related_entities": [
+          "字节跳动"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.922852",
+      "importance": 0.8,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "knowledge_1776594340.960745_9",
+      "memory_type": "knowledge",
+      "content": "阿里巴巴的算法岗位要求扎实的数学基础和算法能力，面试会考察数据结构、算法设计和系统设计",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "career",
+        "category": "job_requirement",
+        "tags": [
+          "阿里巴巴",
+          "算法岗位",
+          "面试",
+          "数据结构"
+        ],
+        "source": "job_search",
+        "verified": true,
+        "related_entities": [
+          "阿里巴巴"
+        ]
+      },
+      "timestamp": "2026-04-19T18:25:40.960745",
+      "importance": 0.75,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1776594340.99859_10",
+      "memory_type": "insight",
+      "content": "我的人际关系网络中，同事占比27.1%，朋友占比23.4%，家人占比15.6%，说明我的社交圈主要集中在工作领域",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "relationship",
+        "insight_type": "network_analysis",
+        "confidence": 0.85,
+        "data_points": 57,
+        "generated_by": "RelationshipInsightAgent",
+        "query": "分析我的人际关系网络",
+        "key_metrics": {
+          "colleagues": 0.271,
+          "friends": 0.234,
+          "family": 0.156
+        }
+      },
+      "timestamp": "2026-04-19T18:25:40.998590",
+      "importance": 0.9,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1776594341.03475_11",
+      "memory_type": "insight",
+      "content": "我的技能组合（Python + 机器学习 + Web开发）非常适合互联网大厂的算法工程师和后端工程师岗位",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "career",
+        "insight_type": "skill_match",
+        "confidence": 0.88,
+        "data_points": 20,
+        "generated_by": "CareerInsightAgent",
+        "query": "分析我的职业发展方向",
+        "key_metrics": {
+          "skill_match_score": 0.88,
+          "market_demand": "high"
+        }
+      },
+      "timestamp": "2026-04-19T18:25:41.034750",
+      "importance": 0.85,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "insight_1776594341.075163_12",
+      "memory_type": "insight",
+      "content": "清华大学的研究生背景和字节跳动的实习经历是我求职的核心竞争力，应该在简历中重点突出",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "domain": "career",
+        "insight_type": "competitive_advantage",
+        "confidence": 0.92,
+        "data_points": 15,
+        "generated_by": "CareerInsightAgent",
+        "query": "分析我的求职竞争力",
+        "key_metrics": {
+          "education_score": 0.95,
+          "experience_score": 0.85
+        }
+      },
+      "timestamp": "2026-04-19T18:25:41.075163",
+      "importance": 0.9,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1776606172.293292_13",
+      "memory_type": "conversation",
+      "content": "用户: 你好\nAI: 你好。",
+      "metadata": {
+        "session_id": "session_afc219be68af49bb",
+        "thinking": "用户发送了“你好”作为初始问候，这是一个常见的对话开启方式，不包含具体问题或需求。  \n作为择境智能助手，我的职责是等待用户提出明确的问题或任务，以便提供有针对性的分析和帮助。  \n因此，我需要保持响应简洁专业，同时为后续可能的提问做好准备。"
+      },
+      "timestamp": "2026-04-19T21:42:52.294291",
+      "importance": 0.5,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "conversation_1776606172.794684_14",
+      "memory_type": "conversation",
+      "content": "你好",
+      "metadata": {
+        "user_id": "2c2139f7-bab4-483d-9882-ae83ce8734cd",
+        "response": "你好。"
+      },
+      "timestamp": "2026-04-19T21:42:52.794684",
+      "importance": 0.7,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    }
+  ]
+}

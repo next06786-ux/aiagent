@@ -1,0 +1,49 @@
+# ===== Web 服务 =====
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+aiohttp>=3.8.0
+httpx>=0.24.0
+sse-starlette>=1.6.0
+python-multipart
+aiofiles
+
+# ===== 安全认证 =====
+bcrypt>=4.0.0
+
+# ===== 数据库 =====
+neo4j>=5.0.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+redis>=5.0.0
+aiosqlite
+
+# ===== 数据处理 =====
+numpy<2.0.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+
+# ===== AI/ML 核心 (PyTorch 2.8.0 + CUDA 12.8) =====
+# torch 已预装，不需要在这里指定
+transformers>=4.45.0
+dashscope>=1.10.0
+
+# ===== vLLM Multi-LoRA (GPU服务器) =====
+# PyTorch 2.8.0 + CUDA 12.8 + Python 3.12
+vllm>=0.8.0
+peft>=0.14.0
+accelerate>=0.35.0
+datasets>=2.20.0
+bitsandbytes>=0.45.0
+
+# ===== 向量检索 =====
+faiss-cpu
+sentence-transformers>=3.0.0
+
+# ===== 工具 =====
+sentencepiece
+tiktoken
+schedule
+apscheduler

@@ -1,0 +1,205 @@
+{
+  "user_id": "test_user_tarot",
+  "memories": [
+    {
+      "id": "decision_logic_1776614491.332009_0",
+      "memory_type": "decision_logic",
+      "content": "在'愚者'塔罗牌场景中，用户在风险偏好维度上强烈倾向右侧（倾向值：0.8）\n\n场景描述：你站在人生的十字路口，一条路充满未知但可能带来巨大机遇，另一条路稳妥但平淡\n\n用户选择：选择充满未知的冒险路径\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "愚者",
+        "dimension": "风险偏好",
+        "choice": "选择充满未知的冒险路径",
+        "scenario": "你站在人生的十字路口，一条路充满未知但可能带来巨大机遇，另一条路稳妥但平淡",
+        "tendency_value": 0.8,
+        "tendency_label": "强烈倾向右侧",
+        "timestamp": "2026-04-20T00:01:31.332009"
+      },
+      "timestamp": "2026-04-20T00:01:31.332009",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614491.530713_1",
+      "memory_type": "decision_logic",
+      "content": "在'魔术师'塔罗牌场景中，用户在主动性维度上强烈倾向右侧（倾向值：0.7）\n\n场景描述：面对一个新项目，你会主动请缨还是等待安排？\n\n用户选择：主动请缨，展现自己的能力\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "魔术师",
+        "dimension": "主动性",
+        "choice": "主动请缨，展现自己的能力",
+        "scenario": "面对一个新项目，你会主动请缨还是等待安排？",
+        "tendency_value": 0.7,
+        "tendency_label": "强烈倾向右侧",
+        "timestamp": "2026-04-20T00:01:31.530713"
+      },
+      "timestamp": "2026-04-20T00:01:31.530713",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614491.613824_2",
+      "memory_type": "decision_logic",
+      "content": "在'女皇'塔罗牌场景中，用户在思维方式维度上强烈倾向左侧（倾向值：-0.6）\n\n场景描述：做决策时，你更依赖数据分析还是直觉感受？\n\n用户选择：依赖数据分析和逻辑推理\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "女皇",
+        "dimension": "思维方式",
+        "choice": "依赖数据分析和逻辑推理",
+        "scenario": "做决策时，你更依赖数据分析还是直觉感受？",
+        "tendency_value": -0.6,
+        "tendency_label": "强烈倾向左侧",
+        "timestamp": "2026-04-20T00:01:31.613824"
+      },
+      "timestamp": "2026-04-20T00:01:31.613824",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614491.689629_3",
+      "memory_type": "decision_logic",
+      "content": "在'隐者'塔罗牌场景中，用户在社交倾向维度上倾向左侧（倾向值：-0.5）\n\n场景描述：周末你更喜欢和朋友聚会还是独自思考？\n\n用户选择：独自思考，享受独处时光\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "隐者",
+        "dimension": "社交倾向",
+        "choice": "独自思考，享受独处时光",
+        "scenario": "周末你更喜欢和朋友聚会还是独自思考？",
+        "tendency_value": -0.5,
+        "tendency_label": "倾向左侧",
+        "timestamp": "2026-04-20T00:01:31.689629"
+      },
+      "timestamp": "2026-04-20T00:01:31.689629",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614491.773694_4",
+      "memory_type": "decision_logic",
+      "content": "在'命运之轮'塔罗牌场景中，用户在计划性维度上强烈倾向右侧（倾向值：0.6）\n\n场景描述：你更喜欢详细规划还是随机应变？\n\n用户选择：详细规划每一步\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "命运之轮",
+        "dimension": "计划性",
+        "choice": "详细规划每一步",
+        "scenario": "你更喜欢详细规划还是随机应变？",
+        "tendency_value": 0.6,
+        "tendency_label": "强烈倾向右侧",
+        "timestamp": "2026-04-20T00:01:31.773694"
+      },
+      "timestamp": "2026-04-20T00:01:31.773694",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614582.774701_5",
+      "memory_type": "decision_logic",
+      "content": "在'愚者'塔罗牌场景中，用户在风险偏好维度上强烈倾向右侧（倾向值：0.8）\n\n场景描述：你站在人生的十字路口，一条路充满未知但可能带来巨大机遇，另一条路稳妥但平淡\n\n用户选择：选择充满未知的冒险路径\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "愚者",
+        "dimension": "风险偏好",
+        "choice": "选择充满未知的冒险路径",
+        "scenario": "你站在人生的十字路口，一条路充满未知但可能带来巨大机遇，另一条路稳妥但平淡",
+        "tendency_value": 0.8,
+        "tendency_label": "强烈倾向右侧",
+        "timestamp": "2026-04-20T00:03:02.774701"
+      },
+      "timestamp": "2026-04-20T00:03:02.774701",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614582.949353_6",
+      "memory_type": "decision_logic",
+      "content": "在'魔术师'塔罗牌场景中，用户在主动性维度上强烈倾向右侧（倾向值：0.7）\n\n场景描述：面对一个新项目，你会主动请缨还是等待安排？\n\n用户选择：主动请缨，展现自己的能力\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "魔术师",
+        "dimension": "主动性",
+        "choice": "主动请缨，展现自己的能力",
+        "scenario": "面对一个新项目，你会主动请缨还是等待安排？",
+        "tendency_value": 0.7,
+        "tendency_label": "强烈倾向右侧",
+        "timestamp": "2026-04-20T00:03:02.949353"
+      },
+      "timestamp": "2026-04-20T00:03:02.949353",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614583.013483_7",
+      "memory_type": "decision_logic",
+      "content": "在'女皇'塔罗牌场景中，用户在思维方式维度上强烈倾向左侧（倾向值：-0.6）\n\n场景描述：做决策时，你更依赖数据分析还是直觉感受？\n\n用户选择：依赖数据分析和逻辑推理\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "女皇",
+        "dimension": "思维方式",
+        "choice": "依赖数据分析和逻辑推理",
+        "scenario": "做决策时，你更依赖数据分析还是直觉感受？",
+        "tendency_value": -0.6,
+        "tendency_label": "强烈倾向左侧",
+        "timestamp": "2026-04-20T00:03:03.013483"
+      },
+      "timestamp": "2026-04-20T00:03:03.013483",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614583.076281_8",
+      "memory_type": "decision_logic",
+      "content": "在'隐者'塔罗牌场景中，用户在社交倾向维度上倾向左侧（倾向值：-0.5）\n\n场景描述：周末你更喜欢和朋友聚会还是独自思考？\n\n用户选择：独自思考，享受独处时光\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "隐者",
+        "dimension": "社交倾向",
+        "choice": "独自思考，享受独处时光",
+        "scenario": "周末你更喜欢和朋友聚会还是独自思考？",
+        "tendency_value": -0.5,
+        "tendency_label": "倾向左侧",
+        "timestamp": "2026-04-20T00:03:03.076281"
+      },
+      "timestamp": "2026-04-20T00:03:03.076281",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    },
+    {
+      "id": "decision_logic_1776614583.140462_9",
+      "memory_type": "decision_logic",
+      "content": "在'命运之轮'塔罗牌场景中，用户在计划性维度上强烈倾向右侧（倾向值：0.6）\n\n场景描述：你更喜欢详细规划还是随机应变？\n\n用户选择：详细规划每一步\n\n这反映了用户在该决策维度上的价值观和偏好。",
+      "metadata": {
+        "source": "tarot_game",
+        "card": "命运之轮",
+        "dimension": "计划性",
+        "choice": "详细规划每一步",
+        "scenario": "你更喜欢详细规划还是随机应变？",
+        "tendency_value": 0.6,
+        "tendency_label": "强烈倾向右侧",
+        "timestamp": "2026-04-20T00:03:03.140462"
+      },
+      "timestamp": "2026-04-20T00:03:03.140462",
+      "importance": 0.95,
+      "access_count": 0,
+      "last_access": null,
+      "related_memories": []
+    }
+  ]
+}

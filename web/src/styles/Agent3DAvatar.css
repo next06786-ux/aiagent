@@ -1,0 +1,180 @@
+/* ========================================================
+   可爱的3D小人物 - 简洁版
+   ======================================================== */
+
+.agent-avatar-3d {
+  width: 160px;
+  height: 200px;
+  margin: 0 auto 20px;
+  perspective: 800px;
+}
+
+.avatar-scene {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotateY(-5deg); }
+  50% { transform: translateY(-10px) rotateY(5deg); }
+}
+
+.agent-avatar-3d.is-hovered .avatar-scene {
+  animation: jump 0.6s ease-out;
+}
+
+@keyframes jump {
+  0% { transform: translateY(0) scale(1); }
+  30% { transform: translateY(-25px) scale(1.1) rotateY(10deg); }
+  50% { transform: translateY(-20px) scale(1.08) rotateY(-10deg); }
+  70% { transform: translateY(-25px) scale(1.1) rotateY(5deg); }
+  100% { transform: translateY(-15px) scale(1.05); }
+}
+
+/* ── 3D人物 ────────────────────────────────────────── */
+.character-3d {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+/* ========================================================
+   头部
+   ======================================================== */
+.char-head {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 70px;
+  height: 70px;
+  transform-style: preserve-3d;
+  animation: head-bob 2s ease-in-out infinite;
+}
+
+@keyframes head-bob {
+  0%, 100% { transform: translateX(-50%) rotateX(0deg); }
+  50% { transform: translateX(-50%) rotateX(5deg); }
+}
+
+.head-sphere {
+  width: 70px;
+  height: 70px;
+  background: radial-gradient(circle at 30% 30%, #ffe4c4, #ffd4a3, #ffb380);
+  border-radius: 50%;
+  position: relative;
+  box-shadow: 
+    0 8px 20px rgba(0, 0, 0, 0.2),
+    inset -5px -5px 15px rgba(0, 0, 0, 0.1),
+    inset 5px 5px 15px rgba(255, 255, 255, 0.5);
+  transform: translateZ(10px);
+}
+
+/* 脸部 */
+.face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+.eyes {
+  position: absolute;
+  top: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+}
+
+.eye {
+  width: 14px;
+  height: 16px;
+  background: white;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: blink 4s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 96%, 100% { transform: scaleY(1); }
+  98% { transform: scaleY(0.1); }
+}
+
+.eyeball {
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle, #4a90e2 0%, #2c5aa0 100%);
+  border-radius: 50%;
+  position: absolute;
+  top: 4px;
+  left: 3px;
+  animation: look 5s ease-in-out infinite;
+}
+
+@keyframes look {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(2px, -1px); }
+  75% { transform: translate(-2px, 1px); }
+}
+
+.eyeball::after {
+  content: '';
+  width: 4px;
+  height: 4px;
+  background: #1a1a1a;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.eyeball::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  z-index: 1;
+}
+
+.nose {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 8px;
+  background: rgba(255, 180, 128, 0.4);
+  border-radius: 50%;
+  box-shadow: -1px 2px 2px rgba(0, 0, 0, 0.1);
+}
+
+.mouth {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 10px;
+  border: 2.5px solid #d4956c;
+  border-top: none;
+  border-radius: 0 0 22px 22px;
+  animation: smile 3s ease-in-out infinite;
+}
+
+@keyframes smile {
+  0%, 100% { width: 22px; height: 10px; }
+  50% { width: 26px; height: 12px; }
+}

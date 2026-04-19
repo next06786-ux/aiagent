@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live2D Viewer</title>
+  
+  <!-- 预加载关键资源 -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://cubism.live2d.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://cubism.live2d.com">
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* 添加加载动画 */
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-top-color: #0A59F7;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .loaded #loading {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading"></div>
+  <canvas id="canvas"></canvas>
+  
+  <!-- 使用CDN加载库 - Cubism 4 版本 - 添加预加载和异步加载 -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://cubism.live2d.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://cubism.live2d.com">
+  
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js" defer></script>
+  <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js" defer></script>
+  
+  <script>
+    // 等待库加载完成 - 优化检测频率
+    function waitForLibraries() {
+      return new Promise((resolve) => {
+        // 先快速检查一次
+        if (window.PIXI && window.PIXI.live2d && window.PIXI.live2d.Live2DModel) {
+          resolve();
+          return;
+        }
+        
+        const checkInterval = setInterval(() => {
+          if (window.PIXI && window.PIXI.live2d && window.PIXI.live2d.Live2DModel) {
+            clearInterval(checkInterval);
+            resolve();
+          }
+        }, 50); // 减少检测间隔从100ms到50ms
+        
+        // 超时保护
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          if (!window.PIXI || !window.PIXI.live2d) {
+            console.error('[Live2D Viewer] Libraries failed to load');
+          }
+        }, 8000); // 减少超时时间
+      });
+    }
+    
+    // 初始化
+    async function init() {
+      // 等待库加载
+      await waitForLibraries();
+      
+      if (!window.PIXI || !window.PIXI.live2d) {
+        console.error('[Live2D Viewer] Libraries not available');
+        return;
+      }
+      
+      // 从URL参数获取模型路径
+      const urlParams = new URLSearchParams(window.location.search);
+      const modelPath = urlParams.get('model');
+      
+      if (!modelPath) {
+        console.error('[Live2D Viewer] No model path provided');
+        return;
+      }
+      
+      try {
+        const { Application, Ticker } = PIXI;
+        const { Live2DModel } = PIXI.live2d;
+        
+        // 注册Ticker
+        Live2DModel.registerTicker(Ticker);
+        
+        // 创建PIXI应用 - 优化渲染设置
+        const app = new Application({
+          view: document.getElementById('canvas'),
+          width: 300,
+          height: 380,
+          backgroundColor: 0xffffff,
+          backgroundAlpha: 0,
+          antialias: true,
+          resolution: Math.min(window.devicePixelRatio || 1, 2), // 限制最大分辨率
+          autoDensity: true,
+          powerPreference: 'high-performance', // 使用高性能模式
+        });
+        
+        // 加载Live2D模型 - 添加超时和错误处理
+        const model = await Promise.race([
+          Live2DModel.from(modelPath, {
+            autoInteract: false,
+            idleMotionGroup: 'idle', // 预设待机动画组
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Model load timeout')), 10000)
+          )
+        ]);
+        
+        // 设置模型 - 调整缩放和位置以完整显示
+        const scale = Math.min(
+          app.screen.width / model.width,
+          app.screen.height / model.height
+        ) * 0.85;
+        
+        model.scale.set(scale);
+        model.anchor.set(0.5, 0.5);
+        model.x = app.screen.width / 2 - 40;
+        model.y = app.screen.height / 2;
+        
+        app.stage.addChild(model);
+        
+        // 移除加载动画
+        document.body.classList.add('loaded');
+        
+        // 播放待机动画
+        try {
+          model.motion('idle');
+        } catch (e) {
+          // 忽略错误
+        }
+        
+        // 定期播放待机动画
+        setInterval(() => {
+          try {
+            model.motion('idle');
+          } catch (e) {
+            // 忽略错误
+          }
+        }, 15000);
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', (event) => {
+          if (event.data.type === 'playMotion') {
+            try {
+              model.motion(event.data.motionName);
+            } catch (e) {
+              // 忽略错误
+            }
+          }
+        });
+        
+      } catch (error) {
+        console.error('[Live2D Viewer] Failed to load model:', error);
+      }
+    }
+
+    // 启动
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
