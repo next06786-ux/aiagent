@@ -146,10 +146,15 @@ RELATIONSHIPS = [
     {"name": "杨学长", "type": "Person", "category": "colleagues", "relation": "技术交流", "attributes": {"company": "微软", "team": "Azure"}},
 ]
 
-# 教育经历（当前学校 - 不会显示在教育升学视图中）
-CURRENT_EDUCATION = [
-    {"school": "清华大学", "degree": "本科", "major": "计算机科学与技术", "start_year": 2020, "end_year": 2024, "gpa": 3.8, "is_current": True},
-]
+# 当前教育背景（不会显示在教育升学视图中）
+CURRENT_EDUCATION = {
+    "school": "清华大学",
+    "degree": "本科", 
+    "major": "计算机科学与技术",
+    "start_year": 2020,
+    "end_year": 2024,
+    "gpa": 3.8
+}
 
 # 目标院校（会显示在教育升学视图中）
 TARGET_SCHOOLS = [
@@ -453,26 +458,26 @@ def init_knowledge_graph():
             # 创建教育经历
             print(f"  创建教育经历...")
             
-            # 1. 创建当前学校（不会显示在教育升学视图中）
-            for edu in CURRENT_EDUCATION:
-                kg.add_information(
-                    name=edu["school"],
-                    info_type="entity",
-                    category="education",
-                    confidence=1.0,
-                    attributes={
-                        "type": "School",
-                        "degree": edu["degree"],
-                        "major": edu["major"],
-                        "start_year": edu["start_year"],
-                        "end_year": edu["end_year"],
-                        "gpa": edu.get("gpa", 0),
-                        "is_current": True
-                    }
-                )
-                total_nodes += 1
+            # 1. 创建当前学校（标记为当前，不会显示在教育升学视图中）
+            # 注意：这里不创建INTERESTED_IN关系，因为是当前学校
+            kg.add_information(
+                name=CURRENT_EDUCATION["school"],
+                info_type="entity",
+                category="education",
+                confidence=1.0,
+                attributes={
+                    "type": "School",
+                    "degree": CURRENT_EDUCATION["degree"],
+                    "major": CURRENT_EDUCATION["major"],
+                    "start_year": CURRENT_EDUCATION["start_year"],
+                    "end_year": CURRENT_EDUCATION["end_year"],
+                    "gpa": CURRENT_EDUCATION.get("gpa", 0),
+                    "is_current": True
+                }
+            )
+            total_nodes += 1
             
-            # 2. 创建目标院校（会显示在教育升学视图中）
+            # 2. 创建目标院校（只包含高等教育，会显示在教育升学视图中）
             for school in TARGET_SCHOOLS:
                 kg.add_information(
                     name=school["school"],
