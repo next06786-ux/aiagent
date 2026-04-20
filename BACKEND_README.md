@@ -921,3 +921,34 @@ main.py (入口)
 - ✅ 模块依赖关系完整展示
 - ✅ 核心功能流程详细描述
 
+测试用户账号（密码统一为: 123456）：
+  - 用户名: 张三
+    User ID: test_user_001
+    邮箱: zhangsan@example.com
+    密码: 123456
+    学校: 清华大学 - 计算机科学
+
+  - 用户名: 李四
+    User ID: test_user_002
+    邮箱: lisi@example.com
+    密码: 123456
+    学校: 北京大学 - 人工智能
+
+  - 用户名: 王五
+    User ID: test_user_003
+    邮箱: wangwu@example.com
+    密码: 123456
+    学校: 上海交通大学 - 软件工程
+    docker logs -f lifeswarm-backend
+
+    git add backend/init_test_data.py
+    git commit -m "扩充教育升学测试数据：添加30所目标院校（国内10所+美国15所+欧洲5所）"
+    git push origin main
+    
+cd /opt/aiagent/
+git checkout -- backend/init_test_data.py  # 放弃本地修改
+git pull origin main
+docker compose build backend
+docker compose up -d backend
+sleep 10
+docker exec -it lifeswarm-backend python backend/init_test_data.py
