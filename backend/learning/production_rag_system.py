@@ -114,7 +114,11 @@ class ProductionRAGSystem:
             print(f"   🌐 从HuggingFace下载模型...")
             cls._shared_model = SentenceTransformer(model_name, device=device)
         
-        cls._embedding_dim = cls._shared_model.get_sentence_embedding_dimension()
+        # 使用新的API名称（兼容旧版本）
+        if hasattr(cls._shared_model, 'get_embedding_dimension'):
+            cls._embedding_dim = cls._shared_model.get_embedding_dimension()
+        else:
+            cls._embedding_dim = cls._shared_model.get_sentence_embedding_dimension()
         cls._model_initialized = True
         
         # 验证模型实际运行设备
