@@ -1,3 +1,7 @@
+# Git
+.git
+.gitignore
+
 # Python
 __pycache__/
 *.py[cod]
@@ -7,7 +11,9 @@ __pycache__/
 env/
 venv/
 ENV/
-.venv
+*.egg-info/
+dist/
+build/
 
 # Node
 node_modules/
@@ -23,39 +29,34 @@ yarn-error.log*
 *.swo
 *~
 
-# 测试和临时文件
-*.log
-*.tmp
+# OS
 .DS_Store
 Thumbs.db
 
-# Git
-.git/
-.gitignore
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
 
-# 数据文件（可选，根据需要调整）
-backend/data/chroma/
-backend/data/decision_sessions/
-*.db
-*.sqlite
-
-# 构建产物
-web/dist/
-web/build/
-*.egg-info/
-dist/
-build/
-
-# 环境变量（敏感信息）
+# 环境变量
 .env.local
 .env.*.local
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 数据文件（不打包到镜像）
+backend/data/persona_memories/
+backend/data/decision_sessions/
+faiss_indexes/
+models/
 
 # 文档
 *.md
 docs/
-
-# 测试文件
-test_*.py
-test_*.html
-*_test.py
-tests/

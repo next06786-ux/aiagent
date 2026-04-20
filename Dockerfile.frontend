@@ -6,11 +6,12 @@ WORKDIR /app
 # 复制package文件
 COPY web/package*.json ./
 
-# 安装依赖
-RUN npm ci
+# 安装依赖（使用国内镜像）
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install
 
 # 复制源代码
-COPY web/ ./
+COPY web/ .
 
 # 构建生产版本
 RUN npm run build

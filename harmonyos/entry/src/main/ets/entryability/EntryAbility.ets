@@ -5,40 +5,12 @@ import { Want } from '@kit.AbilityKit';
 import { AbilityConstant } from '@kit.AbilityKit';
 import { abilityAccessCtrl, Permissions, PermissionRequestResult } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-// import { SmartVisionService, SamplingStrategy } from '../service/SmartVisionService'; // 
 import preferences from '@ohos.data.preferences';
-import { getUserSessionManager } from '../service/UserSessionManager';
-import { getAuthService } from '../service/AuthService';
 
 export default class EntryAbility extends UIAbility {
-  // private smartVisionService: SmartVisionService | null = null; // 
   
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(0x0000, 'VisionAgent', '%{public}s', 'Ability onCreate');
-    
-    // 初始化 AuthService 的 context
-    const authService = getAuthService();
-    authService.setContext(this.context);
-    
-    // 初始化用户会话管理器
-    this.initializeUserSession();
-    
-    // 
-    this.initializeSmartVision();
-  }
-  
-  /**
-   * 初始化用户会话管理器
-   */
-  private async initializeUserSession(): Promise<void> {
-    try {
-      hilog.info(0x0000, 'VisionAgent', '初始化用户会话管理器...');
-      const sessionManager = getUserSessionManager();
-      await sessionManager.initialize();
-      hilog.info(0x0000, 'VisionAgent', '用户会话管理器初始化完成');
-    } catch (err) {
-      hilog.error(0x0000, 'VisionAgent', '用户会话管理器初始化失败: %{public}s', JSON.stringify(err));
-    }
   }
 
   onDestroy(): void {
@@ -150,47 +122,5 @@ export default class EntryAbility extends UIAbility {
 
   onBackground(): void {
     hilog.info(0x0000, 'VisionAgent', '%{public}s', 'Ability onBackground');
-  }
-  
-  /**
-   * 
-   */
-  private async initializeSmartVision(): Promise<void> {
-    // 
-    /*
-    try {
-      hilog.info(0x0000, 'VisionAgent', 'Initializing smart vision service...');
-      
-      this.smartVisionService = SmartVisionService.getInstance();
-      await this.smartVisionService.initialize(this.context);
-      
-      // 
-      this.smartVisionService.configure({
-        strategy: SamplingStrategy.SPARSE,      // 5/
-        interval: 5 * 60 * 1000,                // 5
-        enableAutoTrigger: true,                // 
-        enableBackgroundCapture: false,         // 
-        privacyMode: true,                      // 
-        localProcessOnly: true,                 // 
-        autoDeleteRaw: true                     // 
-      });
-      
-      // 
-      this.smartVisionService.addListener((result) => {
-        hilog.info(0x0000, 'VisionAgent', 
-          `Vision captured: ${result.scene} at ${new Date(result.timestamp).toLocaleString()}`);
-      });
-      
-      // 
-      // await this.smartVisionService.startSampling();
-      
-      hilog.info(0x0000, 'VisionAgent', 'Smart vision service initialized');
-      
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.error(0x0000, 'VisionAgent', `Initialize smart vision failed: ${err.message}`);
-    }
-    */
-    hilog.info(0x0000, 'VisionAgent', 'Smart vision service disabled for testing');
   }
 }
