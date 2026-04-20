@@ -559,7 +559,7 @@ def init_knowledge_graph():
                     companies_created.add(company_name)
                     total_nodes += 1
             
-            # 创建Job实体并建立关系链（不创建User→Job关系）
+            # 创建Job实体并建立完整关系链
             for goal in CAREER_GOALS:
                 # 1. 创建Job实体
                 kg.add_information(
@@ -579,9 +579,19 @@ def init_knowledge_graph():
                 )
                 total_nodes += 1
                 
-                # 注意：不创建 User → Job 关系，用户通过技能间接连接岗位
+                # 2. User → Job (INTERESTED_IN) - 后端需要这个关系来查询岗位
+                kg.add_user_relationship(
+                    target_name=goal["position"],
+                    relation_type="INTERESTED_IN",
+                    properties={
+                        "interest_level": 0.9 if goal["priority"] == "高" else 0.85 if goal["priority"] == "中" else 0.8,
+                        "priority": goal["priority"],
+                        "company": goal["company"]
+                    }
+                )
+                total_relations += 1
                 
-                # 2. Job → Company (PART_OF)
+                # 3. Job → Company (PART_OF)
                 kg.add_information_relationship(
                     source_name=goal["position"],
                     target_name=goal["company"],
@@ -593,7 +603,7 @@ def init_knowledge_graph():
                 )
                 total_relations += 1
                 
-                # 3. Job → Skill (REQUIRES) - 岗位需要技能
+                # 4. Job → Skill (REQUIRES) - 岗位需要技能
                 # 根据岗位类型匹配技能
                 required_skills = []
                 position_lower = goal["position"].lower()
