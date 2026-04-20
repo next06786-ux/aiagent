@@ -3,36 +3,29 @@
  * 包含所有后端API端点
  */
 export class ApiConstants {
-  // 后端地址 - 生产服务器
-  static readonly BASE_URL = 'http://82.157.195.238:6006';
-  
-  // WebSocket基础地址
-  static readonly WS_BASE_URL = 'ws://82.157.195.238:6006';
+  // 后端地址
+  // 模拟器使用: http://10.0.2.2:6006
+  // 本机测试使用: http://localhost:6006 或 http://127.0.0.1:6006
+  // 真机测试使用: http://192.168.242.1:6006
+  static readonly BASE_URL = 'http://192.168.242.1:6006';
   
   // API端点
   static readonly AUTH = {
     REGISTER: '/api/auth/register',
     LOGIN: '/api/auth/login',
-    LOGOUT: '/api/auth/logout',
-    VERIFY_TOKEN: '/api/auth/verify-token',
-    USER_INFO: '/api/auth/user'  // GET /api/auth/user/{user_id}
+    LOGOUT: '/api/auth/logout'
   };
   
   static readonly AI_CORE = {
     INTENT: '/api/v5/ai-core/intent',
-    NAVIGATE: '/api/v5/ai-core/navigate',
-    CHAT: '/api/chat/send'  // AI对话
+    NAVIGATE: '/api/v5/ai-core/navigate'
   };
   
   static readonly KNOWLEDGE = {
     ADD_INFO: '/api/knowledge/add-info',
     QUERY: '/api/knowledge/query',
     RELATIONSHIPS: '/api/knowledge/relationships',
-    STATS: '/api/knowledge/stats',
-    // 知识图谱节点
-    CAREER_NODES: '/api/kg/career/nodes',
-    EDUCATION_NODES: '/api/kg/education/nodes',
-    RELATIONSHIP_NODES: '/api/kg/relationship/nodes'
+    STATS: '/api/knowledge/stats'
   };
   
   static readonly VERTICAL = {
@@ -46,55 +39,45 @@ export class ApiConstants {
     CONTINUE_COLLECTION: '/api/decision/persona/collect/continue',
     GENERATE_OPTIONS: '/api/decision/persona/generate-options',
     SESSION: '/api/decision/persona/collect/session',
-    UPDATE_OUTCOME: '/api/decision/persona/update-outcome',
-    START_SESSION: '/api/decision/persona/start-session',  // 开始推演
-    WORKBENCH: '/api/decision/workbench'  // 决策工作台
+    UPDATE_OUTCOME: '/api/decision/persona/update-outcome'
   };
   
   static readonly INSIGHTS = {
     RELATIONSHIP: '/api/insights/realtime/relationship/insight',
     EDUCATION: '/api/insights/realtime/education/insight',
     CAREER: '/api/insights/realtime/career/insight',
-    AGENTS_STATUS: '/api/insights/realtime/agents/status',
-    GENERATE: '/api/insights/generate',  // 生成洞察
-    HISTORY: '/api/insights/history'  // 历史洞察
+    AGENTS_STATUS: '/api/insights/realtime/agents/status'
   };
   
   static readonly PARALLEL_LIFE = {
     START_GAME: '/api/v5/parallel-life/start-game',
     SUBMIT_CHOICE: '/api/v5/parallel-life/submit-choice',
-    DECISION_PROFILE: '/api/v5/parallel-life/decision-profile',
-    DRAW_CARDS: '/api/parallel-life/draw-cards',  // 抽牌
-    INTERPRET: '/api/parallel-life/interpret'  // 解读
+    DECISION_PROFILE: '/api/v5/parallel-life/decision-profile'
   };
   
   static readonly SOCIAL = {
-    // 好友相关
-    FRIENDS_LIST: '/api/social/friends',
-    FRIEND_REQUEST_SEND: '/api/social/friend-request',
-    FRIEND_REQUESTS: '/api/social/friend-requests',
-    FRIEND_REQUEST_ACCEPT: '/api/social/friend-request/accept',
-    FRIEND_REQUEST_REJECT: '/api/social/friend-request/reject',
-    SEARCH_USERS: '/api/social/search',
-    // 树洞相关
-    TREE_HOLE_POSTS: '/api/social/tree-hole/posts',
-    TREE_HOLE_POST: '/api/social/tree-hole/post',
-    TREE_HOLE_COMMENT: '/api/social/tree-hole/comment',
-    TREE_HOLE_LIKE: '/api/social/tree-hole/like'
+    FRIENDS_LIST: '/api/friends/list',
+    FRIENDS_ADD: '/api/friends/add',
+    FRIENDS_REMOVE: '/api/friends/remove',
+    FRIENDS_REQUESTS: '/api/friends/requests',
+    TREE_HOLE_POSTS: '/api/tree-hole/posts',
+    TREE_HOLE_POST: '/api/tree-hole/post',
+    TREE_HOLE_COMMENT: '/api/tree-hole/comment',
+    TREE_HOLE_LIKE: '/api/tree-hole/like'
   };
   
   static readonly SCHEDULE = {
-    LIST: '/api/schedule/list',
-    CREATE: '/api/schedule/create',
-    UPDATE: '/api/schedule/update',
-    DELETE: '/api/schedule/delete',
-    RECOMMEND: '/api/schedule/recommend',
-    AUTO_GENERATE: '/api/schedule/auto-generate'
+    LIST: '/api/v5/schedule/list',
+    ADD: '/api/v5/schedule/add',
+    UPDATE: '/api/v5/schedule/update',
+    DELETE: '/api/v5/schedule/delete',
+    RECOMMEND: '/api/v5/schedule/recommend',
+    AUTO_GENERATE: '/api/v5/schedule/auto-generate'
   };
   
   // WebSocket端点
   static readonly WS = {
-    CHAT: `${ApiConstants.WS_BASE_URL}/ws/chat`,
-    DECISION_SIMULATE: `${ApiConstants.WS_BASE_URL}/ws/decision`  // WebSocket决策推演
+    CHAT: 'ws://192.168.242.1:6006/ws/chat',
+    DECISION_SIMULATE: 'ws://192.168.242.1:6006/api/decision/persona/ws/simulate-option'
   };
 }
