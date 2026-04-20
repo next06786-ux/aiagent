@@ -2,19 +2,19 @@
 
 本文档详细说明了backend目录中每个文件夹和文件的作用。
 
-**最后更新时间**: 2026-04-18
+**最后更新时间**: 2026-04-20
 
 ---
 
 ## 📋 目录概览
 
-Backend采用模块化架构，共18个模块目录，分为以下几类：
+Backend采用模块化架构，共15个模块目录，分为以下几类：
 
 ### 🎯 七大核心功能模块
 1. **ai_core** - AI核心（意图识别、功能导航）
 2. **knowledge** - 知识星图（知识图谱）
-3. **decision + vertical + decision_algorithm** - 决策副本（三维垂直决策）
-4. **insights + emergence** - 智慧洞察（涌现检测、对话分析）
+3. **decision + vertical** - 决策副本（多人格决策系统）
+4. **insights** - 智慧洞察（实时Agent、协作智能体）
 5. **parallel_life** - 平行人生（塔罗牌决策游戏）
 6. **social** - 社交系统树洞世界（好友、树洞）
 7. **schedule** - 智能日程（日程推荐、自动生成）
@@ -72,10 +72,7 @@ neo4j_knowledge_graph.py（基础操作）
   - 支持溯源查询（信息来自哪张照片/哪次对话）
   - 支持人际关系查询、节点类型查询
   - 提供统计和导出功能
-- `neo4j_knowledge_graph.py` - **Neo4j知识图谱基础类**
-  - 提供实体、关系的CRUD操作
-  - 提供图谱查询和统计功能
-  - 支持路径查找、中心节点分析
+- `future_os_api.py` - Future OS API接口
 
 **技术栈**: Neo4j图数据库
 
@@ -101,67 +98,108 @@ neo4j_knowledge_graph.py（基础操作）
 
 ### 3️⃣ decision/ - 决策模块（核心）
 
-**功能**: 决策信息收集、决策推演、多智能体评估
+**功能**: 多人格决策推演系统，7个独特人格从不同角度分析决策
 
 **核心工作流程**:
 1. 用户点击决策副本球体 → 进入对话
 2. `decision_info_collector.py` 收集用户信息（对话式）
+   - 集成塔罗牌决策逻辑画像（从RAG检索用户决策偏好）
 3. AI根据收集的信息推荐模拟方向（生成选项）
-4. `enhanced_decision_api.py` 协调整个推演流程（WebSocket）
-5. 根据决策类型调用对应的多智能体评估器进行推演：
-   - 教育升学 → `multi_agent_education_evaluator.py` ✅ 已完整实现
-   - 职业规划 → `multi_agent_career_evaluator.py` ✅ 已完整实现
-   - 人际关系 → `multi_agent_relationship_evaluator.py` ✅ 已完整实现
-6. 返回推演结果和时间线（12个月的演化过程）
+4. `persona_decision_api.py` 协调整个推演流程（WebSocket）
+5. 7个决策人格并行分析（每个人格独立思考）：
+   - 理性分析师（逻辑推理）
+   - 情感共鸣者（情感洞察）
+   - 风险评估师（风险分析）
+   - 机会探索者（机会发现）
+   - 道德守护者（伦理评估）
+   - 实用主义者（实际可行性）
+   - 创新思考者（创新视角）
+6. 深度反思阶段：每个人格查看其他人格的观点，进行二次思考
+7. 综合评分和推演结果实时流式返回
 
-**推演架构**（三个领域统一）:
+**推演架构**（多人格并行）:
 ```
-用户对话 → 信息收集 → AI推荐选项 → WebSocket推演
-                                    ↓
-                        垂直决策引擎（vertical/）
-                                    ↓
-                        多智能体评估器（5个Agent并行）
-                                    ↓
-                        决策算法支持（decision_algorithm/）
-                                    ↓
-                        实时流式返回（12个月时间线）
+用户对话 → 信息收集（含决策逻辑画像）→ AI推荐选项 → WebSocket推演
+                                                    ↓
+                                    7个决策人格并行分析（第0轮）
+                                                    ↓
+                                    深度反思（查看其他人格观点）
+                                                    ↓
+                                    综合评分 + 实时流式返回
 ```
 
 **文件列表**:
+- `persona_decision_api.py` - **多人格决策API（主要API，核心入口，WebSocket推演）**
+- `decision_personas.py` - **7个决策人格定义（每个人格的特征和分析方法）**
+- `decision_persona_system.py` - **人格系统管理器**
+- `persona_memory_system.py` - **人格记忆系统（分层记忆架构）**
+- `persona_skills.py` - **人格技能系统（RAG检索、知识图谱查询等）**
 - `decision_info_collector.py` - **决策信息收集器（对话收集用户信息）**
-- `enhanced_decision_api.py` - **增强决策API（主要API，核心入口，包含WebSocket推演）**
-- `multi_agent_career_evaluator.py` - **多智能体职业评估器（职业推演，5个Agent）**
-- `multi_agent_education_evaluator.py` - **多智能体教育评估器（升学推演，5个Agent）**
-- `multi_agent_relationship_evaluator.py` - **多智能体关系评估器（关系推演，5个Agent）**
-- `lora_decision_analyzer.py` - **LoRA决策分析器（时间线生成、推荐生成）**
-- `personal_knowledge_fusion.py` - **个人知识融合（PKF-DS，提取个人事实）**
-- `review_agents.py` - 审查智能体（节点评审）
-- `risk_assessment_engine.py` - 风险评估引擎（选项风险评估）
 - `future_os_api.py` - Future OS API（统一智能体接口）
-- `future_os_service.py` - Future OS服务
+- `enhanced_decision_api_full_backup.py` - 旧版API备份文件
+- `prompts/` - **Prompt管理目录**
+  - `prompt_manager.py` - Prompt管理器（核心）
+  - `README.md` - Prompt系统说明
+  - `IMPLEMENTATION_SUMMARY.md` - 实现总结
+  - `MIGRATION_SUMMARY.md` - 迁移总结
+  - `configs/` - Prompt配置文件目录
+    - `info_collection/` - 信息收集Prompt
+      - `free_talk_followup.yaml` - 自由对话跟进
+      - `next_question.yaml` - 下一个问题
+      - `targeted_question.yaml` - 针对性问题
+    - `option_generation/` - 选项生成Prompt
+      - `generate_options.yaml` - 生成AI推荐选项
+    - `persona_analysis/` - 人格分析Prompt（7个人格）
+      - `rational_analyst.yaml` - 理性分析师
+      - `social_navigator.yaml` - 情感共鸣者
+      - `conservative.yaml` - 风险评估师
+      - `adventurer.yaml` - 机会探索者
+      - `idealist.yaml` - 道德守护者
+      - `pragmatist.yaml` - 实用主义者
+      - `innovator.yaml` - 创新思考者
+- `DECISION_PERSONA_ARCHITECTURE.md` - 决策人格架构文档
+- `LAYERED_MEMORY_ARCHITECTURE.md` - 分层记忆架构文档
+- `PERSONA_CAPABILITIES.md` - 人格能力文档
 
 **API端点**: 
-- `/api/decision/enhanced/*` - 决策信息收集和推演
-- `/ws/decision-simulate` - **WebSocket决策推演（主要入口）**
+- `/api/decision/persona/*` - 多人格决策API
+  - `/start-collection` - 开始信息收集
+  - `/continue-collection` - 继续信息收集
+  - `/generate-options` - 生成AI推荐选项
+  - `/session/{session_id}` - 获取会话信息
+  - `/update-outcome` - 更新决策结果
+- `/ws/decision/simulate-option` - **WebSocket决策推演（主要入口）**
+  - 支持`stop_simulation`消息实现暂停功能
 - `/api/v5/future-os/*` - Future OS统一接口
 
-**推演实现状态**:
-- ✅ **教育升学推演** - 完整实现（已测试通过）
-  - 垂直引擎: `vertical/education/education_decision_engine.py`
-  - 多智能体: `multi_agent_education_evaluator.py` (5个Agent)
-  - 算法支持: `decision_algorithm/education_decision_algorithm.py`
-  
-- ✅ **职业规划推演** - 完整实现（代码结构与教育一致）
-  - 垂直引擎: `vertical/career/career_decision_engine.py`
-  - 多智能体: `multi_agent_career_evaluator.py` (5个Agent)
-  - 算法支持: `decision_algorithm/career_decision_algorithm.py`
-  
-- ✅ **人际关系推演** - 完整实现（代码结构与教育一致）
-  - 垂直引擎: `vertical/relationship/relationship_decision_engine.py`
-  - 多智能体: `multi_agent_relationship_evaluator.py` (5个Agent)
-  - 算法支持: `decision_algorithm/relationship_decision_algorithm.py`
+**WebSocket消息类型**:
+- `start_simulation` - 开始推演
+- `stop_simulation` - 停止推演（暂停功能）
+- `persona_status` - 人格状态更新
+- `persona_analysis` - 人格分析结果
+- `reflection_complete` - 反思完成
+- `final_score` - 最终综合评分
+- `simulation_complete` - 推演完成
 
-所有三个领域都采用相同的架构模式：信息收集 → AI推荐 → 多智能体推演（12个月）→ 实时流式返回
+**7个决策人格**:
+1. **理性分析师** - 逻辑推理、数据分析、因果关系
+2. **情感共鸣者** - 情感洞察、人际关系、心理影响
+3. **风险评估师** - 风险识别、概率评估、应对策略
+4. **机会探索者** - 机会发现、潜力挖掘、创新可能
+5. **道德守护者** - 伦理评估、价值观、社会责任
+6. **实用主义者** - 实际可行性、资源评估、执行难度
+7. **创新思考者** - 创新视角、突破性思维、未来趋势
+
+**人格分析流程**:
+- 第0轮：独立分析（每个人格基于自己的视角）
+- 深度反思：查看其他人格的观点，进行二次思考
+- 最终评分：综合所有人格的分析结果
+
+**决策逻辑画像集成**:
+- 从塔罗牌游戏收集的决策逻辑自动集成到信息收集阶段
+- 通过RAG系统检索用户的决策偏好和价值观
+- 置信度阈值：20%（至少4次选择）
+- 自动应用到人格分析中，提供个性化洞察
 
 ---
 
@@ -176,36 +214,32 @@ neo4j_knowledge_graph.py（基础操作）
 - `decision_logic_integration.py` - 决策逻辑集成
 - `llm_batch_classifier.py` - LLM批量分类器
 - `unified_decision_workflow.py` - 统一决策工作流
+- `unified_kg_query.py` - 统一知识图谱查询
 - `vertical_decision_api.py` - 垂直决策API
 
 **子目录**:
 - `career/` - 职业决策引擎和知识图谱
+  - `career_knowledge_graph.py` - 职业知识图谱
+  - `job_neo4j_storage.py` - 岗位Neo4j存储
+  - `job_scheduler.py` - 岗位调度器
+  - `job_updater_service.py` - 岗位更新服务
+  - `neo4j_career_kg.py` - Neo4j职业知识图谱
+  - `real_job_cache_loader.py` - 真实岗位缓存加载器
+  - `real_job_data_integration.py` - 真实岗位数据集成
 - `education/` - 教育决策引擎和知识图谱
+  - `education_cache_warmer.py` - 教育缓存预热器
+  - `education_decision_engine.py` - 教育决策引擎
+  - `education_knowledge_graph.py` - 教育知识图谱
+  - `neo4j_education_kg.py` - Neo4j教育知识图谱
+  - `school_matching_cache.py` - 学校匹配缓存
 - `relationship/` - 关系决策引擎和知识图谱
+  - `neo4j_relationship_kg.py` - Neo4j关系知识图谱
 - `time/` - 时间决策引擎
 - `general/` - 通用决策引擎
 
 ---
 
-### 5️⃣ decision_algorithm/ - 决策算法模块
-
-**功能**: 决策算法实现，提供核心决策引擎基类和知识图谱集成
-
-**架构说明**:
-- `core_decision_engine.py` 是所有垂直决策引擎（career/education/relationship）的基类
-- 提供统一的决策评估接口和算法框架
-- 三个算法文件负责知识图谱数据集成
-
-**文件列表**:
-- `__init__.py` - 模块初始化
-- `career_decision_algorithm.py` - 职业决策算法（知识图谱集成）
-- `core_decision_engine.py` - **核心决策引擎（基类）**
-- `education_decision_algorithm.py` - 教育决策算法
-- `relationship_decision_algorithm.py` - 关系决策算法
-
-**说明**: 
-- `core_decision_engine.py` 是所有垂直决策引擎的基类
-- 三个算法文件提供知识图谱集成和数据模型定义
+**说明**: decision_algorithm模块已被整合到vertical模块中，不再作为独立模块存在。决策算法功能现在由vertical模块的各个子模块提供。
 
 ---
 
@@ -229,17 +263,18 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 **文件列表**:
 - `__init__.py` - 模块初始化
-- `data_connector.py` - 数据连接器（从MySQL/Neo4j获取数据）
-- `data_transformer.py` - 数据转换器（转换为分析格式）
-- `emergence_adapter.py` - 涌现检测适配器（Layer 1: 规则引擎）
-- `hybrid_insights_engine.py` - 混合洞察引擎（三层架构核心）
-- `integrated_insights_api.py` - 集成洞察API（主要API入口）
-- `llm_enhancer.py` - LLM增强器（Layer 3: LLM深度分析）
-- `ml_enhanced_insights.py` - ML增强洞察（Layer 2: ML量化评估）
-- `realtime_insight_agents.py` - **实时智慧洞察Agent系统（新增）**
-- `realtime_insight_api.py` - **实时洞察API（新增）**
+- `collaborative_agents.py` - 协作智能体系统
+- `multi_agent_system.py` - 多智能体系统
+- `ml_models.py` - 机器学习模型
+- `realtime_insight_agents.py` - **实时智慧洞察Agent系统**
+  - RelationshipInsightAgent - 人际关系洞察
+  - EducationInsightAgent - 教育升学洞察
+  - CareerInsightAgent - 职业规划洞察
+- `realtime_insight_api.py` - **实时洞察API**
 - `README.md` - 模块说明文档
-- `REALTIME_AGENTS_README.md` - 实时Agent说明文档
+- `AGENT_MEMORY_ARCHITECTURE.md` - Agent记忆架构文档
+- `INSIGHT_MEMORY_ARCHITECTURE.md` - 洞察记忆架构文档
+- `三层AI架构设计.md` - 三层AI架构设计文档
 
 **API端点**: 
 - `/api/insights/*` - 三层混合架构洞察API
@@ -278,10 +313,7 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 **功能**: 实时对话分析、智能洞察生成
 
-**文件列表**:
-- `__init__.py` - 模块初始化
-- `insight_api.py` - 洞察API（对话分析、洞察生成）
-- `realtime_analyzer.py` - 实时分析器（从对话中提取情绪、话题、意图）
+**说明**: emergence模块已被整合到insights模块中，不再作为独立模块存在。涌现检测功能现在由insights模块的实时Agent系统提供。
 
 **API端点**: `/api/v1/insights/*`
 
@@ -300,15 +332,67 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 ### 8️⃣ parallel_life/ - 平行人生模块
 
-**功能**: 塔罗牌决策游戏，通过游戏化方式收集用户决策逻辑
+**功能**: 塔罗牌决策游戏，通过游戏化方式收集用户决策逻辑并集成到决策系统
+
+**核心工作流程**:
+1. 用户玩塔罗牌游戏，在不同场景中做出选择
+2. `tarot_game.py` 生成塔罗牌场景和选项
+3. `decision_logic_analyzer.py` 分析用户选择，提取决策模式
+4. 决策逻辑存储到FAISS（MemoryType.DECISION_LOGIC）
+5. 在决策推演时自动检索并应用用户的决策偏好
+
+**决策逻辑集成**:
+```
+塔罗牌游戏 → 用户选择 → 决策逻辑分析
+                            ↓
+                    存储到FAISS (DECISION_LOGIC类型)
+                            ↓
+                    决策信息收集时自动检索
+                            ↓
+                    应用到人格分析中
+```
 
 **文件列表**:
 - `__init__.py` - 模块初始化
-- `decision_logic_analyzer.py` - 决策逻辑分析器
+- `tarot_game.py` - **塔罗牌游戏引擎（生成场景和选项）**
+- `decision_logic_analyzer.py` - **决策逻辑分析器（核心）**
+  - 记录用户选择到RAG系统
+  - 生成决策画像（维度倾向值）
+  - 应用到决策推演引擎
 - `parallel_life_api.py` - 平行人生API
-- `tarot_game.py` - 塔罗牌游戏引擎
+- `INTEGRATION_GUIDE.md` - 集成指南
+- `TAROT_INTEGRATION.md` - 塔罗牌集成文档
 
 **API端点**: `/api/v5/parallel-life/*`
+
+**决策维度**:
+- 理性 vs 感性
+- 保守 vs 冒险
+- 个人 vs 集体
+- 短期 vs 长期
+- 物质 vs 精神
+- 稳定 vs 变化
+
+**决策画像结构**:
+```json
+{
+  "dimensions": {
+    "理性vs感性": {
+      "value": 0.6,
+      "count": 5,
+      "confidence": 1.0
+    }
+  },
+  "patterns": ["理性vs感性: 明显倾向于右侧选择"],
+  "confidence": 0.25,
+  "total_choices": 5
+}
+```
+
+**集成到决策系统**:
+- `decision_info_collector.py` 的 `_get_decision_logic_profile()` 方法
+- `decision_personas.py` 的 `supplement_shared_facts()` 方法
+- 置信度阈值：20%（至少4次选择才应用）
 
 ---
 
@@ -358,14 +442,18 @@ Layer 3: LLM增强（llm_enhancer.py）
 **功能**: 数据库连接、模型定义、缓存管理
 
 **文件列表**:
-- `cache_manager.py` - Redis缓存管理器
-- `config.py` - 数据库配置
+- `db_manager.py` - **数据库管理器**（主要接口）
+- `models.py` - **SQLAlchemy数据模型定义**
 - `connection.py` - 数据库连接管理
-- `db_manager.py` - 数据库管理器（主要接口）
-- `init_db.py` - 数据库初始化
-- `models.py` - SQLAlchemy数据模型定义
+- `config.py` - 数据库配置
+- `cache_manager.py` - Redis缓存管理器
+- `init_db.py` - MySQL数据库初始化
+- `init_neo4j.py` - Neo4j数据库初始化
+- `import_real_data.py` - 真实数据导入工具
+- `neo4j_schema.cypher` - Neo4j数据库Schema脚本
+- `NEO4J_SCHEMA.md` - Neo4j Schema文档
 
-**技术栈**: MySQL + Redis
+**技术栈**: MySQL + Redis + Neo4j
 
 **数据模型**: User, Conversation, Message, Decision, Insight, Schedule等
 
@@ -390,27 +478,26 @@ Layer 3: LLM增强（llm_enhancer.py）
 **功能**: 大语言模型服务，支持多种LLM提供商
 
 **文件列表**:
-- `__init__.py` - 模块初始化
-- `auto_lora_trainer.py` - 自动LoRA训练器（已废弃）
+- `llm_service.py` - **LLM服务主入口**（核心文件）
+- `hybrid_llm_service.py` - 混合LLM服务
+- `model_config.py` - 模型配置
+- `llm_switch_api.py` - LLM切换API
 - `collaborative_agent.py` - 协作智能体
-- `conversation_manager.py` - 对话管理器
-- `deep_ai_processor.py` - 深度AI处理器
 - `enhanced_agents.py` - 增强智能体
+- `conversation_manager.py` - 对话管理器
 - `enhanced_conversation_manager.py` - 增强对话管理器
 - `enhanced_memory_retriever.py` - 增强记忆检索器
+- `deep_ai_processor.py` - 深度AI处理器
 - `hybrid_intelligence_system.py` - 混合智能系统
-- `hybrid_llm_service.py` - 混合LLM服务
-- `knowledge_distillation.py` - 知识蒸馏
-- `llm_service.py` - **LLM服务主入口**（核心文件）
-- `llm_switch_api.py` - LLM切换API
-- `local_quantized_model.py` - 本地量化模型
 - `meta_agent_router.py` - 元智能体路由
-- `model_config.py` - 模型配置
 - `proactive_questioner.py` - 主动提问器
+- `knowledge_distillation.py` - 知识蒸馏
+- `local_quantized_model.py` - 本地量化模型
 - `quarot_loader.py` - QUAROT加载器
-- `README.md` - 模块说明文档
 - `remote_model_client.py` - 远程模型客户端
 - `remote_model_server.py` - 远程模型服务器
+- `__init__.py` - 模块初始化
+- `README.md` - 模块说明文档
 
 **支持的LLM提供商**:
 - Qwen (通义千问)
@@ -423,25 +510,65 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 ### 1️⃣4️⃣ learning/ - RAG记忆系统模块
 
-**功能**: RAG（检索增强生成）、强化学习、记忆管理
+**功能**: RAG（检索增强生成）、FAISS向量检索、记忆管理、混合检索优化
+
+**核心架构**:
+```
+用户数据 → 向量化 → FAISS索引 → 语义检索
+                                    ↓
+                            混合检索（向量+知识图谱）
+                                    ↓
+                            返回相关记忆和知识
+```
 
 **文件列表**:
-- `kg_rag_api.py` - 知识图谱RAG API
+- `production_rag_system.py` - **生产级RAG系统（核心文件）**
+  - 支持多种记忆类型（CONVERSATION, DECISION_LOGIC等）
+  - FAISS向量索引和检索
+  - 记忆重要性评分
+- `unified_hybrid_retrieval.py` - **统一混合检索系统**
+  - 向量检索 + 知识图谱检索
+  - 智能结果融合
+- `concurrent_retrieval_optimizer.py` - **并发检索优化器**
+  - 多查询并行处理
+  - 连接池管理
 - `kg_rag_integration.py` - KG-RAG集成
-- `knowledge_graph_rag.py` - 知识图谱RAG
-- `optimized_reinforcement_learner.py` - 优化强化学习器
-- `production_rag_system.py` - **生产级RAG系统**（核心文件）
-- `rag_memory.py` - RAG记忆
-- `reinforcement_learner.py` - 强化学习器
-- `rl_trainer.py` - RL训练器
+- `kg_rag_api.py` - KG-RAG API接口
+- `neo4j_faiss_sync.py` - Neo4j与FAISS同步
+- `rag_manager.py` - RAG管理器
+- `rag_config.py` - RAG配置
+- `rag_memory.py` - RAG记忆管理
 - `unified_memory_system.py` - 统一记忆系统
 - `unified_rag_system.py` - 统一RAG系统
+- `vector_retrieval_pool.py` - 向量检索连接池
+- `optimized_reinforcement_learner.py` - 优化强化学习器
+- `reinforcement_learner.py` - 强化学习器
+- `rl_trainer.py` - RL训练器
+- `FAISS_SCHEMA.md` - **FAISS架构文档**
+- `CONCURRENT_OPTIMIZATION_GUIDE.md` - 并发优化指南
+- `GPU_OPTIMIZATION_GUIDE.md` - GPU优化指南
+- `HIGH_CONCURRENCY_OPTIMIZATION.md` - 高并发优化指南
+
+**记忆类型（MemoryType）**:
+- `CONVERSATION` - 对话记忆
+- `DECISION_LOGIC` - 决策逻辑画像（塔罗牌游戏收集）
+- `KNOWLEDGE` - 知识记忆
+- `EXPERIENCE` - 经验记忆
+- `INSIGHT` - 洞察记忆
 
 **技术栈**: 
-- 向量数据库（用于语义检索）
-- 强化学习（Q-Learning, Actor-Critic）
+- FAISS（向量检索）
+- Neo4j（知识图谱）
+- 混合检索（向量+图）
+- 并发优化（连接池、批处理）
 
 **API端点**: `/api/kg-rag/*`
+
+**使用场景**:
+- 决策信息收集：检索用户历史决策和偏好
+- 人格分析：检索相关知识和经验
+- 智慧洞察：检索用户数据生成洞察报告
+- 对话系统：检索上下文和历史对话
 
 ---
 
@@ -450,14 +577,22 @@ Layer 3: LLM增强（llm_enhancer.py）
 **功能**: 对话管理、流式聊天、函数调用
 
 **文件列表**:
+- `conversational_ai.py` - **对话AI主类**（核心）
 - `conversation_storage.py` - 对话存储
-- `conversational_ai.py` - 对话AI主类
+- `message_processor.py` - **消息处理器**（核心）
 - `function_calling.py` - 函数调用注册表
 - `simple_streaming.py` - 简单流式聊天
+- `MESSAGE_PROCESSING_README.md` - 消息处理说明文档
 
 **API端点**: 
 - `/api/chat/stream` - 流式聊天
 - `/api/chat/chat` - 完整聊天
+
+**工作流程**:
+1. 用户发送消息 → message_processor处理
+2. conversational_ai调用LLM生成回复
+3. function_calling处理函数调用（如查询知识图谱）
+4. simple_streaming实现流式返回
 
 ---
 
@@ -476,13 +611,19 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 ### 1️⃣7️⃣ data/ - 数据目录
 
-**功能**: 存储静态数据文件
+**功能**: 存储静态数据文件和运行时数据
 
 **子目录**:
 - `education/` - 教育数据（学校真实数据）
   - `schools_real_data.json` - 2,631所高校数据
 - `job_cache/` - 岗位缓存数据（102个JSON文件）
   - 各城市各岗位的真实招聘数据
+  - 包含统计数据（stats_*.json）
+- `decision_sessions/` - 决策会话数据
+  - 存储用户决策信息收集会话
+- `persona_memories/` - 人格记忆数据
+  - 存储7个决策人格的记忆文件
+  - 按人格、决策类型、用户ID组织
 - `scheduler_config.json` - 调度器配置
 
 ---
@@ -491,8 +632,14 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 **文件列表**:
 - `main.py` - **FastAPI应用主入口**（最重要的文件）
+  - 注册所有API路由
+  - 配置CORS和中间件
+  - 启动时初始化各系统
 - `start_server.py` - 服务器启动脚本
-- `startup_manager.py` - 系统启动管理器
+  - 使用uvicorn启动FastAPI应用
+- `startup_manager.py` - **系统启动管理器**
+  - 管理LLM、数据库、RAG等系统的初始化
+  - 按需加载用户系统（知识图谱、RAG）
 - `STARTUP_OPTIMIZATION.md` - 启动优化文档
 - `.env.example` - 环境变量示例
 
@@ -500,73 +647,59 @@ Layer 3: LLM增强（llm_enhancer.py）
 
 ## 🗑️ 已删除的冗余模块
 
-以下模块已被删除，因为它们未被七大功能模块使用或存在冗余：
+以下模块已被删除或整合，因为它们未被七大功能模块使用或存在冗余：
 
 1. **agent/** - 元智能体模块（未使用）
 2. **lora/** - LoRA训练模块（未使用）
 3. **personality/** - 个性测试模块（未使用）
-4. **prediction/** - 预测模块（已清空，功能已迁移到emergence）
+4. **prediction/** - 预测模块（已清空）
 5. **utils/** - 工具类模块（未使用）
+6. **emergence/** - 涌现检测模块（已整合到insights）
+7. **decision_algorithm/** - 决策算法模块（已整合到vertical）
 
-### 已删除的冗余文件（2026-04-18更新）
+### 已删除的冗余文件（2026-04-20更新）
 
-**insights/ 目录（智慧洞察模块清理）：**
-- `decision_insight_types.py` - 决策洞察类型定义（未使用）
-- `impact_chain_analyzer.py` - 影响链分析器（未使用）
-- `ml_models.py` - ML模型（未使用）
-- `openclaw_agents.py` - OpenClaw智能体（未使用）
-- `risk_loop_detector.py` - 风险循环检测器（未使用）
-- `smart_insights_engine.py` - 智能洞察引擎（未使用）
+**insights/ 目录（智慧洞察模块）：**
+- 保留的核心文件：
+  - `collaborative_agents.py` - 协作智能体系统
+  - `multi_agent_system.py` - 多智能体系统
+  - `ml_models.py` - 机器学习模型
+  - `realtime_insight_agents.py` - 实时智慧洞察Agent
+  - `realtime_insight_api.py` - 实时洞察API
+  - 相关文档：README.md, AGENT_MEMORY_ARCHITECTURE.md等
 
-**emergence/ 目录（涌现检测模块清理）：**
-- `conversation_analyzer.py` - 对话分析器（未使用）
-- `emergence_detector.py` - 涌现检测器（未使用）
-- `smart_insight_engine.py` - 智能洞察引擎（未使用）
+**decision/ 目录（决策模块）：**
+- 保留的核心文件（多人格系统）：
+  - `persona_decision_api.py` - 多人格决策API（主要入口）
+  - `decision_personas.py` - 7个决策人格定义
+  - `decision_persona_system.py` - 人格系统管理器
+  - `persona_memory_system.py` - 人格记忆系统
+  - `persona_skills.py` - 人格技能系统
+  - `decision_info_collector.py` - 决策信息收集器
+  - `future_os_api.py` - Future OS API
+  - `prompts/` - Prompt管理目录
+  - 备份文件：`enhanced_decision_api_full_backup.py`
+  - 相关文档：DECISION_PERSONA_ARCHITECTURE.md等
 
-**新增文件（2026-04-18）：**
-- `insights/realtime_insight_agents.py` - 实时智慧洞察Agent系统
-  - RelationshipInsightAgent - 人际关系洞察Agent
-  - EducationInsightAgent - 教育升学洞察Agent
-  - CareerInsightAgent - 职业规划洞察Agent
-- `insights/realtime_insight_api.py` - 实时洞察API接口
-- `insights/REALTIME_AGENTS_README.md` - 实时Agent说明文档
+**knowledge/ 目录（知识星图模块）：**
+- 保留的核心文件：
+  - `information_extractor.py` - 信息提取器
+  - `information_knowledge_graph.py` - 信息知识图谱
+  - `future_os_api.py` - Future OS API
 
-**清理说明**:
-- insights和emergence模块存在大量冗余文件，已清理未使用的文件
-- 保留实际被前端调用的核心文件
-- 新增三个专业领域的实时洞察Agent，通过RAG+Neo4j混合检索生成智慧洞察报告
+**vertical/ 目录（垂直决策模块）：**
+- 完整保留，包含career/, education/, relationship/等子目录
+- 所有文件都在使用中
 
-**decision/ 目录：**
-- `decision_engine.py` - 旧版决策引擎（已废弃）
-- `decision_type_selector.py` - 决策类型选择器（功能已集成）
-- `enhanced_info_collector.py` - 增强信息收集器（未使用）
-- `counterfactual_analyzer.py` - 反事实分析器（未实现）
-- `career_simulation_agents.py` - 职业模拟智能体（未使用）
-- `career_simulation_api.py` - 职业模拟API（未注册）
-- `career_simulation_integration.py` - 职业模拟集成（仅在废弃API中使用）
-- `multi_agent_career_simulator.py` - 多智能体职业模拟器（未使用）
-- `education_api.py` - 教育升学辅助API（未使用）
-- `relationship_api.py` - 人际关系辅助API（未使用）
-- `integrated_decision_engine.py` - 集成决策引擎（仅在废弃API中使用）
-- `real_data_sources.py` - 真实数据源（未使用）
-- `websocket_keepalive.py` - WebSocket保活管理（未使用）
-
-**decision_algorithm/ 目录：**
-- `ml_enhanced_career_model.py` - ML增强职业模型（未使用）
-
-**knowledge/ 目录：**
-- `automated_kg_builder.py` - 自动知识图谱构建器（未集成）
-- `enhanced_neo4j_knowledge_graph.py` - 增强版Neo4j知识图谱（未集成）
-- `personal_knowledge_graph.py` - 个人知识图谱（未集成）
-
-**vertical/relationship/ 目录：**
-- `people_graph_builder.py` - 旧版人物关系图谱构建器（已统一使用neo4j_relationship_kg.py）
-- `relationship_knowledge_graph.py` - 空文件（已删除）
+**learning/ 目录（RAG系统）：**
+- 完整保留，所有文件都在使用中
+- 核心文件：production_rag_system.py, unified_hybrid_retrieval.py等
 
 **说明**: 
-- WebSocket推演是真正的用户流程，decision核心文件只有11个
-- knowledge模块保留3个实际使用的核心文件
-- 三个领域的星图构建已完全统一架构，都使用neo4j_*_kg.py文件，采用相同的代码结构
+- 所有测试文件（test_*.py）已在之前清理
+- 所有辅助脚本（check_*.py, add_*.py等）已在之前清理
+- 当前backend目录只保留实际使用的核心文件
+- 多人格决策系统是当前的主要决策推演方式
 
 ---
 
@@ -585,20 +718,52 @@ main.py (入口)
 ├─ knowledge/ (知识星图)
 │  └─ Neo4j知识图谱
 │
-├─ decision/ (决策副本)
-│  ├─ vertical/ (垂直决策)
-│  └─ decision_algorithm/ (决策算法)
+├─ decision/ (决策副本 - 多人格系统)
+│  ├─ persona_decision_api.py (WebSocket推演)
+│  ├─ decision_personas.py (7个人格)
+│  ├─ persona_memory_system.py (分层记忆)
+│  ├─ persona_skills.py (RAG检索)
+│  └─ decision_info_collector.py (信息收集)
+│       └─ 集成决策逻辑画像
+│
+├─ parallel_life/ (平行人生 - 塔罗牌游戏)
+│  ├─ tarot_game.py (游戏引擎)
+│  └─ decision_logic_analyzer.py (决策逻辑分析)
+│       └─ 存储到FAISS (DECISION_LOGIC类型)
+│
+├─ learning/ (RAG系统 - FAISS向量检索)
+│  ├─ production_rag_system.py (核心)
+│  ├─ unified_hybrid_retrieval.py (混合检索)
+│  └─ concurrent_retrieval_optimizer.py (并发优化)
 │
 ├─ insights/ (智慧洞察)
-│  └─ emergence/ (涌现检测)
+│  ├─ realtime_insight_agents.py (实时Agent)
+│  └─ hybrid_insights_engine.py (三层架构)
 │
-├─ parallel_life/ (平行人生)
+├─ vertical/ (垂直决策)
+│  ├─ career/ (职业)
+│  ├─ education/ (教育)
+│  └─ relationship/ (关系)
+│
 ├─ social/ (社交系统)
 ├─ schedule/ (智能日程)
-│
-├─ learning/ (RAG系统)
 └─ conversation/ (对话系统)
 ```
+
+**关键数据流**:
+1. **塔罗牌 → 决策系统**:
+   - 用户玩塔罗牌 → decision_logic_analyzer → FAISS (DECISION_LOGIC)
+   - 决策推演时 → decision_info_collector → 检索决策逻辑 → 应用到人格分析
+
+2. **多人格决策推演**:
+   - 用户请求 → persona_decision_api (WebSocket)
+   - 7个人格并行分析 → 深度反思 → 综合评分
+   - 支持stop_simulation消息实现暂停功能
+
+3. **混合检索**:
+   - 查询 → unified_hybrid_retrieval
+   - 向量检索 (FAISS) + 图检索 (Neo4j)
+   - 智能融合 → 返回结果
 
 ---
 
@@ -620,13 +785,20 @@ main.py (入口)
 
 ### 核心功能API
 - `/api/ai-core/*` - AI核心（意图识别）
+- `/api/decision/persona/*` - **多人格决策API（主要）**
+  - `POST /start-collection` - 开始信息收集
+  - `POST /continue-collection` - 继续信息收集
+  - `POST /generate-options` - 生成AI推荐选项
+  - `GET /session/{session_id}` - 获取会话信息
+  - `POST /update-outcome` - 更新决策结果
 - `/api/v5/future-os/*` - Future OS统一接口
-- `/api/v5/decision/*` - 决策推演
-- `/api/v5/relationship/*` - 人际关系决策
-- `/api/v5/education/*` - 教育升学决策
-- `/api/insights/*` - 智慧洞察
+- `/api/insights/*` - 智慧洞察（三层架构）
+- `/api/insights/realtime/*` - 实时智慧洞察Agent
+  - `POST /relationship/insight` - 人际关系洞察
+  - `POST /education/insight` - 教育升学洞察
+  - `POST /career/insight` - 职业规划洞察
 - `/api/v1/insights/*` - 涌现检测洞察
-- `/api/v5/parallel-life/*` - 平行人生
+- `/api/v5/parallel-life/*` - 平行人生（塔罗牌游戏）
 - `/api/friends/*` - 好友管理
 - `/api/tree-hole/*` - 树洞世界
 - `/api/schedule/*` - 智能日程
@@ -639,7 +811,15 @@ main.py (入口)
 
 ### WebSocket端点
 - `/ws/chat` - 聊天WebSocket
-- `/ws/decision-simulate` - 决策推演WebSocket
+- `/ws/decision/simulate-option` - **决策推演WebSocket（主要）**
+  - 消息类型：
+    - `start_simulation` - 开始推演
+    - `stop_simulation` - 停止推演（暂停功能）
+    - `persona_status` - 人格状态更新
+    - `persona_analysis` - 人格分析结果
+    - `reflection_complete` - 反思完成
+    - `final_score` - 最终综合评分
+    - `simulation_complete` - 推演完成
 
 ---
 
@@ -648,10 +828,11 @@ main.py (入口)
 - **Web框架**: FastAPI
 - **数据库**: MySQL + Redis
 - **图数据库**: Neo4j
+- **向量数据库**: FAISS（用于RAG语义检索）
 - **LLM**: Qwen, DeepSeek
-- **向量数据库**: 用于RAG
 - **ORM**: SQLAlchemy
 - **异步**: asyncio
+- **WebSocket**: 实时推演和聊天
 
 ---
 
@@ -660,10 +841,83 @@ main.py (入口)
 1. **模块化设计**: 每个功能模块独立，便于维护和扩展
 2. **按需加载**: 知识图谱和RAG系统在用户登录后按需加载，减少启动时间
 3. **真实数据**: 使用真实的学校数据（2,631所）和岗位数据
-4. **三层架构**: insights模块采用规则引擎+ML+LLM的三层混合架构
-5. **多智能体**: decision模块使用多智能体协作进行决策评估
+4. **多人格系统**: decision模块采用7个独特人格并行分析决策
+5. **决策逻辑集成**: 塔罗牌游戏收集的决策逻辑自动应用到决策推演
+6. **混合检索**: 向量检索（FAISS）+ 知识图谱（Neo4j）智能融合
+7. **实时推演**: WebSocket实时流式返回推演结果，支持暂停/继续
+8. **分层记忆**: 人格记忆系统采用短期/长期/核心三层架构
+
+---
+
+## 🎯 核心功能流程
+
+### 决策推演完整流程
+1. 用户进入决策副本 → 对话收集信息
+2. 系统检索用户的决策逻辑画像（来自塔罗牌游戏）
+3. AI生成推荐选项
+4. 用户选择一个选项 → 建立WebSocket连接
+5. 7个人格并行分析（第0轮独立思考）
+6. 深度反思阶段（每个人格查看其他人格观点）
+7. 综合评分 → 实时流式返回结果
+8. 用户可随时暂停/继续推演
+
+### 塔罗牌决策逻辑收集流程
+1. 用户玩塔罗牌游戏 → 在不同场景做选择
+2. decision_logic_analyzer分析选择模式
+3. 存储到FAISS（MemoryType.DECISION_LOGIC）
+4. 生成决策画像（各维度倾向值）
+5. 决策推演时自动检索并应用
 
 ---
 
 **文档维护**: 如有模块变更，请及时更新本文档
+
+**最后更新**: 2026-04-20 - 更新多人格决策系统、塔罗牌集成、FAISS架构
+
+---
+
+## 📊 文件统计
+
+### Python代码文件统计
+- admin: 3个文件
+- ai_core: 3个文件
+- auth: 4个文件
+- conversation: 5个文件
+- database: 8个文件
+- decision: 9个文件（含prompts子目录）
+- insights: 6个文件
+- knowledge: 3个文件
+- learning: 15个文件
+- llm: 19个文件
+- parallel_life: 4个文件
+- schedule: 9个文件
+- social: 10个文件
+- vertical: 26个文件（含子目录）
+- 根目录: 3个文件
+
+**总计**: 127个Python文件
+
+### 文档文件统计
+- 模块说明文档: 20个.md文件
+- Prompt配置文件: 10个.yaml文件
+- 数据库Schema: 1个.cypher文件
+
+### 数据文件统计
+- 教育数据: 1个JSON文件（2,631所高校）
+- 岗位缓存: 102个JSON文件
+- 决策会话: 44个JSON文件
+- 人格记忆: 400+个JSON文件
+
+---
+
+## ✅ 文档完整性检查
+
+本文档已涵盖backend目录下的所有模块和文件：
+- ✅ 15个功能模块全部说明
+- ✅ 127个Python文件全部提及
+- ✅ 20个文档文件全部列出
+- ✅ 所有API端点全部记录
+- ✅ 所有WebSocket端点全部说明
+- ✅ 模块依赖关系完整展示
+- ✅ 核心功能流程详细描述
 
