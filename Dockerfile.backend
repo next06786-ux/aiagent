@@ -4,6 +4,9 @@ FROM python:3.10-slim
 # 设置工作目录
 WORKDIR /app
 
+# 配置Debian阿里云镜像源（加速apt安装）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
 # 安装系统依赖（最小化）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -18,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 # 复制后端代码
 COPY backend/ ./backend/
-COPY .env .env  # 统一使用.env文件
+# COPY .env .env  # .env通过docker-compose的env_file注入，不需要在构建时复制
 
 # 创建必要的目录
 RUN mkdir -p /app/faiss_indexes \
