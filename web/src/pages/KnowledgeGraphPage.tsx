@@ -543,14 +543,35 @@ export default function KnowledgeGraphPage() {
   
   const location = useLocation();
   const { user, isLoading: authLoading } = useAuth();
+  
+  // 从URL查询参数读取配置（优先级高于location.state）
+  const searchParams = new URLSearchParams(location.search);
+  const urlView = searchParams.get('view') as GraphViewMode | null;
+  const urlQuestion = searchParams.get('question');
+  
+  // 兼容location.state方式
   const routeState = (location.state || {}) as { question?: string; view?: GraphViewMode };
+  
+  // URL参数优先，然后是location.state，最后是默认值
+  const initialView = urlView || routeState.view || 'people';
+  const initialQuestion = urlQuestion || routeState.question || '';
+  
+  console.log('[KG] 📝 初始化参数:', {
+    urlView,
+    urlQuestion,
+    routeStateView: routeState.view,
+    routeStateQuestion: routeState.question,
+    finalView: initialView,
+    finalQuestion: initialQuestion,
+  });
 
-  const [viewMode, setViewMode] = useState<GraphViewMode>(routeState.view || 'people');
-  const [question, setQuestion] = useState(routeState.question || '');
+  const [viewMode, setViewMode] = useState<GraphViewMode>(initialView);
+  const [question, setQuestion] = useState(initialQuestion);
   const [graph, setGraph] = useState<KnowledgeGraphView | null>(null);
   const [selectedNode, setSelectedNode] = useState<KnowledgeGraphViewNode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showLegend, setShowLegend] = useState(true);
   
   console.log('[KG] 📊 组件状态初始化完成，时间:', performance.now());
   
@@ -1153,8 +1174,42 @@ export default function KnowledgeGraphPage() {
           )}
         </div>
 
+        {/* 显示图例按钮 - 当图例被关闭时显示 */}
+        {viewMode === 'career' && graph && !showLegend && (
+          <button
+            onClick={() => setShowLegend(true)}
+            style={{
+              position: 'absolute',
+              top: 90,
+              left: 16,
+              background: 'rgba(6,13,26,0.92)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(99,179,237,0.3)',
+              borderRadius: 12,
+              padding: '10px 16px',
+              color: 'rgba(147,197,253,0.9)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              zIndex: 10,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(99,179,237,0.15)';
+              e.currentTarget.style.borderColor = 'rgba(99,179,237,0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(6,13,26,0.92)';
+              e.currentTarget.style.borderColor = 'rgba(99,179,237,0.3)';
+            }}
+          >
+            显示图例
+          </button>
+        )}
+
         {/* 左侧图例面板 - 仅在职业发展视图显示 */}
-        {viewMode === 'career' && graph && (
+        {viewMode === 'career' && graph && showLegend && (
           <div style={{
             position: 'absolute', top: 90, left: 16, width: 280,
             maxHeight: 'calc(100vh - 140px)', overflowY: 'auto',
@@ -1163,8 +1218,33 @@ export default function KnowledgeGraphPage() {
             padding: 20, zIndex: 10,
             boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
           }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#e8f0fe', marginBottom: 16 }}>
-              图例说明
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#e8f0fe' }}>
+                图例说明
+              </div>
+              <button
+                onClick={() => setShowLegend(false)}
+                style={{
+                  background: 'rgba(99,179,237,0.1)',
+                  border: '1px solid rgba(99,179,237,0.3)',
+                  borderRadius: 8,
+                  padding: '4px 8px',
+                  color: 'rgba(147,197,253,0.8)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(99,179,237,0.2)';
+                  e.currentTarget.style.borderColor = 'rgba(99,179,237,0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(99,179,237,0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(99,179,237,0.3)';
+                }}
+              >
+                关闭
+              </button>
             </div>
 
             {/* 节点类型 */}
