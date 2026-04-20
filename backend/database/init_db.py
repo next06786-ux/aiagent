@@ -298,12 +298,17 @@ class DatabaseInitializer:
 def main():
     """主函数"""
     import sys
+    import os
+    from dotenv import load_dotenv
     
-    # 从命令行参数获取配置
-    host = sys.argv[1] if len(sys.argv) > 1 else 'localhost'
-    user = sys.argv[2] if len(sys.argv) > 2 else 'lifeswarm'
-    password = sys.argv[3] if len(sys.argv) > 3 else 'lifeswarm123'
-    database = sys.argv[4] if len(sys.argv) > 4 else 'lifeswarm'
+    # 加载环境变量
+    load_dotenv()
+    
+    # 优先从环境变量读取，其次命令行参数，最后默认值
+    host = os.getenv('MYSQL_HOST') or (sys.argv[1] if len(sys.argv) > 1 else 'localhost')
+    user = os.getenv('MYSQL_USER') or (sys.argv[2] if len(sys.argv) > 2 else 'lifeswarm')
+    password = os.getenv('MYSQL_PASSWORD') or (sys.argv[3] if len(sys.argv) > 3 else 'lifeswarm123')
+    database = os.getenv('MYSQL_DATABASE') or (sys.argv[4] if len(sys.argv) > 4 else 'lifeswarm')
     
     logger.info(f"Initializing database: {database} on {host}")
     
