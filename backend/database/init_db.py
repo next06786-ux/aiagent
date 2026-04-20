@@ -67,6 +67,7 @@ class DatabaseInitializer:
             user_id VARCHAR(255) UNIQUE NOT NULL,
             username VARCHAR(255),
             email VARCHAR(255),
+            password_hash VARCHAR(255),
             phone VARCHAR(20),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
