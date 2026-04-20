@@ -85,9 +85,10 @@ class UnifiedKGQuery:
             // 查询来源信息（信息溯源关系）
             OPTIONAL MATCH (e)-[:EXTRACTED_FROM]->(s:Source)
             
-            // 查询实体间关系
-            OPTIONAL MATCH (e)-[er]->(related:Entity)
+            // 查询实体间关系（包括Entity和Concept）
+            OPTIONAL MATCH (e)-[er]->(related)
             WHERE type(er) IN ['PART_OF', 'REQUIRES', 'LOCATED_IN', 'RELATED_TO']
+                AND (related:Entity OR related:Concept)
             
             RETURN e,
                    type(ur) as user_relation_type,
@@ -109,7 +110,12 @@ class UnifiedKGQuery:
                 }
                 entity_data['sources'] = [dict(s) for s in record['sources'] if s]
                 entity_data['entity_relations'] = [
-                    r for r in record['entity_relations'] 
+                    {
+                        'relation': r['relation'],
+                        'target': dict(r['target']) if r['target'] else None,
+                        'props': r['props']
+                    }
+                    for r in record['entity_relations'] 
                     if r['relation'] and r['target']
                 ]
                 entities.append(entity_data)
