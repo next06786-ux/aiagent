@@ -10,7 +10,6 @@ import sys
 import os
 from datetime import datetime, timedelta
 import random
-import hashlib
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -19,11 +18,13 @@ from backend.database.db_manager import db_manager
 from backend.knowledge.information_knowledge_graph import InformationKnowledgeGraph
 from backend.learning.production_rag_system import ProductionRAGSystem, MemoryType
 from backend.conversation.conversation_storage import ConversationStorage
+from backend.auth.auth_service import get_auth_service
 
 
 def hash_password(password: str) -> str:
-    """生成密码哈希（简单的SHA256，实际应用应使用bcrypt）"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """生成密码哈希（使用bcrypt）"""
+    auth_service = get_auth_service()
+    return auth_service.hash_password(password)
 
 
 # ==================== 测试数据模板 ====================
@@ -206,6 +207,9 @@ def init_knowledge_graph():
         try:
             kg = InformationKnowledgeGraph(user_id)
             
+            # 确保User节点存在
+            kg.ensure_user_exists()
+            
             # 创建人物关系
             print(f"  创建人物关系...")
             for person in RELATIONSHIPS:
@@ -215,7 +219,7 @@ def init_knowledge_graph():
                     category=person["category"],
                     confidence=0.9,
                     attributes={
-                        "entity_type": person["type"],
+                        "type": person["type"],  # 实体类型（Person）
                         **person["attributes"]
                     }
                 )
@@ -242,7 +246,7 @@ def init_knowledge_graph():
                     category="education",
                     confidence=1.0,
                     attributes={
-                        "entity_type": "School",
+                        "type": "School",  # 实体类型（School）
                         "degree": edu["degree"],
                         "major": edu["major"],
                         "start_year": edu["start_year"],
