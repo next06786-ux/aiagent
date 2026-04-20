@@ -28,7 +28,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   /**
-   * 
+   * 检查登录状态并加载对应页面
    */
   private async checkFirstLaunchAndLoadPage(windowStage: window.WindowStage): Promise<void> {
     try {
@@ -36,25 +36,15 @@ export default class EntryAbility extends UIAbility {
       const authPrefs = await preferences.getPreferences(this.context, 'lifeswarm_auth');
       const token = await authPrefs.get('token', '') as string;
       
-      let targetPage = 'pages/Login'; // 默认进入登录页
+      let targetPage = 'pages/AuthPage'; // 默认进入认证页
       
       if (token) {
-        // 已登录，检查是否首次启动
-        const prefs = await preferences.getPreferences(this.context, 'lifeswarm_config');
-        const firstLaunch = await prefs.get('first_launch', true);
-        
-        if (!firstLaunch) {
-          // 非首次启动，直接进入主页
-          targetPage = 'pages/AgentHome';
-          hilog.info(0x0000, 'VisionAgent', 'User logged in, loading AgentHome');
-        } else {
-          // 首次启动，进入欢迎页
-          targetPage = 'pages/Welcome';
-          hilog.info(0x0000, 'VisionAgent', 'First launch with login, loading Welcome page');
-        }
+        // 已登录，进入主页
+        targetPage = 'pages/HomePage';
+        hilog.info(0x0000, 'VisionAgent', 'User logged in, loading HomePage');
       } else {
-        // 未登录，进入登录页
-        hilog.info(0x0000, 'VisionAgent', 'User not logged in, loading Login page');
+        // 未登录，进入认证页
+        hilog.info(0x0000, 'VisionAgent', 'User not logged in, loading AuthPage');
       }
       
       windowStage.loadContent(targetPage, (err: BusinessError) => {
@@ -68,12 +58,12 @@ export default class EntryAbility extends UIAbility {
       
     } catch (error) {
       const err = error as BusinessError;
-      hilog.error(0x0000, 'VisionAgent', `Check first launch failed: ${err.message}`);
+      hilog.error(0x0000, 'VisionAgent', `Check login status failed: ${err.message}`);
       
-      // 出错时默认进入登录页
-      windowStage.loadContent('pages/Login', (err: BusinessError) => {
+      // 出错时默认进入认证页
+      windowStage.loadContent('pages/AuthPage', (err: BusinessError) => {
         if (err.code) {
-          hilog.error(0x0000, 'VisionAgent', 'Failed to load Login page. Cause: %{public}s', 
+          hilog.error(0x0000, 'VisionAgent', 'Failed to load AuthPage. Cause: %{public}s', 
             JSON.stringify(err) ?? '');
         }
       });

@@ -952,3 +952,19 @@ docker compose build backend
 docker compose up -d backend
 sleep 10
 docker exec -it lifeswarm-backend python backend/init_test_data.py
+
+
+
+
+git pull origin main
+
+# 2. 清空Neo4j数据（重新初始化）
+docker exec -it lifeswarm-neo4j cypher-shell -u neo4j -p neo4j_secure_password_2024 "MATCH (n {user_id: 'test_user_001'}) DETACH DELETE n;"
+docker exec -it lifeswarm-neo4j cypher-shell -u neo4j -p neo4j_secure_password_2024 "MATCH (n {user_id: 'test_user_002'}) DETACH DELETE n;"
+docker exec -it lifeswarm-neo4j cypher-shell -u neo4j -p neo4j_secure_password_2024 "MATCH (n {user_id: 'test_user_003'}) DETACH DELETE n;"
+
+# 3. 重新初始化测试数据
+docker exec -it lifeswarm-backend python backend/init_test_data.py
+
+# 4. 验证数据
+docker exec -it lifeswarm-backend python backend/verify_career_data.py

@@ -1,5 +1,6 @@
 /**
- * 社交页面 - 好友和树洞
+ * 好友页面 - 对标Web端FriendsPage
+ * 包含好友列表和树洞入口
  */
 import router from '@ohos.router';
 import { SocialService } from '../services/SocialService';
@@ -10,7 +11,7 @@ import { ErrorToast } from '../components/common/ErrorToast';
 
 @Entry
 @Component
-struct SocialPage {
+struct FriendsPage {
   @State selectedTab: number = 0;
   @State friends: Friend[] = [];
   @State posts: Post[] = [];
@@ -20,7 +21,7 @@ struct SocialPage {
   @State showPostDialog: boolean = false;
   @State newPostContent: string = '';
 
-  private tabs: string[] = ['好友', '树洞'];
+  private tabs: string[] = ['好友列表', '好友请求', '添加好友'];
 
   aboutToAppear() {
     this.loadData();
@@ -64,26 +65,13 @@ struct SocialPage {
               router.back();
             })
 
-          Text('社交')
+          Text('好友')
             .fontSize(20)
             .fontWeight(FontWeight.Bold)
             .fontColor(Color.White)
             .margin({ left: 16 })
 
           Blank()
-
-          if (this.selectedTab === 1) {
-            Text('+')
-              .width(24)
-              .height(24)
-              .fontSize(28)
-              .fontColor('#fff')
-              .fontWeight(FontWeight.Bold)
-              .textAlign(TextAlign.Center)
-              .onClick(() => {
-                this.showPostDialog = true;
-              })
-          }
         }
         .width('100%')
         .height(56)
@@ -118,14 +106,19 @@ struct SocialPage {
         .width('100%')
         .backgroundColor(Color.White)
 
+        // 树洞入口卡片（对标Web端）
+        this.TreeHoleEntryCard()
+
         // 内容区域
         if (this.isLoading) {
           LoadingSpinner()
         } else {
           if (this.selectedTab === 0) {
             this.FriendsList()
+          } else if (this.selectedTab === 1) {
+            this.FriendRequestsList()
           } else {
-            this.TreeHoleList()
+            this.AddFriendView()
           }
         }
 
@@ -141,15 +134,55 @@ struct SocialPage {
       }
       .width('100%')
       .height('100%')
-
-      // 发帖对话框
-      if (this.showPostDialog) {
-        this.PostDialog()
-      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor('#F5F5F5')
+  }
+
+  @Builder
+  TreeHoleEntryCard() {
+    // 树洞入口卡片（对标Web端）
+    Column() {
+      Row() {
+        // 树洞图标
+        Text('🌳')
+          .width(48)
+          .height(48)
+          .fontSize(32)
+          .textAlign(TextAlign.Center)
+          .margin({ right: 16 })
+
+        // 内容
+        Column() {
+          Text('树洞世界')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#1A1A1A')
+            .margin({ bottom: 4 })
+
+          Text('匿名分享你的心情、秘密和梦想')
+            .fontSize(14)
+            .fontColor('#666666')
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+
+        // 箭头
+        Text('→')
+          .fontSize(24)
+          .fontColor(AppConstants.COLORS.PRIMARY)
+      }
+      .width('100%')
+      .padding(20)
+      .backgroundColor(Color.White)
+      .borderRadius(16)
+      .onClick(() => {
+        router.pushUrl({ url: 'pages/TreeHolePage' });
+      })
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, bottom: 12 })
   }
 
   @Builder
@@ -210,6 +243,56 @@ struct SocialPage {
     .padding(16)
     .backgroundColor(Color.White)
     .borderRadius(12)
+  }
+
+  @Builder
+  FriendRequestsList() {
+    // 好友请求列表
+    List({ space: 12 }) {
+      ListItem() {
+        Column() {
+          Text('暂无好友请求')
+            .fontSize(14)
+            .fontColor('#999999')
+            .textAlign(TextAlign.Center)
+        }
+        .width('100%')
+        .padding(40)
+      }
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .padding(16)
+  }
+
+  @Builder
+  AddFriendView() {
+    // 添加好友视图
+    Column() {
+      Text('搜索用户')
+        .fontSize(16)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#333333')
+        .margin({ bottom: 16 })
+
+      TextInput({ placeholder: '输入用户名搜索...' })
+        .width('100%')
+        .height(48)
+        .fontSize(15)
+        .backgroundColor('#F5F5F5')
+        .borderRadius(12)
+        .margin({ bottom: 16 })
+
+      Button('搜索')
+        .width('100%')
+        .height(48)
+        .fontSize(16)
+        .fontColor(Color.White)
+        .backgroundColor(AppConstants.COLORS.PRIMARY)
+        .borderRadius(12)
+    }
+    .width('100%')
+    .padding(16)
   }
 
   @Builder
@@ -275,91 +358,6 @@ struct SocialPage {
     .onClick(() => {
       // 跳转到帖子详情
     })
-  }
-
-  @Builder
-  PostDialog() {
-    Column() {
-      // 遮罩
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#00000080')
-        .onClick(() => {
-          this.showPostDialog = false;
-        })
-
-      // 对话框
-      Column() {
-        Text('发布树洞')
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#333333')
-          .margin({ bottom: 16 })
-
-        TextArea({ placeholder: '说说你的想法...' })
-          .width('100%')
-          .height(150)
-          .fontSize(15)
-          .backgroundColor('#F5F5F5')
-          .borderRadius(8)
-          .onChange((value: string) => {
-            this.newPostContent = value;
-          })
-          .margin({ bottom: 16 })
-
-        Row({ space: 12 }) {
-          Button('取消')
-            .fontSize(16)
-            .fontColor('#666666')
-            .backgroundColor('#F5F5F5')
-            .borderRadius(8)
-            .layoutWeight(1)
-            .onClick(() => {
-              this.showPostDialog = false;
-              this.newPostContent = '';
-            })
-
-          Button('发布')
-            .fontSize(16)
-            .fontColor(Color.White)
-            .backgroundColor(AppConstants.COLORS.PRIMARY)
-            .borderRadius(8)
-            .layoutWeight(1)
-            .enabled(this.newPostContent.trim().length > 0)
-            .onClick(() => {
-              this.publishPost();
-            })
-        }
-        .width('100%')
-      }
-      .width('90%')
-      .padding(20)
-      .backgroundColor(Color.White)
-      .borderRadius(16)
-      .position({ x: '5%', y: '30%' })
-    }
-    .width('100%')
-    .height('100%')
-    .position({ x: 0, y: 0 })
-  }
-
-  private async publishPost() {
-    this.isLoading = true;
-    this.errorMessage = '';
-
-    try {
-      const socialService = new SocialService();
-      await socialService.createTreeHolePost(this.newPostContent);
-      this.showPostDialog = false;
-      this.newPostContent = '';
-      await this.loadData();
-    } catch (error) {
-      this.errorMessage = (error as Error).message || '发布失败';
-      this.showError = true;
-    } finally {
-      this.isLoading = false;
-    }
   }
 
   private formatDate(timestamp: number): string {
