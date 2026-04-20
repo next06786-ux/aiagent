@@ -32,9 +32,6 @@ docker-compose --version
 ### 2. 配置环境变量
 
 ```bash
-# 复制环境变量模板
-cp .env.production .env
-
 # 编辑环境变量（填写实际的密码和API密钥）
 nano .env
 ```

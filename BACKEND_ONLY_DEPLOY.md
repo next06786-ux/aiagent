@@ -19,7 +19,6 @@ ssh root@152.136.13.236
 cd /root/lifeswarm
 
 # 4. 配置环境变量
-cp .env.production .env
 nano .env
 # 修改: MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD, NEO4J_PASSWORD, QWEN_API_KEY
 

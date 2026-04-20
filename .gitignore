@@ -15,8 +15,8 @@ npm-debug.log*
 yarn-debug.log*
 .pnpm-debug.log*
 
-# 环境变量（敏感信息）
-.env
+# 环境变量（个人项目，.env可以提交）
+# .env  # 注释掉，允许提交
 .env.local
 .env.*.local
 
