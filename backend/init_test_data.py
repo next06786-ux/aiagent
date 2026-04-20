@@ -517,6 +517,7 @@ def init_knowledge_graph():
                     category="skill",
                     confidence=0.9,
                     attributes={
+                        "type": "Skill",  # 重要：设置type为Skill，用于查询
                         "concept_type": "Skill",
                         "level": skill["level"],
                         "years": skill["years"],
