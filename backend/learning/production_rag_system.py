@@ -325,6 +325,16 @@ class ProductionRAGSystem:
         
         return results
     
+    def retrieve_memories(
+        self,
+        query: str,
+        memory_types: Optional[List[MemoryType]] = None,
+        top_k: int = 10,
+        min_importance: float = 0.0
+    ) -> List[UnifiedMemory]:
+        """检索记忆（search方法的别名，保持API兼容性）"""
+        return self.search(query, memory_types, top_k, min_importance)
+    
     def batch_add_memories(
         self,
         memories_data: List[Dict[str, Any]]
