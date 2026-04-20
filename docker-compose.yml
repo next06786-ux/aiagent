@@ -96,6 +96,7 @@ services:
       
       # LLM配置
       LLM_PROVIDER: ${LLM_PROVIDER}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       QWEN_API_KEY: ${QWEN_API_KEY}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       
