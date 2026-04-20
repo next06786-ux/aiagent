@@ -26,7 +26,10 @@ RUN pip install --no-cache-dir -r requirements.txt \
     --retries 5
 
 # 【最后复制代码】代码变化不会触发依赖重装
+# 先复制除了__pycache__之外的所有文件
 COPY backend/ ./backend/
+# 删除可能存在的缓存文件
+RUN find /app/backend -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # 创建必要的目录
 RUN mkdir -p /app/faiss_indexes \
