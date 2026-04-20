@@ -146,13 +146,48 @@ RELATIONSHIPS = [
     {"name": "杨学长", "type": "Person", "category": "colleagues", "relation": "技术交流", "attributes": {"company": "微软", "team": "Azure"}},
 ]
 
-# 教育经历（扩充）
-EDUCATION_HISTORY = [
-    {"school": "清华大学", "degree": "本科", "major": "计算机科学与技术", "start_year": 2020, "end_year": 2024, "gpa": 3.8},
-    {"school": "北京四中", "degree": "高中", "major": "理科实验班", "start_year": 2017, "end_year": 2020, "score": 680},
-    {"school": "海淀实验小学", "degree": "小学", "major": "全科", "start_year": 2011, "end_year": 2017, "score": 95},
-    {"school": "斯坦福大学", "degree": "交换生", "major": "人工智能", "start_year": 2023, "end_year": 2023, "gpa": 4.0},
-    {"school": "MIT", "degree": "暑期课程", "major": "深度学习", "start_year": 2022, "end_year": 2022, "gpa": 3.9},
+# 教育经历（当前学校 - 不会显示在教育升学视图中）
+CURRENT_EDUCATION = [
+    {"school": "清华大学", "degree": "本科", "major": "计算机科学与技术", "start_year": 2020, "end_year": 2024, "gpa": 3.8, "is_current": True},
+]
+
+# 目标院校（会显示在教育升学视图中）
+TARGET_SCHOOLS = [
+    # 国内顶尖院校 (10所)
+    {"school": "北京大学", "degree": "硕士", "major": "人工智能", "tier": "985", "ranking": 2, "location": "北京", "interest_level": 0.95},
+    {"school": "上海交通大学", "degree": "硕士", "major": "计算机科学", "tier": "985", "ranking": 3, "location": "上海", "interest_level": 0.9},
+    {"school": "浙江大学", "degree": "硕士", "major": "软件工程", "tier": "985", "ranking": 4, "location": "杭州", "interest_level": 0.9},
+    {"school": "复旦大学", "degree": "硕士", "major": "数据科学", "tier": "985", "ranking": 5, "location": "上海", "interest_level": 0.85},
+    {"school": "中国科学技术大学", "degree": "硕士", "major": "人工智能", "tier": "985", "ranking": 6, "location": "合肥", "interest_level": 0.85},
+    {"school": "南京大学", "degree": "硕士", "major": "计算机科学", "tier": "985", "ranking": 7, "location": "南京", "interest_level": 0.8},
+    {"school": "哈尔滨工业大学", "degree": "硕士", "major": "计算机科学", "tier": "985", "ranking": 8, "location": "哈尔滨", "interest_level": 0.75},
+    {"school": "西安交通大学", "degree": "硕士", "major": "软件工程", "tier": "985", "ranking": 9, "location": "西安", "interest_level": 0.75},
+    {"school": "北京航空航天大学", "degree": "硕士", "major": "计算机科学", "tier": "985", "ranking": 10, "location": "北京", "interest_level": 0.8},
+    {"school": "同济大学", "degree": "硕士", "major": "软件工程", "tier": "985", "ranking": 11, "location": "上海", "interest_level": 0.7},
+    
+    # 美国顶尖院校 (15所)
+    {"school": "Stanford University", "degree": "master", "major": "Computer Science", "tier": "top10", "ranking": 1, "location": "美国", "interest_level": 0.95},
+    {"school": "MIT", "degree": "master", "major": "Artificial Intelligence", "tier": "top10", "ranking": 2, "location": "美国", "interest_level": 0.95},
+    {"school": "Carnegie Mellon University", "degree": "master", "major": "Machine Learning", "tier": "top10", "ranking": 3, "location": "美国", "interest_level": 0.9},
+    {"school": "UC Berkeley", "degree": "master", "major": "Computer Science", "tier": "top10", "ranking": 4, "location": "美国", "interest_level": 0.9},
+    {"school": "Harvard University", "degree": "master", "major": "Data Science", "tier": "top10", "ranking": 5, "location": "美国", "interest_level": 0.85},
+    {"school": "Princeton University", "degree": "master", "major": "Computer Science", "tier": "top10", "ranking": 6, "location": "美国", "interest_level": 0.85},
+    {"school": "Cornell University", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 7, "location": "美国", "interest_level": 0.8},
+    {"school": "Columbia University", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 8, "location": "美国", "interest_level": 0.8},
+    {"school": "University of Washington", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 9, "location": "美国", "interest_level": 0.75},
+    {"school": "Georgia Tech", "degree": "master", "major": "Machine Learning", "tier": "top20", "ranking": 10, "location": "美国", "interest_level": 0.75},
+    {"school": "UIUC", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 11, "location": "美国", "interest_level": 0.7},
+    {"school": "University of Michigan", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 12, "location": "美国", "interest_level": 0.7},
+    {"school": "UT Austin", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 13, "location": "美国", "interest_level": 0.65},
+    {"school": "UCLA", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 14, "location": "美国", "interest_level": 0.65},
+    {"school": "UCSD", "degree": "master", "major": "Computer Science", "tier": "top30", "ranking": 15, "location": "美国", "interest_level": 0.6},
+    
+    # 欧洲顶尖院校 (5所)
+    {"school": "ETH Zurich", "degree": "master", "major": "Computer Science", "tier": "top10", "ranking": 1, "location": "瑞士", "interest_level": 0.85},
+    {"school": "University of Cambridge", "degree": "master", "major": "Computer Science", "tier": "top10", "ranking": 2, "location": "英国", "interest_level": 0.85},
+    {"school": "University of Oxford", "degree": "master", "major": "Computer Science", "tier": "top10", "ranking": 3, "location": "英国", "interest_level": 0.8},
+    {"school": "Imperial College London", "degree": "master", "major": "Artificial Intelligence", "tier": "top20", "ranking": 4, "location": "英国", "interest_level": 0.75},
+    {"school": "EPFL", "degree": "master", "major": "Computer Science", "tier": "top20", "ranking": 5, "location": "瑞士", "interest_level": 0.7},
 ]
 
 # 技能数据（大幅扩充）
@@ -417,30 +452,52 @@ def init_knowledge_graph():
             
             # 创建教育经历
             print(f"  创建教育经历...")
-            for edu in EDUCATION_HISTORY:
+            
+            # 1. 创建当前学校（不会显示在教育升学视图中）
+            for edu in CURRENT_EDUCATION:
                 kg.add_information(
                     name=edu["school"],
                     info_type="entity",
                     category="education",
                     confidence=1.0,
                     attributes={
-                        "type": "School",  # 实体类型（School）
+                        "type": "School",
                         "degree": edu["degree"],
                         "major": edu["major"],
                         "start_year": edu["start_year"],
                         "end_year": edu["end_year"],
-                        "gpa": edu.get("gpa", 0)
+                        "gpa": edu.get("gpa", 0),
+                        "is_current": True
+                    }
+                )
+                total_nodes += 1
+            
+            # 2. 创建目标院校（会显示在教育升学视图中）
+            for school in TARGET_SCHOOLS:
+                kg.add_information(
+                    name=school["school"],
+                    info_type="entity",
+                    category="education",
+                    confidence=0.95,
+                    attributes={
+                        "type": "School",
+                        "degree": school["degree"],
+                        "major": school["major"],
+                        "tier": school["tier"],
+                        "ranking": school["ranking"],
+                        "location": school["location"]
                     }
                 )
                 
                 # 添加User到School的INTERESTED_IN关系
                 kg.add_user_relationship(
-                    target_name=edu["school"],
+                    target_name=school["school"],
                     relation_type="INTERESTED_IN",
                     properties={
-                        "interest_level": 0.8,
-                        "degree": edu["degree"],
-                        "major": edu["major"]
+                        "interest_level": school["interest_level"],
+                        "degree": school["degree"],
+                        "major": school["major"],
+                        "status": "considering"  # considering/applied/admitted
                     }
                 )
                 total_nodes += 1
@@ -473,10 +530,32 @@ def init_knowledge_graph():
                 total_nodes += 1
                 total_relations += 1
             
-            # 创建职业目标（Job实体）
+            # 创建职业目标（Job实体 + Company实体 + 关系链）
             print(f"  创建职业目标...")
+            
+            # 先创建公司实体（去重）
+            companies_created = set()
             for goal in CAREER_GOALS:
-                # 创建Job实体（而不是career_goal概念）
+                company_name = goal["company"]
+                if company_name not in companies_created:
+                    kg.add_information(
+                        name=company_name,
+                        info_type="entity",
+                        category="company",
+                        confidence=0.95,
+                        attributes={
+                            "type": "Organization",  # 实体类型（Organization）
+                            "industry": "tech",
+                            "location": goal.get("location", "未知"),
+                            "size": "large" if company_name in ["Google", "Meta", "Microsoft", "Amazon", "Apple", "字节跳动", "腾讯", "阿里巴巴", "百度"] else "medium"
+                        }
+                    )
+                    companies_created.add(company_name)
+                    total_nodes += 1
+            
+            # 创建Job实体并建立关系链
+            for goal in CAREER_GOALS:
+                # 1. 创建Job实体
                 kg.add_information(
                     name=goal["position"],
                     info_type="entity",
@@ -487,11 +566,14 @@ def init_knowledge_graph():
                         "position": goal["position"],
                         "company": goal["company"],
                         "priority": goal["priority"],
-                        "timeline": goal["timeline"]
+                        "timeline": goal["timeline"],
+                        "salary": goal.get("salary", "面议"),
+                        "location": goal.get("location", "未知")
                     }
                 )
+                total_nodes += 1
                 
-                # 添加User到Job的INTERESTED_IN关系
+                # 2. User → Job (INTERESTED_IN)
                 kg.add_user_relationship(
                     target_name=goal["position"],
                     relation_type="INTERESTED_IN",
@@ -501,8 +583,54 @@ def init_knowledge_graph():
                         "company": goal["company"]
                     }
                 )
-                total_nodes += 1
                 total_relations += 1
+                
+                # 3. Job → Company (PART_OF)
+                kg.add_information_relationship(
+                    source_name=goal["position"],
+                    target_name=goal["company"],
+                    relation_type="PART_OF",
+                    properties={
+                        "role": "position",
+                        "department": "技术部"
+                    }
+                )
+                total_relations += 1
+                
+                # 4. Job → Skills (REQUIRES) - 为每个岗位关联相关技能
+                # 根据岗位类型匹配技能
+                required_skills = []
+                position_lower = goal["position"].lower()
+                
+                if "算法" in position_lower or "ml" in position_lower or "ai" in position_lower:
+                    required_skills = ["Python", "机器学习", "深度学习", "PyTorch", "TensorFlow"]
+                elif "后端" in position_lower or "backend" in position_lower:
+                    required_skills = ["Python", "Java", "MySQL", "Redis", "Docker"]
+                elif "全栈" in position_lower or "full stack" in position_lower:
+                    required_skills = ["Python", "JavaScript", "React", "MySQL", "Docker"]
+                elif "数据" in position_lower or "data" in position_lower:
+                    required_skills = ["Python", "SQL", "机器学习", "数据分析"]
+                elif "nlp" in position_lower or "自然语言" in position_lower:
+                    required_skills = ["Python", "深度学习", "自然语言处理", "Transformers"]
+                elif "视觉" in position_lower or "cv" in position_lower or "computer vision" in position_lower:
+                    required_skills = ["Python", "深度学习", "计算机视觉", "OpenCV", "PyTorch"]
+                else:
+                    # 默认技能
+                    required_skills = ["Python", "算法设计", "系统设计"]
+                
+                # 创建 Job → Skill (REQUIRES) 关系
+                for skill_name in required_skills:
+                    if skill_name in [s["name"] for s in SKILLS]:  # 确保技能存在
+                        kg.add_information_relationship(
+                            source_name=goal["position"],
+                            target_name=skill_name,
+                            relation_type="REQUIRES",
+                            properties={
+                                "importance": 0.9,
+                                "level": "高级" if skill_name in ["机器学习", "深度学习", "系统设计"] else "熟练"
+                            }
+                        )
+                        total_relations += 1
             
             kg.close()
             print(f"  ✓ 完成用户 {user['username']} 的知识图谱")
