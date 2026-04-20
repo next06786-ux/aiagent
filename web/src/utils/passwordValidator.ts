@@ -91,11 +91,19 @@ export function validateUsername(username: string): {
   if (username.length < 3) {
     return { valid: false, message: '用户名至少3个字符' };
   }
-  if (username.length > 20) {
-    return { valid: false, message: '用户名最多20个字符' };
+  if (username.length > 50) {
+    return { valid: false, message: '用户名最多50个字符' };
   }
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    return { valid: false, message: '用户名只能包含字母、数字和下划线' };
+  
+  // 支持邮箱格式登录
+  if (username.includes('@')) {
+    if (!validateEmail(username)) {
+      return { valid: false, message: '邮箱格式不正确' };
+    }
+    return { valid: true };
   }
+  
+  // 支持中文、字母、数字和下划线
+  // 移除了严格的字母数字下划线限制，允许中文等字符
   return { valid: true };
 }
