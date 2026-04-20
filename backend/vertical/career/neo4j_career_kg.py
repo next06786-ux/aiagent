@@ -661,19 +661,21 @@ class Neo4jCareerKnowledgeGraph:
                 }
             })
             
-            # User-INTERESTED_IN->Job关系
-            job_edges.append({
-                "source": "__me__",
-                "target": job_id,
-                "type": user_relation.get('type', 'INTERESTED_IN'),
-                "strength": interest_level,
-                "metadata": {
-                    "relationship_category": "user_related",
-                    "interest_level": interest_level
-                }
-            })
+            # 注释掉 User-INTERESTED_IN->Job 直接关系
+            # 让用户通过技能间接连接到岗位，形成：我→技能→岗位→公司
+            # job_edges.append({
+            #     "source": "__me__",
+            #     "target": job_id,
+            #     "type": user_relation.get('type', 'INTERESTED_IN'),
+            #     "strength": interest_level,
+            #     "metadata": {
+            #         "relationship_category": "user_related",
+            #         "interest_level": interest_level
+            #     }
+            # })
             
             # Job-REQUIRES->Skill关系（从entity_relations中提取）
+            # 注意：在可视化中反向显示为 Skill->Job，形成 我→技能→岗位 的路径
             for rel in job.get('entity_relations', []):
                 if rel.get('relation') == 'REQUIRES':
                     target_skill = rel.get('target', {})
@@ -682,6 +684,7 @@ class Neo4jCareerKnowledgeGraph:
                         skill_id = f"skill_{skill_name}"
                         # 检查技能节点是否存在
                         if any(s['id'] == skill_id for s in skill_nodes):
+                            # 反向边：Skill -> Job（可视化为"技能适用于岗位"）
                             job_edges.append({
                                 "source": skill_id,
                                 "target": job_id,
