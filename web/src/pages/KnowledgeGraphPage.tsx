@@ -573,6 +573,44 @@ export default function KnowledgeGraphPage() {
   const [error, setError] = useState('');
   const [showLegend, setShowLegend] = useState(true);
   
+  // 处理URL中的token参数（用于Android WebView直接访问）
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    const userIdFromUrl = urlParams.get('user_id');
+    
+    if (tokenFromUrl && userIdFromUrl) {
+      const STORAGE_KEY = 'choicerealm.web.auth';
+      const existingAuth = localStorage.getItem(STORAGE_KEY);
+      
+      // 如果没有已存储的认证信息，或者token不同，则更新
+      if (!existingAuth || !existingAuth.includes(tokenFromUrl)) {
+        console.log('[KG] 🔑 从URL设置token和用户信息');
+        
+        // 构造认证信息（简化版，只包含必要字段）
+        const authData = {
+          token: tokenFromUrl,
+          user: {
+            user_id: userIdFromUrl,
+            username: 'webview_user',
+            email: '',
+            nickname: 'WebView用户',
+            avatar_url: '',
+            is_verified: true,
+          }
+        };
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(authData));
+        
+        // 移除URL中的token参数并刷新页面
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('token');
+        newUrl.searchParams.delete('user_id');
+        window.location.href = newUrl.toString();
+      }
+    }
+  }, []);
+  
   console.log('[KG] 📊 组件状态初始化完成，时间:', performance.now());
   
   // 视图切换处理函数 - 立即清空图谱和场景
