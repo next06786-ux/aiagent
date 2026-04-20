@@ -631,7 +631,8 @@ class Neo4jCareerKnowledgeGraph:
                 color = "#FAAD14"
                 size = 10
             
-            # 解析attributes
+            # 从job字典中直接获取属性（attributes已被展开存储）
+            # 优先从attributes字段获取，如果不存在则从顶层属性获取
             attributes = job.get('attributes', {})
             if isinstance(attributes, str):
                 try:
@@ -639,6 +640,9 @@ class Neo4jCareerKnowledgeGraph:
                     attributes = json.loads(attributes)
                 except:
                     attributes = {}
+            
+            # 获取公司名（优先从attributes，其次从顶层属性）
+            company = attributes.get('company') or job.get('company', '未知公司')
             
             job_nodes.append({
                 "id": job_id,
@@ -651,9 +655,9 @@ class Neo4jCareerKnowledgeGraph:
                 "metadata": {
                     "node_type": "Entity",
                     "entity_type": "Job",
-                    "company": attributes.get('company', '未知公司'),
-                    "salary": attributes.get('salary', 0),
-                    "location": attributes.get('location', ''),
+                    "company": company,
+                    "salary": attributes.get('salary') or job.get('salary', 0),
+                    "location": attributes.get('location') or job.get('location', ''),
                     "description": job.get('description', ''),
                     "confidence": job.get('confidence', 0.5),
                     "interest_level": interest_level,
