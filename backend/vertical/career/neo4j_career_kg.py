@@ -706,6 +706,13 @@ class Neo4jCareerKnowledgeGraph:
         company_nodes = []
         company_edges = []
         
+        # 调试日志（始终打印）
+        print(f"[_build_company_layer] 输入参数:")
+        print(f"  - companies数量: {len(companies)}")
+        print(f"  - job_nodes数量: {len(job_nodes)}")
+        if job_nodes:
+            print(f"  - 第一个job_node示例: {job_nodes[0]}")
+        
         # 合并从职位提取的公司和用户直接相关的公司
         company_map = {}
         
@@ -722,6 +729,10 @@ class Neo4jCareerKnowledgeGraph:
                         'confidence': 0.5
                     }
                 company_map[company_name]['jobs'].append(job_node['id'])
+        
+        print(f"  - 从job_nodes提取的公司数量: {len(company_map)}")
+        if company_map:
+            print(f"  - 提取的公司列表: {list(company_map.keys())[:5]}")
         
         # 2. 添加用户直接相关的公司
         for company in companies:
@@ -746,7 +757,11 @@ class Neo4jCareerKnowledgeGraph:
                     company_map[company_name]['related_events'].append(rel.get('target', {}).get('name'))
         
         if not company_map:
+            print(f"  - ⚠ 警告: company_map为空，返回空列表")
             return [], []
+        
+        print(f"  - 最终company_map数量: {len(company_map)}")
+        print(f"  - 公司列表: {list(company_map.keys())[:5]}")
         
         # 构建公司节点
         radius = 58
@@ -816,6 +831,7 @@ class Neo4jCareerKnowledgeGraph:
                     }
                 })
         
+        print(f"  - 最终生成: {len(company_nodes)}个公司节点, {len(company_edges)}条边")
         return company_nodes, company_edges
     
     def _build_event_layer(self, events: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
