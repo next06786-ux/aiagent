@@ -1,4 +1,4 @@
-# 后端 Dockerfile - 针对2核4G优化
+# 后端 Dockerfile - 针对2核4G优化，利用Docker层缓存
 FROM python:3.10-slim
 
 # 设置工作目录
@@ -13,19 +13,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制依赖文件
+# 【关键优化】先复制requirements.txt，利用Docker层缓存
+# 只有requirements.txt变化时才会重新安装依赖
 COPY backend/requirements.txt .
 
 # 安装Python依赖（使用腾讯云镜像，服务器在腾讯云最快+最全）
+# 这一层会被缓存，除非requirements.txt变化
 RUN pip install --no-cache-dir -r requirements.txt \
     -i https://mirrors.cloud.tencent.com/pypi/simple \
     --trusted-host mirrors.cloud.tencent.com \
     --timeout 100 \
     --retries 5
 
-# 复制后端代码
+# 【最后复制代码】代码变化不会触发依赖重装
 COPY backend/ ./backend/
-# COPY .env .env  # .env通过docker-compose的env_file注入，不需要在构建时复制
 
 # 创建必要的目录
 RUN mkdir -p /app/faiss_indexes \
