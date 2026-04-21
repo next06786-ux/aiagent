@@ -3,7 +3,8 @@
  * 支持在 API 大模型和基座模型之间切换
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:6006';
+// 使用相对路径，由nginx代理到后端
+const API_BASE_URL = '';
 
 export interface LLMProvider {
   name: string;

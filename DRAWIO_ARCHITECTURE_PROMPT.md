@@ -25,7 +25,7 @@
 LifeSwarm 是一个基于 AI 的智能生活助手系统，提供多人格决策推演、知识图谱管理、智慧洞察等功能。
 
 ### 技术栈
-- **前端**: React (Web) + HarmonyOS (移动端)
+- **前端**: React (Web) + HarmonyOS (鸿蒙) + Android (安卓)
 - **后端**: Python FastAPI
 - **数据库**: MySQL + Redis + Neo4j + FAISS
 - **AI**: Qwen/DeepSeek LLM + RAG 系统
@@ -50,8 +50,8 @@ LifeSwarm 是一个基于 AI 的智能生活助手系统，提供多人格决策
 ┌─────────────────────────────────────────────────────────────┐
 │                      客户端层 (Client Layer)                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  Web 前端     │  │ HarmonyOS    │  │  移动浏览器   │      │
-│  │  (React)     │  │  原生应用     │  │              │      │
+│  │  Web 前端     │  │ HarmonyOS    │  │   Android    │      │
+│  │  (React)     │  │  鸿蒙原生     │  │   原生应用    │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 └─────────────────────────────────────────────────────────────┘
                             ↓ HTTP/WebSocket
@@ -96,7 +96,7 @@ LifeSwarm 是一个基于 AI 的智能生活助手系统，提供多人格决策
 ```
 
 ### 绘图要点
-- 使用不同颜色区分各层：客户端(蓝色)、API(绿色)、业务(橙色)、数据(紫色)、外部(灰色)
+- 使用质感灰白色系区分各层：客户端(浅灰)、API(白色)、业务(中灰)、数据(深灰)、外部(灰色)
 - 用箭头标注数据流向和协议类型
 - 标注关键的同步/异步调用关系
 
@@ -153,13 +153,16 @@ web/
 │       └── *.css
 ```
 
-### HarmonyOS 前端
+### HarmonyOS 鸿蒙前端
 
 ```
 harmonyos/entry/src/main/ets/
 ├── pages/                        # 页面
 │   ├── HomePage.ets              # 首页
 │   ├── AuthPage.ets              # 登录页
+│   ├── LoginPage.ets             # 登录页
+│   ├── RegisterPage.ets          # 注册页
+│   ├── IndexNew.ets              # 新版首页
 │   ├── DecisionSimulationPage.ets  # 决策推演
 │   ├── KnowledgeGraphPage.ets    # 知识星图
 │   ├── ParallelLifePage.ets      # 平行人生
@@ -191,12 +194,66 @@ harmonyos/entry/src/main/ets/
     └── ApiTypes.ets
 ```
 
+### Android 安卓前端
+
+```
+android/app/src/main/
+├── java/com/lifeswarm/
+│   ├── ui/                       # UI 层
+│   │   ├── activity/             # Activity
+│   │   │   ├── MainActivity.kt
+│   │   │   ├── LoginActivity.kt
+│   │   │   ├── DecisionActivity.kt
+│   │   │   └── KnowledgeGraphActivity.kt
+│   │   ├── fragment/             # Fragment
+│   │   │   ├── HomeFragment.kt
+│   │   │   ├── DecisionFragment.kt
+│   │   │   ├── InsightsFragment.kt
+│   │   │   └── ProfileFragment.kt
+│   │   └── adapter/              # RecyclerView 适配器
+│   │       ├── PersonaAdapter.kt
+│   │       └── FriendAdapter.kt
+│   │
+│   ├── viewmodel/                # ViewModel 层
+│   │   ├── DecisionViewModel.kt
+│   │   ├── KnowledgeGraphViewModel.kt
+│   │   └── InsightsViewModel.kt
+│   │
+│   ├── repository/               # 数据仓库层
+│   │   ├── DecisionRepository.kt
+│   │   ├── UserRepository.kt
+│   │   └── InsightsRepository.kt
+│   │
+│   ├── network/                  # 网络层
+│   │   ├── ApiService.kt         # Retrofit API 接口
+│   │   ├── WebSocketClient.kt    # WebSocket 客户端
+│   │   └── RetrofitClient.kt     # Retrofit 配置
+│   │
+│   ├── model/                    # 数据模型
+│   │   ├── User.kt
+│   │   ├── Decision.kt
+│   │   ├── Persona.kt
+│   │   └── Insight.kt
+│   │
+│   └── util/                     # 工具类
+│       ├── PreferenceManager.kt  # SharedPreferences 管理
+│       ├── TokenManager.kt       # Token 管理
+│       └── NetworkUtils.kt       # 网络工具
+│
+└── res/                          # 资源文件
+    ├── layout/                   # 布局文件
+    ├── drawable/                 # 图片资源
+    ├── values/                   # 值资源
+    └── navigation/               # 导航图
+```
+
 ### 前端关键技术点
-1. **3D 球体导航** - Three.js / HarmonyOS 3D API
+1. **3D 球体导航** - Three.js (Web) / HarmonyOS 3D API / Android OpenGL
 2. **实时通信** - WebSocket 连接管理
-3. **状态管理** - React Context + Local State
-4. **数据可视化** - D3.js / ECharts
+3. **状态管理** - React Context (Web) / StateFlow (Android) / @State (HarmonyOS)
+4. **数据可视化** - D3.js / ECharts / MPAndroidChart
 5. **响应式设计** - 移动端适配
+6. **架构模式** - MVVM (Android) / Composition API (Web) / ArkTS (HarmonyOS)
 
 ---
 
@@ -1465,15 +1522,15 @@ LLM 深度分析
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│  第2层: 客户端层 (蓝色系)                                      │
+│  第2层: 客户端层 (质感灰色系)                                   │
 │  • Web 前端 (React)                                           │
-│  • HarmonyOS 原生应用                                         │
-│  • 移动浏览器                                                 │
+│  • HarmonyOS 鸿蒙原生应用                                      │
+│  • Android 安卓原生应用                                        │
 └─────────────────────────────────────────────────────────────┘
                             ↓ HTTP/WebSocket
 
 ┌─────────────────────────────────────────────────────────────┐
-│  第3层: API 网关层 (绿色系)                                    │
+│  第3层: API 网关层 (质感白色系)                                 │
 │  • FastAPI 主应用                                             │
 │  • 路由管理                                                   │
 │  • 中间件                                                     │
@@ -1481,14 +1538,14 @@ LLM 深度分析
                             ↓
 
 ┌─────────────────────────────────────────────────────────────┐
-│  第4层: 业务逻辑层 (橙色系)                                    │
+│  第4层: 业务逻辑层 (浅灰色系)                                  │
 │  • 7大核心功能模块                                            │
 │  • 8大支持模块                                                │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 
 ┌─────────────────────────────────────────────────────────────┐
-│  第5层: 数据层 (紫色系)                                        │
+│  第5层: 数据层 (中灰色系)                                      │
 │  • MySQL / Redis / Neo4j / FAISS                             │
 └─────────────────────────────────────────────────────────────┘
                             ↓
@@ -1503,39 +1560,57 @@ LLM 深度分析
 #### 2. 颜色方案
 
 ```
-推荐配色:
+推荐配色 - 质感灰白色系 (Material Design Gray Scale):
 
 客户端层:
-• 背景: #E3F2FD (浅蓝)
-• 边框: #2196F3 (蓝色)
-• 文字: #0D47A1 (深蓝)
+• 背景: #FAFAFA (质感白)
+• 边框: #9E9E9E (中灰)
+• 文字: #424242 (深灰)
+• 图标: #757575 (灰色)
 
 API 网关层:
-• 背景: #E8F5E9 (浅绿)
-• 边框: #4CAF50 (绿色)
-• 文字: #1B5E20 (深绿)
+• 背景: #FFFFFF (纯白)
+• 边框: #BDBDBD (浅灰)
+• 文字: #212121 (黑灰)
+• 阴影: #E0E0E0 (极浅灰)
 
 业务逻辑层:
-• 核心模块背景: #FFF3E0 (浅橙)
-• 核心模块边框: #FF9800 (橙色)
-• 支持模块背景: #FFF8E1 (浅黄)
-• 支持模块边框: #FFC107 (黄色)
-• 文字: #E65100 (深橙)
+• 核心模块背景: #F5F5F5 (浅灰白)
+• 核心模块边框: #757575 (灰色)
+• 支持模块背景: #FAFAFA (质感白)
+• 支持模块边框: #BDBDBD (浅灰)
+• 文字: #424242 (深灰)
 
 数据层:
-• 背景: #F3E5F5 (浅紫)
-• 边框: #9C27B0 (紫色)
-• 文字: #4A148C (深紫)
+• 背景: #EEEEEE (浅灰)
+• 边框: #616161 (深灰)
+• 文字: #212121 (黑灰)
+• 数据库图标: #757575 (灰色)
 
 外部服务层:
-• 背景: #ECEFF1 (浅灰)
-• 边框: #607D8B (灰色)
-• 文字: #263238 (深灰)
+• 背景: #E0E0E0 (中浅灰)
+• 边框: #9E9E9E (中灰)
+• 文字: #424242 (深灰)
+• 云图标: #BDBDBD (浅灰)
 
 特殊标记:
-• 核心功能: ⭐ 或红色角标
-• WebSocket: 🔌 或绿色虚线
-• 异步操作: ⚡ 或黄色闪电图标
+• 核心功能: ⭐ 或 #FF6F00 (深橙色强调)
+• WebSocket: 🔌 或 #4CAF50 (绿色强调)
+• 异步操作: ⚡ 或 #FFC107 (琥珀色强调)
+• 警告/重要: #F44336 (红色强调)
+• 成功/完成: #4CAF50 (绿色强调)
+
+Material Design 灰色色板参考:
+• #FAFAFA - 50  (最浅)
+• #F5F5F5 - 100
+• #EEEEEE - 200
+• #E0E0E0 - 300
+• #BDBDBD - 400
+• #9E9E9E - 500 (中间色)
+• #757575 - 600
+• #616161 - 700
+• #424242 - 800
+• #212121 - 900 (最深)
 ```
 
 #### 3. 图形元素选择
@@ -1576,8 +1651,9 @@ Page 1: 整体架构总览
 • 核心组件关系
 
 Page 2: 前端架构详图
-• Web 前端结构
-• HarmonyOS 结构
+• Web 前端结构 (React)
+• HarmonyOS 鸿蒙结构 (ArkTS)
+• Android 安卓结构 (Kotlin)
 • 组件关系
 
 Page 3: 后端模块详图
@@ -1714,6 +1790,117 @@ Page 7: 部署架构图
 
 ---
 
+
+---
+
+## 附录: 三端客户端对比
+
+### 技术栈对比
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    三端技术栈对比表                           │
+├──────────────┬──────────────┬──────────────┬──────────────┤
+│   特性       │  Web 前端     │  HarmonyOS   │   Android    │
+├──────────────┼──────────────┼──────────────┼──────────────┤
+│ 开发语言     │ TypeScript   │ ArkTS        │ Kotlin       │
+│ UI 框架      │ React        │ ArkUI        │ Jetpack      │
+│              │              │              │ Compose      │
+│ 状态管理     │ Context API  │ @State       │ StateFlow    │
+│              │ + Hooks      │ @Provide     │ + ViewModel  │
+│ 网络请求     │ Axios        │ HttpClient   │ Retrofit     │
+│ WebSocket    │ native WS    │ WebSocket    │ OkHttp WS    │
+│ 3D 渲染      │ Three.js     │ XComponent   │ OpenGL ES    │
+│              │              │ + Native     │              │
+│ 本地存储     │ localStorage │ Preferences  │ SharedPref   │
+│              │ IndexedDB    │              │ Room DB      │
+│ 导航路由     │ React Router │ Navigation   │ Navigation   │
+│              │              │              │ Component    │
+│ 构建工具     │ Vite         │ DevEco       │ Gradle       │
+│ 包管理       │ npm/yarn     │ ohpm         │ Maven        │
+│ 部署方式     │ Nginx        │ HAP 包       │ APK/AAB      │
+└──────────────┴──────────────┴──────────────┴──────────────┘
+```
+
+### 功能支持对比
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    功能支持对比表                             │
+├──────────────────┬──────────┬──────────┬──────────┬────────┤
+│   功能模块       │  Web     │ HarmonyOS│ Android  │  优先级│
+├──────────────────┼──────────┼──────────┼──────────┼────────┤
+│ 用户认证         │    ✅    │    ✅    │    ✅    │  P0    │
+│ 3D 球体导航      │    ✅    │    ✅    │    ✅    │  P0    │
+│ 决策推演         │    ✅    │    ✅    │    ✅    │  P0    │
+│ 知识星图         │    ✅    │    ✅    │    ✅    │  P0    │
+│ 智慧洞察         │    ✅    │    ✅    │    ✅    │  P1    │
+│ 平行人生游戏     │    ✅    │    ✅    │    ✅    │  P1    │
+│ 好友管理         │    ✅    │    ✅    │    ✅    │  P1    │
+│ 树洞世界         │    ✅    │    ✅    │    ✅    │  P1    │
+│ 智能日程         │    ✅    │    ✅    │    ✅    │  P2    │
+│ 实时通知         │    ⚠️    │    ✅    │    ✅    │  P2    │
+│ 离线模式         │    ⚠️    │    ✅    │    ✅    │  P2    │
+│ 推送通知         │    ❌    │    ✅    │    ✅    │  P2    │
+│ 生物识别登录     │    ❌    │    ✅    │    ✅    │  P3    │
+│ 桌面小组件       │    ❌    │    ✅    │    ✅    │  P3    │
+└──────────────────┴──────────┴──────────┴──────────┴────────┘
+
+图例:
+✅ 完全支持
+⚠️ 部分支持/受限
+❌ 不支持
+P0-P3: 优先级（P0最高）
+```
+
+### API 调用示例对比
+
+```typescript
+// Web (TypeScript + Axios)
+import axios from 'axios';
+
+const login = async (username: string, password: string) => {
+  const response = await axios.post('/api/auth/login', {
+    username,
+    password
+  });
+  return response.data;
+};
+```
+
+```typescript
+// HarmonyOS (ArkTS)
+import http from '@ohos.net.http';
+
+async function login(username: string, password: string) {
+  const httpRequest = http.createHttp();
+  const response = await httpRequest.request(
+    'http://backend:8000/api/auth/login',
+    {
+      method: http.RequestMethod.POST,
+      extraData: { username, password }
+    }
+  );
+  return JSON.parse(response.result as string);
+}
+```
+
+```kotlin
+// Android (Kotlin + Retrofit)
+interface ApiService {
+    @POST("/api/auth/login")
+    suspend fun login(
+        @Body request: LoginRequest
+    ): Response<LoginResponse>
+}
+
+// 使用
+val response = apiService.login(
+    LoginRequest(username, password)
+)
+```
+
+---
 
 ## 附录: 关键 API 端点清单
 
@@ -1966,10 +2153,11 @@ class MemoryType(Enum):
 ### 使用建议
 
 1. **分页绘制**: 建议创建 7 个独立页面，每个页面聚焦一个主题
-2. **颜色编码**: 使用统一的颜色方案区分不同层次
+2. **颜色编码**: 使用质感灰白色系（Material Design Gray Scale），保持专业简洁
 3. **标注清晰**: 在关键位置添加技术栈、端口、协议等标注
-4. **突出重点**: 用特殊标记 (⭐/颜色/粗线) 突出核心功能
+4. **突出重点**: 用特殊标记 (⭐/强调色/粗线) 突出核心功能
 5. **保持简洁**: 避免在单个图中放入过多细节，适当抽象
+6. **统一风格**: 所有页面使用相同的灰白色调，保持视觉一致性
 
 ### 绘图顺序建议
 

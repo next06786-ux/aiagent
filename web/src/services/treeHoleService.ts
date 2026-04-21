@@ -2,7 +2,8 @@
  * 树洞服务 - API 调用
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:6006';
+// 使用相对路径，由nginx代理到后端
+const API_BASE = '';
 
 export interface TrendingDecision {
   rank: number;
