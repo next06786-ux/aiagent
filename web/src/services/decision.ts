@@ -747,7 +747,7 @@ export function openDecisionSimulationSocket(
   },
   handlers: DecisionSocketHandlers & { onOpen?: (socket: WebSocket) => void },
 ) {
-  // 使用新的决策人格系统端点
+  // 使用决策人格系统WebSocket端点
   const socket = createSocket('/api/decision/persona/ws/simulate-option');
 
   socket.addEventListener('open', () => {
@@ -826,10 +826,9 @@ export async function* streamDecisionCollection(payload: {
     collected_info?: CollectedInfo;
   };
 }> {
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:6006';
-  
   try {
-    const response = await fetch(`${API_BASE}/api/decision/enhanced/collect/continue-stream`, {
+    // 使用兼容路由
+    const response = await fetch('/api/decision/enhanced/collect/continue-stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -879,7 +878,7 @@ export async function* streamDecisionCollection(payload: {
 // ── AI核心预热 ──────────────────────────────────────────
 export async function warmupAICore(userId: string): Promise<void> {
   try {
-    await postJson('/api/decision/enhanced/ai-core/warmup', { user_id: userId });
+    await postJson('/api/decision/persona/ai-core/warmup', { user_id: userId });
   } catch (error) {
     // 预热失败不影响使用
     console.warn('AI核心预热失败:', error);
@@ -896,7 +895,7 @@ export async function getWarmupStatus(userId: string): Promise<{
       status: string;
       stage: string;
       progress: number;
-    }>>(`/api/decision/enhanced/ai-core/warmup-status/${encodeURIComponent(userId)}`);
+    }>>(`/api/decision/persona/ai-core/warmup-status/${encodeURIComponent(userId)}`);
     
     if (result.code === 200 && result.data) {
       return {
