@@ -890,13 +890,18 @@ class DecisionPersona:
         获取所有人格共享的客观数据（RAG + Neo4j）
         """
         if hasattr(self, 'memory_system') and self.memory_system.shared_facts:
+            # past_decisions 在 DecisionContext 层,不在 SharedFactsLayer
+            past_decisions = []
+            if self.memory_system.current_decision:
+                past_decisions = self.memory_system.current_decision.past_decisions
+            
             return {
                 "summary": self.memory_system.shared_facts.get_summary(),
                 "relationships": self.memory_system.shared_facts.relationships,
                 "education": self.memory_system.shared_facts.education_history,
                 "career": self.memory_system.shared_facts.career_history,
                 "skills": self.memory_system.shared_facts.skills,
-                "past_decisions": self.memory_system.shared_facts.past_decisions
+                "past_decisions": past_decisions
             }
         return None
     
@@ -1274,9 +1279,11 @@ class DecisionPersona:
                 skill_names = [s.get('content', '').split('\n')[0] if s.get('content') else '未知技能' for s in facts.skills[:5]]
                 facts_parts.append(f"  - {', '.join(skill_names)}")
             
-            # 历史决策
-            if facts.past_decisions:
-                facts_parts.append(f"\n【历史决策】共{len(facts.past_decisions)}次重要决策")
+            # 历史决策 - 从 DecisionContext 获取,不是从 SharedFactsLayer
+            if self.memory_system and self.memory_system.current_decision:
+                past_decisions = self.memory_system.current_decision.past_decisions
+                if past_decisions:
+                    facts_parts.append(f"\n【历史决策】共{len(past_decisions)}次重要决策")
         
         base_text = "\n".join(facts_parts) if facts_parts else "（暂无用户历史数据）"
         
