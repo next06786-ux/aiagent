@@ -744,6 +744,7 @@ export function openDecisionSimulationSocket(
     option_index: number;
     collected_info?: CollectedInfo;
     decision_type?: string;
+    persona_rounds?: Record<string, number>; // 每个Agent的推演轮数配置
   },
   handlers: DecisionSocketHandlers & { onOpen?: (socket: WebSocket) => void },
 ) {
@@ -768,6 +769,15 @@ export function openDecisionSimulationSocket(
       option_index: payload.option_index,
       collected_info: payload.collected_info || {},
       decision_type: payload.decision_type || 'general',
+      persona_rounds: payload.persona_rounds || {
+        rational_analyst: 2,
+        adventurer: 2,
+        pragmatist: 2,
+        idealist: 2,
+        conservative: 2,
+        social_navigator: 2,
+        innovator: 2,
+      },
     }));
   });
 

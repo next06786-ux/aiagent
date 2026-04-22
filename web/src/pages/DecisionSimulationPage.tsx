@@ -64,6 +64,18 @@ export function DecisionSimulationPage() {
   // 状态管理
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
   const [error, setError] = useState('');
+  
+  // Agent轮数配置
+  const [showRoundsConfig, setShowRoundsConfig] = useState(false);
+  const [personaRounds, setPersonaRounds] = useState<Record<string, number>>({
+    rational_analyst: 2,
+    adventurer: 2,
+    pragmatist: 2,
+    idealist: 2,
+    conservative: 2,
+    social_navigator: 2,
+    innovator: 2,
+  });
 
   // WebSocket状态
   const [wsPhase, setWsPhase] = useState<'idle' | 'connecting' | 'running' | 'done'>('idle');
@@ -181,6 +193,7 @@ export function DecisionSimulationPage() {
           option_index: index,
           collected_info: config.collectedInfo,
           decision_type: config.decisionType || 'general',
+          persona_rounds: personaRounds, // 传递用户配置的轮数
         },
         {
           onOpen(ws) {
@@ -829,6 +842,19 @@ export function DecisionSimulationPage() {
             返回
           </button>
           
+          <button onClick={() => setShowRoundsConfig(true)} style={{ 
+            background: 'rgba(107, 72, 255, 0.06)', border: 'none', borderRadius: 12, 
+            padding: '10px 16px', color: '#6B48FF', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 6,
+            transition: 'all 0.3s ease',
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2"/>
+            </svg>
+            Agent轮数配置
+          </button>
+          
           <div style={{ borderLeft: '1px solid rgba(0, 0, 0, 0.08)', paddingLeft: 16 }}>
             <div style={{ fontSize: 11, color: '#999', marginBottom: 4 }}>决策图谱舞台</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#1A1A1A' }}>{config.question}</div>
@@ -1137,6 +1163,103 @@ export function DecisionSimulationPage() {
             <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           {error}
+        </div>
+      )}
+      
+      {/* Agent轮数配置对话框 */}
+      {showRoundsConfig && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }} onClick={() => setShowRoundsConfig(false)}>
+          <div style={{
+            background: 'white', borderRadius: 16, padding: 32,
+            maxWidth: 600, width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 24px 0', fontSize: 24, fontWeight: 700 }}>
+              Agent推演轮数配置
+            </h2>
+            <p style={{ margin: '0 0 24px 0', color: '#666', fontSize: 14 }}>
+              为每个决策人格Agent设置推演轮数（1-5轮）。轮数越多，思考越深入，但耗时也越长。
+            </p>
+            
+            <div style={{ display: 'grid', gap: 16 }}>
+              {[
+                { id: 'rational_analyst', name: '理性分析师', icon: '📊' },
+                { id: 'adventurer', name: '冒险家', icon: '🚀' },
+                { id: 'pragmatist', name: '实用主义者', icon: '⚙️' },
+                { id: 'idealist', name: '理想主义者', icon: '✨' },
+                { id: 'conservative', name: '保守派', icon: '🛡️' },
+                { id: 'social_navigator', name: '社交导向者', icon: '🤝' },
+                { id: 'innovator', name: '创新者', icon: '💡' },
+              ].map(({ id, name, icon }) => (
+                <div key={id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: 16, background: '#F8FAFC', borderRadius: 12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 24 }}>{icon}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>{name}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={() => setPersonaRounds(prev => ({
+                        ...prev,
+                        [id]: Math.max(1, prev[id] - 1)
+                      }))}
+                      style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        border: '1px solid #E2E8F0', background: 'white',
+                        cursor: 'pointer', fontSize: 18, color: '#64748B',
+                      }}
+                    >−</button>
+                    <span style={{
+                      width: 40, textAlign: 'center',
+                      fontSize: 16, fontWeight: 600,
+                    }}>{personaRounds[id]}轮</span>
+                    <button
+                      onClick={() => setPersonaRounds(prev => ({
+                        ...prev,
+                        [id]: Math.min(5, prev[id] + 1)
+                      }))}
+                      style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        border: '1px solid #E2E8F0', background: 'white',
+                        cursor: 'pointer', fontSize: 18, color: '#64748B',
+                      }}
+                    >+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div style={{ marginTop: 24, display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowRoundsConfig(false)}
+                style={{
+                  padding: '12px 24px', borderRadius: 12,
+                  border: '1px solid #E2E8F0', background: 'white',
+                  cursor: 'pointer', fontSize: 15, fontWeight: 600,
+                  color: '#64748B',
+                }}
+              >取消</button>
+              <button
+                onClick={() => {
+                  setShowRoundsConfig(false);
+                  // 配置已保存到state，下次推演时会使用
+                }}
+                style={{
+                  padding: '12px 24px', borderRadius: 12,
+                  border: 'none', background: 'linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%)',
+                  cursor: 'pointer', fontSize: 15, fontWeight: 600,
+                  color: 'white', boxShadow: '0 4px 12px rgba(107, 72, 255, 0.3)',
+                }}
+              >确定</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
