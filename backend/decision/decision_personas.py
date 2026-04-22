@@ -810,3 +810,121 @@ PERSONA_CONFIGS = {
         "skills": ["创新潜力评估", "机会识别"]
     }
 }
+
+    
+    async def initialize_for_decision(
+        self,
+        decision_id: str,
+        question: str,
+        options: List[Dict[str, Any]],
+        collected_info: Dict[str, Any]
+    ):
+        """
+        为决策初始化记忆系统
+        
+        Args:
+            decision_id: 决策ID
+            question: 决策问题
+            options: 选项列表
+            collected_info: 收集的信息
+        """
+        try:
+            from backend.decision.persona_memory_system import LayeredMemorySystem
+            
+            # 创建记忆系统
+            self.memory_system = LayeredMemorySystem(self.user_id)
+            
+            # 初始化决策
+            await self.memory_system.initialize_decision(
+                decision_id=decision_id,
+                question=question,
+                options=options,
+                collected_info=collected_info
+            )
+            
+            # 为所有人格设置记忆系统
+            self.set_memory_system(self.memory_system)
+            
+            logger.info(f"✅ 记忆系统初始化完成 - 决策ID: {decision_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ 记忆系统初始化失败: {e}")
+            raise
+    
+    async def analyze_decision(
+        self,
+        decision_context: Dict[str, Any],
+        options: List[Dict[str, Any]],
+        persona_rounds: Optional[Dict[str, int]] = None
+    ) -> Dict[str, Any]:
+        """
+        分析决策选项
+        
+        Args:
+            decision_context: 决策上下文
+            options: 选项列表
+            persona_rounds: 每个人格的轮数配置
+        
+        Returns:
+            分析结果
+        """
+        if persona_rounds is None:
+            persona_rounds = {pid: 2 for pid in self.personas.keys()}
+        
+        all_analyses = {}
+        
+        # 分析每个选项
+        for idx, option in enumerate(options):
+            option_id = f"option_{idx + 1}"
+            option_analyses = {}
+            
+            # 让每个人格分析这个选项
+            for persona_id, persona in self.personas.items():
+                rounds = persona_rounds.get(persona_id, 2)
+                
+                # 执行多轮分析
+                round_results = []
+                for round_num in range(rounds):
+                    logger.info(f"[{persona.name}] 第 {round_num + 1}/{rounds} 轮分析")
+                    
+                    # 获取其他人格的观点（用于后续轮次）
+                    other_views = []
+                    if round_num > 0:
+                        for other_id, other_persona in self.personas.items():
+                            if other_id != persona_id and other_id in option_analyses:
+                                other_views.append({
+                                    "persona_name": other_persona.name,
+                                    "stance": option_analyses[other_id].get("stance", "未知")
+                                })
+                    
+                    # 分析选项
+                    result = await persona.analyze_option(
+                        option=option,
+                        context=decision_context,
+                        other_personas_views=other_views if other_views else None
+                    )
+                    
+                    round_results.append(result)
+                
+                # 保存最终结果（最后一轮）
+                option_analyses[persona_id] = round_results[-1] if round_results else {}
+            
+            all_analyses[option_id] = {
+                "option": option,
+                "final_analyses": option_analyses
+            }
+        
+        return {
+            "all_analyses": all_analyses,
+            "summary": self._generate_summary(all_analyses)
+        }
+    
+    def _generate_summary(self, all_analyses: Dict[str, Any]) -> Dict[str, Any]:
+        """生成分析摘要"""
+        summary = {
+            "total_options": len(all_analyses),
+            "total_personas": len(self.personas),
+            "consensus_level": "medium"  # 简化版本
+        }
+        
+        return summary
