@@ -34,6 +34,21 @@ router = APIRouter(prefix="/api/decision/persona", tags=["persona-decision"])
 # 全局实例
 info_collector = DecisionInfoCollector()
 
+# ==================== 配置常量 ====================
+
+# 推演轮数配置
+ROUNDS_CONFIG = {
+    "quick": 1,      # 快速决策: 1轮,适合简单日常选择
+    "standard": 2,   # 标准决策: 2轮,平衡速度和深度
+    "deep": 3        # 深度决策: 3轮,充分辩论重大决策
+}
+
+# 默认轮数(可通过环境变量覆盖)
+DEFAULT_ROUNDS = ROUNDS_CONFIG["quick"]  # 默认快速模式
+
+# 重大决策类型自动升级到标准模式
+MAJOR_DECISION_TYPES = ["career", "education", "relationship", "investment", "health"]
+
 
 # ==================== 请求模型 ====================
 
@@ -482,16 +497,33 @@ async def simulate_single_option(websocket: WebSocket):
                     # 🆕 获取轮数配置
                     persona_rounds = message.get("persona_rounds", None)
                     if persona_rounds is None:
-                        # 默认所有Agent 2轮
+                        # 智能轮数配置：根据决策复杂度动态调整
+                        default_rounds = DEFAULT_ROUNDS
+                        
+                        # 重大决策类型自动升级到标准模式
+                        if decision_type in MAJOR_DECISION_TYPES:
+                            default_rounds = ROUNDS_CONFIG["standard"]
+                            logger.info(f"[轮数配置] 检测到重大决策类型 '{decision_type}'，升级到标准模式({default_rounds}轮)")
+                        
+                        # 如果收集的信息很丰富,升级到标准模式
+                        if collected_info:
+                            concerns_count = len(collected_info.get("concerns", []))
+                            constraints_count = len(collected_info.get("constraints", {}))
+                            if concerns_count > 3 or constraints_count > 3:
+                                default_rounds = max(default_rounds, ROUNDS_CONFIG["standard"])
+                                logger.info(f"[轮数配置] 检测到复杂信息(担忧:{concerns_count}, 约束:{constraints_count})，升级到标准模式({default_rounds}轮)")
+                        
                         persona_rounds = {
-                            "rational_analyst": 2,
-                            "adventurer": 2,
-                            "pragmatist": 2,
-                            "idealist": 2,
-                            "conservative": 2,
-                            "social_navigator": 2,
-                            "innovator": 2
+                            "rational_analyst": default_rounds,
+                            "adventurer": default_rounds,
+                            "pragmatist": default_rounds,
+                            "idealist": default_rounds,
+                            "conservative": default_rounds,
+                            "social_navigator": default_rounds,
+                            "innovator": default_rounds
                         }
+                    else:
+                        logger.info(f"[轮数配置] 使用客户端指定的轮数配置")
                     
                     logger.info(f"[决策人格推演] 开始 - 选项: {option.get('title')}, 类型: {decision_type}")
                     logger.info(f"[决策人格推演] 轮数配置: {persona_rounds}")
@@ -616,6 +648,19 @@ async def simulate_single_option(websocket: WebSocket):
                     # ============================================================
                     
                     try:
+                        # 创建WebSocket状态回调函数
+                        async def ws_status_callback(event_type: str, data: Dict[str, Any]):
+                            """实时推送Agent状态到前端"""
+                            try:
+                                await safe_send({
+                                    "type": "agent_event",
+                                    "event_type": event_type,
+                                    "option_id": option_id,
+                                    **data
+                                })
+                            except Exception as e:
+                                logger.error(f"WebSocket推送失败: {e}")
+                        
                         # 准备决策上下文
                         decision_context = {
                             "question": question,
@@ -623,7 +668,7 @@ async def simulate_single_option(websocket: WebSocket):
                             "option_title": option_title,
                             "decision_type": decision_type,
                             "user_decision_style": council.memory_system.current_decision.user_decision_style if council.memory_system else {},
-                            "status_callback": None  # WebSocket回调会在run_lifecycle中处理
+                            "status_callback": ws_status_callback  # 传递WebSocket回调
                         }
                         
                         # 调用新的analyze_decision方法

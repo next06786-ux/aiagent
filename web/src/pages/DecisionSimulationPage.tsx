@@ -331,6 +331,197 @@ export function DecisionSimulationPage() {
               });
             }
 
+            // 处理新的agent_event消息
+            if (type === 'agent_event') {
+              const eventType = String(event.event_type || '');
+              const optId = String(event.option_id || optionId);
+              const personaId = String(event.persona_id || '');
+              const personaName = String(event.persona_name || '');
+              
+              console.log(`[Agent事件] ${eventType}: ${personaName}`);
+              
+              // Agent开始
+              if (eventType === 'agent_start') {
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => 
+                    a.id === personaId ? { ...a, status: 'waiting' as const } : a
+                  ));
+                  return next;
+                });
+              }
+              
+              // 轮次开始
+              if (eventType === 'round_start') {
+                const round = event.round as number || 1;
+                setCurrentMonthByOption(prev => {
+                  const next = new Map(prev);
+                  next.set(optId, round);
+                  return next;
+                });
+              }
+              
+              // 思考开始
+              if (eventType === 'thinking_start') {
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => 
+                    a.id === personaId ? { 
+                      ...a, 
+                      status: 'thinking' as const,
+                      currentMessage: '正在思考...',
+                      messageTimestamp: Date.now()
+                    } : a
+                  ));
+                  return next;
+                });
+              }
+              
+              // 思考完成
+              if (eventType === 'thinking_complete') {
+                const stance = String(event.stance || '');
+                const score = event.score as number;
+                const reasoningPreview = String(event.reasoning_preview || '');
+                const round = event.round as number || 1;
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const historyRecord = {
+                        round,
+                        message: reasoningPreview,
+                        timestamp: Date.now(),
+                        score,
+                        stance,
+                        keyPoints: [],
+                        reasoning: reasoningPreview,
+                      };
+                      
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return { 
+                        ...a, 
+                        status: 'complete' as const,
+                        score,
+                        stance,
+                        currentMessage: `${stance} (${score}分)`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
+              }
+              
+              // 观察其他Agent
+              if (eventType === 'observation') {
+                const observedCount = event.observed_count as number || 0;
+                const observedPersonas = event.observed_personas as string[] || [];
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const message = `👀 观察到${observedCount}个观点: ${observedPersonas.join(', ')}`;
+                      return { 
+                        ...a, 
+                        currentMessage: message,
+                        messageTimestamp: Date.now(),
+                        messageAction: 'viewing'
+                      };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
+                
+                // 3秒后清除消息
+                setTimeout(() => {
+                  setAgentsByOption(prev => {
+                    const next = new Map(prev);
+                    const agents = next.get(optId) || [];
+                    next.set(optId, agents.map(a => 
+                      a.id === personaId ? { 
+                        ...a, 
+                        currentMessage: undefined,
+                        messageAction: undefined
+                      } : a
+                    ));
+                    return next;
+                  });
+                }, 3000);
+              }
+              
+              // 信心度调整
+              if (eventType === 'confidence_adjusted') {
+                const newConfidence = event.new_confidence as number || 0;
+                const adjustment = event.adjustment as number || 0;
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const message = adjustment > 0 
+                        ? `✓ 信心增强 (+${(adjustment * 100).toFixed(0)}%)`
+                        : `⚠️ 信心降低 (${(adjustment * 100).toFixed(0)}%)`;
+                      return { 
+                        ...a, 
+                        currentMessage: message,
+                        messageTimestamp: Date.now(),
+                        messageAction: 'score_adjusted'
+                      };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
+                
+                // 3秒后清除消息
+                setTimeout(() => {
+                  setAgentsByOption(prev => {
+                    const next = new Map(prev);
+                    const agents = next.get(optId) || [];
+                    next.set(optId, agents.map(a => 
+                      a.id === personaId ? { 
+                        ...a, 
+                        currentMessage: undefined,
+                        messageAction: undefined
+                      } : a
+                    ));
+                    return next;
+                  });
+                }, 3000);
+              }
+              
+              // Agent完成
+              if (eventType === 'agent_complete') {
+                const finalScore = event.final_score as number || 0;
+                const finalStance = String(event.final_stance || '');
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => 
+                    a.id === personaId ? { 
+                      ...a, 
+                      status: 'complete' as const,
+                      score: finalScore,
+                      stance: finalStance
+                    } : a
+                  ));
+                  return next;
+                });
+              }
+            }
+
             // 批量设置智能体思考状态（并行显示）
             if (type === 'agents_thinking_batch') {
               const optId = String(event.option_id || optionId);

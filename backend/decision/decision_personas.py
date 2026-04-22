@@ -3255,18 +3255,73 @@ class PersonaCouncil:
         """
         final_result = None
         
+        # 记录开始时间
+        import time
+        start_time = time.time()
+        logger.info(f"⏱️  [{persona.name}] 开始执行 (时间: {time.strftime('%H:%M:%S')})")
+        
+        # 获取WebSocket回调
+        status_callback = context.get('status_callback')
+        
+        # 推送Agent开始事件
+        if status_callback:
+            await status_callback('agent_start', {
+                'persona_id': persona_id,
+                'persona_name': persona.name,
+                'rounds': rounds,
+                'timestamp': time.time()
+            })
+        
         for round_num in range(1, rounds + 1):
+            round_start = time.time()
             logger.info(f"\n{'='*50}")
-            logger.info(f"🔄 [{persona.name}] 第{round_num}/{rounds}轮")
+            logger.info(f"🔄 [{persona.name}] 第{round_num}/{rounds}轮 (时间: {time.strftime('%H:%M:%S')})")
             logger.info(f"{'='*50}\n")
+            
+            # 推送轮次开始事件
+            if status_callback:
+                await status_callback('round_start', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'round': round_num,
+                    'total_rounds': rounds,
+                    'timestamp': time.time()
+                })
             
             # 更新上下文中的轮次信息
             context['round'] = round_num
             context['total_rounds'] = rounds
             
             # 第1步：独立思考
-            logger.info(f"  🧠 [{persona.name}] 独立思考...")
+            logger.info(f"  🧠 [{persona.name}] 独立思考... (时间: {time.strftime('%H:%M:%S')})")
+            
+            # 推送思考开始事件
+            if status_callback:
+                await status_callback('thinking_start', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'round': round_num,
+                    'timestamp': time.time()
+                })
+            
+            llm_start = time.time()
             result = await persona.analyze_option(option, context, {})
+            llm_duration = time.time() - llm_start
+            logger.info(f"  ✅ [{persona.name}] LLM调用完成 (耗时: {llm_duration:.2f}s)")
+            
+            # 推送思考完成事件
+            if status_callback:
+                await status_callback('thinking_complete', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'round': round_num,
+                    'duration': llm_duration,
+                    'stance': result.get('stance', '未知'),
+                    'score': result.get('score', 0),
+                    'reasoning_preview': result.get('reasoning', '')[:100] + '...' if len(result.get('reasoning', '')) > 100 else result.get('reasoning', ''),
+                    'timestamp': time.time()
+                })
+            
             final_result = result
             
             # 第2步：将当前观点写入共享存储
@@ -3292,9 +3347,22 @@ class PersonaCouncil:
                 if other_views:
                     logger.info(f"  👀 [{persona.name}] 观察到{len(other_views)}个其他Agent的观点")
                     
+                    # 推送观察事件
+                    if status_callback:
+                        await status_callback('observation', {
+                            'persona_id': persona_id,
+                            'persona_name': persona.name,
+                            'round': round_num,
+                            'observed_count': len(other_views),
+                            'observed_personas': [v['name'] for v in other_views.values()],
+                            'timestamp': time.time()
+                        })
+                    
                     # 第4步：深度反思（简化版：根据他人观点调整信心度）
                     confidence_adjustment = 0.0
                     my_score = result.get('score', 50)
+                    my_stance = result.get('stance', '未知')
+                    stance_changed = False
                     
                     for other_id, other_view in other_views.items():
                         other_score = other_view.get('score', 50)
@@ -3315,6 +3383,18 @@ class PersonaCouncil:
                     
                     if confidence_adjustment != 0:
                         logger.info(f"  🤔 [{persona.name}] 信心度调整: {original_confidence:.2f} -> {new_confidence:.2f}")
+                        
+                        # 推送信心度调整事件
+                        if status_callback:
+                            await status_callback('confidence_adjusted', {
+                                'persona_id': persona_id,
+                                'persona_name': persona.name,
+                                'round': round_num,
+                                'original_confidence': original_confidence,
+                                'new_confidence': new_confidence,
+                                'adjustment': confidence_adjustment,
+                                'timestamp': time.time()
+                            })
                     
                     final_result = result
                     
@@ -3324,8 +3404,35 @@ class PersonaCouncil:
                             'confidence': new_confidence,
                             'reflected': True
                         })
+            
+            round_duration = time.time() - round_start
+            logger.info(f"  ⏱️  [{persona.name}] 第{round_num}轮完成 (耗时: {round_duration:.2f}s)")
+            
+            # 推送轮次完成事件
+            if status_callback:
+                await status_callback('round_complete', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'round': round_num,
+                    'duration': round_duration,
+                    'timestamp': time.time()
+                })
         
-        logger.info(f"✅ [{persona.name}] 生命周期完成，共{rounds}轮\n")
+        total_duration = time.time() - start_time
+        logger.info(f"✅ [{persona.name}] 生命周期完成，共{rounds}轮 (总耗时: {total_duration:.2f}s, 时间: {time.strftime('%H:%M:%S')})\n")
+        
+        # 推送Agent完成事件
+        if status_callback:
+            await status_callback('agent_complete', {
+                'persona_id': persona_id,
+                'persona_name': persona.name,
+                'total_rounds': rounds,
+                'total_duration': total_duration,
+                'final_score': final_result.get('score', 0) if final_result else 0,
+                'final_stance': final_result.get('stance', '未知') if final_result else '未知',
+                'timestamp': time.time()
+            })
+        
         return final_result
     
     async def _facilitate_debate(

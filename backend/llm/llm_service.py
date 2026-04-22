@@ -256,6 +256,8 @@ class LLMService:
         """
         异步对话接口 - 在线程池中执行同步调用，避免阻塞事件循环
         
+        使用自定义线程池支持高并发（最多100个并发LLM调用）
+        
         Args:
             messages: 消息列表 [{"role": "user", "content": "..."}]
             temperature: 温度参数（0-1，越高越随机）
@@ -268,8 +270,21 @@ class LLMService:
             大模型回复（可能包含工具调用）
         """
         import asyncio
-        # 在线程池中执行同步的 chat 方法，避免阻塞事件循环
-        return await asyncio.to_thread(
+        import concurrent.futures
+        
+        # 获取或创建全局线程池（支持高并发）
+        if not hasattr(self, '_thread_pool'):
+            max_workers = int(os.getenv("LLM_THREAD_POOL_SIZE", "100"))
+            self._thread_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="llm_worker"
+            )
+            logger.info(f"🚀 LLM线程池已创建: max_workers={max_workers}")
+        
+        # 在线程池中执行同步的 chat 方法
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._thread_pool,
             self.chat,
             messages,
             temperature,
