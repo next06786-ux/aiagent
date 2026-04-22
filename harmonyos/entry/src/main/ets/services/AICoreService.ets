@@ -4,6 +4,7 @@
  */
 import { HttpClient } from '../utils/HttpClient';
 import { ApiConstants } from '../constants/ApiConstants';
+import { RecognizeIntentRequest, NavigateRequest, EmptyObject } from '../types/RequestInterfaces';
 
 export class AICoreService {
   private httpClient = HttpClient.getInstance();
@@ -16,10 +17,10 @@ export class AICoreService {
     message: string,
     context?: Record<string, Object>
   ): Promise<IntentResult> {
-    const requestData: Record<string, Object> = {
+    const requestData: RecognizeIntentRequest = {
       user_id: userId,
       message: message,
-      context: context || {}
+      context: context || new EmptyObject()
     };
     
     const result = await this.httpClient.post<IntentResult>(
@@ -38,10 +39,10 @@ export class AICoreService {
     intent: string,
     params?: Record<string, Object>
   ): Promise<NavigationResult> {
-    const requestData: Record<string, Object> = {
+    const requestData: NavigateRequest = {
       user_id: userId,
       intent: intent,
-      params: params || {}
+      params: params || new EmptyObject()
     };
     
     const result = await this.httpClient.post<NavigationResult>(
@@ -54,16 +55,21 @@ export class AICoreService {
 }
 
 /**
+ * 实体信息
+ */
+export interface EntityInfo {
+  type: string;
+  value: string;
+  confidence: number;
+}
+
+/**
  * 意图识别结果
  */
 export interface IntentResult {
   intent: string;
   confidence: number;
-  entities: Array<{
-    type: string;
-    value: string;
-    confidence: number;
-  }>;
+  entities: EntityInfo[];
   suggested_action: string;
   module: string;
 }

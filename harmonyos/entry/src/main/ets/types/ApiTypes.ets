@@ -96,14 +96,14 @@ export interface KnowledgeNode {
   id: string;
   label: string;
   type: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, Object>;
 }
 
 export interface KnowledgeRelationship {
   from: string;
   to: string;
   type: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, Object>;
 }
 
 /**

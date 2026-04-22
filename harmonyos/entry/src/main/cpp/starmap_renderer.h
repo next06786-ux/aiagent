@@ -80,6 +80,10 @@ private:
     GLuint textProgram_ = 0;
     GLuint nebulaProgram_ = 0;  // 星云背景
     
+    // 球体渲染（新增）
+    GLuint sphereProgram_ = 0;   // 球体主体shader
+    GLuint glowProgram_ = 0;     // 光晕shader
+    
     // VBO
     GLuint nodeVBO_ = 0;
     GLuint lineVBO_ = 0;
@@ -87,6 +91,11 @@ private:
     GLuint particleVBO_ = 0;
     GLuint textVBO_ = 0;
     GLuint nebulaVBO_ = 0;  // 星云全屏四边形
+    
+    // 球体几何（新增）
+    GLuint sphereVBO_ = 0;
+    GLuint sphereIBO_ = 0;
+    int sphereIndexCount_ = 0;
     
     // 数据
     std::vector<StarNode> nodes_;
@@ -157,6 +166,7 @@ private:
     void initBackgroundStars();
     void initFlowParticles();
     void initCategoryColors();
+    void initSphereGeometry();  // 新增：初始化球体几何
     
     void computeMVPMatrix(float* mvp);
     void project3D(float x, float y, float z, float& screenX, float& screenY, float& scale);
@@ -166,6 +176,7 @@ private:
     void drawLinks();
     void drawParticles();
     void drawNodes();
+    void drawSphereNodes();  // 新增：绘制球体节点
     void drawTextLabels();
     
     void updateNodeVBO();

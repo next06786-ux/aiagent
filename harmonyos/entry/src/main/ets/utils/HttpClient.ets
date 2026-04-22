@@ -5,10 +5,12 @@
 import http from '@ohos.net.http';
 import { ApiConstants } from '../constants/ApiConstants';
 import { HttpInterceptor } from './HttpInterceptor';
+import { common } from '@kit.AbilityKit';
 
 export class HttpClient {
   private static instance: HttpClient;
   private baseUrl: string = ApiConstants.BASE_URL;
+  private context: common.UIAbilityContext | null = null;
   
   private constructor() {}
   
@@ -20,9 +22,21 @@ export class HttpClient {
   }
   
   /**
+   * 设置Context
+   */
+  setContext(context: common.UIAbilityContext): void {
+    this.context = context;
+  }
+  
+  /**
    * 通用请求方法
    */
   async request<T>(config: RequestConfig): Promise<ApiResponse<T>> {
+    if (!this.context) {
+      const error = new Error('Context未设置，请先调用setContext');
+      throw error;
+    }
+    
     const httpRequest = http.createHttp();
     
     try {
@@ -30,8 +44,7 @@ export class HttpClient {
       const requestOptions: http.HttpRequestOptions = {
         method: config.method || http.RequestMethod.GET,
         header: {
-          'Content-Type': 'application/json',
-          ...config.headers
+          'Content-Type': 'application/json'
         },
         extraData: config.data,
         expectDataType: http.HttpDataType.STRING,
@@ -39,17 +52,27 @@ export class HttpClient {
         readTimeout: config.timeout || 60000
       };
       
-      const authConfig = await HttpInterceptor.addAuthHeader(requestOptions);
+      // 合并自定义header
+      if (config.headers) {
+        Object.keys(config.headers).forEach(key => {
+          if (requestOptions.header && config.headers) {
+            requestOptions.header[key] = config.headers[key];
+          }
+        });
+      }
+      
+      const authConfig = await HttpInterceptor.addAuthHeader(requestOptions, this.context);
       const fullUrl = `${this.baseUrl}${config.url}`;
       
       const response = await httpRequest.request(fullUrl, authConfig);
       
       // 处理响应
-      return await HttpInterceptor.handleResponse(response);
+      return await HttpInterceptor.handleResponse(response, this.context) as ApiResponse<T>;
       
     } catch (error) {
       console.error('HTTP请求失败:', JSON.stringify(error));
-      throw error;
+      const err = error as Error;
+      throw err;
     } finally {
       httpRequest.destroy();
     }
@@ -58,14 +81,19 @@ export class HttpClient {
   /**
    * GET请求
    */
-  async get<T>(url: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+  async get<T>(url: string, params?: Record<string, Object>): Promise<ApiResponse<T>> {
     let queryString = '';
     if (params) {
       const paramPairs: string[] = [];
       Object.keys(params).forEach(key => {
-        paramPairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`);
+        const value = params[key];
+        if (value !== null && value !== undefined) {
+          paramPairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(value.toString())}`);
+        }
       });
-      queryString = '?' + paramPairs.join('&');
+      if (paramPairs.length > 0) {
+        queryString = '?' + paramPairs.join('&');
+      }
     }
     
     return this.request<T>({
@@ -77,22 +105,34 @@ export class HttpClient {
   /**
    * POST请求
    */
-  async post<T>(url: string, data?: Record<string, Object>): Promise<ApiResponse<T>> {
+  async post<T>(url: string, data?: Object): Promise<ApiResponse<T>> {
+    // 将数据转换为JSON字符串
+    let postData: string | Object = '';
+    if (data) {
+      postData = JSON.stringify(data);
+    }
+    
     return this.request<T>({
       url,
       method: http.RequestMethod.POST,
-      data
+      data: postData
     });
   }
   
   /**
    * PUT请求
    */
-  async put<T>(url: string, data?: Record<string, Object>): Promise<ApiResponse<T>> {
+  async put<T>(url: string, data?: Object): Promise<ApiResponse<T>> {
+    // 将数据转换为JSON字符串
+    let putData: string | Object = '';
+    if (data) {
+      putData = JSON.stringify(data);
+    }
+    
     return this.request<T>({
       url,
       method: http.RequestMethod.PUT,
-      data
+      data: putData
     });
   }
   
@@ -121,7 +161,7 @@ export interface RequestConfig {
   url: string;
   method?: http.RequestMethod;
   headers?: Record<string, string>;
-  data?: Record<string, Object>;
+  data?: string | Object;
   timeout?: number;
 }
 

@@ -1,0 +1,99 @@
+# LifeSwarm Android 依赖版本管理
+# 对应鸿蒙端: harmonyos/oh-package.json5
+
+[versions]
+agp = "8.13.0"
+kotlin = "2.1.0"
+coreKtx = "1.15.0"
+lifecycleRuntimeKtx = "2.8.7"
+activityCompose = "1.9.3"
+composeBom = "2025.01.00"
+navigationCompose = "2.8.5"
+# 网络层 - 对应鸿蒙 @ohos.net.http
+retrofit = "2.11.0"
+okhttp = "4.12.0"
+# JSON解析
+gson = "2.11.0"
+# 本地存储 - 对应鸿蒙 @ohos.data.preferences
+datastore = "1.1.1"
+# 图片加载
+coil = "2.7.0"
+# Markdown渲染 - 对应鸿蒙 MarkdownParser.ets
+markwon = "4.6.2"
+# 协程
+coroutines = "1.8.1"
+# ViewModel
+viewmodelCompose = "2.8.4"
+# CameraX - 对应鸿蒙 EnhancedCameraService.ets (@ohos.multimedia.camera)
+camerax = "1.3.4"
+# Google Play Services Location - 对应鸿蒙 @ohos.geoLocationManager
+playServicesLocation = "21.3.0"
+# 测试
+junit = "4.13.2"
+junitVersion = "1.2.1"
+espressoCore = "3.6.1"
+
+[libraries]
+# AndroidX 核心
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+
+# Jetpack Compose BOM
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+
+# Navigation Compose - 对应鸿蒙 router
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+
+# ViewModel - 对应鸿蒙 @State 状态管理
+androidx-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "viewmodelCompose" }
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleRuntimeKtx" }
+
+# 网络层 - 对应鸿蒙 HttpUtil.ets (@ohos.net.http)
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+okhttp-sse = { group = "com.squareup.okhttp3", name = "okhttp-sse", version.ref = "okhttp" }
+
+# JSON - 对应鸿蒙 JSON.parse()
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+
+# 本地存储 - 对应鸿蒙 @ohos.data.preferences
+androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
+# 图片加载 - 对应鸿蒙 image 组件
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Markdown渲染 - 对应鸿蒙 MarkdownParser.ets
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+
+# 协程 - 对应鸿蒙 async/await Promise
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+# CameraX - 对应鸿蒙 EnhancedCameraService.ets (@ohos.multimedia.camera)
+androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+
+# Google Play Services Location - 对应鸿蒙 @ohos.geoLocationManager
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
+# 测试
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

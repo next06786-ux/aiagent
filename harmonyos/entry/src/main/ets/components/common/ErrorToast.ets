@@ -4,7 +4,7 @@
 @Component
 export struct ErrorToast {
   @Prop message: string = '';
-  @Prop onClose: () => void = () => {};
+  onClose: () => void = () => {};
   @State visible: boolean = true;
 
   aboutToAppear() {

@@ -4,10 +4,12 @@
  */
 import router from '@ohos.router';
 import { AuthService } from '../services/AuthService';
+import { HttpClient } from '../utils/HttpClient';
 import { DataPreloader } from '../utils/DataPreloader';
 import { User } from '../models/User';
 import { SphereView } from '../components/sphere/SphereView';
 import { AppConstants } from '../constants/AppConstants';
+import { common } from '@kit.AbilityKit';
 
 @Entry
 @Component
@@ -17,9 +19,29 @@ struct IndexNew {
   
   private authService = new AuthService();
   private dataPreloader = new DataPreloader();
+  private context: common.UIAbilityContext | null = null;
   
   aboutToAppear() {
-    this.checkLoginStatus();
+    try {
+      // 安全地获取context
+      this.context = getContext(this) as common.UIAbilityContext;
+      
+      if (this.context) {
+        // 设置context
+        this.authService.setContext(this.context);
+        HttpClient.getInstance().setContext(this.context);
+        console.info('IndexNew: Context设置成功');
+        
+        // 检查登录状态
+        this.checkLoginStatus();
+      } else {
+        console.error('IndexNew: 无法获取Context');
+        this.isLoading = false;
+      }
+    } catch (error) {
+      console.error('IndexNew: 初始化失败', JSON.stringify(error));
+      this.isLoading = false;
+    }
   }
   
   /**
@@ -180,9 +202,9 @@ struct IndexNew {
  */
 @Component
 struct FunctionSphere {
-  @Prop title: string;
-  @Prop color: string;
-  @Prop onTapHandler: () => void;
+  @Prop title: string = '';
+  @Prop color: string = '';
+  onTapHandler: () => void = () => {};
   
   build() {
     Column() {

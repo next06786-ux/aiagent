@@ -12,8 +12,8 @@ export interface DecisionInfo {
 @Component
 export struct DecisionInfoCollector {
   @Link info: DecisionInfo;
-  @Prop onSubmit: (info: DecisionInfo) => void = () => {};
-  @Prop onCancel: () => void = () => {};
+  onSubmit: (info: DecisionInfo) => void = () => {};
+  onCancel: () => void = () => {};
 
   @State currentStep: number = 0;
   @State optionInput: string = '';

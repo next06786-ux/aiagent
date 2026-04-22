@@ -4,8 +4,10 @@
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
 import { AuthService } from '../services/AuthService';
+import { HttpClient } from '../utils/HttpClient';
 import { StringUtils } from '../utils/StringUtils';
 import { AppConstants } from '../constants/AppConstants';
+import { common } from '@kit.AbilityKit';
 
 @Entry
 @Component
@@ -19,6 +21,25 @@ struct RegisterPage {
   @State showPassword: boolean = false;
   
   private authService = new AuthService();
+  private context: common.UIAbilityContext | null = null;
+  
+  aboutToAppear() {
+    try {
+      // 安全地获取context
+      this.context = getContext(this) as common.UIAbilityContext;
+      
+      if (this.context) {
+        // 设置context
+        this.authService.setContext(this.context);
+        HttpClient.getInstance().setContext(this.context);
+        console.info('RegisterPage: Context设置成功');
+      } else {
+        console.error('RegisterPage: 无法获取Context');
+      }
+    } catch (error) {
+      console.error('RegisterPage: 初始化失败', JSON.stringify(error));
+    }
+  }
   
   build() {
     Column() {

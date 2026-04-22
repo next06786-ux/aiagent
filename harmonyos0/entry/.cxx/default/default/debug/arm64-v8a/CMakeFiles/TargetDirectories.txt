@@ -1,0 +1,4 @@
+E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/starmap_render.dir
+E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/nebulachat.dir
+E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/edit_cache.dir
+E:/ai/harmonyos/entry/.cxx/default/default/debug/arm64-v8a/CMakeFiles/rebuild_cache.dir

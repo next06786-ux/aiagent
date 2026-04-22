@@ -70,6 +70,7 @@ bool StarMapRenderer::init(OHNativeWindow* window, int width, int height) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(nebulaQuad), nebulaQuad, GL_STATIC_DRAW);
     
     initBackgroundStars();
+    initSphereGeometry();  // 初始化球体几何
     
     // OpenGL设置
     glEnable(GL_BLEND);
@@ -143,6 +144,14 @@ bool StarMapRenderer::initEGL(OHNativeWindow* window) {
 bool StarMapRenderer::initShaders() {
     LOGI("initShaders: Creating shader programs...");
     
+    // 球体节点shader（新增）
+    sphereProgram_ = ShaderUtils::createProgram(SPHERE_VERTEX_SHADER, SPHERE_FRAGMENT_SHADER);
+    LOGI("sphereProgram: %{public}d", sphereProgram_);
+    
+    glowProgram_ = ShaderUtils::createProgram(GLOW_VERTEX_SHADER, GLOW_FRAGMENT_SHADER);
+    LOGI("glowProgram: %{public}d", glowProgram_);
+    
+    // 原有的点精灵节点shader（备用）
     nodeProgram_ = ShaderUtils::createProgram(NODE_VERTEX_SHADER, NODE_FRAGMENT_SHADER);
     LOGI("nodeProgram: %{public}d", nodeProgram_);
     
@@ -161,7 +170,7 @@ bool StarMapRenderer::initShaders() {
     nebulaProgram_ = ShaderUtils::createProgram(NEBULA_VERTEX_SHADER, NEBULA_FRAGMENT_SHADER);
     LOGI("nebulaProgram: %{public}d", nebulaProgram_);
     
-    bool success = nodeProgram_ != 0 && lineProgram_ != 0 && starProgram_ != 0 && particleProgram_ != 0;
+    bool success = sphereProgram_ != 0 && glowProgram_ != 0 && lineProgram_ != 0 && starProgram_ != 0 && particleProgram_ != 0;
     LOGI("initShaders: %{public}s", success ? "SUCCESS" : "FAILED");
     
     return success;
@@ -290,6 +299,83 @@ void StarMapRenderer::initBackgroundStars() {
     LOGI("initBackgroundStars: created %{public}zu bright 3D stars", bgStars_.size());
 }
 
+void StarMapRenderer::initSphereGeometry() {
+    const int latBands = 16;
+    const int lonBands = 16;
+    std::vector<float> vertices;
+    std::vector<uint16_t> indices;
+    
+    // 生成顶点（位置+法线+纹理坐标）
+    for (int lat = 0; lat <= latBands; lat++) {
+        float theta = lat * M_PI / latBands;
+        float sinTheta = sin(theta);
+        float cosTheta = cos(theta);
+        
+        for (int lon = 0; lon <= lonBands; lon++) {
+            float phi = lon * 2 * M_PI / lonBands;
+            float sinPhi = sin(phi);
+            float cosPhi = cos(phi);
+            
+            // 位置（单位球）
+            float x = cosPhi * sinTheta;
+            float y = cosTheta;
+            float z = sinPhi * sinTheta;
+            
+            // 法线（与位置相同，因为是单位球）
+            float nx = x, ny = y, nz = z;
+            
+            // 纹理坐标
+            float u = 1.0f - (float)lon / lonBands;
+            float v = 1.0f - (float)lat / latBands;
+            
+            vertices.push_back(x);
+            vertices.push_back(y);
+            vertices.push_back(z);
+            vertices.push_back(nx);
+            vertices.push_back(ny);
+            vertices.push_back(nz);
+            vertices.push_back(u);
+            vertices.push_back(v);
+        }
+    }
+    
+    // 生成索引
+    for (int lat = 0; lat < latBands; lat++) {
+        for (int lon = 0; lon < lonBands; lon++) {
+            int first = lat * (lonBands + 1) + lon;
+            int second = first + lonBands + 1;
+            
+            indices.push_back(first);
+            indices.push_back(second);
+            indices.push_back(first + 1);
+            
+            indices.push_back(second);
+            indices.push_back(second + 1);
+            indices.push_back(first + 1);
+        }
+    }
+    
+    sphereIndexCount_ = indices.size();
+    
+    // 创建VBO和IBO
+    glGenBuffers(1, &sphereVBO_);
+    glGenBuffers(1, &sphereIBO_);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, sphereVBO_);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), 
+                 vertices.data(), GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereIBO_);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint16_t), 
+                 indices.data(), GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
+    LOGI("initSphereGeometry: created sphere with %{public}zu vertices, %{public}d triangles", 
+         vertices.size() / 8, sphereIndexCount_ / 3);
+}
+
 void StarMapRenderer::initFlowParticles() {
     particles_.clear();
     std::random_device rd;
@@ -374,6 +460,22 @@ void StarMapRenderer::setNodes(const std::vector<StarNode>& nodes) {
 
 void StarMapRenderer::setLinks(const std::vector<StarLink>& links) {
     links_ = links;
+    
+    // 打印前20条边的详细信息用于调试
+    LOGI("SetLinks: %{public}zu links received", links.size());
+    int printCount = std::min(20, (int)links.size());
+    for (int i = 0; i < printCount; i++) {
+        const auto& link = links[i];
+        if (link.sourceIdx >= 0 && link.sourceIdx < (int)nodes_.size() &&
+            link.targetIdx >= 0 && link.targetIdx < (int)nodes_.size()) {
+            LOGI("  Link %{public}d: %{public}s -> %{public}s (strength: %{public}.2f)",
+                 i,
+                 nodes_[link.sourceIdx].name.c_str(),
+                 nodes_[link.targetIdx].name.c_str(),
+                 link.strength);
+        }
+    }
+    
     initFlowParticles();
     updateLineVBO();
 }
@@ -1002,7 +1104,7 @@ void StarMapRenderer::render() {
     // 绘制3D内容
     drawLinks();
     drawParticles();
-    drawNodes();
+    drawSphereNodes();  // 使用3D球体渲染节点
     drawTextLabels();
     
     err = glGetError();
@@ -1506,6 +1608,134 @@ void StarMapRenderer::drawNodes() {
                  x, y, z, ndcX, ndcY, ndcZ, clipW);
         }
         LOGI("drawNodes: drawing %{public}zu nodes with program %{public}d", nodes_.size(), nodeProgram_);
+        firstDraw = false;
+    }
+}
+
+void StarMapRenderer::drawSphereNodes() {
+    if (nodes_.empty()) {
+        LOGI("drawSphereNodes: no nodes to draw");
+        return;
+    }
+    
+    float mvp[16];
+    computeMVPMatrix(mvp);
+    
+    // 光源方向
+    float lightDir[3] = {0.5f, 0.8f, 0.3f};
+    
+    // 计算相机位置（用于光晕效果）
+    float cameraZ = 220.0f / zoom_;
+    float eyeX = targetX_ + cameraZ * sin(rotationY_) * cos(rotationX_);
+    float eyeY = targetY_ + cameraZ * sin(rotationX_);
+    float eyeZ = targetZ_ + cameraZ * cos(rotationY_) * cos(rotationX_);
+    float cameraPos[3] = {eyeX, eyeY, eyeZ};
+    
+    // 计算最大连接数
+    int maxConnections = 1;
+    for (const auto& node : nodes_) {
+        if (node.connections > maxConnections) {
+            maxConnections = node.connections;
+        }
+    }
+    
+    // 绑定球体几何
+    glBindBuffer(GL_ARRAY_BUFFER, sphereVBO_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereIBO_);
+    
+    // 为每个节点绘制球体
+    for (size_t i = 0; i < nodes_.size(); i++) {
+        const auto& node = nodes_[i];
+        int isSelected = (i == selectedNodeIdx_) ? 1 : 0;
+        
+        // 计算节点大小
+        float connectionRatio = (float)node.connections / (float)maxConnections;
+        float nodeSize = 3.0f + connectionRatio * 8.0f;
+        if (node.connections == maxConnections) {
+            nodeSize *= 1.4f;
+        }
+        
+        // 1. 绘制球体本体
+        glUseProgram(sphereProgram_);
+        
+        GLint mvpLoc = glGetUniformLocation(sphereProgram_, "uMVPMatrix");
+        GLint posLoc = glGetUniformLocation(sphereProgram_, "uNodePosition");
+        GLint sizeLoc = glGetUniformLocation(sphereProgram_, "uNodeSize");
+        GLint colorLoc = glGetUniformLocation(sphereProgram_, "uNodeColor");
+        GLint timeLoc = glGetUniformLocation(sphereProgram_, "uTime");
+        GLint selectedLoc = glGetUniformLocation(sphereProgram_, "uIsSelected");
+        GLint lightLoc = glGetUniformLocation(sphereProgram_, "uLightDir");
+        
+        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
+        glUniform3f(posLoc, node.x, node.y, node.z);
+        glUniform1f(sizeLoc, nodeSize);
+        glUniform3f(colorLoc, node.r, node.g, node.b);
+        glUniform1f(timeLoc, time_);
+        glUniform1i(selectedLoc, isSelected);
+        glUniform3fv(lightLoc, 1, lightDir);
+        
+        // 设置顶点属性
+        int stride = 8 * sizeof(float);
+        glEnableVertexAttribArray(0);  // 位置
+        glEnableVertexAttribArray(1);  // 法线
+        glEnableVertexAttribArray(2);  // 纹理坐标
+        
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, 0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(6 * sizeof(float)));
+        
+        // 绘制球体
+        glDrawElements(GL_TRIANGLES, sphereIndexCount_, GL_UNSIGNED_SHORT, 0);
+        
+        glDisableVertexAttribArray(0);
+        glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(2);
+        
+        // 2. 绘制光晕（大气层）
+        glUseProgram(glowProgram_);
+        
+        mvpLoc = glGetUniformLocation(glowProgram_, "uMVPMatrix");
+        posLoc = glGetUniformLocation(glowProgram_, "uNodePosition");
+        sizeLoc = glGetUniformLocation(glowProgram_, "uNodeSize");
+        colorLoc = glGetUniformLocation(glowProgram_, "uNodeColor");
+        timeLoc = glGetUniformLocation(glowProgram_, "uTime");
+        selectedLoc = glGetUniformLocation(glowProgram_, "uIsSelected");
+        GLint cameraLoc = glGetUniformLocation(glowProgram_, "uCameraPos");
+        
+        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, mvp);
+        glUniform3f(posLoc, node.x, node.y, node.z);
+        glUniform1f(sizeLoc, nodeSize);
+        glUniform3f(colorLoc, node.r, node.g, node.b);
+        glUniform1f(timeLoc, time_);
+        glUniform1i(selectedLoc, isSelected);
+        glUniform3fv(cameraLoc, 1, cameraPos);
+        
+        // 设置顶点属性（只需要位置和法线）
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, 0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+        
+        // 启用加法混合绘制光晕
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        
+        // 绘制
+        glDrawElements(GL_TRIANGLES, sphereIndexCount_, GL_UNSIGNED_SHORT, 0);
+        
+        // 恢复正常混合
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        
+        glDisableVertexAttribArray(0);
+        glDisableVertexAttribArray(1);
+    }
+    
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    
+    static bool firstDraw = true;
+    if (firstDraw) {
+        LOGI("drawSphereNodes: drew %{public}zu sphere nodes", nodes_.size());
         firstDraw = false;
     }
 }

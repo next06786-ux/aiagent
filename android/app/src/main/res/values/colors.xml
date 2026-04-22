@@ -1,0 +1,29 @@
+<resources>
+    <!--
+        颜色资源 - 对应鸿蒙 Theme.ets Color 系统
+        所有颜色值与 Theme.ets 完全一致
+    -->
+
+    <!-- Primary Brand Colors -->
+    <color name="color_primary">#0A59F7</color>       <!-- 鸿蒙蓝 -->
+    <color name="color_secondary">#6B48FF</color>     <!-- 星空紫 -->
+    <color name="color_accent">#00C853</color>        <!-- 生机绿 -->
+    <color name="color_warning">#FF9500</color>       <!-- 警示橙 -->
+    <color name="color_destructive">#FF3B30</color>   <!-- 危险红 -->
+
+    <!-- Backgrounds -->
+    <color name="bg_primary">#F5F7FA</color>          <!-- 主背景 -->
+    <color name="bg_secondary">#FFFFFF</color>        <!-- 卡片背景 -->
+    <color name="bg_tertiary">#FAFBFC</color>         <!-- 次级背景 -->
+
+    <!-- Text -->
+    <color name="text_primary">#1A1A1A</color>        <!-- 主文字 -->
+    <color name="text_secondary">#666666</color>      <!-- 次要文字 -->
+    <color name="text_tertiary">#999999</color>       <!-- 辅助文字 -->
+    <color name="text_white">#FFFFFF</color>
+
+    <!-- Borders -->
+    <color name="border_light">#0A000000</color>      <!-- rgba(0,0,0,0.04) -->
+    <color name="border_medium">#14000000</color>     <!-- rgba(0,0,0,0.08) -->
+    <color name="border_heavy">#1F000000</color>      <!-- rgba(0,0,0,0.12) -->
+</resources>

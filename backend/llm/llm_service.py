@@ -185,18 +185,28 @@ class LLMService:
                 logger.warning(f"⚠️ 本地量化模型备用方案加载失败: {e}")
                 self.local_model_service = None
     
-    def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, response_format: Optional[str] = None, model: Optional[str] = None) -> str:
+    def chat(
+        self, 
+        messages: List[Dict[str, str]], 
+        temperature: float = 0.7, 
+        response_format: Optional[str] = None, 
+        model: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = "auto"
+    ) -> str:
         """
-        对话接口 - 支持自动降级到本地模型
+        对话接口 - 支持自动降级到本地模型 + Function Calling
         
         Args:
             messages: 消息列表 [{"role": "user", "content": "..."}]
             temperature: 温度参数（0-1，越高越随机）
             response_format: 响应格式，可选 "json_object"
             model: 指定模型名称（可选），如果不指定则使用默认模型
+            tools: 工具定义列表（Function Calling）
+            tool_choice: 工具选择策略 ("auto" | "none" | {"type": "function", "function": {"name": "..."}})
         
         Returns:
-            大模型回复
+            大模型回复（可能包含工具调用）
         """
         # 临时保存原模型，使用指定模型
         original_model = self.model
@@ -205,9 +215,9 @@ class LLMService:
         
         try:
             if self.provider == LLMProvider.OPENAI:
-                return self._chat_openai(messages, temperature, response_format)
+                return self._chat_openai(messages, temperature, response_format, tools, tool_choice)
             elif self.provider == LLMProvider.QWEN:
-                return self._chat_qwen(messages, temperature, response_format)
+                return self._chat_qwen(messages, temperature, response_format, tools, tool_choice)
             elif self.provider == LLMProvider.TRANSFORMERS:
                 return self._chat_transformers(messages, temperature)
             elif self.provider == LLMProvider.LOCAL_QUANTIZED:
@@ -234,22 +244,62 @@ class LLMService:
             # 恢复原模型
             self.model = original_model
     
-    def _chat_openai(self, messages: List[Dict[str, str]], temperature: float, response_format: Optional[str] = None) -> str:
-        """OpenAI 对话"""
+    def _chat_openai(
+        self, 
+        messages: List[Dict[str, str]], 
+        temperature: float, 
+        response_format: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = "auto"
+    ) -> str:
+        """OpenAI 对话 - 支持Function Calling"""
         kwargs = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
             "timeout": 15
         }
+        
         if response_format == "json_object":
             kwargs["response_format"] = {"type": "json_object"}
         
+        # 添加Function Calling支持
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = tool_choice
+        
         response = self.client.chat.completions.create(**kwargs)
+        
+        # 检查是否有工具调用
+        if response.choices[0].message.tool_calls:
+            # 返回包含工具调用的JSON
+            tool_calls = []
+            for tool_call in response.choices[0].message.tool_calls:
+                tool_calls.append({
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                })
+            
+            return json.dumps({
+                "tool_calls": tool_calls,
+                "content": response.choices[0].message.content
+            })
+        
         return response.choices[0].message.content
     
-    def _chat_qwen(self, messages: List[Dict[str, str]], temperature: float, response_format: Optional[str] = None) -> str:
-        """通义千问对话（使用 OpenAI 兼容接口）"""
+    def _chat_qwen(
+        self, 
+        messages: List[Dict[str, str]], 
+        temperature: float, 
+        response_format: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = "auto"
+    ) -> str:
+        """通义千问对话（使用 OpenAI 兼容接口）- 支持Function Calling"""
         kwargs = {
             "model": self.model,
             "messages": messages,
@@ -265,8 +315,33 @@ class LLMService:
         if response_format == "json_object":
             kwargs["response_format"] = {"type": "json_object"}
         
+        # 添加Function Calling支持
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = tool_choice
+        
         # 不在这里捕获异常，让外层的降级逻辑处理
         response = self.client.chat.completions.create(**kwargs)
+        
+        # 检查是否有工具调用
+        if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+            # 返回包含工具调用的JSON
+            tool_calls = []
+            for tool_call in response.choices[0].message.tool_calls:
+                tool_calls.append({
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments
+                    }
+                })
+            
+            return json.dumps({
+                "tool_calls": tool_calls,
+                "content": response.choices[0].message.content
+            })
+        
         return response.choices[0].message.content
     
     def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):

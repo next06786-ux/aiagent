@@ -28,16 +28,6 @@ export interface KeyValuePair {
   value: string;
 }
 
-/**
- * 请求数据接口
- */
-export interface RequestData {
-  [key: string]: string | number | boolean | Object | string[];
-}
-
-/**
- * 响应数据接口
- */
-export interface ResponseData {
-  [key: string]: Object;
-}
+// ArkTS不支持索引签名，使用Record类型替代
+// export type RequestData = Record<string, Object>;
+// export type ResponseData = Record<string, Object>;

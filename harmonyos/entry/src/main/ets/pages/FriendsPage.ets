@@ -360,8 +360,9 @@ struct FriendsPage {
     })
   }
 
-  private formatDate(timestamp: number): string {
-    const date = new Date(timestamp * 1000);
+  private formatDate(timestamp: string | number): string {
+    const timestampNum = typeof timestamp === 'string' ? parseInt(timestamp) : timestamp;
+    const date = new Date(timestampNum * 1000);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / (1000 * 60));

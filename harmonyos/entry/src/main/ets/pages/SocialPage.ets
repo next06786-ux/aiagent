@@ -238,7 +238,7 @@ struct SocialPage {
 
       // 底部信息
       Row() {
-        Text(this.formatDate(post.created_at))
+        Text(this.formatDate(post.created_at || ''))
           .fontSize(12)
           .fontColor('#999999')
 
@@ -362,8 +362,15 @@ struct SocialPage {
     }
   }
 
-  private formatDate(timestamp: number): string {
-    const date = new Date(timestamp * 1000);
+  private formatDate(timestamp: string | number): string {
+    let time: number;
+    if (typeof timestamp === 'string') {
+      time = new Date(timestamp).getTime();
+    } else {
+      time = timestamp * 1000;
+    }
+    
+    const date = new Date(time);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / (1000 * 60));

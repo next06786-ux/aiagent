@@ -9,7 +9,7 @@ import { SphereView } from './SphereView';
 @Component
 export struct AgentNode {
   @ObjectLink agent: Agent;
-  @Prop onTap: () => void = () => {};
+  onTap: () => void = () => {};
   
   build() {
     Stack() {

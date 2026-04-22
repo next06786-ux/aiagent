@@ -5,6 +5,7 @@
 import { HttpClient } from '../utils/HttpClient';
 import { ApiConstants } from '../constants/ApiConstants';
 import { InsightResult, Insight, InsightType } from '../models/Insight';
+import { GetInsightRequest, EmptyObject } from '../types/RequestInterfaces';
 
 export class InsightsService {
   private httpClient = HttpClient.getInstance();
@@ -17,10 +18,10 @@ export class InsightsService {
     query: string,
     context?: Record<string, Object>
   ): Promise<InsightResult> {
-    const requestData: Record<string, Object> = {
+    const requestData: GetInsightRequest = {
       user_id: userId,
       query: query,
-      context: context || {}
+      context: context || new EmptyObject()
     };
     
     const result = await this.httpClient.post<InsightResult>(
@@ -39,10 +40,10 @@ export class InsightsService {
     query: string,
     context?: Record<string, Object>
   ): Promise<InsightResult> {
-    const requestData: Record<string, Object> = {
+    const requestData: GetInsightRequest = {
       user_id: userId,
       query: query,
-      context: context || {}
+      context: context || new EmptyObject()
     };
     
     const result = await this.httpClient.post<InsightResult>(
@@ -61,10 +62,10 @@ export class InsightsService {
     query: string,
     context?: Record<string, Object>
   ): Promise<InsightResult> {
-    const requestData: Record<string, Object> = {
+    const requestData: GetInsightRequest = {
       user_id: userId,
       query: query,
-      context: context || {}
+      context: context || new EmptyObject()
     };
     
     const result = await this.httpClient.post<InsightResult>(
@@ -80,7 +81,8 @@ export class InsightsService {
    */
   async getAgentsStatus(): Promise<Record<string, Object>> {
     const result = await this.httpClient.get<Record<string, Object>>(
-      ApiConstants.INSIGHTS.AGENTS_STATUS
+      ApiConstants.INSIGHTS.AGENTS_STATUS,
+      {}
     );
     
     return result.data;
@@ -112,7 +114,8 @@ export class InsightsService {
    */
   async getInsights(type: InsightType): Promise<Insight[]> {
     const result = await this.httpClient.get<Insight[]>(
-      `${ApiConstants.INSIGHTS.RELATIONSHIP}?type=${type}`
+      `${ApiConstants.INSIGHTS.RELATIONSHIP}?type=${type}`,
+      {}
     );
     
     return result.data || [];

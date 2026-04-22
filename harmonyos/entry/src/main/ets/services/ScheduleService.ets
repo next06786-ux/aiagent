@@ -5,6 +5,21 @@
 import { HttpClient } from '../utils/HttpClient';
 import { ApiConstants } from '../constants/ApiConstants';
 import { Schedule, ScheduleInput, ScheduleRecommendation } from '../models/Schedule';
+import {
+  GetSchedulesParams,
+  AddScheduleRequest,
+  GetRecommendationsRequest,
+  AutoGenerateRequest,
+  EmptyObject
+} from '../types/RequestInterfaces';
+
+/**
+ * 日期范围接口
+ */
+export interface DateRange {
+  start: string;
+  end: string;
+}
 
 export class ScheduleService {
   private httpClient = HttpClient.getInstance();
@@ -13,14 +28,14 @@ export class ScheduleService {
    * 获取日程列表
    */
   async getScheduleList(userId: string, date?: string): Promise<Schedule[]> {
-    const params: Record<string, string> = {};
+    const paramsObj: Record<string, Object> = {};
     if (date) {
-      params.date = date;
+      paramsObj['date'] = date;
     }
     
     const result = await this.httpClient.get<Schedule[]>(
       `${ApiConstants.SCHEDULE.LIST}/${userId}`,
-      params
+      paramsObj
     );
     
     return result.data;
@@ -30,12 +45,13 @@ export class ScheduleService {
    * 获取日程（按时间范围）
    */
   async getSchedules(startTime: number, endTime: number): Promise<Schedule[]> {
+    const paramsObj: Record<string, Object> = {};
+    paramsObj['start_time'] = startTime.toString();
+    paramsObj['end_time'] = endTime.toString();
+    
     const result = await this.httpClient.get<Schedule[]>(
       ApiConstants.SCHEDULE.LIST,
-      {
-        start_time: startTime.toString(),
-        end_time: endTime.toString()
-      }
+      paramsObj
     );
     
     return result.data || [];
@@ -45,22 +61,15 @@ export class ScheduleService {
    * 添加日程
    */
   async addSchedule(schedule: ScheduleInput): Promise<Schedule> {
-    const scheduleData: Record<string, Object> = {
+    const scheduleData: AddScheduleRequest = {
       user_id: schedule.user_id,
       title: schedule.title,
       start_time: schedule.start_time,
-      end_time: schedule.end_time
+      end_time: schedule.end_time,
+      description: schedule.description || '',
+      location: schedule.location || '',
+      priority: schedule.priority || ''
     };
-    
-    if (schedule.description) {
-      scheduleData.description = schedule.description;
-    }
-    if (schedule.location) {
-      scheduleData.location = schedule.location;
-    }
-    if (schedule.priority) {
-      scheduleData.priority = schedule.priority;
-    }
     
     const result = await this.httpClient.post<Schedule>(
       ApiConstants.SCHEDULE.ADD,
@@ -73,7 +82,7 @@ export class ScheduleService {
   /**
    * 更新日程
    */
-  async updateSchedule(scheduleId: string, updates: Partial<Schedule>): Promise<Schedule> {
+  async updateSchedule(scheduleId: string, updates: Record<string, Object>): Promise<Schedule> {
     const result = await this.httpClient.put<Schedule>(
       `${ApiConstants.SCHEDULE.UPDATE}/${scheduleId}`,
       updates
@@ -86,7 +95,7 @@ export class ScheduleService {
    * 删除日程
    */
   async deleteSchedule(scheduleId: string): Promise<void> {
-    await this.httpClient.delete(
+    await this.httpClient.delete<Object>(
       `${ApiConstants.SCHEDULE.DELETE}/${scheduleId}`
     );
   }
@@ -99,13 +108,15 @@ export class ScheduleService {
     date: string,
     preferences?: Record<string, Object>
   ): Promise<ScheduleRecommendation[]> {
+    const requestData: GetRecommendationsRequest = {
+      user_id: userId,
+      date: date,
+      preferences: preferences || new EmptyObject()
+    };
+    
     const result = await this.httpClient.post<ScheduleRecommendation[]>(
       ApiConstants.SCHEDULE.RECOMMEND,
-      {
-        user_id: userId,
-        date,
-        preferences: preferences || {}
-      }
+      requestData
     );
     
     return result.data;
@@ -116,16 +127,18 @@ export class ScheduleService {
    */
   async autoGenerateSchedule(
     userId: string,
-    dateRange: { start: string; end: string },
+    dateRange: DateRange,
     goals?: string[]
   ): Promise<Schedule[]> {
+    const requestData: AutoGenerateRequest = {
+      user_id: userId,
+      date_range: dateRange as Object,
+      goals: goals || []
+    };
+    
     const result = await this.httpClient.post<Schedule[]>(
       ApiConstants.SCHEDULE.AUTO_GENERATE,
-      {
-        user_id: userId,
-        date_range: dateRange,
-        goals: goals || []
-      }
+      requestData
     );
     
     return result.data;
@@ -149,12 +162,13 @@ export class ScheduleService {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     
+    const paramsObj: Record<string, Object> = {};
+    paramsObj['start_date'] = startOfWeek.toISOString().split('T')[0];
+    paramsObj['end_date'] = endOfWeek.toISOString().split('T')[0];
+    
     const result = await this.httpClient.get<Schedule[]>(
       `${ApiConstants.SCHEDULE.LIST}/${userId}`,
-      {
-        start_date: startOfWeek.toISOString().split('T')[0],
-        end_date: endOfWeek.toISOString().split('T')[0]
-      }
+      paramsObj
     );
     
     return result.data;

@@ -4,8 +4,10 @@
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
 import { AuthService } from '../services/AuthService';
+import { HttpClient } from '../utils/HttpClient';
 import { StringUtils } from '../utils/StringUtils';
 import { AppConstants } from '../constants/AppConstants';
+import { common } from '@kit.AbilityKit';
 
 @Entry
 @Component
@@ -16,6 +18,25 @@ struct LoginPage {
   @State showPassword: boolean = false;
   
   private authService = new AuthService();
+  private context: common.UIAbilityContext | null = null;
+  
+  aboutToAppear() {
+    try {
+      // 安全地获取context
+      this.context = getContext(this) as common.UIAbilityContext;
+      
+      if (this.context) {
+        // 设置context
+        this.authService.setContext(this.context);
+        HttpClient.getInstance().setContext(this.context);
+        console.info('LoginPage: Context设置成功');
+      } else {
+        console.error('LoginPage: 无法获取Context');
+      }
+    } catch (error) {
+      console.error('LoginPage: 初始化失败', JSON.stringify(error));
+    }
+  }
   
   build() {
     Column() {
@@ -129,6 +150,12 @@ struct LoginPage {
    * 处理登录
    */
   async handleLogin() {
+    // 验证context
+    if (!this.context) {
+      promptAction.showToast({ message: '应用初始化失败，请重启应用' });
+      return;
+    }
+    
     // 验证输入
     if (StringUtils.isEmpty(this.username)) {
       promptAction.showToast({ message: '请输入用户名或邮箱' });
@@ -143,14 +170,23 @@ struct LoginPage {
     this.isLoading = true;
     
     try {
+      console.info('开始登录:', this.username);
+      
       const result = await this.authService.login(this.username, this.password);
       
+      console.info('登录成功:', JSON.stringify(result));
       promptAction.showToast({ message: '登录成功' });
+      
       // 跳转到主页
-      router.replaceUrl({ url: 'pages/IndexNew' });
+      setTimeout(() => {
+        router.replaceUrl({ url: 'pages/IndexNew' });
+      }, 500);
+      
     } catch (error) {
-      console.error('登录失败:', error);
-      promptAction.showToast({ message: '登录失败，请检查网络连接' });
+      console.error('登录失败:', JSON.stringify(error));
+      const err = error as Error;
+      const errorMsg = err.message || '登录失败，请检查网络连接';
+      promptAction.showToast({ message: errorMsg });
     } finally {
       this.isLoading = false;
     }

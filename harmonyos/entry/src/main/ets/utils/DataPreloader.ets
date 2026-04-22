@@ -7,6 +7,12 @@ import { ScheduleService } from '../services/ScheduleService';
 import { SocialService } from '../services/SocialService';
 import { OfflineCache } from './OfflineCache';
 import { AppConstants } from '../constants/AppConstants';
+import {
+  CacheData,
+  ScheduleCacheData,
+  FriendsCacheData,
+  ConversationsCacheData
+} from '../types/RequestInterfaces';
 
 export class DataPreloader {
   private cache = new OfflineCache();
@@ -53,14 +59,16 @@ export class DataPreloader {
       ]);
       
       // 缓存到本地
+      const starMapsData: CacheData = {
+        career: starMaps[0] as Object,
+        education: starMaps[1] as Object,
+        relationship: starMaps[2] as Object,
+        timestamp: Date.now()
+      };
+      
       await this.cache.cacheData(
         `${AppConstants.CACHE_KEYS.STAR_MAPS}_${userId}`,
-        {
-          career: starMaps[0],
-          education: starMaps[1],
-          relationship: starMaps[2],
-          timestamp: Date.now()
-        }
+        starMapsData as Object
       );
       
       console.log('知识图谱预加载完成');
@@ -79,12 +87,14 @@ export class DataPreloader {
       const schedules = await this.scheduleService.getTodaySchedule(userId);
       
       // 缓存到本地
+      const cacheData: ScheduleCacheData = {
+        schedules: schedules as Object,
+        timestamp: Date.now()
+      };
+      
       await this.cache.cacheData(
         `schedules_today_${userId}`,
-        {
-          schedules,
-          timestamp: Date.now()
-        }
+        cacheData as Object
       );
       
       console.log('日程预加载完成');
@@ -103,12 +113,14 @@ export class DataPreloader {
       const friends = await this.socialService.getFriendsList(userId);
       
       // 缓存到本地
+      const cacheData: FriendsCacheData = {
+        friends: friends as Object,
+        timestamp: Date.now()
+      };
+      
       await this.cache.cacheData(
         `friends_${userId}`,
-        {
-          friends,
-          timestamp: Date.now()
-        }
+        cacheData as Object
       );
       
       console.log('好友列表预加载完成');
@@ -128,12 +140,14 @@ export class DataPreloader {
       // const conversations = await conversationService.getRecentConversations(userId);
       
       // 缓存到本地
+      const cacheData: ConversationsCacheData = {
+        conversations: [],
+        timestamp: Date.now()
+      };
+      
       await this.cache.cacheData(
         `${AppConstants.CACHE_KEYS.RECENT_CONVERSATIONS}_${userId}`,
-        {
-          conversations: [],
-          timestamp: Date.now()
-        }
+        cacheData as Object
       );
       
       console.log('最近对话预加载完成');

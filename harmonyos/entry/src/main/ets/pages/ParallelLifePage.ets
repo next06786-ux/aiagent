@@ -145,11 +145,21 @@ struct ParallelLifePage {
 
       // 卡牌网格
       Grid() {
-        ForEach(Array.from({ length: 12 }, (_, i) => i), (index: number) => {
-          GridItem() {
-            this.CardBack(index)
-          }
-        })
+        ForEach(
+          (() => {
+            const arr: number[] = [];
+            for (let i = 0; i < 12; i++) {
+              arr.push(i);
+            }
+            return arr;
+          })(),
+          (index: number) => {
+            GridItem() {
+              this.CardBack(index)
+            }
+          },
+          (index: number) => index.toString()
+        )
       }
       .columnsTemplate('1fr 1fr 1fr')
       .rowsGap(16)
@@ -227,9 +237,9 @@ struct ParallelLifePage {
           .fontColor('#333333')
           .margin({ bottom: 12 })
 
-        ForEach(this.reading?.cards || [], (card: TarotCard) => {
+        ForEach(this.reading?.cards || ([] as TarotCard[]), (card: TarotCard) => {
           this.TarotCardView(card)
-        })
+        }, (card: TarotCard) => card.id)
 
         // 总体解读
         Column() {
@@ -341,14 +351,17 @@ struct ParallelLifePage {
       const gameSession = await parallelLifeService.getTarotReading('test_user');
       
       // 创建TarotCard数组
-      const cards: TarotCard[] = this.selectedCards.map((cardIndex: number) => ({
-        id: `card_${cardIndex}`,
-        name: `塔罗牌 ${cardIndex + 1}`,
-        description: '塔罗牌描述',
-        image_url: '',
-        position: '位置',
-        interpretation: '解读'
-      }));
+      const cards: TarotCard[] = this.selectedCards.map((cardIndex: number): TarotCard => {
+        const card: TarotCard = {
+          id: `card_${cardIndex}`,
+          name: `塔罗牌 ${cardIndex + 1}`,
+          description: '塔罗牌描述',
+          image_url: '',
+          position: '位置',
+          interpretation: '解读'
+        };
+        return card;
+      });
       
       this.reading = {
         session_id: gameSession.game_id,

@@ -479,7 +479,22 @@ async def simulate_single_option(websocket: WebSocket):
                     collected_info = message.get("collected_info", {})
                     decision_type = message.get("decision_type", "general")  # relationship/education/career
                     
+                    # 🆕 获取轮数配置
+                    persona_rounds = message.get("persona_rounds", None)
+                    if persona_rounds is None:
+                        # 默认所有Agent 2轮
+                        persona_rounds = {
+                            "rational_analyst": 2,
+                            "adventurer": 2,
+                            "pragmatist": 2,
+                            "idealist": 2,
+                            "conservative": 2,
+                            "social_navigator": 2,
+                            "innovator": 2
+                        }
+                    
                     logger.info(f"[决策人格推演] 开始 - 选项: {option.get('title')}, 类型: {decision_type}")
+                    logger.info(f"[决策人格推演] 轮数配置: {persona_rounds}")
                     
                     # 发送开始消息
                     if not await safe_send({
@@ -488,7 +503,8 @@ async def simulate_single_option(websocket: WebSocket):
                         "user_id": user_id,
                         "question": question,
                         "decision_type": decision_type,
-                        "option": option
+                        "option": option,
+                        "persona_rounds": persona_rounds
                     }):
                         return
                     
@@ -595,243 +611,79 @@ async def simulate_single_option(websocket: WebSocket):
                     }):
                         return
                     
-                    # 第1轮：所有人格独立分析
-                    if not await safe_send({
-                        "type": "thinking",
-                        "stage": "independent_analysis",
-                        "option_id": option_id,
-                        "content": f"【{option_title}】第1轮：7个人格独立分析..."
-                    }):
-                        return
-                    
-                    option_analyses = {}
-                    
                     # ============================================================
-                    # 多轮交互式推演系统
+                    # 使用新的生命周期系统进行推演
                     # ============================================================
                     
-                    # 第0轮：每个Agent独立形成初步观点（完整分析）
-                    if not await safe_send({
-                        "type": "thinking",
-                        "stage": "round_0",
-                        "option_id": option_id,
-                        "content": f"【{option_title}】第0轮：各Agent独立分析..."
-                    }):
-                        return
-                    
-                    # 随机打乱Agent顺序
-                    import random
-                    persona_items = list(council.personas.items())
-                    random.shuffle(persona_items)
-                    
-                    # 第0轮：所有Agent并行独立分析（真正的异步）
-                    async def analyze_persona_round_0(persona_id, persona):
-                        try:
-                            # 创建状态回调函数
-                            async def send_status(message: str, skill_result=None):
-                                msg = {
-                                    "type": "agent_thinking",
-                                    "agent_id": persona_id,
-                                    "option_id": option_id,
-                                    "stage": "round_0",
-                                    "content": message
-                                }
-                                
-                                # 如果有技能结果，添加到消息中
-                                if skill_result:
-                                    msg["skill_result"] = skill_result
-                                
-                                await safe_send(msg)
+                    try:
+                        # 准备决策上下文
+                        decision_context = {
+                            "question": question,
+                            "collected_info": collected_info,
+                            "option_title": option_title,
+                            "decision_type": decision_type,
+                            "user_decision_style": council.memory_system.current_decision.user_decision_style if council.memory_system else {},
+                            "status_callback": None  # WebSocket回调会在run_lifecycle中处理
+                        }
+                        
+                        # 调用新的analyze_decision方法
+                        logger.info(f"[决策推演] 使用生命周期系统，轮数配置: {persona_rounds}")
+                        
+                        result = await council.analyze_decision(
+                            decision_context=decision_context,
+                            options=[option],
+                            persona_rounds=persona_rounds
+                        )
+                        
+                        # 提取分析结果
+                        option_analyses = result['all_analyses'].get('option_1', {}).get('final_analyses', {})
+                        
+                        # 发送所有Agent的最终结果
+                        for persona_id, analysis in option_analyses.items():
+                            persona = council.personas[persona_id]
                             
-                            # 阶段1：开始分析
-                            await send_status(f"【{persona.name}】开始分析...")
-                            
-                            # 阶段2：构建上下文
-                            await asyncio.sleep(0.1)
-                            await send_status(f"【{persona.name}】正在整理用户数据...")
-                            
-                            # 阶段3：根据persona特点显示不同的思考内容
-                            await asyncio.sleep(0.2)
-                            thinking_messages = {
-                                "rational_analyst": "正在分析数据和逻辑...",
-                                "adventurer": "正在评估机会和可能性...",
-                                "pragmatist": "正在评估可行性和执行难度...",
-                                "idealist": "正在思考价值观和长期意义...",
-                                "conservative": "正在识别风险和稳定性...",
-                                "social_navigator": "正在考虑人际关系影响...",
-                                "innovator": "正在寻找创新机会..."
-                            }
-                            await send_status(f"【{persona.name}】{thinking_messages.get(persona_id, '正在深度思考...')}")
-                            
-                            # 阶段4：执行技能分析（会通过回调发送实时状态）
-                            await asyncio.sleep(0.2)
-                            
-                            # 构建第0轮的详细指令
-                            initial_instruction = f"""这是第0轮独立分析。
-
-请你作为【{persona.name}】，基于你的特点和价值观，独立分析这个选项：
-- 你的核心特征：{persona.description}
-- 你的风险偏好：{persona.value_system.risk_tolerance}
-- 你的决策风格：{persona.value_system.decision_style}
-
-请深入思考：
-1. 从你的角度看，这个选项的最大优势是什么？
-2. 从你的角度看，这个选项的最大风险是什么？
-3. 基于用户的背景和约束条件，这个选项的可行性如何？
-4. 你会给这个选项打多少分（0-100）？为什么？
-
-请给出你的独立判断，不要考虑其他人的观点。"""
-                            
-                            # 检查是否需要停止
-                            if not ws_connected:
-                                logger.info(f"[{persona.name}] 检测到停止信号，中止分析")
-                                return persona_id, None
-                            
-                            # 修改analyze_option调用，传递状态回调
-                            # 注意：需要修改persona的analyze_option方法来接受status_callback
-                            result = await persona.analyze_option(
-                                option=option,
-                                context={
-                                    "question": question,
-                                    "collected_info": collected_info,
-                                    "option_title": option_title,
-                                    "decision_type": decision_type,
-                                    "round": 0,
-                                    "instruction": initial_instruction,
-                                    "status_callback": send_status  # 传递状态回调
-                                },
-                                other_personas_views={}
-                            )
-                            
-                            # 阶段5：分析完成
-                            stance = result.get('stance', '未知')
-                            score = result.get('score', 0)
-                            await send_status(f"【{persona.name}】✓ 分析完成：{stance}（{score}分）")
-                            
-                            # 发送完整的分析结果
                             await safe_send({
                                 "type": "persona_analysis",
-                                "stage": "round_0",
+                                "stage": "final",
                                 "option_id": option_id,
                                 "persona_id": persona_id,
                                 "persona_name": persona.name,
                                 "persona_data": {
                                     "id": persona_id,
                                     "name": persona.name,
-                                    "stance": stance,
-                                    "score": score,
-                                    "confidence": result.get('confidence', 0.5),
-                                    "stance_changed": False,
-                                    "round": 0,
+                                    "stance": analysis.get('stance', '未知'),
+                                    "score": analysis.get('score', 0),
+                                    "confidence": analysis.get('confidence', 0.5),
                                     "emotion": persona.emotional_state.primary_emotion.value,
-                                    "key_points": result.get('key_points', []),
-                                    "reasoning": result.get('reasoning', '')
+                                    "key_points": analysis.get('key_points', []),
+                                    "reasoning": analysis.get('reasoning', '')
                                 },
-                                "content": f"第0轮独立分析"
+                                "content": f"推演完成"
                             })
-                            
-                            return persona_id, result
-                            
-                        except Exception as e:
-                            logger.error(f"Agent {persona_id} 第0轮分析失败: {e}")
-                            await safe_send({
-                                "type": "agent_thinking",
-                                "agent_id": persona_id,
-                                "option_id": option_id,
-                                "stage": "round_0",
-                                "content": f"【{persona.name}】❌ 分析失败"
-                            })
-                            return persona_id, None
-                    
-                    logger.info(f"[决策推演] 开始第0轮真正异步分析 - {len(persona_items)}个智能体")
-                    
-                    # 检查是否需要停止
-                    if not ws_connected:
-                        logger.info(f"[决策推演] 检测到停止信号，中止推演")
+                        
+                        # 发送完成消息
+                        if not await safe_send({
+                            "type": "complete",
+                            "option_id": option_id,
+                            "session_id": session_id,
+                            "analyses": option_analyses,
+                            "recommendation": result.get('recommendation', {}),
+                            "content": f"【{option_title}】分析完成"
+                        }):
+                            return
+                        
+                        logger.info(f"[决策推演] 完成 - 选项: {option_title}")
+                        
+                    except Exception as e:
+                        logger.error(f"[决策推演] 失败: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        
+                        await safe_send({
+                            "type": "error",
+                            "content": f"推演失败: {str(e)}"
+                        })
                         return
-                    
-                    # 创建共享的分析结果字典（线程安全）
-                    shared_analyses = {}
-                    shared_analyses_lock = asyncio.Lock()
-                    
-                    # 修改analyze_persona_round_0，让它能实时交互
-                    async def analyze_with_realtime_interaction(persona_id, persona):
-                        """智能体分析，完成后立即开始查看其他已完成的智能体"""
-                        try:
-                            # 第0轮：独立分析
-                            result = await analyze_persona_round_0(persona_id, persona)
-                            
-                            if result[1]:  # 如果分析成功
-                                # 保存到共享字典
-                                async with shared_analyses_lock:
-                                    shared_analyses[persona_id] = result[1]
-                                
-                                # 立即开始查看其他已完成的智能体（不等待所有人完成）
-                                await asyncio.sleep(random.uniform(0.3, 0.8))  # 短暂延迟
-                                
-                                async def send_status_reflection(message: str, skill_result=None):
-                                    msg = {
-                                        "type": "agent_thinking",
-                                        "agent_id": persona_id,
-                                        "option_id": option_id,
-                                        "stage": "reflection",
-                                        "content": message
-                                    }
-                                    if skill_result:
-                                        msg["skill_result"] = skill_result
-                                    await safe_send(msg)
-                                
-                                # 获取当前已完成的其他智能体
-                                async with shared_analyses_lock:
-                                    available_views = {k: v for k, v in shared_analyses.items() if k != persona_id}
-                                
-                                logger.info(f"[{persona.name}] 开始深度反思，可用观点数: {len(available_views)}")
-                                
-                                if not available_views:
-                                    # 如果还没有其他智能体完成，跳过深度反思
-                                    logger.info(f"[{persona.name}] 暂无其他观点，跳过深度反思")
-                                    await send_status_reflection(f"【{persona.name}】✓ 分析完成（暂无其他观点可参考）")
-                                    return result
-                                
-                                await send_status_reflection(f"【{persona.name}】正在查看其他智能体的观点...")
-                                
-                                if available_views:
-                                    # 找出差异最大的前3个
-                                    my_score = result[1].get("score", 50)
-                                    differences = []
-                                    
-                                    for other_id, other_analysis in available_views.items():
-                                        other_score = other_analysis.get("score", 50)
-                                        diff = abs(my_score - other_score)
-                                        differences.append((diff, other_id, other_analysis))
-                                    
-                                    differences.sort(reverse=True, key=lambda x: x[0])
-                                    top_different = differences[:min(3, len(differences))]
-                                    
-                                    # 发送交互消息
-                                    most_different_id = None
-                                    for i, (diff, other_id, other_analysis) in enumerate(top_different):
-                                        other_persona = council.personas[other_id]
-                                        
-                                        if i == 0:
-                                            most_different_id = other_id
-                                        
-                                        await safe_send({
-                                            "type": "persona_interaction",
-                                            "stage": "viewing",
-                                            "option_id": option_id,
-                                            "interaction_data": {
-                                                "from_persona_id": persona_id,
-                                                "from_persona": persona.name,
-                                                "to_persona_id": other_id,
-                                                "to_persona": other_persona.name,
-                                                "action": "viewing",
-                                                "content": f"正在查看【{other_persona.name}】的观点：{other_analysis.get('stance', '未知')}（{other_analysis.get('score', 0)}分）"
-                                            },
-                                            "content": f"【{persona.name}】→【{other_persona.name}】查看观点"
-                                        })
-                                        
-                                        await asyncio.sleep(0.3)
                                     
                                     # 执行深度反思
                                     await send_status_reflection(f"【{persona.name}】正在深度反思...")

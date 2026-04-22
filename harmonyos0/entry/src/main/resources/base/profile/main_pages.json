@@ -1,0 +1,14 @@
+{
+  "src": [
+    "pages/LoginPage",
+    "pages/RegisterPage",
+    "pages/IndexNew",
+    "pages/DecisionSimulationPage",
+    "pages/KnowledgeGraphPage",
+    "pages/InsightsPage",
+    "pages/ParallelLifePage",
+    "pages/SocialPage",
+    "pages/SchedulePage",
+    "pages/UserProfilePage"
+  ]
+}

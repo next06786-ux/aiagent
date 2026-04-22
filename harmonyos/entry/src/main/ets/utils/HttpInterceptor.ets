@@ -6,24 +6,37 @@ import http from '@ohos.net.http';
 import router from '@ohos.router';
 import dataPreferences from '@ohos.data.preferences';
 import { AppConstants } from '../constants/AppConstants';
+import { common } from '@kit.AbilityKit';
 
 export class HttpInterceptor {
   /**
    * 添加认证头
    */
-  static async addAuthHeader(request: http.HttpRequestOptions): Promise<http.HttpRequestOptions> {
+  static async addAuthHeader(
+    request: http.HttpRequestOptions,
+    context: common.UIAbilityContext
+  ): Promise<http.HttpRequestOptions> {
     try {
       const preferences = await dataPreferences.getPreferences(
-        getContext(this),
+        context,
         'auth'
       );
       const token = await preferences.get(AppConstants.CACHE_KEYS.AUTH_TOKEN, '') as string;
       
       if (token) {
-        request.header = {
-          ...request.header,
-          'Authorization': `Bearer ${token}`
-        };
+        // 创建新的header对象
+        const newHeader: Record<string, string> = {};
+        if (request.header) {
+          // 复制现有header
+          Object.keys(request.header).forEach(key => {
+            if (request.header) {
+              newHeader[key] = request.header[key] as string;
+            }
+          });
+        }
+        // 添加Authorization
+        newHeader['Authorization'] = `Bearer ${token}`;
+        request.header = newHeader;
       }
     } catch (error) {
       console.error('获取Token失败:', error);
@@ -35,16 +48,26 @@ export class HttpInterceptor {
   /**
    * 处理响应
    */
-  static async handleResponse(response: http.HttpResponse): Promise<any> {
+  static async handleResponse(
+    response: http.HttpResponse,
+    context: common.UIAbilityContext
+  ): Promise<Object> {
     try {
-      const result = JSON.parse(response.result.toString());
+      const result = JSON.parse(response.result.toString()) as Record<string, Object>;
+      
+      // 兼容两种响应格式：
+      // 1. { code: 200, data: {...}, message: "..." }
+      // 2. { success: true, data: {...}, message: "..." }
+      
+      const code = result.code as number;
+      const success = result.success as boolean;
       
       // Token过期处理
-      if (result.code === 401) {
+      if (code === 401) {
         // 清除Token
         try {
           const preferences = await dataPreferences.getPreferences(
-            getContext(this),
+            context,
             'auth'
           );
           await preferences.clear();
@@ -55,21 +78,32 @@ export class HttpInterceptor {
         
         // 跳转到登录页
         router.pushUrl({ url: 'pages/LoginPage' });
-        throw new Error('Token已过期，请重新登录');
+        const error = new Error('Token已过期，请重新登录');
+        throw error;
       }
       
-      // 其他错误处理
-      if (result.code !== 200 && result.code !== 0) {
-        throw new Error(result.message || '请求失败');
+      // 检查响应是否成功
+      // 支持两种格式：code字段或success字段
+      const isSuccess = (code === 200 || code === 0) || (success === true);
+      
+      if (!isSuccess) {
+        const message = result.message as string || '请求失败';
+        const error = new Error(message);
+        throw error;
       }
       
       return result;
       
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error('响应数据格式错误');
+        const err = new Error('响应数据格式错误');
+        throw err;
       }
-      throw error;
+      if (error instanceof Error) {
+        throw error;
+      }
+      const err = new Error('未知错误');
+      throw err;
     }
   }
 }

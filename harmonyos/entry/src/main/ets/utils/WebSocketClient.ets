@@ -4,13 +4,38 @@
  */
 import webSocket from '@ohos.net.webSocket';
 
+/**
+ * 错误数据接口
+ */
+interface ErrorData {
+  error: Object;
+}
+
+/**
+ * 消息处理器类型
+ */
+export type MessageHandler = (data: Object) => void;
+
+/**
+ * WebSocket消息接口
+ */
+export interface WSMessage {
+  type: string;
+}
+
+/**
+ * 空对象接口
+ */
+interface EmptyObject {
+}
+
 export class WebSocketClient {
   private ws: webSocket.WebSocket | null = null;
   private url: string;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectDelay: number = 3000;
-  private messageHandlers: Map<string, (data: any) => void> = new Map();
+  private messageHandlers: Record<string, MessageHandler> = {};
   private isManualClose: boolean = false;
   
   constructor(url: string) {
@@ -29,16 +54,17 @@ export class WebSocketClient {
       this.reconnectAttempts = 0;
       
       // 触发连接成功回调
-      const handler = this.messageHandlers.get('open');
+      const handler = this.messageHandlers['open'];
       if (handler) {
-        handler({});
+        const emptyData: EmptyObject = {};
+        handler(emptyData);
       }
     });
     
     this.ws.on('message', (err, value) => {
       if (!err && value) {
         try {
-          const message = JSON.parse(value.toString());
+          const message = JSON.parse(value.toString()) as WSMessage;
           this.handleMessage(message);
         } catch (error) {
           console.error('解析WebSocket消息失败:', error);
@@ -50,9 +76,12 @@ export class WebSocketClient {
       console.error('WebSocket错误:', JSON.stringify(err));
       
       // 触发错误回调
-      const handler = this.messageHandlers.get('error');
+      const handler = this.messageHandlers['error'];
       if (handler) {
-        handler({ error: err });
+        const errorData: ErrorData = { 
+          error: err as Object
+        };
+        handler(errorData as Object);
       }
     });
     
@@ -60,9 +89,10 @@ export class WebSocketClient {
       console.log('WebSocket连接关闭');
       
       // 触发关闭回调
-      const handler = this.messageHandlers.get('close');
+      const handler = this.messageHandlers['close'];
       if (handler) {
-        handler({});
+        const emptyData: EmptyObject = {};
+        handler(emptyData);
       }
       
       // 自动重连
@@ -77,7 +107,7 @@ export class WebSocketClient {
   /**
    * 发送消息
    */
-  send(data: any): void {
+  send(data: Object): void {
     if (this.ws) {
       try {
         this.ws.send(JSON.stringify(data));
@@ -92,29 +122,29 @@ export class WebSocketClient {
   /**
    * 注册消息处理器
    */
-  on(eventType: string, handler: (data: any) => void): void {
-    this.messageHandlers.set(eventType, handler);
+  on(eventType: string, handler: MessageHandler): void {
+    this.messageHandlers[eventType] = handler;
   }
   
   /**
    * 移除消息处理器
    */
   off(eventType: string): void {
-    this.messageHandlers.delete(eventType);
+    this.messageHandlers[eventType] = (): void => {};
   }
   
   /**
    * 处理消息
    */
-  private handleMessage(message: any): void {
+  private handleMessage(message: WSMessage): void {
     // 特定类型处理器
-    const handler = this.messageHandlers.get(message.type);
+    const handler = this.messageHandlers[message.type];
     if (handler) {
       handler(message);
     }
     
     // 通用处理器
-    const allHandler = this.messageHandlers.get('*');
+    const allHandler = this.messageHandlers['*'];
     if (allHandler) {
       allHandler(message);
     }
@@ -135,9 +165,10 @@ export class WebSocketClient {
       console.error('WebSocket重连失败，已达到最大重试次数');
       
       // 触发重连失败回调
-      const handler = this.messageHandlers.get('reconnect_failed');
+      const handler = this.messageHandlers['reconnect_failed'];
       if (handler) {
-        handler({});
+        const emptyData: EmptyObject = {};
+        handler(emptyData);
       }
     }
   }

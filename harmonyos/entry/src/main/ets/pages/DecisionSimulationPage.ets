@@ -4,14 +4,30 @@
  */
 import router from '@ohos.router';
 import promptAction from '@ohos.promptAction';
-import { DecisionService } from '../services/DecisionService';
+import { DecisionService, OptionInfo } from '../services/DecisionService';
 import { AuthService } from '../services/AuthService';
-import { Agent, WebSocketEvent } from '../models/Agent';
+import { Agent, WebSocketEvent, AgentInfo } from '../models/Agent';
 import { Option } from '../models/Decision';
 import { AgentNode } from '../components/sphere/AgentNode';
 import { SphereView } from '../components/sphere/SphereView';
 import { GeometryUtils } from '../utils/GeometryUtils';
-import { AppConstants } from '../constants/AppConstants';
+import { AppConstants, Persona } from '../constants/AppConstants';
+
+interface RouterParams {
+  sessionId?: string;
+  question?: string;
+  option?: Option;
+  collectedInfo?: Object;
+}
+
+interface AgentData {
+  id: string;
+  name: string;
+  status: 'waiting' | 'thinking' | 'complete' | 'error';
+}
+
+interface EmptyObject {
+}
 
 @Entry
 @Component
@@ -31,7 +47,7 @@ struct DecisionSimulationPage {
   
   aboutToAppear() {
     // 获取路由参数
-    const params = router.getParams() as any;
+    const params = router.getParams() as RouterParams;
     this.sessionId = params?.sessionId || '';
     this.question = params?.question || '';
     this.selectedOption = params?.option || null;
@@ -52,11 +68,14 @@ struct DecisionSimulationPage {
     }
     
     // 初始化7个决策人格
-    this.agents = AppConstants.PERSONAS.map(persona => new Agent({
-      id: persona.id,
-      name: persona.name,
-      status: 'waiting'
-    }));
+    this.agents = AppConstants.PERSONAS.map((persona: Persona): Agent => {
+      const agentData: AgentData = {
+        id: persona.id,
+        name: persona.name,
+        status: 'waiting'
+      };
+      return new Agent(agentData);
+    });
     
     // 开始推演
     if (this.selectedOption) {
@@ -74,16 +93,18 @@ struct DecisionSimulationPage {
     this.wsStatus = '正在连接...';
     
     try {
+      const optionData: OptionInfo = {
+        title: this.selectedOption.title,
+        description: this.selectedOption.description
+      };
+      
       await this.decisionService.startSimulation(
         this.sessionId,
         this.userId,
         this.question,
-        {
-          title: this.selectedOption.title,
-          description: this.selectedOption.description
-        },
+        optionData,
         0,
-        {},
+        {} as EmptyObject,
         'general',
         (event: WebSocketEvent) => {
           this.handleWebSocketMessage(event);
@@ -111,11 +132,14 @@ struct DecisionSimulationPage {
       case 'personas_init':
         if (event.agents || event.personas) {
           const agentList = event.agents || event.personas || [];
-          this.agents = agentList.map(a => new Agent({
-            id: a.id,
-            name: a.name,
-            status: 'waiting'
-          }));
+          this.agents = agentList.map((a: AgentInfo): Agent => {
+            const agentData: AgentData = {
+              id: a.id,
+              name: a.name,
+              status: 'waiting'
+            };
+            return new Agent(agentData);
+          });
         }
         if (event.month !== undefined) {
           this.currentMonth = event.month;
@@ -174,14 +198,13 @@ struct DecisionSimulationPage {
    * 更新Agent状态
    */
   updateAgentStatus(agentId: string, status: 'waiting' | 'thinking' | 'complete', message?: string) {
-    this.agents = this.agents.map(agent => {
+    this.agents = this.agents.map((agent: Agent): Agent => {
       if (agent.id === agentId) {
-        return new Agent({
-          ...agent,
-          status,
-          currentMessage: message,
-          messageTimestamp: Date.now()
-        });
+        const updatedAgent = new Agent(agent);
+        updatedAgent.status = status;
+        updatedAgent.currentMessage = message;
+        updatedAgent.messageTimestamp = Date.now();
+        return updatedAgent;
       }
       return agent;
     });
@@ -191,14 +214,13 @@ struct DecisionSimulationPage {
    * 更新Agent分析结果
    */
   updateAgentAnalysis(agentId: string, score: number, stance: string) {
-    this.agents = this.agents.map(agent => {
+    this.agents = this.agents.map((agent: Agent): Agent => {
       if (agent.id === agentId) {
-        return new Agent({
-          ...agent,
-          status: 'complete',
-          score,
-          stance
-        });
+        const updatedAgent = new Agent(agent);
+        updatedAgent.status = 'complete';
+        updatedAgent.score = score;
+        updatedAgent.stance = stance;
+        return updatedAgent;
       }
       return agent;
     });
@@ -208,25 +230,23 @@ struct DecisionSimulationPage {
    * 更新Agent消息
    */
   updateAgentMessage(agentId: string, message: string) {
-    this.agents = this.agents.map(agent => {
+    this.agents = this.agents.map((agent: Agent): Agent => {
       if (agent.id === agentId) {
-        return new Agent({
-          ...agent,
-          currentMessage: message,
-          messageTimestamp: Date.now()
-        });
+        const updatedAgent = new Agent(agent);
+        updatedAgent.currentMessage = message;
+        updatedAgent.messageTimestamp = Date.now();
+        return updatedAgent;
       }
       return agent;
     });
     
     // 5秒后清除消息
     setTimeout(() => {
-      this.agents = this.agents.map(agent => {
+      this.agents = this.agents.map((agent: Agent): Agent => {
         if (agent.id === agentId) {
-          return new Agent({
-            ...agent,
-            currentMessage: undefined
-          });
+          const updatedAgent = new Agent(agent);
+          updatedAgent.currentMessage = undefined;
+          return updatedAgent;
         }
         return agent;
       });

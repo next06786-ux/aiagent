@@ -4,6 +4,7 @@
  */
 import { HttpClient } from '../utils/HttpClient';
 import { ApiConstants } from '../constants/ApiConstants';
+import { StartGameRequest, SubmitChoiceRequest } from '../types/RequestInterfaces';
 
 export class ParallelLifeService {
   private httpClient = HttpClient.getInstance();
@@ -12,7 +13,7 @@ export class ParallelLifeService {
    * 开始塔罗牌游戏
    */
   async startGame(userId: string): Promise<GameSession> {
-    const requestData: Record<string, Object> = {
+    const requestData: StartGameRequest = {
       user_id: userId
     };
     
@@ -39,7 +40,7 @@ export class ParallelLifeService {
     userId: string,
     choiceId: string
   ): Promise<GameProgress> {
-    const requestData: Record<string, Object> = {
+    const requestData: SubmitChoiceRequest = {
       game_id: gameId,
       user_id: userId,
       choice_id: choiceId
@@ -58,7 +59,8 @@ export class ParallelLifeService {
    */
   async getDecisionProfile(userId: string): Promise<DecisionProfile> {
     const result = await this.httpClient.get<DecisionProfile>(
-      `${ApiConstants.PARALLEL_LIFE.DECISION_PROFILE}/${userId}`
+      `${ApiConstants.PARALLEL_LIFE.DECISION_PROFILE}/${userId}`,
+      {}
     );
     
     return result.data;

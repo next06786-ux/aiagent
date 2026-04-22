@@ -20,11 +20,18 @@ export default class EntryAbility extends UIAbility {
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(0x0000, 'VisionAgent', '%{public}s', 'Ability onWindowStageCreate');
 
-    // 
+    // 请求权限
     this.requestPermissions();
 
-    // 
-    this.checkFirstLaunchAndLoadPage(windowStage);
+    // 直接加载登录页，避免复杂的异步逻辑导致崩溃
+    windowStage.loadContent('pages/LoginPage', (err: BusinessError) => {
+      if (err.code) {
+        hilog.error(0x0000, 'VisionAgent', 'Failed to load LoginPage. Cause: %{public}s', 
+          JSON.stringify(err) ?? '');
+        return;
+      }
+      hilog.info(0x0000, 'VisionAgent', 'Succeeded in loading LoginPage');
+    });
   }
 
   /**
@@ -36,7 +43,7 @@ export default class EntryAbility extends UIAbility {
       const authPrefs = await preferences.getPreferences(this.context, 'lifeswarm_auth');
       const token = await authPrefs.get('token', '') as string;
       
-      let targetPage = 'pages/Login'; // 默认进入登录页
+      let targetPage = 'pages/LoginPage'; // 默认进入登录页
       
       if (token) {
         // 已登录，检查是否首次启动
@@ -45,16 +52,16 @@ export default class EntryAbility extends UIAbility {
         
         if (!firstLaunch) {
           // 非首次启动，直接进入主页
-          targetPage = 'pages/AgentHome';
-          hilog.info(0x0000, 'VisionAgent', 'User logged in, loading AgentHome');
+          targetPage = 'pages/IndexNew';
+          hilog.info(0x0000, 'VisionAgent', 'User logged in, loading IndexNew');
         } else {
-          // 首次启动，进入欢迎页
-          targetPage = 'pages/Welcome';
-          hilog.info(0x0000, 'VisionAgent', 'First launch with login, loading Welcome page');
+          // 首次启动，进入主页（暂时没有欢迎页）
+          targetPage = 'pages/IndexNew';
+          hilog.info(0x0000, 'VisionAgent', 'First launch with login, loading IndexNew page');
         }
       } else {
         // 未登录，进入登录页
-        hilog.info(0x0000, 'VisionAgent', 'User not logged in, loading Login page');
+        hilog.info(0x0000, 'VisionAgent', 'User not logged in, loading LoginPage');
       }
       
       windowStage.loadContent(targetPage, (err: BusinessError) => {
@@ -71,9 +78,9 @@ export default class EntryAbility extends UIAbility {
       hilog.error(0x0000, 'VisionAgent', `Check first launch failed: ${err.message}`);
       
       // 出错时默认进入登录页
-      windowStage.loadContent('pages/Login', (err: BusinessError) => {
+      windowStage.loadContent('pages/LoginPage', (err: BusinessError) => {
         if (err.code) {
-          hilog.error(0x0000, 'VisionAgent', 'Failed to load Login page. Cause: %{public}s', 
+          hilog.error(0x0000, 'VisionAgent', 'Failed to load LoginPage. Cause: %{public}s', 
             JSON.stringify(err) ?? '');
         }
       });
@@ -81,14 +88,14 @@ export default class EntryAbility extends UIAbility {
   }
 
   /**
-   * 
+   * 请求权限
    */
   private async requestPermissions(): Promise<void> {
     try {
       hilog.info(0x0000, 'VisionAgent', 'Requesting permissions...');
       
       const permissions: Array<Permissions> = [
-        'ohos.permission.CAMERA'
+        'ohos.permission.INTERNET'
       ];
       
       const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager();
@@ -97,7 +104,7 @@ export default class EntryAbility extends UIAbility {
         permissions
       );
       
-      // 
+      // 检查权限结果
       for (let i = 0; i < result.authResults.length; i++) {
         if (result.authResults[i] === 0) {
           hilog.info(0x0000, 'VisionAgent', `Permission granted: ${permissions[i]}`);

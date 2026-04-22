@@ -1,0 +1,16 @@
+# ninja log v6
+189	12397	7966298275838171	CMakeFiles/starmap_render.dir/shader_utils.cpp.o	3690977d1f21acca
+178	1277	7964841465845981	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+14942	15853	7966298423367105	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e
+92	3274	7961955022964162	CMakeFiles/starmap_render.dir/napi_init.cpp.o	36dec27eb8821b98
+25	14941	7966298274192329	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
+156	3235	7961955023597800	CMakeFiles/nebulachat.dir/nebula_chat_renderer.cpp.o	66b04b4d588703a6
+7	26	7961954030864374	clean	57746c6217a6fbb4
+138	2901	7961955023425049	CMakeFiles/nebulachat.dir/nebula_napi.cpp.o	68741ac6f3a6220e
+58	2133	7983566975768685	CMakeFiles/starmap_render.dir/shader_utils.cpp.o	3690977d1f21acca
+76	2575	7983566975954256	CMakeFiles/nebulachat.dir/nebula_napi.cpp.o	68741ac6f3a6220e
+96	2976	7983566976148283	CMakeFiles/nebulachat.dir/nebula_chat_renderer.cpp.o	66b04b4d588703a6
+12	3021	7983566975312451	CMakeFiles/starmap_render.dir/napi_init.cpp.o	36dec27eb8821b98
+2976	3608	7983567004952912	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libnebulachat.so	40c5b1f1a453e0a5
+42	3859	7983566975618435	CMakeFiles/starmap_render.dir/starmap_renderer.cpp.o	910b977b5f828ecb
+3859	4203	7983567013784354	E:/ai/harmonyos/entry/build/default/intermediates/cmake/default/obj/arm64-v8a/libstarmap_render.so	3c804d507b4bc80e

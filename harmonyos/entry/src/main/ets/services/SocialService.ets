@@ -5,6 +5,14 @@
 import { HttpClient } from '../utils/HttpClient';
 import { ApiConstants } from '../constants/ApiConstants';
 import { Friend, Post, Comment } from '../models/Social';
+import {
+  AddFriendRequest,
+  RemoveFriendRequest,
+  GetPostsParams,
+  CreatePostRequest,
+  CommentPostRequest,
+  LikePostRequest
+} from '../types/RequestInterfaces';
 
 export class SocialService {
   private httpClient = HttpClient.getInstance();
@@ -16,7 +24,8 @@ export class SocialService {
    */
   async getFriendsList(userId: string): Promise<Friend[]> {
     const result = await this.httpClient.get<Friend[]>(
-      `${ApiConstants.SOCIAL.FRIENDS_LIST}/${userId}`
+      `${ApiConstants.SOCIAL.FRIENDS_LIST}/${userId}`,
+      {}
     );
     
     return result.data;
@@ -27,7 +36,8 @@ export class SocialService {
    */
   async getFriends(): Promise<Friend[]> {
     const result = await this.httpClient.get<Friend[]>(
-      ApiConstants.SOCIAL.FRIENDS_LIST
+      ApiConstants.SOCIAL.FRIENDS_LIST,
+      {}
     );
     
     return result.data || [];
@@ -37,12 +47,14 @@ export class SocialService {
    * 添加好友
    */
   async addFriend(userId: string, friendId: string): Promise<void> {
-    await this.httpClient.post(
+    const requestData: AddFriendRequest = {
+      user_id: userId,
+      friend_id: friendId
+    };
+    
+    await this.httpClient.post<Object>(
       ApiConstants.SOCIAL.FRIENDS_ADD,
-      {
-        user_id: userId,
-        friend_id: friendId
-      }
+      requestData
     );
   }
   
@@ -50,24 +62,27 @@ export class SocialService {
    * 删除好友
    */
   async removeFriend(userId: string, friendId: string): Promise<void> {
-    await this.httpClient.post(
+    const requestData: RemoveFriendRequest = {
+      user_id: userId,
+      friend_id: friendId
+    };
+    
+    await this.httpClient.post<Object>(
       ApiConstants.SOCIAL.FRIENDS_REMOVE,
-      {
-        user_id: userId,
-        friend_id: friendId
-      }
+      requestData
     );
   }
   
   /**
    * 获取好友请求
    */
-  async getFriendRequests(userId: string): Promise<any[]> {
-    const result = await this.httpClient.get(
-      `${ApiConstants.SOCIAL.FRIENDS_REQUESTS}/${userId}`
+  async getFriendRequests(userId: string): Promise<Object[]> {
+    const result = await this.httpClient.get<Object[]>(
+      `${ApiConstants.SOCIAL.FRIENDS_REQUESTS}/${userId}`,
+      {}
     );
     
-    return result.data;
+    return result.data || [];
   }
   
   // ==================== 树洞世界 ====================
@@ -76,9 +91,13 @@ export class SocialService {
    * 获取树洞帖子列表
    */
   async getTreeHolePosts(page: number = 1, limit: number = 20): Promise<Post[]> {
+    const paramsObj: Record<string, Object> = {};
+    paramsObj['page'] = page.toString();
+    paramsObj['limit'] = limit.toString();
+    
     const result = await this.httpClient.get<Post[]>(
       ApiConstants.SOCIAL.TREE_HOLE_POSTS,
-      { page: page.toString(), limit: limit.toString() }
+      paramsObj
     );
     
     return result.data || [];
@@ -93,7 +112,7 @@ export class SocialService {
     isAnonymous: boolean = false,
     tags: string[] = []
   ): Promise<Post> {
-    const requestData: Record<string, Object> = {
+    const requestData: CreatePostRequest = {
       user_id: userId,
       content: content,
       is_anonymous: isAnonymous,
@@ -112,8 +131,11 @@ export class SocialService {
    * 创建树洞帖子
    */
   async createTreeHolePost(content: string): Promise<Post> {
-    const requestData: Record<string, Object> = {
-      content: content
+    const requestData: CreatePostRequest = {
+      user_id: '',
+      content: content,
+      is_anonymous: false,
+      tags: []
     };
     
     const result = await this.httpClient.post<Post>(
@@ -129,7 +151,8 @@ export class SocialService {
    */
   async getPostDetail(postId: string): Promise<Post> {
     const result = await this.httpClient.get<Post>(
-      `${ApiConstants.SOCIAL.TREE_HOLE_POST}/${postId}`
+      `${ApiConstants.SOCIAL.TREE_HOLE_POST}/${postId}`,
+      {}
     );
     
     return result.data;
@@ -143,7 +166,7 @@ export class SocialService {
     userId: string,
     content: string
   ): Promise<Comment> {
-    const requestData: Record<string, Object> = {
+    const requestData: CommentPostRequest = {
       post_id: postId,
       user_id: userId,
       content: content
@@ -161,12 +184,14 @@ export class SocialService {
    * 点赞帖子
    */
   async likePost(postId: string, userId: string): Promise<void> {
+    const requestData: LikePostRequest = {
+      post_id: postId,
+      user_id: userId
+    };
+    
     await this.httpClient.post<Object>(
       ApiConstants.SOCIAL.TREE_HOLE_LIKE,
-      {
-        post_id: postId,
-        user_id: userId
-      } as Record<string, string>
+      requestData
     );
   }
   
@@ -174,12 +199,14 @@ export class SocialService {
    * 取消点赞
    */
   async unlikePost(postId: string, userId: string): Promise<void> {
+    const requestData: LikePostRequest = {
+      post_id: postId,
+      user_id: userId
+    };
+    
     await this.httpClient.post<Object>(
       `${ApiConstants.SOCIAL.TREE_HOLE_LIKE}/cancel`,
-      {
-        post_id: postId,
-        user_id: userId
-      } as Record<string, string>
+      requestData
     );
   }
 }

@@ -857,19 +857,11 @@ class DecisionPersona:
         
         base_text = "\n".join(facts_parts) if facts_parts else "（暂无用户历史数据）"
         
-        # 执行技能分析（新增）
-        collected_info = context.get('collected_info', {})
-        skill_context = {
-            "option": option,
-            "collected_info": collected_info,
-            "shared_facts": self.memory_system.shared_facts if self.memory_system else None
-        }
+        # 🆕 使用已执行的技能结果（来自智能选择）
+        skill_results = context.get('skill_results', {})
         
-        skill_results = await self.execute_all_skills(skill_context, status_callback)
-        skill_results_text = self.format_skill_results(skill_results)
-        
-        # 合并基础数据和技能分析结果
-        if skill_results_text:
+        if skill_results:
+            skill_results_text = self.format_skill_results(skill_results)
             return base_text + skill_results_text
         else:
             return base_text
@@ -920,6 +912,702 @@ class DecisionPersona:
         logger.info(f"[{self.name}] 使用已有数据进行分析，不额外检索")
         return ""
     
+    async def run_lifecycle(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        rounds: int = 2,
+        status_callback=None
+    ) -> Dict[str, Any]:
+        """
+        运行Agent完整生命周期（主线流程）
+        
+        生命周期包含N轮，每轮5个阶段：
+        1. 觉醒阶段 - 读取三层记忆
+        2. 独立思考阶段 - 执行技能 + 分析
+        3. 观察他人阶段 - 查看其他Agent观点
+        4. 深度反思阶段 - 调整立场
+        5. 休眠阶段 - 保存状态
+        
+        Args:
+            option: 决策选项
+            context: 决策上下文
+            rounds: 推演轮数
+            status_callback: 状态回调
+        
+        Returns:
+            最终分析结果
+        """
+        logger.info(f"🌟 [{self.name}] 开始生命周期，共{rounds}轮")
+        
+        final_result = None
+        
+        for round_num in range(1, rounds + 1):
+            logger.info(f"\n{'='*60}")
+            logger.info(f"🔄 [{self.name}] 第 {round_num}/{rounds} 轮")
+            logger.info(f"{'='*60}\n")
+            
+            # 更新上下文中的轮次信息
+            context['round'] = round_num
+            context['total_rounds'] = rounds
+            
+            # 阶段1: 觉醒
+            await self._phase_awaken(context, status_callback)
+            
+            # 阶段2: 独立思考
+            result = await self._phase_independent_thinking(option, context, status_callback)
+            final_result = result
+            
+            # 阶段3: 观察他人
+            await self._phase_observe_others(context, status_callback)
+            
+            # 阶段4: 深度反思
+            result = await self._phase_deep_reflection(option, context, result, status_callback)
+            final_result = result
+            
+            # 阶段5: 休眠
+            await self._phase_sleep(round_num, rounds, status_callback)
+        
+        logger.info(f"✅ [{self.name}] 生命周期完成，共{rounds}轮")
+        return final_result
+    
+    async def _phase_awaken(self, context: Dict[str, Any], status_callback=None):
+        """阶段1: 觉醒 - 读取三层记忆"""
+        logger.info(f"🌅 [{self.name}] 阶段1: 觉醒")
+        
+        if status_callback:
+            await status_callback({
+                "persona": self.name,
+                "phase": "awaken",
+                "message": "正在觉醒，读取记忆..."
+            })
+        
+        # 读取第1层：共享事实层
+        shared_facts = self.get_shared_facts()
+        logger.info(f"  ✓ 读取共享事实层")
+        
+        # 读取第2层：决策上下文层（包含历史决策和决策风格）
+        user_decision_style = context.get('user_decision_style', {})
+        logger.info(f"  ✓ 读取决策上下文层")
+        
+        # 读取第3层：查询历史经验
+        historical_experience = self._get_historical_experience_context(
+            option=context.get('current_option', {}),
+            context=context
+        )
+        if historical_experience:
+            logger.info(f"  ✓ 查询到历史经验")
+        
+        logger.info(f"  ✓ 初始化情感状态: {self.emotional_state.primary_emotion.value}")
+        logger.info(f"✅ [{self.name}] 觉醒完成\n")
+    
+    async def _phase_independent_thinking(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        status_callback=None
+    ) -> Dict[str, Any]:
+        """阶段2: 独立思考 - 智能调用技能 + 分析"""
+        logger.info(f"🧠 [{self.name}] 阶段2: 独立思考")
+        
+        if status_callback:
+            await status_callback({
+                "persona": self.name,
+                "phase": "thinking",
+                "message": "正在独立思考..."
+            })
+        
+        # 🆕 智能决策：Agent自主决定需要调用哪些技能
+        logger.info(f"  🤔 智能决策需要调用的技能...")
+        selected_skills = await self._intelligent_skill_selection(
+            option=option,
+            context=context,
+            phase="independent_thinking"
+        )
+        
+        # 执行选中的技能
+        logger.info(f"  🔧 执行选中的技能: {selected_skills}")
+        skill_results = await self._execute_selected_skills(
+            selected_skills=selected_skills,
+            context=context,
+            status_callback=status_callback
+        )
+        
+        # 基于技能结果 + 三层记忆进行分析
+        logger.info(f"  📊 基于技能结果和记忆进行分析...")
+        context['current_option'] = option
+        context['skill_results'] = skill_results
+        result = await self.analyze_option(option, context, {})
+        
+        # 记录到第3层：私有解读层
+        logger.info(f"  💾 记录思考轨迹到私有解读层")
+        
+        logger.info(f"✅ [{self.name}] 独立思考完成\n")
+        return result
+    
+    async def _phase_observe_others(self, context: Dict[str, Any], status_callback=None):
+        """阶段3: 观察他人 - 查看其他Agent观点"""
+        logger.info(f"👀 [{self.name}] 阶段3: 观察他人")
+        
+        if status_callback:
+            await status_callback({
+                "persona": self.name,
+                "phase": "observing",
+                "message": "正在观察其他Agent的观点..."
+            })
+        
+        # 获取其他Agent的观点
+        other_views = context.get('other_personas_views', {})
+        
+        if other_views:
+            logger.info(f"  👥 观察到 {len(other_views)} 个其他Agent的观点")
+            
+            # 产生情感反应
+            for persona_id, view in other_views.items():
+                if persona_id != self.persona_id:
+                    stance = view.get('stance', '未知')
+                    logger.info(f"    - {view.get('name', persona_id)}: {stance}")
+        else:
+            logger.info(f"  ⚠️ 暂无其他Agent观点")
+        
+        logger.info(f"✅ [{self.name}] 观察完成\n")
+    
+    async def _phase_deep_reflection(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        previous_result: Dict[str, Any],
+        status_callback=None
+    ) -> Dict[str, Any]:
+        """阶段4: 深度反思 - 结合他人观点调整立场"""
+        logger.info(f"🤔 [{self.name}] 阶段4: 深度反思")
+        
+        if status_callback:
+            await status_callback({
+                "persona": self.name,
+                "phase": "reflecting",
+                "message": "正在深度反思..."
+            })
+        
+        # 获取其他Agent的观点
+        other_views = context.get('other_personas_views', {})
+        
+        if other_views:
+            logger.info(f"  🔄 结合他人观点重新分析...")
+            
+            # 🆕 智能决策：根据他人观点，决定是否需要补充调用技能
+            logger.info(f"  🤔 评估是否需要补充调用技能...")
+            additional_skills = await self._intelligent_skill_selection(
+                option=option,
+                context=context,
+                phase="deep_reflection",
+                other_views=other_views,
+                previous_result=previous_result
+            )
+            
+            # 执行补充技能（如果需要）
+            if additional_skills:
+                logger.info(f"  🔧 补充执行技能: {additional_skills}")
+                additional_skill_results = await self._execute_selected_skills(
+                    selected_skills=additional_skills,
+                    context=context,
+                    status_callback=status_callback
+                )
+                
+                # 合并技能结果
+                existing_results = context.get('skill_results', {})
+                existing_results.update(additional_skill_results)
+                context['skill_results'] = existing_results
+            
+            # 重新分析，这次包含其他人的观点
+            result = await self.analyze_option(option, context, other_views)
+            
+            # 比较前后立场变化
+            old_score = previous_result.get('score', 0)
+            new_score = result.get('score', 0)
+            
+            if abs(new_score - old_score) > 5:
+                logger.info(f"  📈 立场调整: {old_score} → {new_score}")
+            else:
+                logger.info(f"  ✓ 坚持原有立场: {new_score}")
+            
+            logger.info(f"✅ [{self.name}] 深度反思完成\n")
+            return result
+        else:
+            logger.info(f"  ✓ 无其他观点，保持原有分析")
+            logger.info(f"✅ [{self.name}] 深度反思完成\n")
+            return previous_result
+    
+    async def _phase_sleep(self, current_round: int, total_rounds: int, status_callback=None):
+        """阶段5: 休眠 - 保存状态并检查是否继续下一轮"""
+        logger.info(f"😴 [{self.name}] 阶段5: 休眠")
+        
+        # 保存第3层记忆
+        logger.info(f"  💾 保存私有解读层")
+        
+        if current_round < total_rounds:
+            # 还有未完成的轮次，准备下一轮
+            logger.info(f"  ⏸️ 第{current_round}轮完成，准备进入第{current_round + 1}轮...")
+            
+            if status_callback:
+                await status_callback({
+                    "persona": self.name,
+                    "phase": "sleeping",
+                    "message": f"第{current_round}轮完成，即将开始第{current_round + 1}轮..."
+                })
+            
+            # 短暂休眠后立即开始下一轮
+            await asyncio.sleep(0.5)
+            logger.info(f"  🌟 [{self.name}] 立即开始第{current_round + 1}轮")
+        else:
+            # 所有轮次完成，最终休眠
+            logger.info(f"  🏁 所有{total_rounds}轮完成，最终休眠")
+            
+            if status_callback:
+                await status_callback({
+                    "persona": self.name,
+                    "phase": "sleeping",
+                    "message": f"所有{total_rounds}轮完成，进入最终休眠"
+                })
+        
+        logger.info(f"✅ [{self.name}] 休眠完成\n")
+    
+    def _get_historical_experience_context(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any]
+    ) -> str:
+        """
+        获取历史经验上下文（第3层增强功能）
+        
+        从分层记忆系统查询该人格在相似决策中的历史经验
+        
+        Args:
+            option: 当前分析的选项
+            context: 决策上下文
+        
+        Returns:
+            格式化的历史经验文本
+        """
+        if not self.memory_system:
+            return ""
+        
+        try:
+            # 查询历史经验
+            past_experiences = self.memory_system.get_persona_past_interpretations(
+                persona_id=self.persona_id,
+                current_question=context.get('question', ''),
+                current_options=context.get('options', []),
+                top_k=2  # 获取最相关的2条经验
+            )
+            
+            if not past_experiences:
+                return ""
+            
+            # 格式化历史经验
+            experience_lines = ["【我的历史经验】"]
+            
+            for i, exp in enumerate(past_experiences, 1):
+                similarity = exp.get('similarity_score', 0)
+                past_question = exp.get('past_question', '未知决策')
+                learned_lessons = exp.get('learned_lessons', [])
+                option_stances = exp.get('option_stances', {})
+                
+                experience_lines.append(f"\n经验 {i} (相似度: {similarity:.0%}):")
+                experience_lines.append(f"  决策: {past_question[:50]}...")
+                
+                # 添加学到的教训
+                if learned_lessons:
+                    experience_lines.append(f"  教训: {learned_lessons[0]}")
+                
+                # 添加当时的立场
+                if option_stances:
+                    first_stance = list(option_stances.values())[0]
+                    stance_text = first_stance.get('stance', '未知')
+                    score = first_stance.get('score', 0)
+                    experience_lines.append(f"  当时立场: {stance_text} ({score}分)")
+            
+            return "\n".join(experience_lines)
+            
+        except Exception as e:
+            logger.warning(f"[{self.name}] 获取历史经验失败: {e}")
+            return ""
+    
+    async def _intelligent_skill_selection(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        phase: str,
+        other_views: Optional[Dict[str, Any]] = None,
+        previous_result: Optional[Dict[str, Any]] = None
+    ) -> List[str]:
+        """
+        智能技能选择 - 使用Function Calling机制（类似Cursor）
+        
+        核心改进：
+        1. 使用Function Calling而不是JSON解析
+        2. LLM直接决定调用哪些工具
+        3. 支持迭代式工具调用
+        4. 上下文感知的工具选择
+        
+        Args:
+            option: 决策选项
+            context: 决策上下文
+            phase: 当前阶段 ("independent_thinking" | "deep_reflection")
+            other_views: 其他Agent的观点（仅深度反思阶段）
+            previous_result: 之前的分析结果（仅深度反思阶段）
+        
+        Returns:
+            选中的技能名称列表
+        """
+        from backend.llm.llm_service import get_llm_service
+        
+        llm = get_llm_service()
+        if not llm or not llm.enabled:
+            # 降级策略：返回核心技能
+            return self._get_fallback_skills(phase)
+        
+        # 🆕 构建Function Calling的工具定义
+        tools = self._build_tool_definitions()
+        
+        # 构建系统提示词
+        system_prompt = self._build_system_prompt_for_tool_selection(phase)
+        
+        # 构建用户消息
+        user_message = self._build_user_message_for_tool_selection(
+            option, context, phase, other_views, previous_result
+        )
+        
+        try:
+            # 🆕 使用Function Calling
+            response = await asyncio.to_thread(
+                llm.chat,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.7,
+                tools=tools,  # 传入工具定义
+                tool_choice="auto"  # 让LLM自动决定是否调用工具
+            )
+            
+            # 解析工具调用
+            selected_skills = self._parse_tool_calls(response)
+            
+            if selected_skills:
+                logger.info(f"  💡 [{self.name}] Function Calling选中技能: {selected_skills}")
+            else:
+                logger.info(f"  💡 [{self.name}] 决定不调用任何技能")
+            
+            return selected_skills
+            
+        except Exception as e:
+            logger.error(f"[{self.name}] Function Calling失败: {e}")
+            # 降级到传统方式
+            return await self._fallback_skill_selection(
+                option, context, phase, other_views, previous_result
+            )
+    
+    def _build_tool_definitions(self) -> List[Dict[str, Any]]:
+        """
+        构建工具定义（Function Calling格式）
+        
+        类似Cursor的工具定义，每个技能都有：
+        - name: 工具名称
+        - description: 工具描述
+        - parameters: 参数schema
+        """
+        available_skills = self.list_skills()
+        tools = []
+        
+        for skill in available_skills:
+            if skill['name'] == "混合检索":
+                continue  # 混合检索单独处理
+            
+            tool_def = {
+                "type": "function",
+                "function": {
+                    "name": skill['name'].replace(" ", "_"),  # 函数名不能有空格
+                    "description": f"{skill['description']}。这个技能适合{self.name}使用，因为它与{self.description}的特点相符。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "reason": {
+                                "type": "string",
+                                "description": "为什么需要调用这个技能的简短理由"
+                            }
+                        },
+                        "required": ["reason"]
+                    }
+                }
+            }
+            tools.append(tool_def)
+        
+        return tools
+    
+    def _build_system_prompt_for_tool_selection(self, phase: str) -> str:
+        """构建系统提示词"""
+        base_prompt = f"""你是【{self.name}】，一个决策人格。
+
+你的核心特点：{self.description}
+你的价值观体系：{json.dumps(self.value_system.priorities, ensure_ascii=False, indent=2)}
+你的决策风格：{self.value_system.decision_style}
+你的风险承受度：{self.value_system.risk_tolerance:.0%}
+
+你拥有一系列分析技能（tools），可以帮助你做出更好的决策。"""
+        
+        if phase == "independent_thinking":
+            return base_prompt + """
+
+现在是【独立思考阶段】，你需要决定调用哪些技能来分析当前选项。
+
+原则：
+1. 只调用真正需要的技能，不要贪多
+2. 优先选择与你价值观最契合的技能
+3. 如果已有足够信息，可以不调用任何技能
+4. 每个技能调用都需要消耗资源，请谨慎选择
+
+你可以调用0个或多个技能。如果不需要任何技能，直接回复即可。"""
+        
+        else:  # deep_reflection
+            return base_prompt + """
+
+现在是【深度反思阶段】，你已经有了初步结论，但看到了其他Agent的不同观点。
+
+你需要决定是否需要补充调用某些技能来：
+1. 验证其他Agent提出的观点
+2. 补充你之前可能忽略的分析维度
+3. 加强或修正你的立场
+
+原则：
+- 如果其他Agent的观点与你一致，通常不需要补充技能
+- 如果其他Agent提出了你没考虑的重要角度，可以选择相关技能验证
+- 如果你对自己的结论很有信心，可以不调用任何技能
+
+你可以调用0个或多个技能。"""
+    
+    def _build_user_message_for_tool_selection(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        phase: str,
+        other_views: Optional[Dict[str, Any]],
+        previous_result: Optional[Dict[str, Any]]
+    ) -> str:
+        """构建用户消息"""
+        message_parts = [
+            f"决策问题：{context.get('question', '')}",
+            f"当前选项：{option.get('title', '')}",
+            f"选项描述：{option.get('description', '')}"
+        ]
+        
+        if phase == "deep_reflection" and previous_result:
+            message_parts.append(f"\n你的初步结论：")
+            message_parts.append(f"- 立场：{previous_result.get('stance', '未知')}")
+            message_parts.append(f"- 评分：{previous_result.get('score', 0)}")
+            
+            if other_views:
+                message_parts.append(f"\n其他Agent的观点：")
+                for pid, view in other_views.items():
+                    if pid != self.persona_id:
+                        persona_name = view.get('name', pid)
+                        stance = view.get('stance', '未知')
+                        score = view.get('score', 0)
+                        key_points = view.get('key_points', [])
+                        message_parts.append(
+                            f"- 【{persona_name}】{stance} ({score}分)：{', '.join(key_points[:2]) if key_points else ''}"
+                        )
+        
+        message_parts.append("\n请决定是否需要调用技能来帮助分析。")
+        
+        return "\n".join(message_parts)
+    
+    def _parse_tool_calls(self, response: str) -> List[str]:
+        """
+        解析LLM的工具调用响应
+        
+        注意：这里需要根据你的LLM服务的实际返回格式来解析
+        如果LLM支持原生Function Calling，会返回tool_calls
+        如果不支持，可能需要从文本中解析
+        """
+        selected_skills = []
+        
+        try:
+            # 尝试解析为JSON（如果LLM返回JSON格式）
+            if isinstance(response, str):
+                # 检查是否包含工具调用标记
+                if "tool_calls" in response or "function_call" in response:
+                    result = json.loads(response)
+                    
+                    # OpenAI格式
+                    if "tool_calls" in result:
+                        for tool_call in result["tool_calls"]:
+                            function_name = tool_call.get("function", {}).get("name", "")
+                            if function_name:
+                                # 转换回技能名称（去掉下划线）
+                                skill_name = function_name.replace("_", " ")
+                                selected_skills.append(skill_name)
+                    
+                    # 旧版function_call格式
+                    elif "function_call" in result:
+                        function_name = result["function_call"].get("name", "")
+                        if function_name:
+                            skill_name = function_name.replace("_", " ")
+                            selected_skills.append(skill_name)
+                
+                # 如果没有工具调用标记，尝试解析为普通JSON
+                else:
+                    result = json.loads(response)
+                    selected_skills = result.get("selected_skills", [])
+            
+        except json.JSONDecodeError:
+            # 如果不是JSON，返回空列表（表示不调用任何工具）
+            pass
+        
+        return selected_skills
+    
+    def _get_fallback_skills(self, phase: str) -> List[str]:
+        """降级策略：返回核心技能"""
+        if phase == "independent_thinking":
+            # 独立思考阶段：返回与人格最相关的核心技能
+            core_skills = []
+            for skill_name in self.skill_names:
+                if skill_name == "混合检索":
+                    continue
+                # 根据人格特点选择核心技能
+                if self.persona_id == "rational_analyst" and skill_name in ["数据分析", "风险评估"]:
+                    core_skills.append(skill_name)
+                elif self.persona_id == "adventurer" and skill_name in ["机会识别", "创新潜力评估"]:
+                    core_skills.append(skill_name)
+                elif self.persona_id == "pragmatist" and skill_name in ["可行性评估", "数据分析"]:
+                    core_skills.append(skill_name)
+                elif self.persona_id == "idealist" and skill_name in ["价值观对齐分析"]:
+                    core_skills.append(skill_name)
+                elif self.persona_id == "conservative" and skill_name in ["风险评估"]:
+                    core_skills.append(skill_name)
+                elif self.persona_id == "social_navigator" and skill_name in ["人际关系影响分析"]:
+                    core_skills.append(skill_name)
+                elif self.persona_id == "innovator" and skill_name in ["创新潜力评估", "机会识别"]:
+                    core_skills.append(skill_name)
+            
+            return core_skills if core_skills else [s for s in self.skill_names if s != "混合检索"][:2]
+        else:
+            # 深度反思阶段：默认不补充技能
+            return []
+    
+    async def _fallback_skill_selection(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        phase: str,
+        other_views: Optional[Dict[str, Any]],
+        previous_result: Optional[Dict[str, Any]]
+    ) -> List[str]:
+        """降级到传统JSON方式的技能选择"""
+        from backend.llm.llm_service import get_llm_service
+        
+        llm = get_llm_service()
+        if not llm or not llm.enabled:
+            return self._get_fallback_skills(phase)
+        
+        # 构建简单的JSON提示词
+        available_skills = self.list_skills()
+        skills_list = [s['name'] for s in available_skills if s['name'] != "混合检索"]
+        
+        prompt = f"""你是{self.name}。
+
+可用技能：{', '.join(skills_list)}
+
+当前选项：{option.get('title', '')}
+
+请选择需要的技能（可以选0-{len(skills_list)}个）。
+
+返回JSON：{{"selected_skills": ["技能1", "技能2"]}}"""
+        
+        try:
+            response = await asyncio.to_thread(
+                llm.chat,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                response_format="json_object"
+            )
+            
+            result = json.loads(response)
+            return result.get("selected_skills", [])
+            
+        except Exception as e:
+            logger.error(f"[{self.name}] 降级技能选择也失败: {e}")
+            return self._get_fallback_skills(phase)
+    
+    async def _execute_selected_skills(
+        self,
+        selected_skills: List[str],
+        context: Dict[str, Any],
+        status_callback=None
+    ) -> Dict[str, Any]:
+        """
+        执行选中的技能
+        
+        Args:
+            selected_skills: 选中的技能名称列表
+            context: 执行上下文
+            status_callback: 状态回调
+        
+        Returns:
+            技能执行结果字典
+        """
+        if not selected_skills:
+            logger.info(f"  ℹ️ [{self.name}] 未选择任何技能，直接进行分析")
+            return {}
+        
+        skill_results = {}
+        
+        for skill_name in selected_skills:
+            if skill_name == "混合检索":
+                continue  # 混合检索单独处理
+            
+            if not self.has_skill(skill_name):
+                logger.warning(f"  ⚠️ [{self.name}] 不拥有技能: {skill_name}")
+                continue
+            
+            try:
+                # 发送状态更新
+                if status_callback:
+                    await status_callback({
+                        "persona": self.name,
+                        "phase": "skill_execution",
+                        "message": f"正在执行技能：{skill_name}"
+                    })
+                
+                result = await self.use_skill(skill_name, context)
+                
+                if result.get("success"):
+                    skill_results[skill_name] = result
+                    logger.info(f"  ✓ [{self.name}] 技能执行成功: {skill_name}")
+                    
+                    # 提取技能结果摘要
+                    result_summary = self._extract_skill_result_summary(skill_name, result)
+                    
+                    # 发送详细的成功状态
+                    if status_callback:
+                        await status_callback({
+                            "persona": self.name,
+                            "phase": "skill_execution",
+                            "message": f"✓ {skill_name}完成\n{result_summary}",
+                            "skill_result": {
+                                "skill_name": skill_name,
+                                "summary": result_summary,
+                                "full_result": result
+                            }
+                        })
+                else:
+                    logger.warning(f"  ❌ [{self.name}] 技能执行失败: {skill_name}")
+                    
+            except Exception as e:
+                logger.error(f"  ❌ [{self.name}] 技能执行异常: {skill_name} - {e}")
+        
+        return skill_results
+    
     async def analyze_option(
         self,
         option: Dict[str, Any],
@@ -934,6 +1622,7 @@ class DecisionPersona:
         - 价值观体系（评估标准）
         - 情感状态（影响判断）
         - 历史记忆（经验参考）
+        - 🆕 历史经验（第3层增强）
         
         Args:
             option: 决策选项
@@ -1299,6 +1988,12 @@ class RationalAnalyst(DecisionPersona):
             for m in similar_memories if m.learned_lesson
         ]) if similar_memories else "无相关历史经验"
         
+        # 🆕 第3层增强：获取历史经验
+        historical_experience = self._get_historical_experience_context(option, context)
+        if historical_experience:
+            logger.info(f"[{self.name}] 已加载历史经验")
+            memory_context = memory_context + "\n\n" + historical_experience
+        
         # 第1步：构建共享事实层基础上下文
         status_callback = context.get("status_callback")
         shared_facts_text = await self._build_shared_facts_context(option, context, status_callback)
@@ -1313,17 +2008,37 @@ class RationalAnalyst(DecisionPersona):
         # 获取之前的私有解读（如果是多轮推演）
         previous_interpretations = self._get_previous_interpretations_context()
         
-        # 提取用户具体信息
-        collected_info = context.get('collected_info', {})
-        decision_scenario = collected_info.get('decision_scenario', {})
-        constraints = collected_info.get('constraints', {})
-        priorities = collected_info.get('priorities', {})
-        concerns = collected_info.get('concerns', [])
+        # 从共享事实层提取决策场景信息
+        shared_facts = self.get_shared_facts()
+        decision_scenario = shared_facts.get('decision_scenario', {}) if shared_facts else {}
+        constraints = shared_facts.get('constraints', {}) if shared_facts else {}
+        priorities = shared_facts.get('priorities', {}) if shared_facts else {}
+        concerns = shared_facts.get('concerns', []) if shared_facts else []
+        
+        # 🆕 从决策上下文层获取用户决策风格
+        user_decision_style = context.get('user_decision_style', {})
         
         # 构建具体背景信息
         background_info = []
+        
+        # 添加用户决策风格信息
+        if user_decision_style:
+            background_info.append("【用户决策风格】")
+            decision_speed = user_decision_style.get('decision_speed', 'unknown')
+            risk_preference = user_decision_style.get('risk_preference', 'unknown')
+            common_domains = user_decision_style.get('common_domains', [])
+            patterns = user_decision_style.get('patterns', [])
+            
+            background_info.append(f"  - 决策速度: {decision_speed}")
+            background_info.append(f"  - 风险偏好: {risk_preference}")
+            if common_domains:
+                domains_text = ", ".join([d['domain'] for d in common_domains[:2]])
+                background_info.append(f"  - 常见领域: {domains_text}")
+            if patterns:
+                background_info.append(f"  - 决策模式: {patterns[0]}")
+        
         if decision_scenario:
-            background_info.append("【当前决策背景】")
+            background_info.append("\n【当前决策背景】")
             for key, value in decision_scenario.items():
                 if value:
                     background_info.append(f"  - {key}: {value}")
@@ -2676,14 +3391,23 @@ class PersonaCouncil:
     async def analyze_decision(
         self,
         decision_context: Dict[str, Any],
-        options: List[Dict[str, Any]]
+        options: List[Dict[str, Any]],
+        persona_rounds: Optional[Dict[str, int]] = None
     ) -> Dict[str, Any]:
         """
-        分析决策 - 所有人格参与
+        分析决策 - 所有人格参与（支持个性化轮数设置）
         
         Args:
             decision_context: 决策上下文
             options: 决策选项列表
+            persona_rounds: 每个人格的推演轮数配置
+                例如: {
+                    "rational_analyst": 3,
+                    "adventurer": 1,
+                    "pragmatist": 2,
+                    ...
+                }
+                如果为None，则所有人格默认2轮
         
         Returns:
             综合分析结果
@@ -2692,6 +3416,15 @@ class PersonaCouncil:
         logger.info(f"🎭 决策人格委员会开始分析")
         logger.info(f"决策问题: {decision_context.get('question', '')}")
         logger.info(f"选项数量: {len(options)}")
+        
+        # 设置默认轮数
+        if persona_rounds is None:
+            persona_rounds = {pid: 2 for pid in self.personas.keys()}
+        
+        logger.info(f"推演轮数配置:")
+        for pid, rounds in persona_rounds.items():
+            persona_name = self.personas[pid].name if pid in self.personas else pid
+            logger.info(f"  - {persona_name}: {rounds}轮")
         logger.info(f"{'='*60}\n")
         
         all_analyses = {}
@@ -2702,51 +3435,46 @@ class PersonaCouncil:
             
             option_analyses = {}
             
-            # 第一轮：所有人格独立分析
-            logger.info(f"  第1轮：独立分析...")
+            # 使用生命周期方法：所有人格异步并行执行各自的轮数
+            logger.info(f"  🚀 启动所有Agent的生命周期...")
             analysis_tasks = []
-            persona_names = []
+            persona_ids = []
             
             for persona_id, persona in self.personas.items():
+                rounds = persona_rounds.get(persona_id, 2)
+                
+                # 准备上下文
+                ctx = decision_context.copy()
+                ctx['option_idx'] = option_idx
+                ctx['total_options'] = len(options)
+                
+                # 启动生命周期
                 analysis_tasks.append(
-                    persona.analyze_option(option, decision_context, {})
+                    persona.run_lifecycle(
+                        option=option,
+                        context=ctx,
+                        rounds=rounds,
+                        status_callback=decision_context.get('status_callback')
+                    )
                 )
-                persona_names.append(persona_id)
+                persona_ids.append(persona_id)
             
-            # 并行执行所有人格的分析
+            # 并行执行所有人格的生命周期
+            logger.info(f"  ⏳ 等待所有Agent完成...")
             results = await asyncio.gather(*analysis_tasks, return_exceptions=True)
             
-            for persona_id, result in zip(persona_names, results):
+            for persona_id, result in zip(persona_ids, results):
                 if isinstance(result, Exception):
-                    logger.error(f"    ❌ {self.personas[persona_id].name} 分析失败: {result}")
+                    logger.error(f"    ❌ {self.personas[persona_id].name} 执行失败: {result}")
                     continue
                 
                 option_analyses[persona_id] = result
                 logger.info(f"    ✅ {self.personas[persona_id].name}: {result.get('stance', '未知')} (得分: {result.get('score', 0)})")
             
-            # 第二轮：人格间交互和辩论
-            logger.info(f"  第2轮：人格交互...")
-            interactions = await self._facilitate_debate(
-                option,
-                decision_context,
-                option_analyses
-            )
-            
-            # 第三轮：基于交互更新观点
-            logger.info(f"  第3轮：观点更新...")
-            updated_analyses = await self._update_after_debate(
-                option,
-                decision_context,
-                option_analyses,
-                interactions
-            )
-            
             all_analyses[f"option_{option_idx + 1}"] = {
                 "option": option,
-                "initial_analyses": option_analyses,
-                "interactions": interactions,
-                "final_analyses": updated_analyses,
-                "consensus_score": self._calculate_consensus(updated_analyses)
+                "final_analyses": option_analyses,
+                "consensus_score": self._calculate_consensus(option_analyses)
             }
         
         # 生成综合建议
