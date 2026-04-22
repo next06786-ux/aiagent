@@ -852,8 +852,9 @@ class DecisionPersona:
                 facts_parts.append(f"  - {', '.join(skill_names)}")
             
             # 历史决策
-            if facts.past_decisions:
-                facts_parts.append(f"\n【历史决策】共{len(facts.past_decisions)}次重要决策")
+            if self.memory_system.current_decision and self.memory_system.current_decision.past_decisions:
+                past_decisions_count = len(self.memory_system.current_decision.past_decisions)
+                facts_parts.append(f"\n【历史决策】共{past_decisions_count}次重要决策")
         
         base_text = "\n".join(facts_parts) if facts_parts else "（暂无用户历史数据）"
         
