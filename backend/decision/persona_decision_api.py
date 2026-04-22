@@ -685,53 +685,20 @@ async def simulate_single_option(websocket: WebSocket):
                         })
                         return
                     
-                    # 收集最终结果（使用共享字典中的数据）
-                    option_analyses = {}
-                    for persona_id, result in shared_analyses.items():
-                        option_analyses[persona_id] = {
-                            "current": result,
-                            "history": [result],
-                            "stance_changes": 0
-                        }
-                    
-                    # ============================================================
-                    # 自由异步交互模式（无固定轮次）
-                    # ============================================================
-                    # 策略：
-                    # 1. 所有智能体已经完成初始分析并发送结果
-                    # 2. 所有智能体已经完成深度反思（实时交互）
-                    # 3. 用户可以随时查看当前所有智能体的立场
-                    
-                    logger.info(f"[决策推演] 分析完成")
-                    
-                    # 发送完成信号
-                    await safe_send({
-                        "type": "thinking",
-                        "stage": "analysis_complete",
-                        "option_id": option_id,
-                        "content": f"【{option_title}】所有智能体已完成深度分析"
-                    })
-                    
-                    # 使用最终分析结果
-                    option_analyses_final = {
-                        pid: analysis["current"]
-                        for pid, analysis in option_analyses.items()
-                    }
-                    
                     # ============================================================
                     # 记录到决策上下文层（第2层）
                     # ============================================================
-                    if council.memory_system and council.memory_system.current_decision:
+                    if council.memory_system and council.memory_system.current_decision and option_analyses:
                         # 记录所有persona的初始观点
                         for persona_id, persona in council.personas.items():
                             if persona.current_interpretation:
                                 # 记录其他persona的观点（用于后续参考）
-                                for other_id, other_view in option_analyses_final.items():
+                                for other_id, other_analysis in option_analyses.items():
                                     if other_id != persona_id:
                                         persona.current_interpretation.interactions.append({
                                             "with_persona": other_id,
-                                            "their_stance": other_view.get('stance', '未知'),
-                                            "their_score": other_view.get('score', 0),
+                                            "their_stance": other_analysis.get('stance', '未知'),
+                                            "their_score": other_analysis.get('score', 0),
                                             "timestamp": datetime.now().isoformat()
                                         })
                         
@@ -750,20 +717,20 @@ async def simulate_single_option(websocket: WebSocket):
                     # 计算综合评分
                     persona_scores = {
                         pid: analysis.get('score', 50)
-                        for pid, analysis in option_analyses_final.items()
+                        for pid, analysis in option_analyses.items()
                     }
                     
                     avg_score = sum(persona_scores.values()) / len(persona_scores) if persona_scores else 0
                     
                     # 统计立场分布
-                    support_count = sum(1 for a in option_analyses_final.values() if '支持' in a.get('stance', ''))
-                    oppose_count = sum(1 for a in option_analyses_final.values() if '反对' in a.get('stance', ''))
-                    neutral_count = len(option_analyses_final) - support_count - oppose_count
+                    support_count = sum(1 for a in option_analyses.values() if '支持' in a.get('stance', ''))
+                    oppose_count = sum(1 for a in option_analyses.values() if '反对' in a.get('stance', ''))
+                    neutral_count = len(option_analyses) - support_count - oppose_count
                     
                     # 判断共识程度
-                    if support_count >= len(option_analyses_final) * 0.7:
+                    if support_count >= len(option_analyses) * 0.7:
                         consensus = "强烈支持"
-                    elif oppose_count >= len(option_analyses_final) * 0.7:
+                    elif oppose_count >= len(option_analyses) * 0.7:
                         consensus = "强烈反对"
                     elif support_count > oppose_count:
                         consensus = "倾向支持"
@@ -785,7 +752,7 @@ async def simulate_single_option(websocket: WebSocket):
 各人格最终立场：
 """
                     
-                    for pid, analysis in option_analyses_final.items():
+                    for pid, analysis in option_analyses.items():
                         persona = council.personas[pid]
                         evaluation_content += f"\n【{persona.name}】{analysis.get('stance', '未知')} ({analysis.get('score', 0)}分)"
                         if analysis.get('recommendation'):

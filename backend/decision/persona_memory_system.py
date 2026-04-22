@@ -61,6 +61,12 @@ class SharedFactsLayer:
     # 混合检索结果（已包含在 collected_info 中）
     retrieval_results: Dict[str, Any] = field(default_factory=dict)
     
+    # 从 retrieval_cache 中提取的结构化数据
+    relationships: List[Dict[str, Any]] = field(default_factory=list)
+    education_history: List[Dict[str, Any]] = field(default_factory=list)
+    career_history: List[Dict[str, Any]] = field(default_factory=list)
+    skills: List[Dict[str, Any]] = field(default_factory=list)
+    
     last_updated: datetime = field(default_factory=datetime.now)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -338,6 +344,13 @@ class LayeredMemorySystem:
         shared_facts.priorities = collected_info.get('priorities', {})
         shared_facts.concerns = collected_info.get('concerns', [])
         shared_facts.retrieval_results = collected_info.get('retrieval_cache', {})
+        
+        # 从 retrieval_cache 中提取结构化数据
+        retrieval_cache = collected_info.get('retrieval_cache', {})
+        shared_facts.relationships = retrieval_cache.get('relationships', [])
+        shared_facts.education_history = retrieval_cache.get('education_history', [])
+        shared_facts.career_history = retrieval_cache.get('career_history', [])
+        shared_facts.skills = retrieval_cache.get('skills', [])
         
         logger.info(f"  ✓ 数据加载完成:")
         logger.info(f"    - 决策场景: {'已加载' if shared_facts.decision_scenario else '未提供'}")
