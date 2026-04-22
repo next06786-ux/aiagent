@@ -379,6 +379,41 @@ class LLMService:
         
         return response.choices[0].message.content
     
+    async def chat_async(
+        self, 
+        messages: List[Dict[str, str]], 
+        temperature: float = 0.7, 
+        response_format: Optional[str] = None, 
+        model: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[str] = "auto"
+    ) -> str:
+        """
+        异步对话接口 - 在线程池中执行同步调用，避免阻塞事件循环
+        
+        Args:
+            messages: 消息列表 [{"role": "user", "content": "..."}]
+            temperature: 温度参数（0-1，越高越随机）
+            response_format: 响应格式，可选 "json_object"
+            model: 指定模型名称（可选），如果不指定则使用默认模型
+            tools: 工具定义列表（Function Calling）
+            tool_choice: 工具选择策略 ("auto" | "none" | {"type": "function", "function": {"name": "..."}})
+        
+        Returns:
+            大模型回复（可能包含工具调用）
+        """
+        import asyncio
+        # 在线程池中执行同步的 chat 方法，避免阻塞事件循环
+        return await asyncio.to_thread(
+            self.chat,
+            messages,
+            temperature,
+            response_format,
+            model,
+            tools,
+            tool_choice
+        )
+    
     def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
         """
         流式对话接口（支持思考过程展示）
