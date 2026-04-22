@@ -697,9 +697,9 @@ class LayeredMemorySystem:
             }
             
             # 添加决策上下文信息（如果可用）
-            if decision_id in [d.get('session_id') for d in (self.shared_facts.past_decisions if self.shared_facts else [])]:
+            if decision_id in [d.get('session_id') for d in (self.current_decision.past_decisions if self.current_decision else [])]:
                 past_decision = next(
-                    (d for d in self.shared_facts.past_decisions if d.get('session_id') == decision_id),
+                    (d for d in self.current_decision.past_decisions if d.get('session_id') == decision_id),
                     None
                 )
                 if past_decision:
@@ -746,9 +746,9 @@ class LayeredMemorySystem:
         
         # 查找历史决策信息
         past_decision = None
-        if self.shared_facts and self.shared_facts.past_decisions:
+        if self.current_decision and self.current_decision.past_decisions:
             past_decision = next(
-                (d for d in self.shared_facts.past_decisions if d.get('session_id') == past_decision_id),
+                (d for d in self.current_decision.past_decisions if d.get('session_id') == past_decision_id),
                 None
             )
         

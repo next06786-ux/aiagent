@@ -473,7 +473,7 @@ class DecisionPersona:
                 "education": self.memory_system.shared_facts.education_history,
                 "career": self.memory_system.shared_facts.career_history,
                 "skills": self.memory_system.shared_facts.skills,
-                "past_decisions": self.memory_system.shared_facts.past_decisions
+                "past_decisions": self.memory_system.current_decision.past_decisions if self.memory_system.current_decision else []
             }
         return None
     
