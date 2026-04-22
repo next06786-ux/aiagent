@@ -151,7 +151,6 @@ class DecisionContext:
             "user_decision_style": self.user_decision_style,
             "created_at": self.created_at.isoformat()
         }
-        }
 
 
 # ==================== 私有层：人格解读 ====================
