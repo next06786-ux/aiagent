@@ -956,6 +956,8 @@ docker exec -it lifeswarm-backend python backend/init_test_data.py
 
 
 
+
+
 git pull origin main
 
 # 2. 清空Neo4j数据（重新初始化）
@@ -968,3 +970,21 @@ docker exec -it lifeswarm-backend python backend/init_test_data.py
 
 # 4. 验证数据
 docker exec -it lifeswarm-backend python backend/verify_career_data.py
+
+
+
+
+cd /path/to/your/project
+
+# 2. 拉取最新代码
+git pull origin main
+
+# 3. 停止并删除旧容器
+docker compose down
+
+
+# 或者只重启（如果只修改了代码）
+docker compose up -d
+
+# 5. 查看日志确认启动成功
+  docker compose logs -f backend
