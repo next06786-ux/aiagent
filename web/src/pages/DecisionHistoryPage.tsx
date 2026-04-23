@@ -107,16 +107,25 @@ export function DecisionHistoryPage() {
     
     const optionsData = viewingHistory.options_data;
     
+    console.log('[历史查看] getCurrentOptionData 被调用');
+    console.log('[历史查看] selectedOptionId:', selectedOptionId);
+    console.log('[历史查看] optionsData keys:', Object.keys(optionsData));
+    
     // 新格式：多选项
     if (selectedOptionId !== 'legacy' && optionsData[selectedOptionId]) {
-      return optionsData[selectedOptionId];
+      const data = optionsData[selectedOptionId];
+      console.log('[历史查看] 返回新格式数据:', data);
+      console.log('[历史查看] 是否有report:', !!data.report);
+      return data;
     }
     
     // 旧格式：单选项（兼容）
     if (optionsData.agents) {
+      console.log('[历史查看] 返回旧格式数据');
       return optionsData;
     }
     
+    console.log('[历史查看] 没有找到数据');
     return null;
   };
 
@@ -126,15 +135,22 @@ export function DecisionHistoryPage() {
     
     const optionsData = viewingHistory.options_data;
     
+    console.log('[历史查看] getAvailableOptions 被调用');
+    console.log('[历史查看] optionsData:', optionsData);
+    
     // 新格式：返回所有 option_X 的key
     const optionKeys = Object.keys(optionsData).filter(key => key.startsWith('option_'));
     
+    console.log('[历史查看] 找到的 option keys:', optionKeys);
+    
     if (optionKeys.length > 0) {
-      return optionKeys.map(key => ({
+      const options = optionKeys.map(key => ({
         id: key,
         title: optionsData[key].option_title || key,
         data: optionsData[key]
       }));
+      console.log('[历史查看] 返回的选项列表:', options);
+      return options;
     }
     
     // 旧格式：返回单个选项
@@ -250,13 +266,19 @@ export function DecisionHistoryPage() {
                 </div>
               </div>
               
-              {/* 选项切换器 */}
-              {getAvailableOptions().length > 1 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* 选项切换器 - 即使只有一个选项也显示 */}
+              {getAvailableOptions().length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  <div style={{ fontSize: 13, color: '#64748B', marginRight: 8, display: 'flex', alignItems: 'center' }}>
+                    选项:
+                  </div>
                   {getAvailableOptions().map(option => (
                     <button
                       key={option.id}
-                      onClick={() => setSelectedOptionId(option.id)}
+                      onClick={() => {
+                        console.log('[历史查看] 切换到选项:', option.id, option.title);
+                        setSelectedOptionId(option.id);
+                      }}
                       style={{
                         padding: '8px 16px',
                         borderRadius: 10,

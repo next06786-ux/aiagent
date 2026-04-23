@@ -402,6 +402,16 @@ export function DecisionSimulationPage() {
       const report = reportResponse.success ? reportResponse.report : null;
       console.log('[自动保存] 报告生成完成');
       
+      // 🆕 将报告缓存到 reportCache 中，供"查看报告"按钮使用
+      if (report) {
+        setReportCache(prev => {
+          const next = new Map(prev);
+          next.set(optionId, report);
+          console.log('[自动保存] 报告已缓存到 reportCache:', optionId);
+          return next;
+        });
+      }
+      
       // 构建该选项的数据
       const optionData = {
         option_id: optionId,
@@ -458,6 +468,12 @@ export function DecisionSimulationPage() {
       
       // 更新选项数据
       existingOptionsData[optionId] = optionData;
+      
+      console.log('[自动保存] 准备保存的数据结构:');
+      console.log('[自动保存] - optionId:', optionId);
+      console.log('[自动保存] - option_title:', optionData.option_title);
+      console.log('[自动保存] - 所有选项keys:', Object.keys(existingOptionsData));
+      console.log('[自动保存] - 完整数据:', JSON.stringify(existingOptionsData, null, 2));
       
       // 保存到数据库（会覆盖同一个 session_id 的记录）
       console.log('[自动保存] 保存到数据库...');
