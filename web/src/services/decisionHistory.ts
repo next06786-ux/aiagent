@@ -2,7 +2,10 @@
  * 决策历史记录服务
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// 使用与其他服务一致的 API 配置
+const rawBaseUrl =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '';
+const API_BASE_URL = rawBaseUrl.replace(/\/+$/, '');
 
 export interface DecisionHistory {
   id: string;

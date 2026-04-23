@@ -1823,6 +1823,11 @@ export function DecisionSimulationPage() {
 
       {/* 主内容区域 */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {(() => {
+          console.log('[查看报告按钮] wsPhase:', wsPhase, 'canRenderPersonas:', canRenderPersonas, '条件满足:', wsPhase === 'done' && canRenderPersonas);
+          return null;
+        })()}
+        
         {wsPhase === 'done' && canRenderPersonas && (
           <div style={{
             position: 'absolute', 

@@ -88,39 +88,58 @@ export function PersonaInteractionView({
     timestamp: number;
   }>>([]);
   
+  // 追踪已经显示过的观察事件，避免重复触发
+  const [shownObservations, setShownObservations] = useState<Set<string>>(new Set());
+  
+  // 追踪每个 persona 的历史记录长度，只处理新增的事件
+  const [historyLengths, setHistoryLengths] = useState<Record<string, number>>({});
+  
   // 监听 personas 的 thinkingHistory，检测 observe_others 事件
   useEffect(() => {
     personas.forEach(persona => {
       const history = persona.thinkingHistory || [];
-      const latestObserve = history
-        .filter(h => h.event_type === 'phase_complete' && (h as any).phase === 'observe_others')
-        .sort((a, b) => b.timestamp - a.timestamp)[0];
+      const previousLength = historyLengths[persona.id] || 0;
       
-      if (latestObserve) {
-        const observedPersonas = (latestObserve as any).observed_personas || [];
-        const observedIds = observedPersonas.map((p: any) => p.id);
+      // 只处理新增的历史记录
+      if (history.length > previousLength) {
+        const newEvents = history.slice(previousLength);
         
-        // 检查是否已经有这个观察关系的动画
-        const hasAnimation = observationLines.some(
-          line => line.from === persona.id && line.timestamp === latestObserve.timestamp
-        );
+        // 查找新增的 observe_others 事件
+        newEvents.forEach(event => {
+          if (event.event_type === 'phase_complete' && (event as any).phase === 'observe_others') {
+            const observedPersonas = (event as any).observed_personas || [];
+            const observedIds = observedPersonas.map((p: any) => p.id);
+            
+            // 使用唯一 ID 检查是否已经显示过这个观察事件
+            const observationId = `${persona.id}_${event.timestamp}`;
+            
+            if (!shownObservations.has(observationId) && observedIds.length > 0) {
+              console.log(`[连线动画] ${persona.name} 观察 ${observedIds.length} 个Agent (timestamp: ${event.timestamp})`);
+              
+              // 标记为已显示
+              setShownObservations(prev => new Set(prev).add(observationId));
+              
+              // 添加连线动画
+              setObservationLines(prev => [...prev, {
+                id: observationId,
+                from: persona.id,
+                to: observedIds,
+                timestamp: event.timestamp,
+              }]);
+              
+              // 2.5秒后移除连线
+              setTimeout(() => {
+                setObservationLines(prev => prev.filter(l => l.id !== observationId));
+              }, 2500);
+            }
+          }
+        });
         
-        if (!hasAnimation && observedIds.length > 0) {
-          const lineId = `${persona.id}_${latestObserve.timestamp}`;
-          console.log(`[连线动画] ${persona.name} 观察 ${observedIds.length} 个Agent`);
-          
-          setObservationLines(prev => [...prev, {
-            id: lineId,
-            from: persona.id,
-            to: observedIds,
-            timestamp: latestObserve.timestamp,
-          }]);
-          
-          // 2.5秒后移除连线
-          setTimeout(() => {
-            setObservationLines(prev => prev.filter(l => l.id !== lineId));
-          }, 2500);
-        }
+        // 更新历史记录长度
+        setHistoryLengths(prev => ({
+          ...prev,
+          [persona.id]: history.length
+        }));
       }
     });
   }, [personas]);
@@ -136,20 +155,37 @@ export function PersonaInteractionView({
   // 追踪每个 Agent 的上一次分数
   const [previousScores, setPreviousScores] = useState<Record<string, number>>({});
   
+  // 使用 useRef 追踪已经触发过动画的分数变化，避免重复触发和重新渲染
+  const shownScoreChangesRef = useRef<Set<string>>(new Set());
+  
   // 监听personas的score变化，触发动画
   useEffect(() => {
     personas.forEach(persona => {
       if (persona.score !== undefined && persona.status === 'thinking') {
-        const previousScore = previousScores[persona.id] || 50; // 默认初始分数为 50
+        const previousScore = previousScores[persona.id];
+        
+        // 如果是第一次看到这个 persona 的分数，只记录不触发动画
+        if (previousScore === undefined) {
+          setPreviousScores(prev => ({
+            ...prev,
+            [persona.id]: persona.score
+          }));
+          return;
+        }
+        
         const scoreDelta = persona.score - previousScore;
         
         // 只有分数真正变化时才触发动画
         if (Math.abs(scoreDelta) > 0.1) {
-          // 检查是否已经有这个persona的动画
-          const hasAnimation = scoreImpactAnimations.some(anim => anim.personaId === persona.id);
-          if (!hasAnimation) {
+          // 使用唯一 ID 检查是否已经为这个分数变化触发过动画
+          const changeId = `${persona.id}_${previousScore.toFixed(1)}_${persona.score.toFixed(1)}`;
+          
+          if (!shownScoreChangesRef.current.has(changeId)) {
             const animId = `${persona.id}_${Date.now()}`;
-            console.log(`[动画] 触发分数影响动画: ${persona.name} (${previousScore} → ${persona.score}, 变化: ${scoreDelta > 0 ? '+' : ''}${scoreDelta.toFixed(1)})`);
+            console.log(`[动画] 触发分数影响动画: ${persona.name} (${previousScore.toFixed(1)} → ${persona.score.toFixed(1)}, 变化: ${scoreDelta > 0 ? '+' : ''}${scoreDelta.toFixed(1)})`);
+            
+            // 标记为已显示
+            shownScoreChangesRef.current.add(changeId);
             
             setScoreImpactAnimations(prev => [...prev, {
               id: animId,
@@ -172,7 +208,7 @@ export function PersonaInteractionView({
         }
       }
     });
-  }, [personas, previousScores, scoreImpactAnimations]);
+  }, [personas, previousScores]);
   
   // 监听totalScore变化
   useEffect(() => {
