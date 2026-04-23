@@ -1918,9 +1918,6 @@ export function DecisionSimulationPage() {
             </button>
           </div>
         )}
-            <span>分析完成</span>
-          </div>
-        )}
         
         {canRenderPersonas ? (
           <PersonaInteractionView
