@@ -626,12 +626,13 @@ class DecisionPersona:
         previous_result: Optional[Dict[str, Any]] = None
     ) -> List[str]:
         """
-        智能技能选择 - 使用LLM决定调用哪些技能
+        智能技能选择 - 使用LLM自然地决定调用哪些技能
         
-        类似Cursor的Function Calling机制：
-        1. LLM根据当前情况决定是否需要调用技能
-        2. 如果需要，选择最相关的技能
-        3. 支持在不同阶段选择不同的技能
+        优化特点：
+        1. 更自然的提示词，让Agent像真人一样思考
+        2. 详细的技能使用场景说明
+        3. 明确的选择原则和示例
+        4. 支持Agent的内心独白（thinking字段）
         
         Args:
             option: 决策选项
@@ -658,23 +659,45 @@ class DecisionPersona:
         try:
             response = await llm.chat_async(
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
+                temperature=0.8,  # 提高温度，让选择更自然多样
                 response_format="json_object"
             )
             
             result = json.loads(response)
             selected_skills = result.get("selected_skills", [])
             reason = result.get("reason", "")
+            thinking = result.get("thinking", "")
             
-            logger.info(f"[{self.name}] 技能选择: {selected_skills} - {reason}")
+            # 记录Agent的思考过程
+            if thinking:
+                logger.info(f"[{self.name}] 内心独白: {thinking}")
+            
+            logger.info(f"[{self.name}] 技能选择 ({phase}): {selected_skills if selected_skills else '不使用技能'}")
+            if reason:
+                logger.info(f"[{self.name}] 选择理由: {reason}")
             
             # 记录到私有解读层
-            if self.current_interpretation and selected_skills:
-                self.current_interpretation.add_reasoning_step(
-                    f"[技能选择] {phase}: {', '.join(selected_skills)} - {reason}"
-                )
+            if self.current_interpretation:
+                if thinking:
+                    self.current_interpretation.add_reasoning_step(
+                        f"[内心独白] {thinking}"
+                    )
+                if selected_skills:
+                    self.current_interpretation.add_reasoning_step(
+                        f"[技能选择] {phase}: {', '.join(selected_skills)} - {reason}"
+                    )
+                else:
+                    self.current_interpretation.add_reasoning_step(
+                        f"[技能选择] {phase}: 不使用技能 - {reason}"
+                    )
             
-            return selected_skills
+            # 验证选择的技能是否可用
+            valid_skills = [s for s in selected_skills if s in self.skill_names]
+            if len(valid_skills) < len(selected_skills):
+                invalid = set(selected_skills) - set(valid_skills)
+                logger.warning(f"[{self.name}] 选择了不可用的技能: {invalid}")
+            
+            return valid_skills
             
         except Exception as e:
             logger.error(f"[{self.name}] 智能技能选择失败: {e}")
@@ -688,100 +711,224 @@ class DecisionPersona:
         other_views: Optional[Dict[str, Any]],
         previous_result: Optional[Dict[str, Any]]
     ) -> str:
-        """构建技能选择提示词"""
+        """构建技能选择提示词 - 更自然、更智能"""
         
-        # 获取可用技能列表（排除混合检索，它会自动处理）
-        available_skills = [s for s in self.skill_names if s != "混合检索"]
+        # 获取可用技能列表及其详细描述
+        available_skills_info = []
+        for skill_name in self.skill_names:
+            if skill_name == "混合检索":
+                continue  # 混合检索会自动处理
+            
+            # 为每个技能添加使用场景说明
+            skill_desc = self._get_skill_description(skill_name)
+            available_skills_info.append(f"  • {skill_name}: {skill_desc}")
         
         prompt_parts = [
-            f"你是【{self.name}】，一个决策智能体。",
-            f"你的价值观: {json.dumps(self.value_system.priorities, ensure_ascii=False)}",
-            f"你的决策风格: {self.value_system.decision_style}",
+            f"你是【{self.name}】，{self.description}",
             f"",
-            f"当前阶段: {phase}",
-            f"决策问题: {context.get('question', '')}",
-            f"选项: {option.get('title', '')} - {option.get('description', '')}",
-            f"",
-            f"可用技能: {', '.join(available_skills)}",
-            f""
+            f"你的核心价值观:",
         ]
+        
+        # 更自然地展示价值观
+        for key, value in list(self.value_system.priorities.items())[:3]:
+            prompt_parts.append(f"  • {key}: {int(value*100)}%重要度")
+        
+        prompt_parts.extend([
+            f"",
+            f"决策风格: {self._translate_decision_style(self.value_system.decision_style)}",
+            f"风险偏好: {self._translate_risk_tolerance(self.value_system.risk_tolerance)}",
+            f"",
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            f"",
+            f"【决策情境】",
+            f"问题: {context.get('question', '未知')}",
+            f"选项: {option.get('title', '')}",
+            f"描述: {option.get('description', '')}",
+            f"",
+        ])
+        
+        # 展示用户背景信息（如果有）
+        collected_info = context.get('collected_info', {})
+        if collected_info:
+            prompt_parts.append("【用户背景】")
+            if collected_info.get('age'):
+                prompt_parts.append(f"  年龄: {collected_info['age']}岁")
+            if collected_info.get('career_stage'):
+                prompt_parts.append(f"  职业阶段: {collected_info['career_stage']}")
+            if collected_info.get('life_goals'):
+                prompt_parts.append(f"  人生目标: {collected_info['life_goals']}")
+            prompt_parts.append("")
         
         if phase == "independent_thinking":
             prompt_parts.extend([
-                "这是独立思考阶段，你需要决定调用哪些技能来帮助分析。",
-                "",
-                "原则:",
-                "1. 只选择真正需要的技能，不要贪多",
-                "2. 优先选择与你价值观最契合的技能",
-                "3. 如果已有足够信息，可以不选择任何技能",
-                ""
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                f"",
+                f"【独立思考阶段】",
+                f"",
+                f"现在是你独立分析的时刻。作为{self.name}，你需要从自己的视角深入思考这个决策。",
+                f"",
+                f"你拥有以下技能工具:",
+                *available_skills_info,
+                f"",
+                f"💡 智能选择原则:",
+                f"",
+                f"1. 自然思考: 想象你是一个真实的{self.name}，你会本能地想了解什么？",
+                f"   - 如果你重视数据，自然会想看数据分析",
+                f"   - 如果你关注风险，自然会想评估风险",
+                f"   - 如果你在意关系，自然会想了解人际影响",
+                f"",
+                f"2. 按需使用: 不是所有技能都要用，只选择真正能帮助你做决策的",
+                f"   - 信息充足时，可以不用任何技能，直接凭经验判断",
+                f"   - 信息不足时，选择1-2个最关键的技能补充信息",
+                f"   - 复杂决策时，可以选择2-3个技能多角度分析",
+                f"",
+                f"3. 符合人设: 选择与你的价值观和决策风格最契合的技能",
+                f"   - 理性分析师 → 数据分析、风险评估",
+                f"   - 冒险家 → 机会识别、创新潜力",
+                f"   - 实用主义者 → 可行性评估、数据分析",
+                f"   - 理想主义者 → 价值观对齐、联网搜索",
+                f"   - 保守派 → 风险评估",
+                f"   - 社交导向者 → 人际关系影响",
+                f"   - 创新者 → 创新潜力、机会识别、联网搜索",
+                f"",
+                f"4. 联网搜索的使用时机:",
+                f"   - 需要了解最新趋势、行业动态、市场信息",
+                f"   - 涉及新兴领域、技术、政策等时效性强的内容",
+                f"   - 需要验证某个观点或获取权威数据",
+                f"   - 用户背景信息不足，需要补充行业/领域知识",
+                f"",
             ])
         else:  # deep_reflection
             prompt_parts.extend([
-                "这是深度反思阶段，你已经有了初步结论，但看到了其他Agent的观点。",
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
                 f"",
-                f"你的初步结论: {previous_result.get('stance', '未知')} ({previous_result.get('score', 0)}分)",
+                f"【深度反思阶段】",
                 f"",
-                f"其他Agent的观点:"
+                f"你已经完成了独立思考，现在看到了其他Agent的观点。",
+                f"",
+                f"你的初步结论:",
+                f"  立场: {previous_result.get('stance', '未知')}",
+                f"  评分: {previous_result.get('score', 0)}/100",
+                f"  理由: {previous_result.get('reasoning', '未提供')[:100]}...",
+                f"",
             ])
             
             if other_views:
+                prompt_parts.append("其他Agent的观点:")
                 for pid, view in list(other_views.items())[:3]:
                     prompt_parts.append(
-                        f"  - {view.get('name', pid)}: {view.get('stance', '未知')} ({view.get('score', 0)}分)"
+                        f"  • {view.get('name', pid)}: {view.get('stance', '未知')} "
+                        f"({view.get('score', 0)}分) - {view.get('reasoning', '')[:80]}..."
                     )
+                prompt_parts.append("")
             
             prompt_parts.extend([
-                "",
-                "你需要决定是否需要补充技能来:",
-                "1. 验证其他Agent提出的观点",
-                "2. 补充你之前可能忽略的分析维度",
-                "3. 加强或修正你的立场",
-                "",
-                "原则:",
-                "- 如果其他Agent的观点与你一致，通常不需要补充技能",
-                "- 如果其他Agent提出了你没考虑的重要角度，可以选择相关技能验证",
-                "- 如果你对自己的结论很有信心，可以不选择任何技能",
-                ""
+                f"你拥有以下技能工具:",
+                *available_skills_info,
+                f"",
+                f"💡 反思选择原则:",
+                f"",
+                f"1. 保持独立: 不要因为其他人的观点就轻易改变",
+                f"   - 如果你的结论有充分依据，坚持自己的立场",
+                f"   - 只有当发现自己确实遗漏了重要信息时，才考虑补充技能",
+                f"",
+                f"2. 有的放矢: 只在真正需要验证或补充时才使用技能",
+                f"   - 观点一致 → 通常不需要补充技能",
+                f"   - 观点分歧但你有信心 → 不需要补充",
+                f"   - 观点分歧且你发现盲点 → 选择1个相关技能验证",
+                f"",
+                f"3. 自然反应: 想象真实的你会怎么做",
+                f"   - 如果别人提到了你没考虑的数据，你会想看数据吗？",
+                f"   - 如果别人提到了风险，你会想深入评估吗？",
+                f"   - 如果别人提到了新趋势，你会想联网搜索验证吗？",
+                f"",
             ])
         
         prompt_parts.extend([
-            "请返回JSON格式:",
-            "{",
-            '  "selected_skills": ["技能1", "技能2"],  // 可以是空数组',
-            '  "reason": "选择这些技能的原因"',
-            "}"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            f"",
+            f"请以{self.name}的身份，自然地决定是否需要使用技能，以及使用哪些技能。",
+            f"",
+            f"返回JSON格式:",
+            f"{{",
+            f'  "thinking": "你的内心独白：我作为{self.name}，现在的想法是...",',
+            f'  "selected_skills": ["技能1", "技能2"],  // 可以是空数组[]',
+            f'  "reason": "简短说明为什么选择这些技能（或不选择）"',
+            f"}}"
         ])
         
         return "\n".join(prompt_parts)
     
-    def _get_fallback_skills(self, phase: str) -> List[str]:
-        """降级策略：返回核心技能"""
-        if phase == "independent_thinking":
-            # 独立思考阶段：返回与人格最相关的核心技能
-            core_skills = []
-            for skill_name in self.skill_names:
-                if skill_name == "混合检索":
-                    continue
-                # 根据人格特点选择核心技能
-                if self.persona_id == "rational_analyst" and skill_name in ["数据分析", "风险评估"]:
-                    core_skills.append(skill_name)
-                elif self.persona_id == "adventurer" and skill_name in ["机会识别", "创新潜力评估"]:
-                    core_skills.append(skill_name)
-                elif self.persona_id == "pragmatist" and skill_name in ["可行性评估", "数据分析"]:
-                    core_skills.append(skill_name)
-                elif self.persona_id == "idealist" and skill_name in ["价值观对齐分析"]:
-                    core_skills.append(skill_name)
-                elif self.persona_id == "conservative" and skill_name in ["风险评估"]:
-                    core_skills.append(skill_name)
-                elif self.persona_id == "social_navigator" and skill_name in ["人际关系影响分析"]:
-                    core_skills.append(skill_name)
-                elif self.persona_id == "innovator" and skill_name in ["创新潜力评估", "机会识别"]:
-                    core_skills.append(skill_name)
-            
-            return core_skills if core_skills else [s for s in self.skill_names if s != "混合检索"][:2]
+    def _get_skill_description(self, skill_name: str) -> str:
+        """获取技能的使用场景描述"""
+        descriptions = {
+            "数据分析": "分析量化数据、统计指标、趋势图表，适合需要数据支持的决策",
+            "风险评估": "识别潜在风险、评估风险等级、提供风险应对策略",
+            "机会识别": "发现潜在机会、评估机会价值、分析竞争优势",
+            "可行性评估": "评估方案的可执行性、资源需求、实施难度",
+            "价值观对齐分析": "深入分析决策与个人价值观、人生目标的契合度",
+            "人际关系影响分析": "评估决策对重要人际关系、社交网络的影响",
+            "创新潜力评估": "评估方案的创新性、突破性、未来潜力",
+            "联网搜索": "从互联网获取最新信息、行业动态、市场趋势、权威数据"
+        }
+        return descriptions.get(skill_name, "辅助决策分析")
+    
+    def _translate_decision_style(self, style: str) -> str:
+        """翻译决策风格"""
+        translations = {
+            "analytical": "理性分析型（依赖数据和逻辑）",
+            "intuitive": "直觉洞察型（相信直觉和经验）",
+            "balanced": "平衡综合型（理性与直觉结合）"
+        }
+        return translations.get(style, style)
+    
+    def _translate_risk_tolerance(self, tolerance: float) -> str:
+        """翻译风险偏好"""
+        if tolerance < 0.3:
+            return "极度保守（避免一切风险）"
+        elif tolerance < 0.5:
+            return "偏保守（谨慎对待风险）"
+        elif tolerance < 0.7:
+            return "中等（接受适度风险）"
+        elif tolerance < 0.85:
+            return "偏冒险（愿意承担较高风险）"
         else:
-            # 深度反思阶段：默认不补充技能
+            return "高度冒险（追求高风险高回报）"
+    
+    def _get_fallback_skills(self, phase: str) -> List[str]:
+        """
+        降级策略：当LLM不可用时，智能返回核心技能
+        
+        根据人格特点和阶段自动选择最相关的技能
+        """
+        if phase == "independent_thinking":
+            # 独立思考阶段：根据人格特点选择1-2个核心技能
+            persona_core_skills = {
+                "rational_analyst": ["数据分析", "风险评估"],
+                "adventurer": ["机会识别", "联网搜索"],
+                "pragmatist": ["可行性评估", "数据分析"],
+                "idealist": ["价值观对齐分析", "联网搜索"],
+                "conservative": ["风险评估"],
+                "social_navigator": ["人际关系影响分析"],
+                "innovator": ["创新潜力评估", "联网搜索"]
+            }
+            
+            core_skills = persona_core_skills.get(self.persona_id, [])
+            
+            # 确保选择的技能在可用技能列表中
+            available_core = [s for s in core_skills if s in self.skill_names]
+            
+            if available_core:
+                logger.info(f"[{self.name}] 使用降级策略，选择核心技能: {available_core}")
+                return available_core
+            else:
+                # 如果核心技能不可用，返回前2个可用技能（排除混合检索）
+                fallback = [s for s in self.skill_names if s != "混合检索"][:2]
+                logger.info(f"[{self.name}] 使用降级策略，选择默认技能: {fallback}")
+                return fallback
+        else:
+            # 深度反思阶段：默认不补充技能（保持独立性）
+            logger.info(f"[{self.name}] 深度反思阶段降级策略：不补充技能")
             return []
     
     async def _execute_selected_skills(
@@ -1669,7 +1816,8 @@ class RationalAnalyst(DecisionPersona):
             skills=[
                 "混合检索",
                 "数据分析",
-                "风险评估"
+                "风险评估",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为理性分析师，你的分析应该：
@@ -1872,7 +2020,8 @@ class Adventurer(DecisionPersona):
             skills=[
                 "混合检索",
                 "机会识别",
-                "风险评估"
+                "风险评估",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为冒险家，你的分析应该：
@@ -2072,7 +2221,8 @@ class Pragmatist(DecisionPersona):
             skills=[
                 "混合检索",
                 "可行性评估",
-                "数据分析"
+                "数据分析",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为实用主义者，你的分析应该：
@@ -2265,7 +2415,8 @@ class Idealist(DecisionPersona):
             user_id=user_id,
             skills=[
                 "混合检索",
-                "价值观对齐分析"
+                "价值观对齐分析",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为理想主义者，你的分析应该：
@@ -2462,7 +2613,8 @@ class Conservative(DecisionPersona):
             user_id=user_id,
             skills=[
                 "混合检索",
-                "风险评估"
+                "风险评估",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为保守派，你的分析应该：
@@ -2655,7 +2807,8 @@ class SocialNavigator(DecisionPersona):
             user_id=user_id,
             skills=[
                 "混合检索",
-                "人际关系影响分析"
+                "人际关系影响分析",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为社交导向者，你的分析应该：
@@ -2848,7 +3001,8 @@ class Innovator(DecisionPersona):
             skills=[
                 "混合检索",
                 "创新潜力评估",
-                "机会识别"
+                "机会识别",
+                "联网搜索"
             ],
             custom_prompt_suffix="""
 作为创新者，你的分析应该：

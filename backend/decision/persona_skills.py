@@ -745,6 +745,171 @@ class InnovationPotentialSkill(Skill):
             }
 
 
+class WebSearchSkill(Skill):
+    """联网搜索技能 - 使用Qwen内置联网搜索功能"""
+    
+    def __init__(self, persona):
+        super().__init__(
+            name="联网搜索",
+            description="从互联网搜索最新信息、数据和趋势（使用Qwen内置搜索）"
+        )
+        self.persona = persona
+    
+    async def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        执行联网搜索（使用Qwen内置搜索功能）
+        
+        Args:
+            context: {
+                "query": "搜索查询",
+                "option": {},  # 决策选项
+                "collected_info": {}  # 收集的信息
+            }
+        
+        Returns:
+            {
+                "success": bool,
+                "search_content": str,  # 搜索到的内容
+                "analysis": str,  # 分析结果
+                "key_insights": List[str],  # 关键洞察
+                "thinking_process": str
+            }
+        """
+        import asyncio
+        import json
+        from backend.llm.llm_service import get_llm_service
+        
+        query = context.get("query", "")
+        option = context.get("option", {})
+        collected_info = context.get("collected_info", {})
+        
+        if not query:
+            # 如果没有提供查询，根据选项自动生成
+            query = f"{option.get('title', '')} {option.get('description', '')}"
+        
+        if not query.strip():
+            return {
+                "success": False,
+                "search_content": "",
+                "analysis": "搜索查询为空",
+                "key_insights": [],
+                "error": "查询为空"
+            }
+        
+        logger.info(f"[{self.persona.name}] 执行联网搜索技能: {query}")
+        
+        llm = get_llm_service()
+        if not llm or not llm.enabled:
+            return {
+                "success": False,
+                "search_content": "",
+                "analysis": "LLM服务不可用",
+                "key_insights": [],
+                "error": "LLM服务不可用"
+            }
+        
+        try:
+            # 构建搜索提示词
+            search_prompt = f"""作为{self.persona.name}，我需要从互联网搜索最新信息来帮助决策。
+
+决策选项：
+- 标题：{option.get('title', '')}
+- 描述：{option.get('description', '')}
+
+用户背景：
+{json.dumps(collected_info, ensure_ascii=False, indent=2)[:500]}
+
+搜索查询：{query}
+
+请帮我：
+1. 搜索相关的最新信息、数据和趋势
+2. 分析这些信息对决策的影响
+3. 提供关键洞察和建议
+4. 说明你的思考过程
+
+返回JSON格式：
+{{
+    "search_content": "搜索到的主要内容摘要",
+    "analysis": "基于搜索结果的分析",
+    "key_insights": ["洞察1", "洞察2", "洞察3"],
+    "recommendations": ["建议1", "建议2"],
+    "thinking_process": "我的思考过程..."
+}}"""
+            
+            # 使用Qwen的联网搜索功能
+            # 通过修改client的extra_body参数启用搜索
+            if llm.provider.value == "qwen":
+                # 直接调用Qwen API，启用搜索
+                try:
+                    response = llm.client.chat.completions.create(
+                        model=llm.model,
+                        messages=[{"role": "user", "content": search_prompt}],
+                        temperature=0.7,
+                        extra_body={"enable_search": True},  # 启用联网搜索
+                        timeout=60  # 搜索可能需要更长时间
+                    )
+                    
+                    content = response.choices[0].message.content
+                    
+                    # 尝试解析JSON响应
+                    try:
+                        result = json.loads(content)
+                        return {
+                            "success": True,
+                            "search_content": result.get("search_content", content),
+                            "analysis": result.get("analysis", ""),
+                            "key_insights": result.get("key_insights", []),
+                            "recommendations": result.get("recommendations", []),
+                            "thinking_process": result.get("thinking_process", "已完成联网搜索和分析")
+                        }
+                    except json.JSONDecodeError:
+                        # 如果不是JSON格式，直接返回内容
+                        return {
+                            "success": True,
+                            "search_content": content,
+                            "analysis": content,
+                            "key_insights": ["已从互联网获取最新信息"],
+                            "thinking_process": "已完成联网搜索"
+                        }
+                
+                except Exception as e:
+                    logger.error(f"Qwen联网搜索失败: {e}")
+                    # 降级到普通模式
+                    response = await asyncio.to_thread(
+                        llm.chat,
+                        messages=[{"role": "user", "content": search_prompt}],
+                        temperature=0.7,
+                        response_format="json_object"
+                    )
+                    result = json.loads(response)
+                    result["success"] = True
+                    result["note"] = "使用知识库回答（联网搜索不可用）"
+                    return result
+            else:
+                # 非Qwen模型，使用普通对话
+                response = await asyncio.to_thread(
+                    llm.chat,
+                    messages=[{"role": "user", "content": search_prompt}],
+                    temperature=0.7,
+                    response_format="json_object"
+                )
+                result = json.loads(response)
+                result["success"] = True
+                result["note"] = "基于模型知识回答"
+                return result
+            
+        except Exception as e:
+            logger.error(f"[{self.persona.name}] 联网搜索技能执行失败: {e}")
+            return {
+                "success": False,
+                "search_content": "",
+                "analysis": f"搜索失败: {str(e)}",
+                "key_insights": [],
+                "error": str(e),
+                "thinking_process": f"执行失败: {str(e)}"
+            }
+
+
 class SkillRegistry:
     """技能注册表 - 管理所有可用技能"""
     
@@ -758,6 +923,7 @@ class SkillRegistry:
         "价值观对齐分析": ValueAlignmentSkill,
         "人际关系影响分析": RelationshipImpactSkill,
         "创新潜力评估": InnovationPotentialSkill,
+        "联网搜索": WebSearchSkill,
     }
     
     @classmethod
