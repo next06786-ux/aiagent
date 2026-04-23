@@ -1014,8 +1014,14 @@ class DecisionPersona:
         
         # 🚀 并发执行所有技能
         logger.info(f"[{self.name}] 🚀 并发执行{len(skills_to_execute)}个技能: {skills_to_execute}")
+        import time
+        start_time = time.time()
+        
         tasks = [execute_single_skill(skill_name) for skill_name in skills_to_execute]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        duration = time.time() - start_time
+        logger.info(f"[{self.name}] ✅ 所有技能执行完成，耗时{duration:.2f}秒")
         
         # 收集成功的结果
         for result in results:
@@ -3415,7 +3421,7 @@ class PersonaCouncil:
         # 记录开始时间
         import time
         start_time = time.time()
-        logger.info(f"⏱️  [{persona.name}] 开始执行 (时间: {time.strftime('%H:%M:%S')})")
+        logger.info(f"⏱️  [{persona.name}] 🚀 开始执行 (时间: {time.strftime('%H:%M:%S')})")
         
         # 获取WebSocket回调
         status_callback = context.get('status_callback')

@@ -887,6 +887,7 @@ class WebSearchSkill(Skill):
                 # 🌐 直接调用Qwen API，启用真实联网搜索
                 try:
                     logger.info(f"[{self.persona.name}] 🌐 启用Qwen联网搜索: {query}")
+                    search_start = __import__('time').time()
                     
                     # 简化提示词，让Qwen自由发挥联网搜索能力
                     simple_prompt = f"""请帮我搜索关于"{query}"的最新信息。
@@ -908,9 +909,10 @@ class WebSearchSkill(Skill):
                         timeout=60
                     )
                     
+                    search_duration = __import__('time').time() - search_start
                     content = response.choices[0].message.content
                     
-                    logger.info(f"[{self.persona.name}] ✅ 联网搜索完成，获得{len(content)}字符的内容")
+                    logger.info(f"[{self.persona.name}] ✅ 联网搜索完成，耗时{search_duration:.2f}秒，获得{len(content)}字符的内容")
                     
                     # 使用LLM提取结构化信息
                     extract_prompt = f"""请从以下搜索结果中提取关键信息：
