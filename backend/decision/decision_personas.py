@@ -4034,6 +4034,9 @@ class PersonaCouncil:
                 'final_score': final_result.get('score', 0) if final_result else 0,
                 'final_stance': final_result.get('stance', '未知') if final_result else '未知',
                 'final_confidence': final_result.get('confidence', 0.7) if final_result else 0.7,
+                'final_reasoning': final_result.get('reasoning', '') if final_result else '',
+                'final_key_points': final_result.get('key_points', []) if final_result else [],
+                'round': rounds,  # 添加轮次信息
                 'timestamp': time.time()
             })
         

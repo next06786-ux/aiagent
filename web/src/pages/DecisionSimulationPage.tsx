@@ -469,7 +469,7 @@ export function DecisionSimulationPage() {
               if (eventType === 'phase_complete') {
                 const phase = String(event.phase || '');
                 const round = (event.round as number) || 1;
-                console.log(`[Agent事件] ${personaName} 完成阶段: ${phase}`);
+                console.log(`[Agent事件] ${personaName} 完成阶段: ${phase}`, event);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -479,6 +479,7 @@ export function DecisionSimulationPage() {
                       const existingHistory = a.thinkingHistory || [];
                       let historyRecord: any;
                       let displayMessage = '';
+                      let updatedAgent = { ...a };
                       
                       // 根据不同阶段构建不同的消息
                       if (phase === 'independent_thinking' && event.result) {
@@ -495,6 +496,10 @@ export function DecisionSimulationPage() {
                           reasoning: result.reasoning,
                           keyPoints: result.key_points
                         };
+                        // 🆕 更新Agent的分数和立场
+                        updatedAgent.score = result.score;
+                        updatedAgent.stance = result.stance;
+                        updatedAgent.status = 'thinking' as const;  // 继续思考中
                       } else if (phase === 'observe_others') {
                         const observedCount = event.observed_count || 0;
                         displayMessage = `👀 观察到${observedCount}个其他Agent的观点`;
@@ -523,6 +528,13 @@ export function DecisionSimulationPage() {
                           keyPoints: result.key_points,
                           stance_changed: result.stance_changed
                         };
+                        // 🆕 更新Agent的分数和立场
+                        updatedAgent.score = result.score;
+                        updatedAgent.stance = result.stance;
+                        updatedAgent.status = 'thinking' as const;
+                        if (result.stance_changed) {
+                          updatedAgent.messageAction = 'stance_changed';
+                        }
                       } else if (phase === 'decision' && event.decision) {
                         const decision = event.decision as any;
                         displayMessage = `⚖️ 决策: ${decision.stance} (${decision.score}分, 信心${(decision.confidence * 100).toFixed(0)}%)`;
@@ -538,11 +550,15 @@ export function DecisionSimulationPage() {
                           reasoning: decision.reasoning,
                           keyPoints: decision.key_points
                         };
+                        // 🆕 更新Agent的分数和立场
+                        updatedAgent.score = decision.score;
+                        updatedAgent.stance = decision.stance;
+                        updatedAgent.status = 'thinking' as const;  // 还在推演中
                       }
                       
                       if (historyRecord) {
                         return {
-                          ...a,
+                          ...updatedAgent,
                           currentMessage: displayMessage,
                           messageTimestamp: Date.now(),
                           thinkingHistory: [...existingHistory, historyRecord]
@@ -946,21 +962,44 @@ export function DecisionSimulationPage() {
               if (eventType === 'agent_complete') {
                 const finalScore = event.final_score as number || 0;
                 const finalStance = String(event.final_stance || '');
+                const finalReasoning = String(event.final_reasoning || '');
+                const finalKeyPoints = (event.final_key_points as string[]) || [];
+                const round = event.round as number || 1;
                 
                 console.log(`[Agent事件] ${personaName} 完成推演: ${finalStance} (${finalScore}分)`);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
-                  next.set(optId, agents.map(a => 
-                    a.id === personaId ? { 
-                      ...a, 
-                      status: 'complete' as const,
-                      score: finalScore,
-                      stance: finalStance,
-                      currentMessage: `✅ ${finalStance} (${finalScore}分)`
-                    } : a
-                  ));
+                  const updated = agents.map(a => {
+                    if (a.id === personaId) {
+                      const historyRecord = {
+                        round,
+                        message: `✅ 最终结论: ${finalStance} (${finalScore}分)`,
+                        timestamp: Date.now(),
+                        score: finalScore,
+                        stance: finalStance,
+                        keyPoints: finalKeyPoints,
+                        reasoning: finalReasoning,
+                        event_type: 'agent_complete'
+                      };
+                      
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        status: 'complete' as const,
+                        score: finalScore,
+                        stance: finalStance,
+                        currentMessage: `✅ ${finalStance} (${finalScore}分)`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  });
+                  console.log(`[Agent事件] Agent完成，更新后的agents:`, updated.find(a => a.id === personaId));
+                  next.set(optId, updated);
                   return next;
                 });
               }
