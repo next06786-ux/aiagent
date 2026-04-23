@@ -236,7 +236,7 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
                       </div>
                       <div className="conflict-description">{conflict.description}</div>
                       <div className="conflict-resolution">
-                        🔧 解决建议: {conflict.resolution_suggestion}
+                        💡 解决建议: {conflict.resolution_suggestion}
                       </div>
                     </div>
                   ))}

@@ -115,5 +115,5 @@ export function getProviderIcon(provider: string): string {
     local_quantized: '[本地]',
     openai: '[AI]',
   };
-  return icons[provider] || '🔧';
+  return icons[provider] || '[?]';
 }
