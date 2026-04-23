@@ -178,7 +178,7 @@ export function DecisionHistoryPage() {
           right: 0,
           bottom: 0,
           background: 'rgba(0, 0, 0, 0.5)',
-          zIndex: 9999,
+          zIndex: 9998, // 降低一级，让报告弹窗在上面
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

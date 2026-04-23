@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999; /* 提高到最高层，确保在历史详情弹窗之上 */
   animation: fadeIn 0.2s ease-out;
 }
 
