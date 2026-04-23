@@ -333,11 +333,22 @@ export function DecisionSimulationPage() {
 
     try {
       console.log('[自动保存] 开始保存场景:', optionId);
+      console.log('[自动保存] agentsByOption.size:', agentsByOption.size);
+      console.log('[自动保存] agentsByOption keys:', Array.from(agentsByOption.keys()));
       
       // 获取该选项的所有数据
       const agents = agentsByOption.get(optionId) || [];
       const totalScore = totalScoreByOption.get(optionId) || 0;
       const currentMonth = currentMonthByOption.get(optionId) || 0;
+      
+      console.log('[自动保存] agents 数量:', agents.length);
+      console.log('[自动保存] totalScore:', totalScore);
+      
+      // 如果 agents 为空，说明数据还没准备好，跳过保存
+      if (agents.length === 0) {
+        console.warn('[自动保存] agents 数据为空，跳过保存');
+        return;
+      }
       
       // 生成报告
       console.log('[自动保存] 生成报告...');
@@ -1563,7 +1574,7 @@ export function DecisionSimulationPage() {
                 } catch (error) {
                   console.error(`[自动保存] 选项 ${optId} 保存失败:`, error);
                 }
-              }, 1000); // 延迟1秒确保所有数据都已更新
+              }, 3000); // 延迟3秒确保所有数据都已更新
               
               completedCount++;
               if (completedCount === config.options?.length) {

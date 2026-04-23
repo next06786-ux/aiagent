@@ -945,47 +945,6 @@ export function PersonaInteractionView({
         );
       })()}
 
-      {/* 完成状态 - 显示在右上角顶部边缘 */}
-      {isComplete && (
-        <div style={{
-          position: 'absolute',
-          top: '5px',
-          right: '5px',
-          zIndex: 50,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          background: 'rgba(255, 255, 255, 0.98)',
-          padding: '12px 20px',
-          borderRadius: '16px',
-          boxShadow: '0 8px 24px rgba(52, 199, 89, 0.2), 0 4px 12px rgba(52, 199, 89, 0.15)',
-          border: '2px solid rgba(52, 199, 89, 0.3)',
-          animation: 'slideInRight 0.5s ease',
-        }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #34C759, #30D158)',
-            color: 'white',
-            fontSize: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(52, 199, 89, 0.3)',
-          }}>
-            ✓
-          </div>
-          <div style={{
-            fontSize: '16px',
-            fontWeight: 700,
-            color: '#34C759',
-          }}>
-            分析完成
-          </div>
-        </div>
-      )}
-
       {/* Agent历史思考记录模态框 */}
       {selectedPersona && (
         <div 

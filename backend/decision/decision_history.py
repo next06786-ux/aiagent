@@ -130,10 +130,16 @@ class DecisionHistoryManager:
         except Error as e:
             logger.error(f"保存决策历史失败: {e}")
             return False
+        except Exception as e:
+            logger.error(f"保存决策历史失败: {e}")
+            return False
         finally:
-            if conn.is_connected():
-                cursor.close()
-                conn.close()
+            try:
+                if conn.is_connected():
+                    cursor.close()
+                    conn.close()
+            except:
+                pass
     
     def get_history_list(
         self,
