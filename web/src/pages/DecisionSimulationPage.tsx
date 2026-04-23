@@ -104,9 +104,6 @@ export function DecisionSimulationPage() {
   const [liveOptions, setLiveOptions] = useState<Map<string, DecisionOption>>(new Map());
   const [record, setRecord] = useState<any>(null);
   
-  // 总分数状态 - 按option_id分组
-  const [totalScoreByOption, setTotalScoreByOption] = useState<Map<string, number>>(new Map());
-  
   // Agent可视化状态 - 按option_id分组
   const [agentsByOption, setAgentsByOption] = useState<Map<string, Array<{
     id: string; 
@@ -141,6 +138,30 @@ export function DecisionSimulationPage() {
   const [currentMonthByOption, setCurrentMonthByOption] = useState<Map<string, number>>(new Map());
   const [interactionsByOption, setInteractionsByOption] = useState<Map<string, Array<{from: string; to: string; type: string; message: string; timestamp: number}>>>(new Map());
   const [completedOptions, setCompletedOptions] = useState<Set<string>>(new Set());
+  
+  // 总分数状态 - 按option_id分组
+  const [totalScoreByOption, setTotalScoreByOption] = useState<Map<string, number>>(new Map());
+  
+  // 监听 agentsByOption 变化，实时计算总分数
+  useEffect(() => {
+    agentsByOption.forEach((agents, optionId) => {
+      const completedAgents = agents.filter(a => a.score !== undefined);
+      if (completedAgents.length > 0) {
+        const totalScore = completedAgents.reduce((sum, a) => sum + (a.score || 0), 0) / completedAgents.length;
+        setTotalScoreByOption(prev => {
+          const current = prev.get(optionId);
+          // 只有分数变化时才更新
+          if (current !== totalScore) {
+            const next = new Map(prev);
+            next.set(optionId, totalScore);
+            console.log(`[总分数] ${optionId} 更新: ${totalScore.toFixed(1)} (${completedAgents.length}/${agents.length}个完成)`);
+            return next;
+          }
+          return prev;
+        });
+      }
+    });
+  }, [agentsByOption]);
   
   // 推演控制状态
   const [pausedOptions, setPausedOptions] = useState<Set<string>>(new Set());
@@ -1139,7 +1160,7 @@ export function DecisionSimulationPage() {
               console.log(`[推演] 收到persona_analysis: ${personaName} (${personaId}), 分数: ${personaData?.score}`);
               
               if (personaData && personaData.score !== undefined) {
-                // 先更新agents状态，并在回调中计算总分
+                // 更新agents状态
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
@@ -1169,24 +1190,6 @@ export function DecisionSimulationPage() {
                     return a;
                   });
                   next.set(optId, updatedAgents);
-                  
-                  // 立即计算并更新总分数
-                  const completedAgents = updatedAgents.filter(a => a.score !== undefined);
-                  console.log(`[推演] ${optId} 已完成agents:`, completedAgents.map(a => `${a.name}:${a.score}`));
-                  
-                  if (completedAgents.length > 0) {
-                    const totalScore = completedAgents.reduce((sum, a) => sum + (a.score || 0), 0) / completedAgents.length;
-                    console.log(`[推演] ${optId} 计算总分: ${totalScore.toFixed(1)} (${completedAgents.length}/${updatedAgents.length}个完成)`);
-                    
-                    // 立即更新总分数，不使用 setTimeout
-                    setTotalScoreByOption(prevScores => {
-                      const nextScores = new Map(prevScores);
-                      nextScores.set(optId, totalScore);
-                      console.log(`[推演] ${optId} 总分已更新到state: ${totalScore.toFixed(1)}`);
-                      return nextScores;
-                    });
-                  }
-                  
                   return next;
                 });
                 
