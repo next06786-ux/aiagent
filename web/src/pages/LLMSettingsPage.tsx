@@ -10,7 +10,7 @@ export const LLMSettingsPage: React.FC = () => {
   return (
     <div className="llm-settings-page">
       <div className="page-header">
-        <h1>大模型设置
+        <h1>大模型设置</h1>
         <p className="page-description">
           在云端 API 和自建基座模型之间灵活切换，满足不同场景需求
         </p>

@@ -1918,7 +1918,7 @@ export function DecisionSimulationPage() {
             </button>
           </div>
         )}
-        
+
         {canRenderPersonas ? (
           <PersonaInteractionView
             personas={(() => {
