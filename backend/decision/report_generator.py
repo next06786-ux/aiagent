@@ -53,14 +53,24 @@ class DecisionReportGenerator:
             )
             
             # 调用 LLM 生成报告
-            response = await self.llm_service.generate_completion(
-                prompt=prompt,
-                temperature=0.7,
-                max_tokens=2000
+            messages = [
+                {
+                    "role": "system",
+                    "content": "你是一个专业的决策分析师，擅长综合多方观点生成清晰的分析报告。"
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            response = await self.llm_service.chat_async(
+                messages=messages,
+                temperature=0.7
             )
             
-            # 解析响应
-            report_text = response.get('content', '')
+            # 解析响应 - chat_async 直接返回字符串
+            report_text = response if isinstance(response, str) else response.get('content', '')
             
             # 提取关键信息
             report = self._parse_report(report_text, agents_data, total_score)
@@ -96,9 +106,8 @@ class DecisionReportGenerator:
         agents_summary = []
         for agent in agents_data:
             agents_summary.append(
-                f"- {agent['name']}: {agent.get('finalStance', '未知')} "
-                f"(评分: {agent.get('finalScore', 0)}, "
-                f"信心: {agent.get('finalConfidence', 0)*100:.0f}%)"
+                f"- {agent.get('name', '未知')}: {agent.get('stance', '未知')} "
+                f"(评分: {agent.get('score', 0)})"
             )
         
         agents_text = "\n".join(agents_summary)
@@ -213,10 +222,10 @@ class DecisionReportGenerator:
         # 添加 Agent 数据
         sections['agents_summary'] = [
             {
-                'name': agent['name'],
-                'stance': agent.get('finalStance', '未知'),
-                'score': agent.get('finalScore', 0),
-                'confidence': agent.get('finalConfidence', 0)
+                'name': agent.get('name', '未知'),
+                'stance': agent.get('stance', '未知'),
+                'score': agent.get('score', 0),
+                'confidence': agent.get('confidence', 0.8)  # 默认信心度
             }
             for agent in agents_data
         ]
@@ -237,7 +246,7 @@ class DecisionReportGenerator:
         # 统计立场
         stances = {}
         for agent in agents_data:
-            stance = agent.get('finalStance', '未知')
+            stance = agent.get('stance', '未知')
             stances[stance] = stances.get(stance, 0) + 1
         
         # 找出主流立场
@@ -256,10 +265,10 @@ class DecisionReportGenerator:
             'recommendation': '建议结合各 Agent 的详细分析进行综合判断。',
             'agents_summary': [
                 {
-                    'name': agent['name'],
-                    'stance': agent.get('finalStance', '未知'),
-                    'score': agent.get('finalScore', 0),
-                    'confidence': agent.get('finalConfidence', 0)
+                    'name': agent.get('name', '未知'),
+                    'stance': agent.get('stance', '未知'),
+                    'score': agent.get('score', 0),
+                    'confidence': agent.get('confidence', 0.8)
                 }
                 for agent in agents_data
             ],

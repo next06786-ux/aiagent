@@ -7,8 +7,6 @@ interface DecisionReportModalProps {
   onClose: () => void;
   report: DecisionReport | null;
   optionTitle: string;
-  onSaveHistory?: () => void;
-  isSaving?: boolean;
 }
 
 export function DecisionReportModal({
@@ -16,8 +14,6 @@ export function DecisionReportModal({
   onClose,
   report,
   optionTitle,
-  onSaveHistory,
-  isSaving = false,
 }: DecisionReportModalProps) {
   if (!visible || !report) return null;
 
@@ -144,15 +140,6 @@ export function DecisionReportModal({
           <button className="btn-secondary" onClick={onClose}>
             关闭
           </button>
-          {onSaveHistory && (
-            <button 
-              className="btn-primary" 
-              onClick={onSaveHistory}
-              disabled={isSaving}
-            >
-              {isSaving ? '保存中...' : '保存到历史记录'}
-            </button>
-          )}
         </div>
       </div>
     </div>

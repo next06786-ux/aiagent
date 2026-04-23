@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/shell/AppShell';
 import { BackButton } from '../components/common/BackButton';
 import { useAuth } from '../hooks/useAuth';
-import { getDecisionHistoryList, deleteDecisionHistory, DecisionHistoryListItem } from '../services/decisionHistory';
+import { PersonaInteractionView } from '../components/decision/PersonaInteractionView';
+import { DecisionReportModal } from '../components/decision/DecisionReportModal';
+import { 
+  getDecisionHistoryList, 
+  getDecisionHistoryDetail, 
+  deleteDecisionHistory, 
+  DecisionHistoryListItem,
+  DecisionHistory 
+} from '../services/decisionHistory';
 
 export function DecisionHistoryPage() {
   const navigate = useNavigate();
@@ -11,6 +19,10 @@ export function DecisionHistoryPage() {
   const [historyList, setHistoryList] = useState<DecisionHistoryListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // 场景查看状态
+  const [viewingHistory, setViewingHistory] = useState<DecisionHistory | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   useEffect(() => {
     if (user?.user_id) {
@@ -48,15 +60,164 @@ export function DecisionHistoryPage() {
     }
   };
 
-  const handleView = (item: DecisionHistoryListItem) => {
-    // TODO: 实现场景还原功能
+  const handleView = async (item: DecisionHistoryListItem) => {
     console.log('[历史] 查看详情:', item);
-    alert('场景还原功能开发中...');
+    
+    try {
+      const response = await getDecisionHistoryDetail(item.id);
+      if (response.success && response.history) {
+        console.log('[历史] 详情加载成功:', response.history);
+        setViewingHistory(response.history);
+      } else {
+        alert('加载历史详情失败');
+      }
+    } catch (err) {
+      console.error('[历史] 加载详情失败:', err);
+      alert('加载历史详情失败');
+    }
+  };
+
+  const handleCloseViewer = () => {
+    setViewingHistory(null);
+    setShowReportModal(false);
   };
 
   return (
     <AppShell>
       <BackButton to="/decision/workbench" label="返回" />
+      
+      {/* 场景查看器 */}
+      {viewingHistory && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }} onClick={handleCloseViewer}>
+          <div style={{
+            width: '95%',
+            height: '95%',
+            background: 'white',
+            borderRadius: 24,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }} onClick={(e) => e.stopPropagation()}>
+            {/* 头部 */}
+            <div style={{
+              padding: '24px 32px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+            }}>
+              <div>
+                <h2 style={{
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: '#1a1a1a',
+                  marginBottom: 4,
+                }}>
+                  {viewingHistory.question}
+                </h2>
+                <p style={{ fontSize: 14, color: '#64748B' }}>
+                  {new Date(viewingHistory.created_at).toLocaleString('zh-CN')}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {viewingHistory.options_data?.report && (
+                  <button
+                    onClick={() => setShowReportModal(true)}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: 12,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%)',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      boxShadow: '0 4px 12px rgba(107, 72, 255, 0.3)',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(107, 72, 255, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(107, 72, 255, 0.3)';
+                    }}
+                  >
+                    查看报告
+                  </button>
+                )}
+                <button
+                  onClick={handleCloseViewer}
+                  style={{
+                    padding: '12px 24px',
+                    borderRadius: 12,
+                    border: '1px solid #E2E8F0',
+                    background: 'white',
+                    color: '#64748B',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#F8FAFC';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white';
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+            
+            {/* 场景内容 */}
+            <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+              {viewingHistory.options_data?.agents && (
+                <PersonaInteractionView
+                  personas={viewingHistory.options_data.agents.map((a: any) => ({
+                    id: a.id,
+                    name: a.name,
+                    status: 'complete' as const,
+                    score: a.score,
+                    stance: a.stance,
+                    thinkingHistory: a.thinking_history || [],
+                  }))}
+                  interactions={[]}
+                  optionTitle={viewingHistory.options_data.option_title || ''}
+                  currentMonth={viewingHistory.options_data.current_round || 0}
+                  isComplete={true}
+                  totalScore={viewingHistory.options_data.total_score || 0}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 报告弹窗 */}
+      {showReportModal && viewingHistory?.options_data?.report && (
+        <DecisionReportModal
+          visible={showReportModal}
+          report={viewingHistory.options_data.report}
+          optionTitle={viewingHistory.options_data.option_title || ''}
+          onClose={() => setShowReportModal(false)}
+        />
+      )}
       
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
         <div style={{

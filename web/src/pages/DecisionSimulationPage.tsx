@@ -191,59 +191,208 @@ export function DecisionSimulationPage() {
 
   // 报告处理函数
   const handleViewReport = async (optionId: string) => {
-    const option = config.options.find((_, idx) => `option_${idx + 1}` === optionId);
-    if (!option) return;
+    const option = config.options?.find((_, idx) => `option_${idx + 1}` === optionId);
+    if (!option) {
+      console.error('[报告] 找不到选项:', optionId);
+      alert('找不到选项信息');
+      return;
+    }
 
     setIsGeneratingReport(true);
     setReportOptionId(optionId);
     setReportOptionTitle(option.title);
 
     try {
-      const report = await generateDecisionReport(
-        config.sessionId!,
+      // 获取该选项的所有 Agent 数据
+      const agents = agentsByOption.get(optionId) || [];
+      const totalScore = totalScoreByOption.get(optionId) || 0;
+      
+      console.log('[报告] 开始生成报告:', {
         optionId,
-        option.title
-      );
-      setCurrentReport(report);
-      setShowReportModal(true);
+        title: option.title,
+        agentsCount: agents.length,
+        totalScore
+      });
+      
+      const response = await generateDecisionReport({
+        question: config.question,
+        option_title: option.title,
+        option_description: option.description || '',
+        agents_data: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          stance: a.stance || '未知',
+          score: a.score || 0,
+          reasoning: a.thinkingHistory?.map(h => h.message).join('\n') || ''
+        })),
+        total_score: totalScore
+      });
+      
+      console.log('[报告] 生成成功:', response);
+      
+      if (response.success && response.report) {
+        setCurrentReport(response.report);
+        setShowReportModal(true);
+      } else {
+        throw new Error('报告生成失败');
+      }
     } catch (error) {
       console.error('[报告] 生成失败:', error);
-      alert('生成报告失败，请稍后重试');
+      alert(`生成报告失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsGeneratingReport(false);
     }
   };
 
   const handleSaveHistory = async () => {
-    if (!config.sessionId || !currentReport || !reportOptionId) return;
+    if (!config.sessionId || !currentReport || !reportOptionId) {
+      console.error('[历史] 缺少必要参数:', { 
+        hasSessionId: !!config.sessionId, 
+        hasReport: !!currentReport, 
+        hasOptionId: !!reportOptionId 
+      });
+      return;
+    }
 
     setIsSavingHistory(true);
     try {
-      // 获取该选项的所有 Agent 数据
+      // 获取该选项的所有 Agent 数据（完整场景）
       const agents = agentsByOption.get(reportOptionId) || [];
+      const totalScore = totalScoreByOption.get(reportOptionId) || 0;
+      const currentMonth = currentMonthByOption.get(reportOptionId) || 0;
       
-      await saveDecisionHistory({
+      console.log('[历史] 准备保存:', {
         sessionId: config.sessionId,
         userId: config.userId,
         question: config.question,
         optionId: reportOptionId,
         optionTitle: reportOptionTitle,
+        agentsCount: agents.length,
+        totalScore
+      });
+      
+      // 构建完整的场景数据
+      const sceneData = {
+        // 基本信息
+        option_id: reportOptionId,
+        option_title: reportOptionTitle,
+        option_description: config.options?.find((_, idx) => `option_${idx + 1}` === reportOptionId)?.description || '',
+        
+        // 推演结果
+        total_score: totalScore,
+        current_round: currentMonth,
+        
+        // 所有 Agent 的完整数据（包含思考历史）
+        agents: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          status: a.status,
+          stance: a.stance || '未知',
+          score: a.score || 0,
+          thinking_history: a.thinkingHistory || [],
+          final_message: a.currentMessage || ''
+        })),
+        
+        // 报告数据
         report: currentReport,
-        agentsData: agents.map(a => ({
+        
+        // 时间戳
+        completed_at: new Date().toISOString()
+      };
+      
+      // 调用保存 API
+      const response = await saveDecisionHistory({
+        user_id: config.userId,
+        session_id: config.sessionId,
+        question: config.question,
+        decision_type: config.decisionType || 'general',
+        options_data: sceneData
+      });
+      
+      console.log('[历史] 保存成功:', response);
+      alert('决策历史已保存！可以在"查看历史决策"中查看。');
+      
+      // 关闭弹窗
+      setShowReportModal(false);
+      setCurrentReport(null);
+      
+    } catch (error) {
+      console.error('[历史] 保存失败:', error);
+      alert(`保存历史失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setIsSavingHistory(false);
+    }
+  };
+
+  // 自动保存场景到历史记录
+  const autoSaveSceneToHistory = async (optionId: string, option: any) => {
+    if (!config.sessionId) {
+      console.warn('[自动保存] 缺少 sessionId，跳过保存');
+      return;
+    }
+
+    try {
+      console.log('[自动保存] 开始保存场景:', optionId);
+      
+      // 获取该选项的所有数据
+      const agents = agentsByOption.get(optionId) || [];
+      const totalScore = totalScoreByOption.get(optionId) || 0;
+      const currentMonth = currentMonthByOption.get(optionId) || 0;
+      
+      // 生成报告
+      console.log('[自动保存] 生成报告...');
+      const reportResponse = await generateDecisionReport({
+        question: config.question,
+        option_title: option.title,
+        option_description: option.description || '',
+        agents_data: agents.map(a => ({
           id: a.id,
           name: a.name,
           stance: a.stance || '未知',
           score: a.score || 0,
           reasoning: a.thinkingHistory?.map(h => h.message).join('\n') || ''
-        }))
+        })),
+        total_score: totalScore
       });
       
-      alert('决策历史已保存');
+      const report = reportResponse.success ? reportResponse.report : null;
+      console.log('[自动保存] 报告生成完成');
+      
+      // 构建完整的场景数据
+      const sceneData = {
+        option_id: optionId,
+        option_title: option.title,
+        option_description: option.description || '',
+        total_score: totalScore,
+        current_round: currentMonth,
+        agents: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          status: a.status,
+          stance: a.stance || '未知',
+          score: a.score || 0,
+          thinking_history: a.thinkingHistory || [],
+          final_message: a.currentMessage || ''
+        })),
+        report: report,
+        completed_at: new Date().toISOString()
+      };
+      
+      // 保存到数据库
+      console.log('[自动保存] 保存到数据库...');
+      const response = await saveDecisionHistory({
+        user_id: config.userId,
+        session_id: config.sessionId,
+        question: config.question,
+        decision_type: config.decisionType || 'general',
+        options_data: sceneData
+      });
+      
+      console.log('[自动保存] 保存成功:', response);
+      
     } catch (error) {
-      console.error('[历史] 保存失败:', error);
-      alert('保存历史失败，请稍后重试');
-    } finally {
-      setIsSavingHistory(false);
+      console.error('[自动保存] 失败:', error);
+      // 不显示错误提示，静默失败
     }
   };
 
@@ -1407,6 +1556,15 @@ export function DecisionSimulationPage() {
                 return next;
               });
               
+              // 自动保存完整场景到历史记录
+              setTimeout(async () => {
+                try {
+                  await autoSaveSceneToHistory(optId, option);
+                } catch (error) {
+                  console.error(`[自动保存] 选项 ${optId} 保存失败:`, error);
+                }
+              }, 1000); // 延迟1秒确保所有数据都已更新
+              
               completedCount++;
               if (completedCount === config.options?.length) {
                 setWsPhase('done');
@@ -1825,11 +1983,13 @@ export function DecisionSimulationPage() {
       {/* 主内容区域 */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         {(() => {
-          console.log('[查看报告按钮] wsPhase:', wsPhase, 'canRenderPersonas:', canRenderPersonas, '条件满足:', wsPhase === 'done' && canRenderPersonas);
+          const currentOptionId = `option_${selectedOptionIndex + 1}`;
+          const isCompleted = completedOptions.has(currentOptionId);
+          console.log('[查看报告按钮] wsPhase:', wsPhase, 'isCompleted:', isCompleted, 'currentOptionId:', currentOptionId);
           return null;
         })()}
         
-        {wsPhase === 'done' && canRenderPersonas && (
+        {completedOptions.has(`option_${selectedOptionIndex + 1}`) && (
           <div style={{
             position: 'absolute', 
             top: 80, 
@@ -2113,14 +2273,13 @@ export function DecisionSimulationPage() {
       {/* 决策报告弹窗 */}
       {showReportModal && currentReport && (
         <DecisionReportModal
+          visible={showReportModal}
           report={currentReport}
           optionTitle={reportOptionTitle}
           onClose={() => {
             setShowReportModal(false);
             setCurrentReport(null);
           }}
-          onSaveHistory={handleSaveHistory}
-          isSaving={isSavingHistory}
         />
       )}
     </div>
