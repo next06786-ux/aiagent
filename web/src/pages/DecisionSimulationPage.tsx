@@ -138,6 +138,7 @@ export function DecisionSimulationPage() {
   const [currentMonthByOption, setCurrentMonthByOption] = useState<Map<string, number>>(new Map());
   const [interactionsByOption, setInteractionsByOption] = useState<Map<string, Array<{from: string; to: string; type: string; message: string; timestamp: number}>>>(new Map());
   const [completedOptions, setCompletedOptions] = useState<Set<string>>(new Set());
+  const [savedOptions, setSavedOptions] = useState<Set<string>>(new Set()); // 🆕 跟踪已保存的选项
   
   // 总分数状态 - 按option_id分组
   const [totalScoreByOption, setTotalScoreByOption] = useState<Map<string, number>>(new Map());
@@ -359,7 +360,7 @@ export function DecisionSimulationPage() {
       console.log('[自动保存] 开始保存选项:', optionId);
       
       // 获取该选项的所有数据
-      const agents = agentsByOption.get(optionId) || [];
+      let agents = agentsByOption.get(optionId) || [];
       const totalScore = totalScoreByOption.get(optionId) || 0;
       const currentMonth = currentMonthByOption.get(optionId) || 0;
       
@@ -367,8 +368,18 @@ export function DecisionSimulationPage() {
       console.log('[自动保存] totalScore:', totalScore);
       console.log('[自动保存] agentsByOption keys:', Array.from(agentsByOption.keys()));
       
+      // 如果 agentsByOption 为空，尝试从 liveOptions 获取
       if (agents.length === 0) {
-        console.warn('[自动保存] agents 为空，跳过保存');
+        console.warn('[自动保存] agentsByOption 为空，尝试从 liveOptions 获取');
+        const liveOption = liveOptions.get(optionId);
+        // DecisionOption 类型没有 personas 字段，这里不再尝试从 liveOptions 获取
+        // 如果 agentsByOption 为空，说明数据还没准备好，等待下次触发
+        console.warn('[自动保存] liveOptions 中也没有 agents 数据');
+      }
+      
+      if (agents.length === 0) {
+        console.warn('[自动保存] agents 仍然为空，跳过保存');
+        console.warn('[自动保存] liveOptions keys:', Array.from(liveOptions.keys()));
         return;
       }
       
@@ -496,6 +507,7 @@ export function DecisionSimulationPage() {
     
     // 清空之前的完成状态
     setCompletedOptions(new Set());
+    setSavedOptions(new Set()); // 🆕 重置已保存状态
     
     // 初始化暂停状态：除了第一个选项，其他都暂停
     const initialPausedOptions = new Set<string>();
@@ -1626,7 +1638,7 @@ export function DecisionSimulationPage() {
               
               console.log(`[推演完成] 收到完成事件: type=${type}, optId=${optId}, option=${option.title}`);
               
-              // 标记该选项为已完成
+              // 标记该选项为已完成（保存逻辑移到 useEffect 中）
               setCompletedOptions(prev => {
                 const next = new Set(prev);
                 next.add(optId);
@@ -1634,16 +1646,11 @@ export function DecisionSimulationPage() {
                 return next;
               });
               
-              // 立即自动保存该选项到历史记录（不延迟）
-              (async () => {
-                try {
-                  console.log(`[自动保存] 选项 ${optId} 推演完成，开始保存...`);
-                  await saveOrUpdateOptionToHistory(optId, option);
-                  console.log(`[自动保存] 选项 ${optId} 保存成功`);
-                } catch (error) {
-                  console.error(`[自动保存] 选项 ${optId} 保存失败:`, error);
-                }
-              })();
+              // 不在这里保存，等待 agentsByOption 更新后再保存
+              // 保存逻辑移到 useEffect 中监听 agentsByOption 和 completedOptions 的变化
+              
+              // 不在这里保存，等待 agentsByOption 更新后再保存
+              // 保存逻辑移到 useEffect 中监听 agentsByOption 和 completedOptions 的变化
               
               completedCount++;
               console.log(`[推演完成] completedCount=${completedCount}, total=${config.options?.length}`);
@@ -1842,6 +1849,51 @@ export function DecisionSimulationPage() {
       console.log(`[agentsByOption 变化] ${optionId}: ${agents.length}个agents`);
     });
   }, [agentsByOption]);
+
+  // 🆕 监听 agentsByOption 和 completedOptions 变化，自动保存已完成的选项
+  useEffect(() => {
+    // 遍历所有已完成的选项
+    completedOptions.forEach(optionId => {
+      // 如果该选项已经保存过，跳过
+      if (savedOptions.has(optionId)) {
+        return;
+      }
+      
+      const agents = agentsByOption.get(optionId);
+      
+      // 如果该选项已完成且有 agents 数据，则保存
+      if (agents && agents.length > 0) {
+        const optionIndex = parseInt(optionId.replace('option_', '')) - 1;
+        const option = config.options?.[optionIndex];
+        
+        if (option) {
+          console.log(`[自动保存触发] 选项 ${optionId} 已完成且有 ${agents.length} 个 agents，开始保存...`);
+          
+          // 标记为已保存（先标记，避免重复触发）
+          setSavedOptions(prev => {
+            const next = new Set(prev);
+            next.add(optionId);
+            return next;
+          });
+          
+          // 异步保存，不阻塞UI
+          saveOrUpdateOptionToHistory(optionId, option).then(() => {
+            console.log(`[自动保存触发] 选项 ${optionId} 保存成功`);
+          }).catch(error => {
+            console.error(`[自动保存触发] 选项 ${optionId} 保存失败:`, error);
+            // 保存失败，移除已保存标记，允许重试
+            setSavedOptions(prev => {
+              const next = new Set(prev);
+              next.delete(optionId);
+              return next;
+            });
+          });
+        }
+      } else {
+        console.log(`[自动保存触发] 选项 ${optionId} 已完成但 agents 数据未准备好 (agents.length=${agents?.length || 0})`);
+      }
+    });
+  }, [agentsByOption, completedOptions, config.options, savedOptions]); // 监听这些状态的变化
 
   return (
     <div style={{ 
@@ -2182,7 +2234,7 @@ export function DecisionSimulationPage() {
               const currentOptionId = `option_${selectedOptionIndex + 1}`;
               return interactionsByOption.get(currentOptionId) || [];
             })()}
-            optionTitle={activeOption?.title || config.options[selectedOptionIndex]?.title || ''}
+            optionTitle={activeOption?.title || config.options?.[selectedOptionIndex]?.title || ''}
             currentMonth={(() => {
               const currentOptionId = `option_${selectedOptionIndex + 1}`;
               return currentMonthByOption.get(currentOptionId);
