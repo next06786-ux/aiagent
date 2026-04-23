@@ -640,14 +640,20 @@ async def simulate_single_option(websocket: WebSocket):
                         async def ws_status_callback(event_type: str, data: Dict[str, Any]):
                             """实时推送Agent状态到前端"""
                             try:
+                                logger.info(f"[WS推送] 准备发送事件: {event_type}, persona={data.get('persona_name', 'unknown')}")
                                 # 直接发送，不嵌套在agent_event中
-                                await safe_send({
+                                message = {
                                     "type": event_type,
                                     "option_id": option_id,
                                     **data
-                                })
+                                }
+                                logger.info(f"[WS推送] 消息内容: {json.dumps(message, ensure_ascii=False)[:200]}...")
+                                await safe_send(message)
+                                logger.info(f"[WS推送] ✅ 事件已发送: {event_type}")
                             except Exception as e:
-                                logger.error(f"WebSocket推送失败: {e}")
+                                logger.error(f"[WS推送] ❌ 推送失败: {e}")
+                                import traceback
+                                traceback.print_exc()
                         
                         # 准备决策上下文
                         decision_context = {

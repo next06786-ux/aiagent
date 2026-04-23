@@ -470,6 +470,8 @@ export function DecisionSimulationPage() {
                 const phase = String(event.phase || '');
                 const round = (event.round as number) || 1;
                 console.log(`[Agent事件] ${personaName} 完成阶段: ${phase}`, event);
+                console.log(`[Agent事件] event.result:`, event.result);
+                console.log(`[Agent事件] event.decision:`, event.decision);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -485,6 +487,7 @@ export function DecisionSimulationPage() {
                       if (phase === 'independent_thinking' && event.result) {
                         const result = event.result as any;
                         displayMessage = `✅ 独立思考: ${result.stance} (${result.score}分)`;
+                        console.log(`[Agent事件] independent_thinking displayMessage:`, displayMessage);
                         historyRecord = {
                           round,
                           message: displayMessage,
@@ -556,13 +559,18 @@ export function DecisionSimulationPage() {
                         updatedAgent.status = 'thinking' as const;  // 还在推演中
                       }
                       
+                      console.log(`[Agent事件] 最终 displayMessage:`, displayMessage);
+                      console.log(`[Agent事件] historyRecord:`, historyRecord);
+                      
                       if (historyRecord) {
-                        return {
+                        const updated = {
                           ...updatedAgent,
                           currentMessage: displayMessage,
                           messageTimestamp: Date.now(),
                           thinkingHistory: [...existingHistory, historyRecord]
                         };
+                        console.log(`[Agent事件] 更新后的agent:`, updated);
+                        return updated;
                       }
                     }
                     return a;
