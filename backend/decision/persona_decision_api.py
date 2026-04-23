@@ -227,6 +227,8 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
     
     基于收集的信息，使用AI生成或优化决策选项
     """
+    import asyncio
+    
     try:
         session = info_collector.get_session(request.session_id)
         
@@ -235,6 +237,21 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
                 "success": False,
                 "message": "会话不存在",
                 "data": None
+            }
+        
+        # 如果用户提供了选项，直接使用（快速路径）
+        if request.user_options:
+            options = [
+                {"title": opt, "description": ""} 
+                for opt in request.user_options
+            ]
+            
+            return {
+                "success": True,
+                "data": {
+                    "ai_options": options,
+                    "session_id": request.session_id
+                }
             }
         
         collected_info = session.get("collected_info", {})
@@ -247,177 +264,138 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
         concerns = collected_info.get("concerns", [])
         mentioned_options = collected_info.get("mentioned_options", [])
         
-        # 构建详细的上下文描述
+        # 构建详细的上下文描述（简化版，减少token消耗）
         context_parts = []
         
         if user_background:
-            bg_desc = "用户背景：\n"
-            if user_background.get("school"):
-                bg_desc += f"- 学校：{user_background['school']}\n"
-            if user_background.get("major"):
-                bg_desc += f"- 专业：{user_background['major']}\n"
-            if user_background.get("grade"):
-                bg_desc += f"- 年级：{user_background['grade']}\n"
-            if user_background.get("gpa"):
-                bg_desc += f"- GPA：{user_background['gpa']}\n"
-            if user_background.get("experience"):
-                bg_desc += f"- 经历：{user_background['experience']}\n"
+            bg_items = []
+            for key in ["school", "major", "grade", "gpa", "experience"]:
+                if user_background.get(key):
+                    bg_items.append(f"{key}: {user_background[key]}")
             if user_background.get("skills"):
-                bg_desc += f"- 技能：{', '.join(user_background['skills'])}\n"
-            context_parts.append(bg_desc)
+                bg_items.append(f"skills: {', '.join(user_background['skills'][:3])}")  # 只取前3个技能
+            if bg_items:
+                context_parts.append("背景: " + "; ".join(bg_items))
         
         if decision_scenario:
-            scenario_desc = "决策场景：\n"
-            if decision_scenario.get("situation"):
-                scenario_desc += f"- 当前情况：{decision_scenario['situation']}\n"
-            if decision_scenario.get("deadline"):
-                scenario_desc += f"- 时间节点：{decision_scenario['deadline']}\n"
-            if decision_scenario.get("external_factors"):
-                scenario_desc += f"- 外部因素：{decision_scenario['external_factors']}\n"
-            context_parts.append(scenario_desc)
+            scenario_items = []
+            for key in ["situation", "deadline", "external_factors"]:
+                if decision_scenario.get(key):
+                    scenario_items.append(str(decision_scenario[key]))
+            if scenario_items:
+                context_parts.append("场景: " + "; ".join(scenario_items))
         
         if concerns:
-            concerns_desc = f"顾虑：{', '.join(concerns)}"
-            context_parts.append(concerns_desc)
+            context_parts.append(f"顾虑: {', '.join(concerns[:3])}")  # 只取前3个顾虑
         
         if mentioned_options:
-            options_desc = f"用户提到的选项：{', '.join(mentioned_options)}"
-            context_parts.append(options_desc)
+            context_parts.append(f"提及选项: {', '.join(mentioned_options)}")
         
-        # 组合所有上下文
-        full_context = "\n\n".join(context_parts) if context_parts else "（信息收集中，请基于初始问题生成选项）"
+        # 组合所有上下文（限制长度）
+        full_context = " | ".join(context_parts) if context_parts else "基于初始问题生成选项"
+        if len(full_context) > 500:
+            full_context = full_context[:500] + "..."
         
-        logger.info(f"[选项生成] 上下文长度: {len(full_context)} 字符")
-        logger.info(f"[选项生成] 上下文内容: {full_context[:300]}...")
+        logger.info(f"[选项生成] 上下文: {full_context}")
         
-        # 格式化约束条件
-        constraints_text = "\n".join([f"- {k}: {v}" for k, v in constraints.items()]) if constraints else "无特殊约束"
+        # 格式化约束条件（简化）
+        constraints_text = "; ".join([f"{k}: {v}" for k, v in list(constraints.items())[:3]]) if constraints else "无"
         
-        # 格式化优先级
-        priorities_text = ""
-        if priorities:
-            if priorities.get("most_important"):
-                priorities_text += f"最重要：{priorities['most_important']}\n"
-            if priorities.get("secondary"):
-                priorities_text += f"次要：{', '.join(priorities['secondary'])}\n"
-        if not priorities_text:
-            priorities_text = "未明确"
+        # 格式化优先级（简化）
+        priorities_text = priorities.get("most_important", "未明确") if priorities else "未明确"
         
-        # 如果用户提供了选项，直接使用
-        if request.user_options:
-            options = [
-                {"title": opt, "description": ""} 
-                for opt in request.user_options
-            ]
-        else:
-            # 使用AI生成选项
-            from backend.llm.llm_service import get_llm_service
-            llm = get_llm_service()
-            
-            if llm and llm.enabled:
-                # 使用提示词管理器
-                from backend.decision.prompts.prompt_manager import get_prompt
-                
-                # 从配置文件获取提示词
-                prompt_data = get_prompt(
-                    "option_generation",
-                    "generate_options",
-                    variables={
-                        "initial_question": session['initial_question'],
-                        "decision_scenario": full_context,
-                        "constraints": constraints_text,
-                        "priorities": priorities_text
-                    }
-                )
-                
-                messages = [
-                    {"role": "system", "content": prompt_data["system"]},
-                    {"role": "user", "content": prompt_data["user"]}
-                ]
-                
-                response = llm.chat(
-                    messages,
-                    temperature=prompt_data["temperature"],
-                    response_format=prompt_data["return_format"]
-                )
-                
-                logger.info(f"[选项生成] LLM返回: {response[:200]}...")
-                
-                try:
-                    result = json.loads(response)
-                    options = result.get("options", [])
-                    
-                    # 验证选项质量
-                    if len(options) < 3:
-                        logger.warning(f"[选项生成] 生成的选项数量不足: {len(options)}")
-                    
-                    # 检查是否有空洞的标题 - 如果有，重新生成
-                    bad_keywords = ["保守稳定路线", "主动突破路线", "平衡路线", "折中路线", 
-                                   "选项A", "选项B", "选项C", "选项1", "选项2", "选项3",
-                                   "稳住基础", "寻找窗口", "短期波动", "长期跃迁"]
-                    
-                    has_bad_title = False
-                    for opt in options:
-                        title = opt.get("title", "")
-                        if any(bad in title for bad in bad_keywords):
-                            logger.warning(f"[选项生成] ❌ 检测到空洞标题: {title}")
-                            has_bad_title = True
-                            break
-                    
-                    # 如果检测到空洞标题，添加更严格的约束重新生成
-                    if has_bad_title:
-                        logger.info("[选项生成] 重新生成选项（使用更严格的约束）")
-                        
-                        # 添加更严格的约束
-                        strict_system = prompt_data["system"] + """
-
-⚠️ 严格禁止使用以下词汇作为标题：
-- "保守稳定路线"、"主动突破路线"、"平衡路线"、"折中路线"
-- "选项A/B/C"、"选项1/2/3"
-- "稳住基础"、"寻找窗口"、"短期波动"、"长期跃迁"
-
-✅ 必须使用具体的行动方案作为标题，例如：
-- "接受腾讯offer，边工作边准备考研"
-- "全力冲刺top2，放弃offer专心备考"
-- "加入AI创业公司，快速成长后跳槽大厂"
-
-如果你生成了上述禁止的词汇，这次生成将被视为失败！"""
-                        
-                        strict_messages = [
-                            {"role": "system", "content": strict_system},
-                            {"role": "user", "content": prompt_data["user"]}
-                        ]
-                        
-                        response = llm.chat(
-                            strict_messages,
-                            temperature=0.9,  # 提高温度增加创造性
-                            response_format=prompt_data["return_format"]
-                        )
-                        
-                        result = json.loads(response)
-                        options = result.get("options", [])
-                        logger.info(f"[选项生成] 重新生成完成: {len(options)} 个选项")
-                    
-                    logger.info(f"[选项生成] ✅ 成功生成 {len(options)} 个选项")
-                    
-                except Exception as e:
-                    logger.error(f"[选项生成] JSON解析失败: {e}, 原始响应: {response[:500]}")
-                    options = [
+        # 使用AI生成选项（带超时）
+        from backend.llm.llm_service import get_llm_service
+        llm = get_llm_service()
+        
+        if not llm or not llm.enabled:
+            # LLM不可用，返回默认选项
+            logger.warning("[选项生成] LLM不可用，返回默认选项")
+            return {
+                "success": True,
+                "data": {
+                    "ai_options": [
                         {"title": "选项1", "description": "第一个选择"},
                         {"title": "选项2", "description": "第二个选择"},
                         {"title": "选项3", "description": "第三个选择"}
-                    ]
-            else:
-                options = [
-                    {"title": "选项1", "description": "第一个选择"},
-                    {"title": "选项2", "description": "第二个选择"},
-                    {"title": "选项3", "description": "第三个选择"}
-                ]
+                    ],
+                    "session_id": request.session_id
+                }
+            }
+        
+        # 使用提示词管理器
+        from backend.decision.prompts.prompt_manager import get_prompt
+        
+        # 从配置文件获取提示词
+        prompt_data = get_prompt(
+            "option_generation",
+            "generate_options",
+            variables={
+                "initial_question": session['initial_question'],
+                "decision_scenario": full_context,
+                "constraints": constraints_text,
+                "priorities": priorities_text
+            }
+        )
+        
+        messages = [
+            {"role": "system", "content": prompt_data["system"]},
+            {"role": "user", "content": prompt_data["user"]}
+        ]
+        
+        # 设置30秒超时
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    llm.chat,
+                    messages,
+                    temperature=prompt_data["temperature"],
+                    response_format=prompt_data["return_format"]
+                ),
+                timeout=30.0  # 30秒超时
+            )
+        except asyncio.TimeoutError:
+            logger.error("[选项生成] LLM调用超时(30秒)")
+            return {
+                "success": False,
+                "message": "AI生成选项超时，请稍后重试",
+                "data": {
+                    "ai_options": [
+                        {"title": "选项1", "description": "第一个选择"},
+                        {"title": "选项2", "description": "第二个选择"},
+                        {"title": "选项3", "description": "第三个选择"}
+                    ],
+                    "session_id": request.session_id
+                }
+            }
+        
+        logger.info(f"[选项生成] LLM返回: {response[:200]}...")
+        
+        try:
+            result = json.loads(response)
+            options = result.get("options", [])
+            
+            # 验证选项数量
+            if len(options) < 2:
+                logger.warning(f"[选项生成] 生成的选项数量不足: {len(options)}")
+                # 补充默认选项
+                while len(options) < 3:
+                    options.append({"title": f"选项{len(options) + 1}", "description": "待补充"})
+            
+            logger.info(f"[选项生成] ✅ 成功生成 {len(options)} 个选项")
+            
+        except Exception as e:
+            logger.error(f"[选项生成] JSON解析失败: {e}, 原始响应: {response[:500]}")
+            options = [
+                {"title": "选项1", "description": "第一个选择"},
+                {"title": "选项2", "description": "第二个选择"},
+                {"title": "选项3", "description": "第三个选择"}
+            ]
         
         return {
             "success": True,
             "data": {
-                "ai_options": options,  # 前端期望的字段名
+                "ai_options": options,
                 "session_id": request.session_id
             }
         }
