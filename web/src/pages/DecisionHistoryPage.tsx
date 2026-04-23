@@ -65,8 +65,14 @@ export function DecisionHistoryPage() {
     
     try {
       const response = await getDecisionHistoryDetail(item.id);
+      console.log('[历史] API响应:', response);
+      
       if (response.success && response.history) {
         console.log('[历史] 详情加载成功:', response.history);
+        console.log('[历史] options_data:', response.history.options_data);
+        console.log('[历史] agents:', response.history.options_data?.agents);
+        console.log('[历史] report:', response.history.options_data?.report);
+        
         setViewingHistory(response.history);
       } else {
         alert('加载历史详情失败');
