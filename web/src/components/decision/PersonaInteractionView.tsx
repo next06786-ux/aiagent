@@ -589,9 +589,10 @@ export function PersonaInteractionView({
         // 根据action类型添加CSS类
         const actionClass = persona.messageAction ? `action-${persona.messageAction}` : '';
         
-        // 截断消息，只显示前30个字符
-        const shortMessage = persona.currentMessage.length > 30 
-          ? persona.currentMessage.substring(0, 30) + '...' 
+        // 智能截断消息：如果太长则显示前150个字符
+        const maxLength = 150;
+        const shortMessage = persona.currentMessage.length > maxLength 
+          ? persona.currentMessage.substring(0, maxLength) + '...' 
           : persona.currentMessage;
         
         return (

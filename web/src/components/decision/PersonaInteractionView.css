@@ -600,8 +600,11 @@
   border: 2px solid;
   border-radius: 12px;
   padding: 10px 12px;
-  width: 160px;
+  min-width: 200px;
+  max-width: 400px;
   min-height: 50px;
+  max-height: 300px;
+  overflow-y: auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   animation: bubbleIn 0.3s ease;
   z-index: 5;  /* 低于Agent节点(10)，避免遮挡 */
@@ -609,6 +612,8 @@
   transition: all 0.2s ease;
   transform: translate(-50%, -50%);
   pointer-events: auto;  /* 确保可以点击 */
+  white-space: pre-wrap;  /* 保留换行符 */
+  word-wrap: break-word;  /* 自动换行 */
 }
 
 /* 不同action类型的气泡样式 */
