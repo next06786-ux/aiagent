@@ -555,7 +555,7 @@ class DecisionPersona:
                                 'persona_name': persona_name,
                                 'round': round_num,
                                 'content': chunk_buffer,
-                                'type': 'thinking',
+                                'chunk_type': 'thinking',  # 改为 chunk_type 避免与外层 type 冲突
                                 'timestamp': time.time()
                             })
                         chunk_buffer = ""
@@ -576,7 +576,7 @@ class DecisionPersona:
                                 'persona_name': persona_name,
                                 'round': round_num,
                                 'content': chunk_buffer,
-                                'type': 'answer',
+                                'chunk_type': 'answer',  # 改为 chunk_type 避免与外层 type 冲突
                                 'timestamp': time.time()
                             })
                         chunk_buffer = ""
@@ -595,7 +595,7 @@ class DecisionPersona:
                     'persona_name': persona_name,
                     'round': round_num,
                     'content': chunk_buffer,
-                    'type': 'answer',
+                    'chunk_type': 'answer',  # 改为 chunk_type 避免与外层 type 冲突
                     'timestamp': time.time()
                 })
             

@@ -156,7 +156,24 @@ export function DecisionSimulationPage() {
 
   // WebSocket连接 - 为每个选项建立独立连接
   useEffect(() => {
-    if (!config.sessionId || !config.options?.length || !config.userId) return;
+    // 🔍 调试日志：检查配置
+    console.log('[调试] DecisionSimulationPage 配置:', {
+      sessionId: config.sessionId,
+      userId: config.userId,
+      optionsLength: config.options?.length,
+      options: config.options,
+      question: config.question,
+      decisionType: config.decisionType
+    });
+    
+    if (!config.sessionId || !config.options?.length || !config.userId) {
+      console.warn('[调试] ❌ WebSocket未启动，缺少必要参数:', {
+        hasSessionId: !!config.sessionId,
+        hasOptions: !!config.options?.length,
+        hasUserId: !!config.userId
+      });
+      return;
+    }
     
     console.log('[推演] 启动并行WebSocket连接:', config.options.length, '个选项');
     
@@ -289,12 +306,12 @@ export function DecisionSimulationPage() {
 
             // Agent启动
             if (type === 'agents_start' || type === 'personas_init') {
-              console.log(`[Agent初始化] 收到${type}消息`, event);
+              console.log(`[Agent初始化] 收到${type}消息，完整event:`, JSON.stringify(event, null, 2));
               const agents = (event.agents || event.personas) as any[] || [];
               const month = (event.month as number) || 0;
               const optId = String(event.option_id || optionId);
               
-              console.log(`[Agent初始化] optId=${optId}, agents数量=${agents.length}`);
+              console.log(`[Agent初始化] optId=${optId}, agents数量=${agents.length}, agents内容:`, agents);
               
               if (optId && agents.length > 0) {
                 const agentList = agents.map((a: any) => ({
@@ -311,6 +328,7 @@ export function DecisionSimulationPage() {
                   const next = new Map(prev);
                   next.set(optId, agentList);
                   console.log(`[Agent初始化] ✅ 已设置${agentList.length}个agents到optId=${optId}`);
+                  console.log(`[Agent初始化] 当前所有optionIds:`, Array.from(next.keys()));
                   return next;
                 });
                 
@@ -626,9 +644,9 @@ export function DecisionSimulationPage() {
               // 思考片段（流式输出）
               if (eventType === 'thinking_chunk') {
                 const content = String(event.content || '');
-                const chunkType = String(event.type || 'answer');  // thinking 或 answer
+                const chunkType = String(event.chunk_type || 'answer');  // 使用 chunk_type 而不是 type
                 
-                console.log(`[Agent事件] ${personaName} 思考片段: ${content.substring(0, 20)}...`);
+                console.log(`[Agent事件] ${personaName} 思考片段(${chunkType}): ${content.substring(0, 20)}...`);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);

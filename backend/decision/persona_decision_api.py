@@ -535,20 +535,30 @@ async def simulate_single_option(websocket: WebSocket):
                     council = PersonaCouncil(user_id)
                     
                     # 立即发送智能体列表（用于前端初始化显示）
+                    personas_list = [
+                        {
+                            "id": pid,
+                            "name": p.name,
+                            "description": p.description,
+                            "risk_tolerance": p.value_system.risk_tolerance
+                        }
+                        for pid, p in council.personas.items()
+                    ]
+                    
+                    logger.info(f"[WS] 准备发送 personas_init 事件: option_id={option_id}, personas数量={len(personas_list)}")
+                    print(f"[WS] 准备发送 personas_init 事件: option_id={option_id}, personas数量={len(personas_list)}")
+                    
                     if not await safe_send({
                         "type": "personas_init",
                         "option_id": option_id,
-                        "personas": [
-                            {
-                                "id": pid,
-                                "name": p.name,
-                                "description": p.description,
-                                "risk_tolerance": p.value_system.risk_tolerance
-                            }
-                            for pid, p in council.personas.items()
-                        ]
+                        "personas": personas_list
                     }):
+                        logger.error(f"[WS] personas_init 发送失败")
+                        print(f"[WS] personas_init 发送失败")
                         return
+                    
+                    logger.info(f"[WS] ✅ personas_init 已发送")
+                    print(f"[WS] ✅ personas_init 已发送")
                     
                     if not await safe_send({
                         "type": "status",
