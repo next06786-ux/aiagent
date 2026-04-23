@@ -343,7 +343,7 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
             {"role": "user", "content": prompt_data["user"]}
         ]
         
-        # 设置30秒超时
+        # 设置90秒超时（LLM响应较慢）
         try:
             response = await asyncio.wait_for(
                 asyncio.to_thread(
@@ -352,10 +352,10 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
                     temperature=prompt_data["temperature"],
                     response_format=prompt_data["return_format"]
                 ),
-                timeout=30.0  # 30秒超时
+                timeout=90.0  # 90秒超时
             )
         except asyncio.TimeoutError:
-            logger.error("[选项生成] LLM调用超时(30秒)")
+            logger.error("[选项生成] LLM调用超时(90秒)")
             return {
                 "success": False,
                 "message": "AI生成选项超时，请稍后重试",
