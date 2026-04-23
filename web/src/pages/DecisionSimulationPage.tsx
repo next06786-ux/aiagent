@@ -1451,10 +1451,20 @@ export function DecisionSimulationPage() {
     const personas = agentsByOption.get(optionId);
     const hasPersonas = personas && personas.length > 0;
     
-    console.log(`[渲染检查] optionId=${optionId}, hasPersonas=${hasPersonas}, personas数量=${personas?.length || 0}`);
+    console.log(`[渲染检查] optionId=${optionId}, hasPersonas=${hasPersonas}, personas数量=${personas?.length || 0}, agentsByOption.size=${agentsByOption.size}`);
+    console.log(`[渲染检查] 所有optionIds:`, Array.from(agentsByOption.keys()));
+    console.log(`[渲染检查] wsPhase=${wsPhase}`);
     
     return hasPersonas;
-  }, [selectedOptionIndex, agentsByOption]);
+  }, [selectedOptionIndex, agentsByOption, agentsByOption.size, wsPhase]); // 添加 wsPhase 作为依赖
+  
+  // 调试：监听 agentsByOption 变化
+  useEffect(() => {
+    console.log(`[agentsByOption 变化] size=${agentsByOption.size}, keys=`, Array.from(agentsByOption.keys()));
+    agentsByOption.forEach((agents, optionId) => {
+      console.log(`[agentsByOption 变化] ${optionId}: ${agents.length}个agents`);
+    });
+  }, [agentsByOption]);
 
   return (
     <div style={{ 
