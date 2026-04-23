@@ -594,6 +594,16 @@ export function PersonaInteractionView({
           console.log(`[消息气泡] 自动生成消息: ${persona.name} - ${displayMessage}`);
         }
         
+        // 🔍 调试：打印每个persona的消息状态
+        console.log(`[消息气泡] ${persona.name}:`, {
+          hasCurrentMessage: !!persona.currentMessage,
+          currentMessage: persona.currentMessage,
+          displayMessage: displayMessage,
+          score: persona.score,
+          stance: persona.stance,
+          status: persona.status
+        });
+        
         if (!displayMessage) {
           console.log(`[消息气泡] 跳过渲染: ${persona.name} - 无消息`);
           return null;
