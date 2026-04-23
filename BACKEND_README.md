@@ -979,7 +979,7 @@ docker exec -it lifeswarm-backend python backend/verify_career_data.py
 cd /path/to/your/project
 
 # 2. 拉取最新代码
-git pull origin main
+  git pull origin main
 
 # 3. 停止并删除旧容器
 docker compose down

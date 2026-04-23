@@ -1575,24 +1575,24 @@ export function TreeHolePage() {
                   border: 'none',
                   background: sendingMessage 
                     ? 'linear-gradient(135deg, #999 0%, #666 100%)'
-                    : 'linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%)',
+                    : 'linear-gradient(135deg, #8B4513 0%, #A0522D 100%)',
                   color: '#fff',
                   fontSize: 15,
                   fontWeight: 600,
                   cursor: sendingMessage ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s',
-                  boxShadow: '0 8px 24px rgba(10, 89, 247, 0.3)',
+                  boxShadow: '0 8px 24px rgba(139, 69, 19, 0.3)',
                 }}
                 onMouseEnter={e => {
                   if (!sendingMessage) {
                     e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(10, 89, 247, 0.4)';
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(139, 69, 19, 0.4)';
                   }
                 }}
                 onMouseLeave={e => {
                   if (!sendingMessage) {
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(10, 89, 247, 0.3)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(139, 69, 19, 0.3)';
                   }
                 }}
               >

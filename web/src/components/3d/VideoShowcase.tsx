@@ -58,12 +58,27 @@ export function VideoShowcase({ onClose, isEmbedded = false }: VideoShowcaseProp
       <div className="video-showcase-frame">
         <div className="video-showcase-inner-black">
           <div className="video-showcase-content">
-            <div className="video-placeholder-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
+            {/* 显示图片，如果图片不存在则显示占位符 */}
+            <img 
+              src="/images/showcase.png" 
+              alt="系统演示"
+              className="video-showcase-image"
+              onError={(e) => {
+                // 如果图片加载失败，显示占位符
+                e.currentTarget.style.display = 'none';
+                const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
+                if (placeholder) placeholder.style.display = 'flex';
+              }}
+            />
+            <div className="video-placeholder-fallback" style={{ display: 'none' }}>
+              <div className="video-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              </div>
+              <span className="video-placeholder-text">视频演示区域</span>
+              <span className="video-placeholder-hint">请将图片命名为 showcase.png 并放在 web/public/images/ 目录下</span>
             </div>
-            <span className="video-placeholder-text">视频演示区域</span>
           </div>
         </div>
       </div>

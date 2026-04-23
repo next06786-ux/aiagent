@@ -51,7 +51,7 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
   return (
     <div className="cross-domain-analysis">
       <div className="analysis-header">
-        <h2>🔗 跨领域综合分析</h2>
+        <h2>跨领域综合分析</h2>
         <p className="subtitle">多Agent协作 · 发现跨领域关联 · 生成综合战略</p>
       </div>
 

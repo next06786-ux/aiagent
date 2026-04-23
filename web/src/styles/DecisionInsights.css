@@ -540,11 +540,11 @@
 }
 
 .insights-score-bar-feasibility {
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: linear-gradient(90deg, #4a4a4a, #2c2c2c);
 }
 
 .insights-score-bar-risk {
-  background: linear-gradient(90deg, #ef4444, #dc2626);
+  background: linear-gradient(90deg, #2c2c2c, #1a1a1a);
 }
 
 .insights-score-number {
@@ -721,15 +721,15 @@
 }
 
 .insights-rec-priority[data-priority="high"] {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, #2c2c2c, #1a1a1a);
 }
 
 .insights-rec-priority[data-priority="medium"] {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, #4a4a4a, #2c2c2c);
 }
 
 .insights-rec-priority[data-priority="low"] {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #6a6a6a, #4a4a4a);
 }
 
 .insights-rec-content {
@@ -1168,7 +1168,7 @@
   top: 0;
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #0A59F7, #6B48FF);
+  background: linear-gradient(135deg, #2c2c2c, #1a1a1a);
   color: #ffffff;
   border-radius: 50%;
   display: flex;
@@ -1207,7 +1207,7 @@
 
 .insights-influence-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #0A59F7, #6B48FF);
+  background: linear-gradient(90deg, #2c2c2c, #1a1a1a);
   border-radius: 4px;
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1259,17 +1259,19 @@
 
 /* ── 发现卡片重要性标识 ────────────────────────────────────── */
 .insights-finding-icon[data-importance="high"] {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, #2c2c2c, #1a1a1a);
   color: #ffffff;
   font-weight: 700;
 }
 
 .insights-finding-icon[data-importance="medium"] {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
+  background: linear-gradient(135deg, #4a4a4a, #2c2c2c);
+  color: #ffffff;
 }
 
 .insights-finding-icon[data-importance="low"] {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #6a6a6a, #4a4a4a);
+  color: #ffffff;
 }
 
 /* ── 推荐卡片类别标签 ────────────────────────────────────── */

@@ -431,14 +431,25 @@ export function DecisionInsightsPage() {
                 <h3 className="insights-section-title">数据来源</h3>
                 <div className="insights-sources-grid">
                   <div className="insights-source-card">
-                    <div className="insights-source-icon">📚</div>
+                    <div className="insights-source-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                      </svg>
+                    </div>
                     <div className="insights-source-name">RAG记忆系统</div>
                     <div className="insights-source-count">
                       {agentReport.data_sources.rag_nodes || 0} 个节点
                     </div>
                   </div>
                   <div className="insights-source-card">
-                    <div className="insights-source-icon">🔗</div>
+                    <div className="insights-source-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <circle cx="12" cy="12" r="6"/>
+                        <circle cx="12" cy="12" r="2"/>
+                      </svg>
+                    </div>
                     <div className="insights-source-name">Neo4j知识图谱</div>
                     <div className="insights-source-count">
                       {agentReport.data_sources.neo4j_nodes || 0} 个节点

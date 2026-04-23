@@ -438,89 +438,107 @@ export function HomePage() {
     },
   ], []);
 
-  // Carousel cards from real features
+  // Carousel cards - 7大功能球体介绍
   const carouselCards = useMemo(() => [
     {
-      id: 'emergence',
+      id: 'decision',
       badge: 'new',
-      title: '涌现模式检测',
-      description: '发现行为模式中的涌现特征，AI 从复杂交互中提取有价值的洞察，提前预警潜在风险与机遇。',
-      route: '/emergence-patterns',
-      meta: '新功能',
+      title: '决策副本',
+      description: '多智能体协同决策推演，7大决策人格从不同视角分析问题，通过多轮交互与观点碰撞，形成全面深入的决策洞察。',
+      route: '/decision',
+      meta: '核心功能',
       icon: (
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
         </svg>
       ),
     },
     {
-      id: 'life-insights',
-      badge: 'beta',
-      title: '人生领域洞察',
-      description: '多维度分析人生各领域的发展态势，识别关键转折点与优化机会，制定个性化成长路径。',
-      route: '/life-domain-insights',
-      meta: '测试版',
+      id: 'insights',
+      badge: 'new',
+      title: '智慧洞察',
+      description: '3大专项智能体深度分析：教育升学规划、职业发展路径、人际关系洞察，为你的人生重要决策提供专业建议。',
+      route: '/insights',
+      meta: '核心功能',
       icon: (
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="16" x2="12" y2="12"/>
-          <line x1="12" y1="8" x2="12" y2="8"/>
+          <path d="M12 16v-4M12 8h.01"/>
         </svg>
       ),
     },
     {
-      id: 'lora',
+      id: 'parallel-life',
+      badge: 'new',
+      title: '平行人生',
+      description: '塔罗牌决策游戏，探索人生选择的多元可能性，通过互动式体验收集你的决策逻辑画像，发现潜在的人生路径。',
+      route: '/parallel-life',
+      meta: '核心功能',
+      icon: (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'knowledge-graph',
+      badge: 'new',
+      title: '知识星图',
+      description: '多维关系映射与记忆网络构建，智能关联发现你的知识节点，构建专属的知识宇宙，让信息之间的联系清晰可见。',
+      route: '/knowledge-graph',
+      meta: '核心功能',
+      icon: (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          <path d="M2 12h20"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'social',
+      badge: 'new',
+      title: '社交',
+      description: '好友互动与社交网络，分享你的决策历程，交流人生经验，在社区中发现志同道合的伙伴，共同成长。',
+      route: '/friends',
+      meta: '核心功能',
+      icon: (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'schedule',
       badge: 'coming',
-      title: 'LoRA 个性化训练',
-      description: '个性化模型微调服务，训练专属 AI 角色，让 AI 更懂你的需求与偏好，实现深度定制。',
-      route: '/lora-training',
-      meta: '规划中',
+      title: '智能日程',
+      description: 'AI 驱动的智能日程管理，自动优化时间安排，提醒重要事项，帮助你高效规划每一天，实现时间价值最大化。',
+      route: '/schedule',
+      meta: '即将推出',
       icon: (
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 2a10 10 0 1 0 10 10H12V2z"/>
-          <path d="M20 12a8 8 0 0 0-8-8v8h8z"/>
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
       ),
     },
     {
-      id: 'learning',
+      id: 'ai-core',
       badge: 'new',
-      title: '学习进度追踪',
-      description: '智能追踪学习轨迹，分析效率瓶颈，提供个性化改进建议，让学习效果可视化、可量化。',
-      route: '/learning-progress',
-      meta: '可用',
+      title: 'AI 核心',
+      description: '与 AI 核心实时协作对话，支持多轮上下文理解，深度学习你的偏好与需求，让交流如呼吸般自然流畅。',
+      route: '/chat',
+      meta: '核心功能',
       icon: (
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-        </svg>
-      ),
-    },
-    {
-      id: 'risk-analysis',
-      badge: 'new',
-      title: '决策风险评估',
-      description: '全面分析每个决策选项的潜在风险，提供量化风险评分，帮助你做出更理性的选择。',
-      route: '/risk-analysis',
-      meta: '新功能',
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-      ),
-    },
-    {
-      id: 'career-path',
-      badge: 'beta',
-      title: '职业发展模拟',
-      description: 'AI 模拟不同职业路径的发展前景，评估技能差距，提供职业转型建议与学习资源推荐。',
-      route: '/career-simulation',
-      meta: '测试版',
-      icon: (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
       ),
     },
@@ -703,25 +721,15 @@ export function HomePage() {
         <section className="ls-section">
           <div className="ls-section-header ls-reveal">
             <span className="ls-section-eyebrow">核心架构</span>
-            <h2 className="ls-section-title">多智能体协同系统</h2>
+            <h2 className="ls-section-title">智能体架构</h2>
             <p className="ls-section-subtitle">
-              6大专项智能体 + Meta 协调引擎，构建全方位的 AI 决策支持体系
+              多智能体决策推演+智慧洞察
             </p>
           </div>
 
           <div className="ls-architecture-card ls-reveal-scale">
             <div className="ls-arch-visual">
-              <div className="ls-arch-center">
-                <div className="ls-arch-core-icon">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
-                    <circle cx="12" cy="12" r="10" opacity="0.3"/>
-                  </svg>
-                </div>
-                <h3>Meta Agent</h3>
-                <p>协调中枢</p>
-              </div>
+              {/* 移除中心的 Meta Agent，只保留7个决策人格球体 */}
               
               <div className="ls-arch-agents">
                 <div className="ls-arch-agent ls-arch-agent-1">
@@ -730,66 +738,79 @@ export function HomePage() {
                       <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                     </svg>
                   </div>
-                  <span>决策分析</span>
+                  <span>理性分析师</span>
                 </div>
                 
                 <div className="ls-arch-agent ls-arch-agent-2">
                   <div className="ls-arch-agent-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <path d="M2 12h20"/>
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                     </svg>
                   </div>
-                  <span>知识图谱</span>
+                  <span>冒险家</span>
                 </div>
                 
                 <div className="ls-arch-agent ls-arch-agent-3">
                   <div className="ls-arch-agent-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      <path d="M12 2v20M2 12h20"/>
                     </svg>
                   </div>
-                  <span>对话理解</span>
+                  <span>实用主义者</span>
                 </div>
                 
                 <div className="ls-arch-agent ls-arch-agent-4">
                   <div className="ls-arch-agent-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/>
-                      <line x1="9" y1="9" x2="15" y2="15"/>
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6v6l4 2"/>
                     </svg>
                   </div>
-                  <span>数据洞察</span>
+                  <span>理想主义者</span>
                 </div>
                 
                 <div className="ls-arch-agent ls-arch-agent-5">
                   <div className="ls-arch-agent-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                     </svg>
                   </div>
-                  <span>方案评估</span>
+                  <span>保守派</span>
                 </div>
                 
                 <div className="ls-arch-agent ls-arch-agent-6">
                   <div className="ls-arch-agent-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                      <circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                     </svg>
                   </div>
-                  <span>涌现检测</span>
+                  <span>社交导向者</span>
+                </div>
+                
+                <div className="ls-arch-agent ls-arch-agent-7">
+                  <div className="ls-arch-agent-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                      <line x1="9" y1="9" x2="9.01" y2="9"/>
+                      <line x1="15" y1="9" x2="15.01" y2="9"/>
+                    </svg>
+                  </div>
+                  <span>创新者</span>
                 </div>
               </div>
             </div>
             
             <div className="ls-arch-content">
               <div className="ls-arch-description">
-                <h4>智能体协同工作流</h4>
+                <h4>7大决策人格协同推演</h4>
                 <p>
-                  系统采用多智能体协同架构，6个专项智能体各司其职：决策分析 Agent 负责评估方案，知识图谱 Agent 构建关系网络，
-                  对话理解 Agent 处理自然交互，数据洞察 Agent 挖掘模式，方案评估 Agent 分析可行性，涌现检测 Agent 发现潜在机会。
-                  Meta Agent 作为协调中枢，整合各智能体的分析结果，输出综合评分与行动建议。
+                  系统采用多人格决策架构，7个决策人格从不同视角分析问题：理性分析师注重数据与逻辑，冒险家追求突破与创新，
+                  实用主义者关注可行性，理想主义者坚持价值观，保守派重视风险控制，社交导向者考虑人际影响，创新者探索新可能。
+                  通过多轮交互与观点碰撞，形成全面、深入的决策洞察，帮助你做出更明智的选择。
                 </p>
               </div>
               
@@ -866,49 +887,50 @@ export function HomePage() {
             {/* Interactive Feature Showcase - Phone Style */}
             <div className="ls-interactive-showcase">
               <div className="ls-interactive-content ls-reveal-left">
-                <h2 className="ls-interactive-title">看它，满屏都是戏</h2>
+                <h2 className="ls-interactive-title">智慧洞察，精准决策</h2>
                 <p className="ls-interactive-subtitle">
-                  融入 AIGC 能力，可没有理解字体特征，星屏定制专属签名，还能将文字与图形巧妙合一，打造更有趣的合体字；智慧构图功能，可根据你的照片自动化景深，布局与色彩，一键生成风格多变的个性壁纸。
+                  3大专项智能体深度分析人生关键领域：教育升学Agent提供学业规划与升学路径建议，职业发展Agent分析职场机会与职业转型方向，人际关系Agent洞察社交网络与关系维护策略。多维度数据整合，为你的重要决策提供全面、专业的智慧支持。
                 </p>
                 
                 <div className="ls-interactive-features">
-                  <div className="ls-interactive-feature-item" onClick={() => navigate('/parallel-life')}>
+                  <div className="ls-interactive-feature-item" onClick={() => navigate('/decision/workbench')}>
                     <div className="ls-interactive-feature-icon">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                      </svg>
+                    </div>
+                    <div className="ls-interactive-feature-text">
+                      <h4>教育升学</h4>
+                      <p>学业规划与升学建议</p>
+                    </div>
+                  </div>
+
+                  <div className="ls-interactive-feature-item" onClick={() => navigate('/decision/workbench')}>
+                    <div className="ls-interactive-feature-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                      </svg>
+                    </div>
+                    <div className="ls-interactive-feature-text">
+                      <h4>职业发展</h4>
+                      <p>职场机会与转型方向</p>
+                    </div>
+                  </div>
+
+                  <div className="ls-interactive-feature-item" onClick={() => navigate('/decision/workbench')}>
+                    <div className="ls-interactive-feature-icon">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                         <circle cx="9" cy="7" r="4"/>
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                       </svg>
                     </div>
                     <div className="ls-interactive-feature-text">
-                      <h4>平行人生</h4>
-                      <p>探索多元可能</p>
-                    </div>
-                  </div>
-
-                  <div className="ls-interactive-feature-item" onClick={() => navigate('/meta-agent')}>
-                    <div className="ls-interactive-feature-icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                        <polyline points="2 17 12 22 22 17"/>
-                        <polyline points="2 12 12 17 22 12"/>
-                      </svg>
-                    </div>
-                    <div className="ls-interactive-feature-text">
-                      <h4>多智能体协调</h4>
-                      <p>AI 并行分析</p>
-                    </div>
-                  </div>
-
-                  <div className="ls-interactive-feature-item" onClick={() => navigate('/chat')}>
-                    <div className="ls-interactive-feature-icon">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
-                    </div>
-                    <div className="ls-interactive-feature-text">
-                      <h4>AI 对话</h4>
-                      <p>实时协作</p>
+                      <h4>人际关系</h4>
+                      <p>社交网络与关系维护</p>
                     </div>
                   </div>
                 </div>
@@ -919,6 +941,19 @@ export function HomePage() {
                   <div className="ls-laptop-screen">
                     <div className="ls-laptop-camera" />
                     <div className="ls-laptop-content">
+                      {/* 显示智慧洞察界面的图片 */}
+                      <img 
+                        src="/images/insights-dashboard.png" 
+                        alt="智慧洞察界面"
+                        className="ls-laptop-screenshot"
+                        onError={(e) => {
+                          // 如果图片加载失败，显示原来的仪表盘
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'block';
+                        }}
+                      />
+                      <div className="ls-laptop-fallback" style={{ display: 'none' }}>
                       {/* Browser Chrome */}
                       <div className="ls-browser-chrome">
                         <div className="ls-browser-dots">
@@ -1034,8 +1069,9 @@ export function HomePage() {
         <section className="ls-carousel-section">
           <div className="ls-carousel-header">
             <div className="ls-section-header ls-reveal-left">
-              <span className="ls-section-eyebrow">持续进化</span>
-              <h2 className="ls-section-title">探索更多可能</h2>
+              <span className="ls-section-eyebrow">核心功能</span>
+              <h2 className="ls-section-title">7大功能模块</h2>
+              <p className="ls-section-subtitle">全方位智能决策支持体系，助力人生每个重要选择</p>
             </div>
             <div className="ls-carousel-nav ls-reveal-right">
               <button 
