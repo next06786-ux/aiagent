@@ -57,6 +57,22 @@ export function PersonaInteractionView({
   const [activeInteraction, setActiveInteraction] = useState<Interaction | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);  // 改为存储完整的persona对象
   
+  // 🔍 调试：打印接收到的personas数据
+  useEffect(() => {
+    console.log(`[PersonaInteractionView] 🔍 personas数量: ${personas.length}`);
+    personas.forEach((p, i) => {
+      console.log(`[PersonaInteractionView] 🔍 persona[${i}]:`, {
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        score: p.score,
+        stance: p.stance,
+        currentMessage: p.currentMessage,
+        hasCurrentMessage: !!p.currentMessage
+      });
+    });
+  }, [personas]);
+  
   // 缩放和平移状态
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
