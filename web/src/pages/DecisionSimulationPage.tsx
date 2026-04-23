@@ -441,6 +441,7 @@ export function DecisionSimulationPage() {
               // 技能开始
               if (eventType === 'skill_start') {
                 const skillName = String(event.skill_name || '');
+                const round = (event.round as number) || 1;
                 console.log(`[Agent事件] ${personaName} 开始执行技能: ${skillName}`);
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -449,11 +450,12 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       // 添加到历史记录
                       const historyRecord = {
-                        round: context.get('round') || 1,
-                        message: `开始执行技能: ${skillName}`,
+                        round: round,
+                        message: `🔧 ${skillName}`,
                         timestamp: Date.now(),
                         action: 'skill_start',
                         skillName: skillName,
+                        event_type: 'skill_start'
                       };
                       const existingHistory = a.thinkingHistory || [];
                       
@@ -475,7 +477,8 @@ export function DecisionSimulationPage() {
                 const skillName = String(event.skill_name || '');
                 const summary = String(event.summary || '');
                 const result = event.result as any;
-                console.log(`[Agent事件] ${personaName} 技能完成: ${skillName}`);
+                const round = (event.round as number) || 1;
+                console.log(`[Agent事件] ${personaName} 技能完成: ${skillName} - ${summary}`);
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
@@ -483,22 +486,23 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       // 添加到历史记录
                       const historyRecord = {
-                        round: context.get('round') || 1,
-                        message: summary || `技能执行完成: ${skillName}`,
+                        round: round,
+                        message: summary || `✅ ${skillName}`,
                         timestamp: Date.now(),
                         action: 'skill_complete',
                         skillName: skillName,
                         skillResult: {
                           skill_name: skillName,
                           summary: summary,
-                          result: result
-                        }
+                          full_result: result
+                        },
+                        event_type: 'skill_complete'
                       };
                       const existingHistory = a.thinkingHistory || [];
                       
                       return {
                         ...a,
-                        currentMessage: `✅ ${skillName}: ${summary}`,
+                        currentMessage: `✅ ${skillName}`,
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
@@ -507,21 +511,6 @@ export function DecisionSimulationPage() {
                   }));
                   return next;
                 });
-                
-                // 3秒后清除技能消息
-                setTimeout(() => {
-                  setAgentsByOption(prev => {
-                    const next = new Map(prev);
-                    const agents = next.get(optId) || [];
-                    next.set(optId, agents.map(a => 
-                      a.id === personaId ? { 
-                        ...a, 
-                        currentMessage: undefined
-                      } : a
-                    ));
-                    return next;
-                  });
-                }, 3000);
               }
               
               // 技能错误
@@ -545,8 +534,8 @@ export function DecisionSimulationPage() {
               
               // 思考完成
               if (eventType === 'thinking_complete') {
-                const stance = String(event.stance || '');
-                const score = event.score as number;
+                const stance = String(event.stance || '中立');
+                const score = Number(event.score || 50);
                 const reasoning = String(event.reasoning || '');
                 const keyPoints = (event.key_points as string[]) || [];
                 const confidence = event.confidence as number || 0.7;
@@ -557,18 +546,8 @@ export function DecisionSimulationPage() {
                 console.log(`[Agent事件] reasoning内容:`, reasoning.substring(0, 100));
                 console.log(`[Agent事件] key_points:`, keyPoints);
                 
-                // 构建显示消息：完整内容
-                let displayMessage = `💡 ${stance} (${score}分)\n\n`;
-                
-                // 添加推理内容
-                if (reasoning) {
-                  displayMessage += `📝 推理过程：\n${reasoning}\n\n`;
-                }
-                
-                // 添加关键要点
-                if (keyPoints.length > 0) {
-                  displayMessage += `🔑 关键要点：\n${keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
-                }
+                // 构建显示消息
+                const displayMessage = `✅ ${stance} (${score}分)`;
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -577,12 +556,13 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       const historyRecord = {
                         round,
-                        message: reasoning,
+                        message: `${stance} (${score}分)`,
                         timestamp: Date.now(),
                         score,
                         stance,
                         keyPoints,
                         reasoning,
+                        event_type: 'thinking_complete'
                       };
                       
                       console.log(`[Agent事件] 添加历史记录:`, historyRecord);
@@ -594,8 +574,9 @@ export function DecisionSimulationPage() {
                         status: 'complete' as const,
                         score,
                         stance,
-                        currentMessage: displayMessage,  // 显示完整内容
+                        currentMessage: displayMessage,
                         messageTimestamp: Date.now(),
+                        streamingMessage: undefined,
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
                     }
