@@ -8,6 +8,7 @@ import { HomePage } from './pages/HomePage';
 import { AIChatPage } from './pages/AIChatPage';
 import { DecisionWorkbenchPage } from './pages/DecisionWorkbenchPage';
 import { DecisionSimulationPage } from './pages/DecisionSimulationPage';
+import { DecisionHistoryPage } from './pages/DecisionHistoryPage';
 import { AbilityIslandsPage } from './pages/AbilityIslandsPage';
 import { ProfilePageNew } from './pages/ProfilePageNew';
 import { ProfilePage } from './pages/ProfilePage';
@@ -77,7 +78,9 @@ function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/chat" element={<AIChatPage />} />
         <Route path="/decision" element={<DecisionWorkbenchPage />} />
+        <Route path="/decision/workbench" element={<DecisionWorkbenchPage />} />
         <Route path="/decision/simulation" element={<DecisionSimulationPage />} />
+        <Route path="/decision/history" element={<DecisionHistoryPage />} />
         <Route path="/ability-islands" element={<AbilityIslandsPage />} />
         <Route path="/relationship" element={<RelationshipDecisionPage />} />
         <Route path="/profile" element={<ProfilePageNew />} />

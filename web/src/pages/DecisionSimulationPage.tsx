@@ -168,6 +168,64 @@ export function DecisionSimulationPage() {
     }
   `;
 
+  // 报告处理函数
+  const handleViewReport = async (optionId: string) => {
+    const option = config.options.find((_, idx) => `option_${idx + 1}` === optionId);
+    if (!option) return;
+
+    setIsGeneratingReport(true);
+    setReportOptionId(optionId);
+    setReportOptionTitle(option.title);
+
+    try {
+      const report = await generateDecisionReport(
+        config.sessionId!,
+        optionId,
+        option.title
+      );
+      setCurrentReport(report);
+      setShowReportModal(true);
+    } catch (error) {
+      console.error('[报告] 生成失败:', error);
+      alert('生成报告失败，请稍后重试');
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleSaveHistory = async () => {
+    if (!config.sessionId || !currentReport || !reportOptionId) return;
+
+    setIsSavingHistory(true);
+    try {
+      // 获取该选项的所有 Agent 数据
+      const agents = agentsByOption.get(reportOptionId) || [];
+      
+      await saveDecisionHistory({
+        sessionId: config.sessionId,
+        userId: config.userId,
+        question: config.question,
+        optionId: reportOptionId,
+        optionTitle: reportOptionTitle,
+        report: currentReport,
+        agentsData: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          stance: a.stance || '未知',
+          score: a.score || 0,
+          reasoning: a.thinkingHistory?.map(h => h.message).join('\n') || ''
+        }))
+      });
+      
+      alert('决策历史已保存');
+    } catch (error) {
+      console.error('[历史] 保存失败:', error);
+      alert('保存历史失败，请稍后重试');
+    } finally {
+      setIsSavingHistory(false);
+    }
+  };
+
   // WebSocket连接 - 为每个选项建立独立连接
   useEffect(() => {
     // 🔍 调试日志：检查配置
@@ -1771,25 +1829,95 @@ export function DecisionSimulationPage() {
             top: 80, 
             right: 24, 
             zIndex: 9999,
-            background: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.85) 30%, rgba(255, 255, 255, 0.6) 70%), linear-gradient(135deg, rgba(232, 244, 255, 0.95) 0%, rgba(184, 220, 255, 0.9) 100%)',
-            color: 'rgba(0, 0, 0, 0.85)', 
-            padding: '12px 24px', 
-            borderRadius: 12,
-            border: '1.5px solid rgba(184, 220, 255, 0.6)',
-            boxShadow: '0 4px 16px rgba(10, 89, 247, 0.15), 0 2px 8px rgba(10, 89, 247, 0.1), inset 0 1px 2px rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 10,
-            fontSize: 13, 
-            fontWeight: 600,
-            pointerEvents: 'none',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(52, 199, 89, 0.9)" strokeWidth="2.5">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-              <polyline points="22 4 12 14.01 9 11.01"/>
-            </svg>
+            {/* 分析完成标记 */}
+            <div style={{
+              background: 'radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.85) 30%, rgba(255, 255, 255, 0.6) 70%), linear-gradient(135deg, rgba(232, 244, 255, 0.95) 0%, rgba(184, 220, 255, 0.9) 100%)',
+              color: 'rgba(0, 0, 0, 0.85)', 
+              padding: '12px 24px', 
+              borderRadius: 12,
+              border: '1.5px solid rgba(184, 220, 255, 0.6)',
+              boxShadow: '0 4px 16px rgba(10, 89, 247, 0.15), 0 2px 8px rgba(10, 89, 247, 0.1), inset 0 1px 2px rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 10,
+              fontSize: 13, 
+              fontWeight: 600,
+              pointerEvents: 'none',
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(52, 199, 89, 0.9)" strokeWidth="2.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>分析完成</span>
+            </div>
+            
+            {/* 查看报告按钮 */}
+            <button
+              onClick={() => handleViewReport(`option_${selectedOptionIndex + 1}`)}
+              disabled={isGeneratingReport}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 12,
+                background: isGeneratingReport 
+                  ? 'rgba(10, 89, 247, 0.08)' 
+                  : 'linear-gradient(135deg, rgba(10, 89, 247, 0.12), rgba(107, 72, 255, 0.08))',
+                border: '1.5px solid rgba(10, 89, 247, 0.3)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 10,
+                fontSize: 13, 
+                fontWeight: 600,
+                color: 'rgba(10, 89, 247, 0.9)',
+                cursor: isGeneratingReport ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                pointerEvents: 'auto',
+                boxShadow: '0 2px 8px rgba(10, 89, 247, 0.1)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isGeneratingReport) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(10, 89, 247, 0.18), rgba(107, 72, 255, 0.12))';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(10, 89, 247, 0.2)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isGeneratingReport) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(10, 89, 247, 0.12), rgba(107, 72, 255, 0.08))';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(10, 89, 247, 0.1)';
+                }
+              }}
+            >
+              {isGeneratingReport ? (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                  </svg>
+                  <span>生成中...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                  <span>查看报告</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
             <span>分析完成</span>
           </div>
         )}
@@ -1977,6 +2105,20 @@ export function DecisionSimulationPage() {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* 决策报告弹窗 */}
+      {showReportModal && currentReport && (
+        <DecisionReportModal
+          report={currentReport}
+          optionTitle={reportOptionTitle}
+          onClose={() => {
+            setShowReportModal(false);
+            setCurrentReport(null);
+          }}
+          onSaveHistory={handleSaveHistory}
+          isSaving={isSavingHistory}
+        />
       )}
     </div>
   );

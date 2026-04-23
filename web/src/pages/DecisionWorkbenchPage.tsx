@@ -360,7 +360,42 @@ export function DecisionWorkbenchPage() {
   // ── 渲染 ─────────────────────────────────────────────────
   return (
     <AppShell>
-      <BackButton to="/" label="返回" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+        <BackButton to="/" label="返回" />
+        <button
+          onClick={() => navigate('/decision/history')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(10, 89, 247, 0.08), rgba(107, 72, 255, 0.05))',
+            border: '1.5px solid rgba(10, 89, 247, 0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'rgba(10, 89, 247, 0.9)',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(10, 89, 247, 0.12), rgba(107, 72, 255, 0.08))';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(10, 89, 247, 0.15)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(10, 89, 247, 0.08), rgba(107, 72, 255, 0.05))';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>查看历史决策</span>
+        </button>
+      </div>
       <div className="stack-layout">
 
         {/* ── 阶段1：输入问题 ── */}
