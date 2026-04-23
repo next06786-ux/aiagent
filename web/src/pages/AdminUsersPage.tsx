@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE_URL } from '../services/api';
 import '../styles/AdminUsersPage.css';
 
 interface User {
@@ -9,6 +10,7 @@ interface User {
   email: string;
   nickname: string;
   avatar_url?: string;
+  phone?: string;
   is_active: boolean;
   is_verified: boolean;
   created_at: string;
@@ -72,7 +74,7 @@ export function AdminUsersPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5001/api/admin/users?${params}`,
+        `${API_BASE_URL}/api/admin/users?${params}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -118,7 +120,7 @@ export function AdminUsersPage() {
       if (!token) return;
 
       const response = await fetch(
-        `http://localhost:5001/api/admin/users/${userId}/status`,
+        `${API_BASE_URL}/api/admin/users/${userId}/status`,
         {
           method: 'PUT',
           headers: {
@@ -319,21 +321,35 @@ export function AdminUsersPage() {
               <div className="admin-detail-grid">
                 <div className="admin-detail-item">
                   <label>用户ID</label>
-                  <span>{selectedUser.user_id}</span>
+                  <span className="admin-detail-id">{selectedUser.user_id}</span>
+                </div>
+                <div className="admin-detail-item">
+                  <label>用户名</label>
+                  <span>{selectedUser.username}</span>
+                </div>
+                <div className="admin-detail-item">
+                  <label>昵称</label>
+                  <span>{selectedUser.nickname || '未设置'}</span>
                 </div>
                 <div className="admin-detail-item">
                   <label>邮箱</label>
                   <span>{selectedUser.email}</span>
                 </div>
                 <div className="admin-detail-item">
-                  <label>状态</label>
+                  <label>手机号</label>
+                  <span>{selectedUser.phone || '未设置'}</span>
+                </div>
+                <div className="admin-detail-item">
+                  <label>账号状态</label>
                   <span className={`admin-status-badge ${selectedUser.is_active ? 'active' : 'inactive'}`}>
                     {selectedUser.is_active ? '活跃' : '禁用'}
                   </span>
                 </div>
                 <div className="admin-detail-item">
                   <label>验证状态</label>
-                  <span>{selectedUser.is_verified ? '已验证' : '未验证'}</span>
+                  <span className={`admin-status-badge ${selectedUser.is_verified ? 'active' : 'inactive'}`}>
+                    {selectedUser.is_verified ? '已验证' : '未验证'}
+                  </span>
                 </div>
                 <div className="admin-detail-item">
                   <label>注册时间</label>
