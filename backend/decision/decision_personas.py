@@ -514,6 +514,7 @@ class DecisionPersona:
         llm = get_llm_service()
         if not llm or not llm.enabled:
             # 降级：使用非流式
+            logger.warning(f"[{persona_name}] LLM不可用，使用非流式分析")
             return await asyncio.to_thread(
                 llm.chat,
                 messages=[{"role": "user", "content": prompt}],
@@ -521,11 +522,14 @@ class DecisionPersona:
                 response_format=response_format
             )
         
+        logger.info(f"[{persona_name}] 🌊 开始流式分析 (round={round_num})")
+        
         accumulated_content = ""
         accumulated_thinking = ""
         last_chunk_time = time.time()
         chunk_buffer = ""  # 缓冲区，积累一定字符后再发送
         BUFFER_SIZE = 20  # 每20个字符发送一次
+        chunk_count = 0
         
         try:
             async for chunk in llm.chat_stream_async(
@@ -544,6 +548,8 @@ class DecisionPersona:
                     # 当缓冲区达到一定大小或距离上次发送超过0.1秒时，发送
                     if len(chunk_buffer) >= BUFFER_SIZE or (time.time() - last_chunk_time) > 0.1:
                         if status_callback and chunk_buffer:
+                            chunk_count += 1
+                            logger.debug(f"[{persona_name}] 💭 发送thinking片段 #{chunk_count}: {len(chunk_buffer)}字符")
                             await status_callback('thinking_chunk', {
                                 'persona_id': persona_id,
                                 'persona_name': persona_name,
@@ -563,6 +569,8 @@ class DecisionPersona:
                     # 当缓冲区达到一定大小或距离上次发送超过0.1秒时，发送
                     if len(chunk_buffer) >= BUFFER_SIZE or (time.time() - last_chunk_time) > 0.1:
                         if status_callback and chunk_buffer:
+                            chunk_count += 1
+                            logger.debug(f"[{persona_name}] 📝 发送answer片段 #{chunk_count}: {len(chunk_buffer)}字符")
                             await status_callback('thinking_chunk', {
                                 'persona_id': persona_id,
                                 'persona_name': persona_name,
@@ -580,6 +588,8 @@ class DecisionPersona:
             
             # 发送剩余的缓冲内容
             if chunk_buffer and status_callback:
+                chunk_count += 1
+                logger.debug(f"[{persona_name}] 📤 发送最后的片段 #{chunk_count}: {len(chunk_buffer)}字符")
                 await status_callback('thinking_chunk', {
                     'persona_id': persona_id,
                     'persona_name': persona_name,
@@ -589,7 +599,7 @@ class DecisionPersona:
                     'timestamp': time.time()
                 })
             
-            logger.info(f"[{persona_name}] 流式分析完成: thinking={len(accumulated_thinking)}字符, answer={len(accumulated_content)}字符")
+            logger.info(f"[{persona_name}] ✅ 流式分析完成: thinking={len(accumulated_thinking)}字符, answer={len(accumulated_content)}字符, 共{chunk_count}个片段")
             return accumulated_content
         
         except Exception as e:

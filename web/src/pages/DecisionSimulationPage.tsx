@@ -553,7 +553,9 @@ export function DecisionSimulationPage() {
                 const round = event.round as number || 1;
                 
                 console.log(`[Agent事件] ${personaName} 思考完成: ${stance} (${score}分)`);
-                console.log(`[Agent事件] 推理内容长度: ${reasoning.length}字符`);
+                console.log(`[Agent事件] 推理内容长度: ${reasoning.length}字符, key_points数量: ${keyPoints.length}`);
+                console.log(`[Agent事件] reasoning内容:`, reasoning.substring(0, 100));
+                console.log(`[Agent事件] key_points:`, keyPoints);
                 
                 // 构建显示消息：完整内容
                 let displayMessage = `💡 ${stance} (${score}分)\n\n`;
@@ -583,6 +585,8 @@ export function DecisionSimulationPage() {
                         reasoning,
                       };
                       
+                      console.log(`[Agent事件] 添加历史记录:`, historyRecord);
+                      
                       const existingHistory = a.thinkingHistory || [];
                       
                       return { 
@@ -598,6 +602,7 @@ export function DecisionSimulationPage() {
                     return a;
                   });
                   console.log(`[Agent事件] 更新后的agents:`, updated.find(a => a.id === personaId));
+                  console.log(`[Agent事件] thinkingHistory:`, updated.find(a => a.id === personaId)?.thinkingHistory);
                   next.set(optId, updated);
                   return next;
                 });
