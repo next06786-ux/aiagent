@@ -10,7 +10,7 @@ export const LLMSettingsPage: React.FC = () => {
   return (
     <div className="llm-settings-page">
       <div className="page-header">
-        <h1>⚙️ 大模型设置</h1>
+        <h1>大模型设置
         <p className="page-description">
           在云端 API 和自建基座模型之间灵活切换，满足不同场景需求
         </p>
@@ -24,7 +24,7 @@ export const LLMSettingsPage: React.FC = () => {
         <h3>📖 使用说明</h3>
         
         <div className="help-item">
-          <h4>☁️ 通义千问 API</h4>
+          <h4>[云端] 通义千问 API</h4>
           <p>
             阿里云提供的云端大模型服务，速度快、稳定性高，按量计费。
             适合生产环境和高并发场景。
@@ -37,7 +37,7 @@ export const LLMSettingsPage: React.FC = () => {
         </div>
 
         <div className="help-item">
-          <h4>🖥️ 远程基座模型</h4>
+          <h4>[远程] 远程基座模型</h4>
           <p>
             在自己的服务器上部署的量化模型，成本低、数据私密。
             适合对成本敏感或有数据隐私要求的场景。

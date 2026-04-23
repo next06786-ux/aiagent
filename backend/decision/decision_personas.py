@@ -201,7 +201,7 @@ class DecisionPersona:
         self.success_count = 0  # 成功决策次数
         self.failure_count = 0  # 失败决策次数
         
-        logger.info(f"✨ 创建决策人格: {self.name} ({self.persona_id})")
+        logger.info(f"[创建] 创建决策人格: {self.name} ({self.persona_id})")
         logger.info(f"   价值观: {list(self.value_system.priorities.keys())[:3]}")
         logger.info(f"   风险承受度: {self.value_system.risk_tolerance:.1%}")
         logger.info(f"   决策风格: {self.value_system.decision_style}")
@@ -444,7 +444,7 @@ class DecisionPersona:
         Returns:
             最终分析结果
         """
-        logger.info(f"🌟 [{self.name}] 开始生命周期 ({rounds}轮)")
+        logger.info(f"[开始] [{self.name}] 开始生命周期 ({rounds}轮)")
         
         # 阶段1: 觉醒
         await self._phase_awaken(option, context)
@@ -452,7 +452,7 @@ class DecisionPersona:
         final_result = None
         
         for round_num in range(1, rounds + 1):
-            logger.info(f"🔄 [{self.name}] 第{round_num}轮推演")
+            logger.info(f"[轮次] [{self.name}] 第{round_num}轮推演")
             
             if round_num == 1:
                 # 阶段2: 独立思考
@@ -549,7 +549,7 @@ class DecisionPersona:
                     if len(chunk_buffer) >= BUFFER_SIZE or (time.time() - last_chunk_time) > 0.1:
                         if status_callback and chunk_buffer:
                             chunk_count += 1
-                            logger.debug(f"[{persona_name}] 💭 发送thinking片段 #{chunk_count}: {len(chunk_buffer)}字符")
+                            logger.debug(f"[{persona_name}] [思考] 发送thinking片段 #{chunk_count}: {len(chunk_buffer)}字符")
                             await status_callback('thinking_chunk', {
                                 'persona_id': persona_id,
                                 'persona_name': persona_name,
@@ -570,7 +570,7 @@ class DecisionPersona:
                     if len(chunk_buffer) >= BUFFER_SIZE or (time.time() - last_chunk_time) > 0.1:
                         if status_callback and chunk_buffer:
                             chunk_count += 1
-                            logger.debug(f"[{persona_name}] 📝 发送answer片段 #{chunk_count}: {len(chunk_buffer)}字符")
+                            logger.debug(f"[{persona_name}] [分析] 发送answer片段 #{chunk_count}: {len(chunk_buffer)}字符")
                             await status_callback('thinking_chunk', {
                                 'persona_id': persona_id,
                                 'persona_name': persona_name,
@@ -599,7 +599,7 @@ class DecisionPersona:
                     'timestamp': time.time()
                 })
             
-            logger.info(f"[{persona_name}] ✅ 流式分析完成: thinking={len(accumulated_thinking)}字符, answer={len(accumulated_content)}字符, 共{chunk_count}个片段")
+            logger.info(f"[{persona_name}] [完成] 流式分析完成: thinking={len(accumulated_thinking)}字符, answer={len(accumulated_content)}字符, 共{chunk_count}个片段")
             return accumulated_content
         
         except Exception as e:
@@ -625,7 +625,7 @@ class DecisionPersona:
         2. 执行选中的技能
         3. 基于技能结果进行流式分析
         """
-        logger.debug(f"[{self.name}] 💭 独立思考阶段")
+        logger.debug(f"[{self.name}] [独立思考] 独立思考阶段")
         
         # 发送阶段开始事件
         status_callback = context.get("status_callback")
@@ -730,7 +730,7 @@ class DecisionPersona:
             # 解析JSON结果
             result = json.loads(response_text)
             
-            logger.info(f"[{self.name}] ✅ 流式分析完成: {result.get('stance')} ({result.get('score')}分)")
+            logger.info(f"[{self.name}] [完成] 流式分析完成: {result.get('stance')} ({result.get('score')}分)")
             
             return result
             
@@ -847,7 +847,7 @@ class DecisionPersona:
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """阶段3: 观察他人 - 获取其他Agent的观点"""
-        logger.debug(f"[{self.name}] 👀 观察他人阶段")
+        logger.debug(f"[{self.name}] [观察] 观察他人阶段")
         
         # 从共享观点存储中获取其他Agent的观点
         shared_views = context.get('shared_views', {})
@@ -877,7 +877,7 @@ class DecisionPersona:
         3. 执行补充技能
         4. 深度反思并调整立场（流式输出）
         """
-        logger.debug(f"[{self.name}] 🤔 深度反思阶段")
+        logger.debug(f"[{self.name}] [深度反思] 深度反思阶段")
         
         # 发送阶段开始事件
         status_callback = context.get("status_callback")
@@ -1136,7 +1136,7 @@ class DecisionPersona:
                 f"你拥有以下技能工具:",
                 *available_skills_info,
                 f"",
-                f"💡 智能选择原则:",
+                f"[智能选择原则]",
                 f"",
                 f"1. 自然思考: 想象你是一个真实的{self.name}，你会本能地想了解什么？",
                 f"   - 如果你重视数据，自然会想看数据分析",
@@ -1192,7 +1192,7 @@ class DecisionPersona:
                 f"你拥有以下技能工具:",
                 *available_skills_info,
                 f"",
-                f"💡 反思选择原则:",
+                f"[反思选择原则]",
                 f"",
                 f"1. 保持独立: 不要因为其他人的观点就轻易改变",
                 f"   - 如果你的结论有充分依据，坚持自己的立场",
@@ -1382,8 +1382,8 @@ class DecisionPersona:
                     })
                 return (skill_name, None)
         
-        # 🚀 并发执行所有技能
-        logger.info(f"[{self.name}] 🚀 并发执行{len(skills_to_execute)}个技能: {skills_to_execute}")
+        # [并发] 并发执行所有技能
+        logger.info(f"[{self.name}] [并发] 并发执行{len(skills_to_execute)}个技能: {skills_to_execute}")
         import time
         start_time = time.time()
         
@@ -1391,7 +1391,7 @@ class DecisionPersona:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         duration = time.time() - start_time
-        logger.info(f"[{self.name}] ✅ 所有技能执行完成，耗时{duration:.2f}秒")
+        logger.info(f"[{self.name}] [完成] 所有技能执行完成，耗时{duration:.2f}秒")
         
         # 收集成功的结果
         for result in results:
@@ -1858,7 +1858,7 @@ class DecisionPersona:
             logger.info(f"[{self.name}] 使用预检索缓存")
             for query, supplement_data in self._retrieval_cache.items():
                 if supplement_data:
-                    logger.info(f"[{self.name}] ✅ 使用缓存的检索结果: {len(supplement_data)}条")
+                    logger.info(f"[{self.name}] [缓存] 使用缓存的检索结果: {len(supplement_data)}条")
                     supplement_parts = ["\n【智能体主动检索的补充数据】"]
                     for idx, item in enumerate(supplement_data[:8], 1):
                         content = item.get('content', '')
@@ -2074,7 +2074,7 @@ class DecisionPersona:
         recent_memories = self.memories[-top_k:] if self.memories else []
         
         if recent_memories:
-            logger.debug(f"🧠 [{self.name}] 回忆了 {len(recent_memories)} 个相似决策")
+            logger.debug(f"[记忆] [{self.name}] 回忆了 {len(recent_memories)} 个相似决策")
         
         return recent_memories
     
@@ -3642,7 +3642,7 @@ class PersonaCouncil:
         for persona in self.personas.values():
             persona.set_memory_system(self.memory_system)
         
-        logger.info(f"✅ 所有人格已连接到分层记忆系统\n")
+        logger.info(f"[完成] 所有人格已连接到分层记忆系统\n")
     
     async def analyze_decision(
         self,
@@ -3695,7 +3695,7 @@ class PersonaCouncil:
             shared_views_lock = asyncio.Lock()
             
             # 使用生命周期方法：所有人格异步并行执行各自的轮数
-            logger.info(f"  🚀 启动所有Agent的生命周期...")
+            logger.info(f"  [启动] 启动所有Agent的生命周期...")
             analysis_tasks = []
             persona_ids = []
             
@@ -3734,7 +3734,7 @@ class PersonaCouncil:
                     continue
                 
                 option_analyses[persona_id] = result
-                logger.info(f"    ✅ {self.personas[persona_id].name}: {result.get('stance', '未知')} (得分: {result.get('score', 0)})")
+                logger.info(f"    [完成] {self.personas[persona_id].name}: {result.get('stance', '未知')} (得分: {result.get('score', 0)})")
             
             all_analyses[f"option_{option_idx + 1}"] = {
                 "option": option,
@@ -3749,7 +3749,7 @@ class PersonaCouncil:
         )
         
         logger.info(f"\n{'='*60}")
-        logger.info(f"✅ 决策人格委员会分析完成")
+        logger.info(f"[完成] 决策人格委员会分析完成")
         logger.info(f"{'='*60}\n")
         
         return {

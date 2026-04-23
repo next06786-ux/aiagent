@@ -455,7 +455,7 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       const historyRecord = {
                         round,
-                        message: `📍 ${phaseName}`,
+                        message: `[阶段] ${phaseName}`,
                         timestamp: Date.now(),
                         event_type: 'phase_start',
                         phase: phase
@@ -721,7 +721,7 @@ export function DecisionSimulationPage() {
                       // 添加到历史记录
                       const historyRecord = {
                         round: round,
-                        message: `🔧 ${skillName}`,
+                        message: `[执行] ${skillName}`,
                         timestamp: Date.now(),
                         action: 'skill_start',
                         skillName: skillName,
@@ -731,7 +731,7 @@ export function DecisionSimulationPage() {
                       
                       return {
                         ...a,
-                        currentMessage: `🔧 执行技能: ${skillName}`,
+                        currentMessage: `[执行技能] ${skillName}`,
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
@@ -757,7 +757,7 @@ export function DecisionSimulationPage() {
                       // 添加到历史记录
                       const historyRecord = {
                         round: round,
-                        message: summary || `✅ ${skillName}`,
+                        message: summary || `[完成] ${skillName}`,
                         timestamp: Date.now(),
                         action: 'skill_complete',
                         skillName: skillName,
@@ -772,7 +772,7 @@ export function DecisionSimulationPage() {
                       
                       return {
                         ...a,
-                        currentMessage: `✅ ${skillName}`,
+                        currentMessage: `[完成] ${skillName}`,
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
@@ -794,7 +794,7 @@ export function DecisionSimulationPage() {
                   next.set(optId, agents.map(a => 
                     a.id === personaId ? { 
                       ...a, 
-                      currentMessage: `❌ ${skillName}失败`,
+                      currentMessage: `[失败] ${skillName}`,
                       messageTimestamp: Date.now()
                     } : a
                   ));

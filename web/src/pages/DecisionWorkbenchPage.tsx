@@ -981,7 +981,7 @@ export function DecisionWorkbenchPage() {
               marginBottom: 24,
             }}>
               <div style={{ fontSize: 13, color: '#666', lineHeight: 1.6 }}>
-                <div style={{ marginBottom: 8, fontWeight: 600, color: '#0A59F7' }}>💡 推荐配置：</div>
+                <div style={{ marginBottom: 8, fontWeight: 600, color: '#0A59F7' }}>[推荐配置]</div>
                 <div>• 快速决策（日常选择）：1轮，约30秒</div>
                 <div>• 标准决策（一般重要）：2轮，约1分钟</div>
                 <div>• 深度决策（重大选择）：3-5轮，约2-5分钟</div>

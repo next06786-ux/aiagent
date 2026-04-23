@@ -96,11 +96,11 @@ class LLMService:
                     http_client=http_client,
                     max_retries=max_retries,
                 )
-                self.model = "qwen-plus"  # 使用plus版本，性能更强
+                self.model = "qwen-turbo"  # 使用turbo版本，速度更快
                 self.enable_thinking = True
                 self.enabled = True
                 
-                logger.info(f"✅ Qwen LLM服务初始化成功 (模型: qwen-plus)")
+                logger.info(f"✅ Qwen LLM服务初始化成功 (模型: qwen-turbo)")
                 logger.info(f"   并发配置: max_connections={max_connections}, keepalive={max_keepalive}")
                 logger.info(f"   超时配置: timeout={timeout}s, retries={max_retries}")
                 logger.info(f"   🚀 极致并发模式已启用，准备处理大规模并发请求")

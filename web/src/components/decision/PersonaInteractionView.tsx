@@ -129,34 +129,50 @@ export function PersonaInteractionView({
   const [scoreImpactAnimations, setScoreImpactAnimations] = useState<Array<{
     id: string;
     personaId: string;
-    score: number;  // 分数值
+    scoreDelta: number;  // 分数变化值（可正可负）
     timestamp: number;
   }>>([]);
+  
+  // 追踪每个 Agent 的上一次分数
+  const [previousScores, setPreviousScores] = useState<Record<string, number>>({});
   
   // 监听personas的score变化，触发动画
   useEffect(() => {
     personas.forEach(persona => {
       if (persona.score !== undefined && persona.status === 'thinking') {
-        // 检查是否已经有这个persona的动画
-        const hasAnimation = scoreImpactAnimations.some(anim => anim.personaId === persona.id);
-        if (!hasAnimation) {
-          const animId = `${persona.id}_${Date.now()}`;
-          console.log(`[动画] 触发分数影响动画: ${persona.name} (${persona.score}分)`);
-          setScoreImpactAnimations(prev => [...prev, {
-            id: animId,
-            personaId: persona.id,
-            score: persona.score,
-            timestamp: Date.now(),
-          }]);
-          
-          // 2秒后移除动画
-          setTimeout(() => {
-            setScoreImpactAnimations(prev => prev.filter(a => a.id !== animId));
-          }, 2000);
+        const previousScore = previousScores[persona.id] || 50; // 默认初始分数为 50
+        const scoreDelta = persona.score - previousScore;
+        
+        // 只有分数真正变化时才触发动画
+        if (Math.abs(scoreDelta) > 0.1) {
+          // 检查是否已经有这个persona的动画
+          const hasAnimation = scoreImpactAnimations.some(anim => anim.personaId === persona.id);
+          if (!hasAnimation) {
+            const animId = `${persona.id}_${Date.now()}`;
+            console.log(`[动画] 触发分数影响动画: ${persona.name} (${previousScore} → ${persona.score}, 变化: ${scoreDelta > 0 ? '+' : ''}${scoreDelta.toFixed(1)})`);
+            
+            setScoreImpactAnimations(prev => [...prev, {
+              id: animId,
+              personaId: persona.id,
+              scoreDelta: scoreDelta,
+              timestamp: Date.now(),
+            }]);
+            
+            // 更新上一次分数
+            setPreviousScores(prev => ({
+              ...prev,
+              [persona.id]: persona.score
+            }));
+            
+            // 2秒后移除动画
+            setTimeout(() => {
+              setScoreImpactAnimations(prev => prev.filter(a => a.id !== animId));
+            }, 2000);
+          }
         }
       }
     });
-  }, [personas]);
+  }, [personas, previousScores, scoreImpactAnimations]);
   
   // 监听totalScore变化
   useEffect(() => {
@@ -445,9 +461,10 @@ export function PersonaInteractionView({
         
         const personaPos = getPersonaPosition(personaIndex, displayPersonas.length);
         const centerPos = { x: 50, y: 50 };
-        const color = personaColors[anim.personaId] || '#999';
-        const score = anim.score;
-        const isPositive = score >= 0;
+        const scoreDelta = anim.scoreDelta;
+        const isPositive = scoreDelta >= 0;
+        // 根据分数变化正负使用不同颜色
+        const color = isPositive ? '#10b981' : '#ef4444';  // 绿色表示正向，红色表示负向
         
         // 生成粒子
         const particles = Array.from({ length: 8 }, (_, i) => {
@@ -545,7 +562,7 @@ export function PersonaInteractionView({
                 zIndex: 20,
               }}
             >
-              {isPositive ? '+' : ''}{score.toFixed(1)}
+              {isPositive ? '+' : ''}{scoreDelta.toFixed(1)}
             </div>
           </React.Fragment>
         );

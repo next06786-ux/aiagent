@@ -110,10 +110,10 @@ export function getProviderDisplayName(provider: string): string {
  */
 export function getProviderIcon(provider: string): string {
   const icons: Record<string, string> = {
-    qwen: '☁️',
-    remote_model: '🖥️',
-    local_quantized: '💻',
-    openai: '🤖',
+    qwen: '[云]',
+    remote_model: '[远程]',
+    local_quantized: '[本地]',
+    openai: '[AI]',
   };
   return icons[provider] || '🔧';
 }

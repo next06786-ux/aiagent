@@ -350,7 +350,8 @@ async def generate_ai_options(request: GenerateOptionsRequest) -> Dict[str, Any]
                     llm.chat,
                     messages,
                     temperature=prompt_data["temperature"],
-                    response_format=prompt_data["return_format"]
+                    response_format=prompt_data["return_format"],
+                    model="qwen-turbo"  # 使用 qwen-turbo 模型
                 ),
                 timeout=90.0  # 90秒超时
             )
