@@ -88,7 +88,7 @@ class DecisionHistoryManager:
         options_data: Dict[str, Any]
     ) -> bool:
         """
-        保存决策历史
+        保存决策历史（如果 session_id 已存在则更新）
         
         Args:
             history_id: 历史记录ID
@@ -105,27 +105,59 @@ class DecisionHistoryManager:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            sql = """
-            INSERT INTO decision_histories 
-            (id, user_id, session_id, question, decision_type, options_data, completed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
+            # 先检查是否已存在相同 session_id 的记录
+            check_sql = "SELECT id FROM decision_histories WHERE session_id = %s AND user_id = %s"
+            cursor.execute(check_sql, (session_id, user_id))
+            existing = cursor.fetchone()
             
-            values = (
-                history_id,
-                user_id,
-                session_id,
-                question,
-                decision_type,
-                json.dumps(options_data, ensure_ascii=False),
-                datetime.now()
-            )
-            
-            cursor.execute(sql, values)
-            conn.commit()
-            
-            logger.info(f"决策历史已保存: {history_id}")
-            return True
+            if existing:
+                # 更新现有记录
+                update_sql = """
+                UPDATE decision_histories 
+                SET question = %s, 
+                    decision_type = %s, 
+                    options_data = %s, 
+                    completed_at = %s
+                WHERE session_id = %s AND user_id = %s
+                """
+                
+                values = (
+                    question,
+                    decision_type,
+                    json.dumps(options_data, ensure_ascii=False),
+                    datetime.now(),
+                    session_id,
+                    user_id
+                )
+                
+                cursor.execute(update_sql, values)
+                conn.commit()
+                
+                logger.info(f"决策历史已更新: session_id={session_id}, 选项数={len(options_data)}")
+                return True
+            else:
+                # 插入新记录
+                insert_sql = """
+                INSERT INTO decision_histories 
+                (id, user_id, session_id, question, decision_type, options_data, completed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                values = (
+                    history_id,
+                    user_id,
+                    session_id,
+                    question,
+                    decision_type,
+                    json.dumps(options_data, ensure_ascii=False),
+                    datetime.now()
+                )
+                
+                cursor.execute(insert_sql, values)
+                conn.commit()
+                
+                logger.info(f"决策历史已保存: {history_id}, 选项数={len(options_data)}")
+                return True
             
         except Error as e:
             logger.error(f"保存决策历史失败: {e}")

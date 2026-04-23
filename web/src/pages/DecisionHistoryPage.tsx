@@ -22,6 +22,7 @@ export function DecisionHistoryPage() {
   
   // 场景查看状态
   const [viewingHistory, setViewingHistory] = useState<DecisionHistory | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<string>('option_1'); // 当前查看的选项
   const [showReportModal, setShowReportModal] = useState(false);
 
   useEffect(() => {
@@ -70,10 +71,21 @@ export function DecisionHistoryPage() {
       if (response.success && response.history) {
         console.log('[历史] 详情加载成功:', response.history);
         console.log('[历史] options_data:', response.history.options_data);
-        console.log('[历史] agents:', response.history.options_data?.agents);
-        console.log('[历史] report:', response.history.options_data?.report);
         
         setViewingHistory(response.history);
+        
+        // 检查数据结构，设置默认选项
+        const optionsData = response.history.options_data;
+        if (optionsData) {
+          // 找到第一个可用的选项
+          const firstOptionKey = Object.keys(optionsData).find(key => key.startsWith('option_'));
+          if (firstOptionKey) {
+            setSelectedOptionId(firstOptionKey);
+          } else {
+            // 旧格式数据，没有 option_1, option_2 这样的key
+            setSelectedOptionId('legacy');
+          }
+        }
       } else {
         alert('加载历史详情失败');
       }
@@ -86,6 +98,55 @@ export function DecisionHistoryPage() {
   const handleCloseViewer = () => {
     setViewingHistory(null);
     setShowReportModal(false);
+    setSelectedOptionId('option_1');
+  };
+
+  // 获取当前选中选项的数据
+  const getCurrentOptionData = () => {
+    if (!viewingHistory?.options_data) return null;
+    
+    const optionsData = viewingHistory.options_data;
+    
+    // 新格式：多选项
+    if (selectedOptionId !== 'legacy' && optionsData[selectedOptionId]) {
+      return optionsData[selectedOptionId];
+    }
+    
+    // 旧格式：单选项（兼容）
+    if (optionsData.agents) {
+      return optionsData;
+    }
+    
+    return null;
+  };
+
+  // 获取所有可用的选项
+  const getAvailableOptions = () => {
+    if (!viewingHistory?.options_data) return [];
+    
+    const optionsData = viewingHistory.options_data;
+    
+    // 新格式：返回所有 option_X 的key
+    const optionKeys = Object.keys(optionsData).filter(key => key.startsWith('option_'));
+    
+    if (optionKeys.length > 0) {
+      return optionKeys.map(key => ({
+        id: key,
+        title: optionsData[key].option_title || key,
+        data: optionsData[key]
+      }));
+    }
+    
+    // 旧格式：返回单个选项
+    if (optionsData.agents) {
+      return [{
+        id: 'legacy',
+        title: optionsData.option_title || '决策选项',
+        data: optionsData
+      }];
+    }
+    
+    return [];
   };
 
   return (
@@ -120,82 +181,111 @@ export function DecisionHistoryPage() {
             <div style={{
               padding: '24px 32px',
               borderBottom: '1px solid #E2E8F0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
               background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
             }}>
-              <div>
-                <h2 style={{
-                  fontSize: 24,
-                  fontWeight: 700,
-                  color: '#1a1a1a',
-                  marginBottom: 4,
-                }}>
-                  {viewingHistory.question}
-                </h2>
-                <p style={{ fontSize: 14, color: '#64748B' }}>
-                  {new Date(viewingHistory.created_at).toLocaleString('zh-CN')}
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                {viewingHistory.options_data?.report && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div>
+                  <h2 style={{
+                    fontSize: 24,
+                    fontWeight: 700,
+                    color: '#1a1a1a',
+                    marginBottom: 4,
+                  }}>
+                    {viewingHistory.question}
+                  </h2>
+                  <p style={{ fontSize: 14, color: '#64748B' }}>
+                    {new Date(viewingHistory.created_at).toLocaleString('zh-CN')}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {getCurrentOptionData()?.report && (
+                    <button
+                      onClick={() => setShowReportModal(true)}
+                      style={{
+                        padding: '12px 24px',
+                        borderRadius: 12,
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%)',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        boxShadow: '0 4px 12px rgba(107, 72, 255, 0.3)',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(107, 72, 255, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(107, 72, 255, 0.3)';
+                      }}
+                    >
+                      查看报告
+                    </button>
+                  )}
                   <button
-                    onClick={() => setShowReportModal(true)}
+                    onClick={handleCloseViewer}
                     style={{
                       padding: '12px 24px',
                       borderRadius: 12,
-                      border: 'none',
-                      background: 'linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%)',
-                      color: 'white',
+                      border: '1px solid #E2E8F0',
+                      background: 'white',
+                      color: '#64748B',
                       cursor: 'pointer',
                       fontSize: 14,
                       fontWeight: 600,
-                      boxShadow: '0 4px 12px rgba(107, 72, 255, 0.3)',
                       transition: 'all 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(107, 72, 255, 0.4)';
+                      e.currentTarget.style.background = '#F8FAFC';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(107, 72, 255, 0.3)';
+                      e.currentTarget.style.background = 'white';
                     }}
                   >
-                    查看报告
+                    关闭
                   </button>
-                )}
-                <button
-                  onClick={handleCloseViewer}
-                  style={{
-                    padding: '12px 24px',
-                    borderRadius: 12,
-                    border: '1px solid #E2E8F0',
-                    background: 'white',
-                    color: '#64748B',
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#F8FAFC';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'white';
-                  }}
-                >
-                  关闭
-                </button>
+                </div>
               </div>
+              
+              {/* 选项切换器 */}
+              {getAvailableOptions().length > 1 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {getAvailableOptions().map(option => (
+                    <button
+                      key={option.id}
+                      onClick={() => setSelectedOptionId(option.id)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: 10,
+                        border: selectedOptionId === option.id ? 'none' : '1px solid #E2E8F0',
+                        background: selectedOptionId === option.id 
+                          ? 'linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%)'
+                          : 'white',
+                        color: selectedOptionId === option.id ? 'white' : '#64748B',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        transition: 'all 0.2s ease',
+                        boxShadow: selectedOptionId === option.id 
+                          ? '0 2px 8px rgba(107, 72, 255, 0.3)'
+                          : 'none',
+                      }}
+                    >
+                      {option.title}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             
             {/* 场景内容 */}
             <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-              {viewingHistory.options_data?.agents && (
+              {getCurrentOptionData()?.agents && (
                 <PersonaInteractionView
-                  personas={viewingHistory.options_data.agents.map((a: any) => ({
+                  personas={getCurrentOptionData().agents.map((a: any) => ({
                     id: a.id,
                     name: a.name,
                     status: 'complete' as const,
@@ -204,10 +294,10 @@ export function DecisionHistoryPage() {
                     thinkingHistory: a.thinking_history || [],
                   }))}
                   interactions={[]}
-                  optionTitle={viewingHistory.options_data.option_title || ''}
-                  currentMonth={viewingHistory.options_data.current_round || 0}
+                  optionTitle={getCurrentOptionData().option_title || ''}
+                  currentMonth={getCurrentOptionData().current_round || 0}
                   isComplete={true}
-                  totalScore={viewingHistory.options_data.total_score || 0}
+                  totalScore={getCurrentOptionData().total_score || 0}
                 />
               )}
             </div>
@@ -216,11 +306,11 @@ export function DecisionHistoryPage() {
       )}
       
       {/* 报告弹窗 */}
-      {showReportModal && viewingHistory?.options_data?.report && (
+      {showReportModal && getCurrentOptionData()?.report && (
         <DecisionReportModal
           visible={showReportModal}
-          report={viewingHistory.options_data.report}
-          optionTitle={viewingHistory.options_data.option_title || ''}
+          report={getCurrentOptionData().report}
+          optionTitle={getCurrentOptionData().option_title || ''}
           onClose={() => setShowReportModal(false)}
         />
       )}

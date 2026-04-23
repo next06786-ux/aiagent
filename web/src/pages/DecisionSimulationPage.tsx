@@ -344,22 +344,127 @@ export function DecisionSimulationPage() {
     }
   };
 
-  // 自动保存场景到历史记录
-  const autoSaveSceneToHistory = async (optionId: string, option: any) => {
+  // 保存或更新单个选项到历史记录
+  const saveOrUpdateOptionToHistory = async (optionId: string, option: any) => {
     if (!config.sessionId) {
       console.warn('[自动保存] 缺少 sessionId，跳过保存');
       return;
     }
 
     try {
-      console.log('[自动保存] 开始保存场景:', optionId);
-      console.log('[自动保存] agentsByOption.size:', agentsByOption.size);
-      console.log('[自动保存] agentsByOption keys:', Array.from(agentsByOption.keys()));
+      console.log('[自动保存] 开始保存选项:', optionId);
       
       // 获取该选项的所有数据
       const agents = agentsByOption.get(optionId) || [];
       const totalScore = totalScoreByOption.get(optionId) || 0;
       const currentMonth = currentMonthByOption.get(optionId) || 0;
+      
+      console.log('[自动保存] agents 数量:', agents.length);
+      console.log('[自动保存] totalScore:', totalScore);
+      
+      if (agents.length === 0) {
+        console.warn('[自动保存] agents 为空，跳过保存');
+        return;
+      }
+      
+      // 生成报告
+      console.log('[自动保存] 生成报告...');
+      const reportResponse = await generateDecisionReport({
+        question: config.question,
+        option_title: option.title,
+        option_description: option.description || '',
+        agents_data: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          stance: a.stance || '未知',
+          score: a.score || 0,
+          reasoning: a.thinkingHistory?.map(h => h.message).join('\n') || ''
+        })),
+        total_score: totalScore
+      });
+      
+      const report = reportResponse.success ? reportResponse.report : null;
+      console.log('[自动保存] 报告生成完成');
+      
+      // 构建该选项的数据
+      const optionData = {
+        option_id: optionId,
+        option_title: option.title,
+        option_description: option.description || '',
+        total_score: totalScore,
+        current_round: currentMonth,
+        agents: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          status: a.status,
+          stance: a.stance || '未知',
+          score: a.score || 0,
+          thinking_history: a.thinkingHistory || [],
+          final_message: a.currentMessage || ''
+        })),
+        report: report,
+        completed_at: new Date().toISOString()
+      };
+      
+      // 获取或创建完整的历史记录数据
+      // 先尝试从后端获取现有记录
+      let existingOptionsData: any = {};
+      
+      try {
+        const checkResponse = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/api/decision/history/list?user_id=${config.userId}&limit=100`
+        );
+        
+        if (checkResponse.ok) {
+          const listData = await checkResponse.json();
+          const existingRecord = listData.histories?.find(
+            (h: any) => h.session_id === config.sessionId
+          );
+          
+          if (existingRecord) {
+            // 获取详情
+            const detailResponse = await fetch(
+              `${import.meta.env.VITE_API_BASE_URL}/api/decision/history/detail/${existingRecord.id}`
+            );
+            
+            if (detailResponse.ok) {
+              const detailData = await detailResponse.json();
+              if (detailData.success && detailData.history) {
+                existingOptionsData = detailData.history.options_data || {};
+                console.log('[自动保存] 找到现有记录，将更新选项:', optionId);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[自动保存] 检查现有记录失败，将创建新记录:', error);
+      }
+      
+      // 更新选项数据
+      existingOptionsData[optionId] = optionData;
+      
+      // 保存到数据库（会覆盖同一个 session_id 的记录）
+      console.log('[自动保存] 保存到数据库...');
+      const response = await saveDecisionHistory({
+        user_id: config.userId,
+        session_id: config.sessionId,
+        question: config.question,
+        decision_type: config.decisionType || 'general',
+        options_data: existingOptionsData  // 包含所有已完成选项的数据
+      });
+      
+      console.log('[自动保存] 保存成功:', response);
+      
+    } catch (error) {
+      console.error('[自动保存] 失败:', error);
+      // 不显示错误提示，静默失败
+    }
+  };
+
+  // 自动保存场景到历史记录（旧版本，保留兼容）
+  const autoSaveSceneToHistory = async (optionId: string, option: any) => {
+    return saveOrUpdateOptionToHistory(optionId, option);
+  };
       
       console.log('[自动保存] agents 数量:', agents.length);
       console.log('[自动保存] totalScore:', totalScore);
@@ -1665,16 +1770,17 @@ export function DecisionSimulationPage() {
                 return next;
               });
               
-              // 自动保存完整场景到历史记录
+              // 自动保存该选项到历史记录
               setTimeout(async () => {
                 try {
-                  await autoSaveSceneToHistory(optId, option);
+                  await saveOrUpdateOptionToHistory(optId, option);
                 } catch (error) {
                   console.error(`[自动保存] 选项 ${optId} 保存失败:`, error);
                 }
               }, 3000); // 延迟3秒确保所有数据都已更新
               
               completedCount++;
+              
               if (completedCount === config.options?.length) {
                 setWsPhase('done');
                 setWsStatus('✓ 推演完成！');

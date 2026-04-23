@@ -67,7 +67,7 @@ class DecisionReportGenerator:
             response = await self.llm_service.chat_async(
                 messages=messages,
                 temperature=0.7,
-                model="qwen3.6-plus"  # 使用 qwen3.6-plus 模型生成高质量报告
+                model="qwen-plus"  # 使用 qwen-plus 模型生成高质量报告
             )
             
             # 解析响应 - chat_async 直接返回字符串
