@@ -761,7 +761,7 @@ class WebSearchSkill(Skill):
         
         Args:
             context: {
-                "query": "搜索查询",
+                "query": "搜索查询"（可选，如果没有则智能生成）,
                 "option": {},  # 决策选项
                 "collected_info": {}  # 收集的信息
             }
@@ -783,9 +783,55 @@ class WebSearchSkill(Skill):
         option = context.get("option", {})
         collected_info = context.get("collected_info", {})
         
+        # 🆕 智能生成搜索query（而不是硬编码）
         if not query:
-            # 如果没有提供查询，根据选项自动生成
-            query = f"{option.get('title', '')} {option.get('description', '')}"
+            llm = get_llm_service()
+            if llm and llm.enabled:
+                # 使用LLM生成精准的搜索关键词
+                query_gen_prompt = f"""作为{self.persona.name}，我需要从互联网搜索信息来帮助决策。
+
+决策选项：{option.get('title', '')}
+选项描述：{option.get('description', '')}
+
+用户背景：
+{json.dumps(collected_info, ensure_ascii=False, indent=2)[:300]}
+
+请生成1-3个精准的搜索关键词或短语，用于搜索最相关的信息。
+
+要求：
+1. 关键词要简洁、精准
+2. 聚焦于最关键的信息点
+3. 避免冗长的描述
+
+返回JSON格式：
+{{
+    "search_queries": ["关键词1", "关键词2"],
+    "reason": "为什么选择这些关键词"
+}}"""
+                
+                try:
+                    response = await asyncio.to_thread(
+                        llm.chat,
+                        messages=[{"role": "user", "content": query_gen_prompt}],
+                        temperature=0.7,
+                        response_format="json_object"
+                    )
+                    query_result = json.loads(response)
+                    search_queries = query_result.get("search_queries", [])
+                    
+                    if search_queries:
+                        # 使用第一个关键词作为主要搜索query
+                        query = search_queries[0]
+                        logger.info(f"[{self.persona.name}] 智能生成搜索query: {query}")
+                    else:
+                        # 降级：使用选项标题
+                        query = option.get('title', '')
+                except Exception as e:
+                    logger.warning(f"[{self.persona.name}] 生成搜索query失败: {e}")
+                    query = option.get('title', '')
+            else:
+                # LLM不可用，使用选项标题
+                query = option.get('title', '')
         
         if not query.strip():
             return {
@@ -837,44 +883,68 @@ class WebSearchSkill(Skill):
 }}"""
             
             # 使用Qwen的联网搜索功能
-            # 通过修改client的extra_body参数启用搜索
             if llm.provider.value == "qwen":
-                # 直接调用Qwen API，启用搜索
+                # 🌐 直接调用Qwen API，启用真实联网搜索
                 try:
+                    logger.info(f"[{self.persona.name}] 🌐 启用Qwen联网搜索: {query}")
+                    
+                    # 简化提示词，让Qwen自由发挥联网搜索能力
+                    simple_prompt = f"""请帮我搜索关于"{query}"的最新信息。
+
+决策背景：{option.get('title', '')}
+
+请提供：
+1. 搜索到的关键信息
+2. 对决策的影响分析
+3. 具体建议
+
+请用自然语言回答，不需要JSON格式。"""
+                    
                     response = llm.client.chat.completions.create(
                         model=llm.model,
-                        messages=[{"role": "user", "content": search_prompt}],
+                        messages=[{"role": "user", "content": simple_prompt}],
                         temperature=0.7,
-                        extra_body={"enable_search": True},  # 启用联网搜索
-                        timeout=60  # 搜索可能需要更长时间
+                        extra_body={"enable_search": True},  # ✅ 启用真实联网搜索
+                        timeout=60
                     )
                     
                     content = response.choices[0].message.content
                     
-                    # 尝试解析JSON响应
-                    try:
-                        result = json.loads(content)
-                        return {
-                            "success": True,
-                            "search_content": result.get("search_content", content),
-                            "analysis": result.get("analysis", ""),
-                            "key_insights": result.get("key_insights", []),
-                            "recommendations": result.get("recommendations", []),
-                            "thinking_process": result.get("thinking_process", "已完成联网搜索和分析")
-                        }
-                    except json.JSONDecodeError:
-                        # 如果不是JSON格式，直接返回内容
-                        return {
-                            "success": True,
-                            "search_content": content,
-                            "analysis": content,
-                            "key_insights": ["已从互联网获取最新信息"],
-                            "thinking_process": "已完成联网搜索"
-                        }
+                    logger.info(f"[{self.persona.name}] ✅ 联网搜索完成，获得{len(content)}字符的内容")
+                    
+                    # 使用LLM提取结构化信息
+                    extract_prompt = f"""请从以下搜索结果中提取关键信息：
+
+搜索结果：
+{content}
+
+请提取并返回JSON格式：
+{{
+    "search_content": "搜索内容摘要（100字以内）",
+    "analysis": "对决策的影响分析",
+    "key_insights": ["洞察1", "洞察2", "洞察3"],
+    "recommendations": ["建议1", "建议2"],
+    "thinking_process": "分析思路"
+}}"""
+                    
+                    extract_response = await asyncio.to_thread(
+                        llm.chat,
+                        messages=[{"role": "user", "content": extract_prompt}],
+                        temperature=0.5,
+                        response_format="json_object"
+                    )
+                    
+                    result = json.loads(extract_response)
+                    result["success"] = True
+                    result["raw_search_content"] = content  # 保留原始搜索内容
+                    result["search_enabled"] = True  # 标记使用了真实联网搜索
+                    
+                    return result
                 
                 except Exception as e:
-                    logger.error(f"Qwen联网搜索失败: {e}")
-                    # 降级到普通模式
+                    logger.error(f"[{self.persona.name}] Qwen联网搜索失败: {e}")
+                    # 降级到普通模式（不联网）
+                    logger.warning(f"[{self.persona.name}] 降级到知识库模式")
                     response = await asyncio.to_thread(
                         llm.chat,
                         messages=[{"role": "user", "content": search_prompt}],
@@ -883,10 +953,12 @@ class WebSearchSkill(Skill):
                     )
                     result = json.loads(response)
                     result["success"] = True
-                    result["note"] = "使用知识库回答（联网搜索不可用）"
+                    result["search_enabled"] = False
+                    result["note"] = "使用知识库回答（联网搜索失败）"
                     return result
             else:
-                # 非Qwen模型，使用普通对话
+                # 非Qwen模型，使用普通对话（不联网）
+                logger.info(f"[{self.persona.name}] 使用{llm.provider.value}模型（不支持联网搜索）")
                 response = await asyncio.to_thread(
                     llm.chat,
                     messages=[{"role": "user", "content": search_prompt}],
@@ -895,7 +967,8 @@ class WebSearchSkill(Skill):
                 )
                 result = json.loads(response)
                 result["success"] = True
-                result["note"] = "基于模型知识回答"
+                result["search_enabled"] = False
+                result["note"] = "基于模型知识回答（不支持联网搜索）"
                 return result
             
         except Exception as e:

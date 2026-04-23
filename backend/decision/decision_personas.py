@@ -1410,22 +1410,11 @@ class DecisionPersona:
         
         base_text = "\n".join(facts_parts) if facts_parts else "（暂无用户历史数据）"
         
-        # 执行技能分析（新增）
-        collected_info = context.get('collected_info', {})
-        skill_context = {
-            "option": option,
-            "collected_info": collected_info,
-            "shared_facts": self.memory_system.shared_facts if self.memory_system else None
-        }
+        # 🆕 使用智能技能选择系统（而不是执行所有技能）
+        # 注意：这里不执行技能，技能选择和执行在生命周期的各个阶段进行
+        # 这个方法只负责构建基础的共享事实上下文
         
-        skill_results = await self.execute_all_skills(skill_context, status_callback)
-        skill_results_text = self.format_skill_results(skill_results)
-        
-        # 合并基础数据和技能分析结果
-        if skill_results_text:
-            return base_text + skill_results_text
-        else:
-            return base_text
+        return base_text
     
     async def _decide_and_retrieve(
         self,
@@ -3435,7 +3424,23 @@ class PersonaCouncil:
                 })
             
             llm_start = time.time()
-            result = await persona.analyze_option(option, context, {})
+            
+            # 🆕 使用生命周期阶段方法，而不是直接调用analyze_option
+            if round_num == 1:
+                # 第1轮：独立思考阶段（包含智能技能选择）
+                result = await persona._phase_independent_thinking(option, context)
+            else:
+                # 第2+轮：深度反思阶段（包含智能技能选择）
+                # 先观察他人
+                async with shared_views_lock:
+                    other_views = {
+                        pid: view for pid, view in shared_views.items()
+                        if pid != persona_id
+                    }
+                
+                # 深度反思
+                result = await persona._phase_deep_reflection(option, context, other_views, final_result)
+            
             llm_duration = time.time() - llm_start
             logger.info(f"  ✅ [{persona.name}] LLM调用完成 (耗时: {llm_duration:.2f}s)")
             
