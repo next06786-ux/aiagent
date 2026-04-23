@@ -233,6 +233,26 @@ class AuthService:
         Returns:
             登录结果
         """
+        # 【新增】检查是否是默认管理员账号
+        if username_or_email == "admin" and password == "admin123":
+            # 生成管理员token
+            admin_user_id = "admin-default-account"
+            token = self.generate_token(admin_user_id)
+            
+            return {
+                'success': True,
+                'message': '管理员登录成功',
+                'data': {
+                    'user_id': admin_user_id,
+                    'username': 'admin',
+                    'email': 'admin@lifeswarm.com',
+                    'nickname': '系统管理员',
+                    'avatar_url': None,
+                    'is_admin': True,
+                    'token': token
+                }
+            }
+        
         session = self.db_manager.get_session()
         
         try:
@@ -386,6 +406,20 @@ class AuthService:
         Returns:
             用户信息
         """
+        # 【新增】如果是默认管理员账号
+        if user_id == "admin-default-account":
+            return {
+                'user_id': 'admin-default-account',
+                'username': 'admin',
+                'email': 'admin@lifeswarm.com',
+                'nickname': '系统管理员',
+                'avatar_url': None,
+                'phone': None,
+                'is_verified': True,
+                'created_at': None,
+                'last_login': None
+            }
+        
         session = self.db_manager.get_session()
         
         try:

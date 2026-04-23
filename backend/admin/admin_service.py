@@ -18,7 +18,8 @@ class AdminService:
         self.db_manager = DatabaseManager()
         # 管理员用户ID列表（可以从配置文件读取）
         self.admin_user_ids = [
-            'admin-00000000-0000-0000-0000-000000000001',  # 管理员账号
+            'admin-default-account',  # 默认管理员账号
+            'admin-00000000-0000-0000-0000-000000000001',  # 其他管理员账号
         ]
     
     def is_admin(self, user_id: str) -> bool:
