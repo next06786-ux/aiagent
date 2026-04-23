@@ -954,100 +954,101 @@ export function HomePage() {
                         }}
                       />
                       <div className="ls-laptop-fallback" style={{ display: 'none' }}>
-                      {/* Browser Chrome */}
-                      <div className="ls-browser-chrome">
-                        <div className="ls-browser-dots">
-                          <span className="ls-dot ls-dot-red" />
-                          <span className="ls-dot ls-dot-yellow" />
-                          <span className="ls-dot ls-dot-green" />
-                        </div>
-                        <div className="ls-browser-tabs">
-                          <div className="ls-browser-tab ls-tab-active">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <circle cx="12" cy="12" r="10"/>
-                            </svg>
-                            <span>择境 - AI 决策平台</span>
+                        {/* Browser Chrome */}
+                        <div className="ls-browser-chrome">
+                          <div className="ls-browser-dots">
+                            <span className="ls-dot ls-dot-red" />
+                            <span className="ls-dot ls-dot-yellow" />
+                            <span className="ls-dot ls-dot-green" />
                           </div>
-                        </div>
-                      </div>
-                      
-                      {/* Dashboard Content */}
-                      <div className="ls-dashboard-view">
-                        <div className="ls-dashboard-sidebar">
-                          <div className="ls-sidebar-item">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="3" y="3" width="7" height="7"/>
-                              <rect x="14" y="3" width="7" height="7"/>
-                              <rect x="14" y="14" width="7" height="7"/>
-                              <rect x="3" y="14" width="7" height="7"/>
-                            </svg>
-                          </div>
-                          <div className="ls-sidebar-item ls-sidebar-active">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            </svg>
-                          </div>
-                          <div className="ls-sidebar-item">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <circle cx="12" cy="12" r="10"/>
-                            </svg>
-                          </div>
-                          <div className="ls-sidebar-item">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                            </svg>
+                          <div className="ls-browser-tabs">
+                            <div className="ls-browser-tab ls-tab-active">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"/>
+                              </svg>
+                              <span>择境 - AI 决策平台</span>
+                            </div>
                           </div>
                         </div>
                         
-                        <div className="ls-dashboard-main">
-                          <div className="ls-dashboard-header">
-                            <div className="ls-dashboard-title">决策分析中心</div>
-                            <div className="ls-dashboard-status">
-                              <span className="ls-status-dot" />
-                              6个智能体运行中
+                        {/* Dashboard Content */}
+                        <div className="ls-dashboard-view">
+                          <div className="ls-dashboard-sidebar">
+                            <div className="ls-sidebar-item">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="3" width="7" height="7"/>
+                                <rect x="14" y="3" width="7" height="7"/>
+                                <rect x="14" y="14" width="7" height="7"/>
+                                <rect x="3" y="14" width="7" height="7"/>
+                              </svg>
+                            </div>
+                            <div className="ls-sidebar-item ls-sidebar-active">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                              </svg>
+                            </div>
+                            <div className="ls-sidebar-item">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10"/>
+                              </svg>
+                            </div>
+                            <div className="ls-sidebar-item">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                              </svg>
                             </div>
                           </div>
                           
-                          <div className="ls-dashboard-cards">
-                            <div className="ls-dash-card">
-                              <div className="ls-dash-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                                </svg>
+                          <div className="ls-dashboard-main">
+                            <div className="ls-dashboard-header">
+                              <div className="ls-dashboard-title">决策分析中心</div>
+                              <div className="ls-dashboard-status">
+                                <span className="ls-status-dot" />
+                                6个智能体运行中
                               </div>
-                              <div className="ls-dash-card-value">92%</div>
-                              <div className="ls-dash-card-label">决策准确率</div>
                             </div>
                             
-                            <div className="ls-dash-card">
-                              <div className="ls-dash-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                </svg>
+                            <div className="ls-dashboard-cards">
+                              <div className="ls-dash-card">
+                                <div className="ls-dash-card-icon">
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                                  </svg>
+                                </div>
+                                <div className="ls-dash-card-value">92%</div>
+                                <div className="ls-dash-card-label">决策准确率</div>
                               </div>
-                              <div className="ls-dash-card-value">1,247</div>
-                              <div className="ls-dash-card-label">分析方案</div>
+                              
+                              <div className="ls-dash-card">
+                                <div className="ls-dash-card-icon">
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                  </svg>
+                                </div>
+                                <div className="ls-dash-card-value">1,247</div>
+                                <div className="ls-dash-card-label">分析方案</div>
+                              </div>
+                              
+                              <div className="ls-dash-card">
+                                <div className="ls-dash-card-icon">
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                  </svg>
+                                </div>
+                                <div className="ls-dash-card-value">3.2k</div>
+                                <div className="ls-dash-card-label">知识节点</div>
+                              </div>
                             </div>
                             
-                            <div className="ls-dash-card">
-                              <div className="ls-dash-card-icon">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <circle cx="12" cy="12" r="10"/>
-                                </svg>
+                            <div className="ls-dashboard-chart">
+                              <div className="ls-chart-bars">
+                                <div className="ls-chart-bar" style={{ height: '60%' }} />
+                                <div className="ls-chart-bar" style={{ height: '85%' }} />
+                                <div className="ls-chart-bar" style={{ height: '45%' }} />
+                                <div className="ls-chart-bar" style={{ height: '92%' }} />
+                                <div className="ls-chart-bar" style={{ height: '78%' }} />
+                                <div className="ls-chart-bar" style={{ height: '95%' }} />
                               </div>
-                              <div className="ls-dash-card-value">3.2k</div>
-                              <div className="ls-dash-card-label">知识节点</div>
-                            </div>
-                          </div>
-                          
-                          <div className="ls-dashboard-chart">
-                            <div className="ls-chart-bars">
-                              <div className="ls-chart-bar" style={{ height: '60%' }} />
-                              <div className="ls-chart-bar" style={{ height: '85%' }} />
-                              <div className="ls-chart-bar" style={{ height: '45%' }} />
-                              <div className="ls-chart-bar" style={{ height: '92%' }} />
-                              <div className="ls-chart-bar" style={{ height: '78%' }} />
-                              <div className="ls-chart-bar" style={{ height: '95%' }} />
                             </div>
                           </div>
                         </div>
@@ -1062,7 +1063,8 @@ export function HomePage() {
                 </div>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
         {/* ── Horizontal Scroll Carousel ────────────────────── */}
         <section className="ls-carousel-section">
