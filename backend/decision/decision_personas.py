@@ -938,7 +938,7 @@ class DecisionPersona:
         status_callback=None
     ) -> Dict[str, Any]:
         """
-        执行选中的技能
+        并发执行选中的技能
         
         Args:
             selected_skills: 选中的技能名称列表
@@ -950,10 +950,14 @@ class DecisionPersona:
         """
         skill_results = {}
         
-        for skill_name in selected_skills:
-            if skill_name == "混合检索":
-                continue  # 混合检索单独处理
-            
+        # 过滤掉混合检索（单独处理）
+        skills_to_execute = [s for s in selected_skills if s != "混合检索"]
+        
+        if not skills_to_execute:
+            return skill_results
+        
+        # 定义单个技能的执行函数
+        async def execute_single_skill(skill_name: str):
             try:
                 # 推送技能开始事件
                 if status_callback:
@@ -967,7 +971,6 @@ class DecisionPersona:
                 result = await self.use_skill(skill_name, context)
                 
                 if result.get("success"):
-                    skill_results[skill_name] = result
                     logger.info(f"[{self.name}] 技能执行成功: {skill_name}")
                     
                     # 提取技能结果摘要
@@ -983,6 +986,8 @@ class DecisionPersona:
                             'result': result,
                             'timestamp': __import__('time').time()
                         })
+                    
+                    return (skill_name, result)
                 else:
                     logger.warning(f"[{self.name}] 技能执行失败: {skill_name}")
                     if status_callback:
@@ -993,6 +998,8 @@ class DecisionPersona:
                             'error': result.get('error', '未知错误'),
                             'timestamp': __import__('time').time()
                         })
+                    return (skill_name, None)
+                    
             except Exception as e:
                 logger.error(f"[{self.name}] 技能执行异常: {skill_name} - {e}")
                 if status_callback:
@@ -1003,6 +1010,18 @@ class DecisionPersona:
                         'error': str(e),
                         'timestamp': __import__('time').time()
                     })
+                return (skill_name, None)
+        
+        # 🚀 并发执行所有技能
+        logger.info(f"[{self.name}] 🚀 并发执行{len(skills_to_execute)}个技能: {skills_to_execute}")
+        tasks = [execute_single_skill(skill_name) for skill_name in skills_to_execute]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 收集成功的结果
+        for result in results:
+            if isinstance(result, tuple) and result[1] is not None:
+                skill_name, skill_result = result
+                skill_results[skill_name] = skill_result
         
         return skill_results
     
