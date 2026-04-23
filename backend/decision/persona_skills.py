@@ -901,7 +901,9 @@ class WebSearchSkill(Skill):
 
 请用自然语言回答，不需要JSON格式。"""
                     
-                    response = llm.client.chat.completions.create(
+                    # 🔥 使用asyncio.to_thread让同步调用变成异步，避免阻塞
+                    response = await asyncio.to_thread(
+                        llm.client.chat.completions.create,
                         model=llm.model,
                         messages=[{"role": "user", "content": simple_prompt}],
                         temperature=0.7,

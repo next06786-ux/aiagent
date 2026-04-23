@@ -3491,6 +3491,8 @@ class PersonaCouncil:
             # 推送思考完成事件
             if status_callback:
                 reasoning = result.get('reasoning', '')
+                key_points = result.get('key_points', [])
+                logger.info(f"[{persona.name}] 📤 发送thinking_complete事件: reasoning长度={len(reasoning)}, key_points数量={len(key_points)}")
                 await status_callback('thinking_complete', {
                     'persona_id': persona_id,
                     'persona_name': persona.name,
@@ -3499,10 +3501,11 @@ class PersonaCouncil:
                     'stance': result.get('stance', '未知'),
                     'score': result.get('score', 0),
                     'reasoning': reasoning,  # 完整推理内容
-                    'key_points': result.get('key_points', []),  # 关键要点
+                    'key_points': key_points,  # 关键要点
                     'confidence': result.get('confidence', 0.7),  # 信心度
                     'timestamp': time.time()
                 })
+                logger.info(f"[{persona.name}] ✅ thinking_complete事件已发送")
             
             final_result = result
             
