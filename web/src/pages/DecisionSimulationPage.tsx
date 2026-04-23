@@ -32,6 +32,7 @@ interface RouteConfig {
   options?: Array<{ title: string; description: string }>;
   collectedInfo?: any;
   decisionType?: string;
+  personaRounds?: Record<string, number>; // 新增：Agent轮数配置
 }
 
 function parseRouteState(
@@ -48,6 +49,15 @@ function parseRouteState(
     options: routeState.options,
     collectedInfo: routeState.collectedInfo || null,
     decisionType: routeState.decisionType,
+    personaRounds: routeState.personaRounds || {
+      rational_analyst: 2,
+      adventurer: 2,
+      pragmatist: 2,
+      idealist: 2,
+      conservative: 2,
+      social_navigator: 2,
+      innovator: 2,
+    }, // 默认2轮
   };
 }
 
@@ -67,15 +77,17 @@ export function DecisionSimulationPage() {
   
   // Agent轮数配置
   const [showRoundsConfig, setShowRoundsConfig] = useState(false);
-  const [personaRounds, setPersonaRounds] = useState<Record<string, number>>({
-    rational_analyst: 2,
-    adventurer: 2,
-    pragmatist: 2,
-    idealist: 2,
-    conservative: 2,
-    social_navigator: 2,
-    innovator: 2,
-  });
+  const [personaRounds, setPersonaRounds] = useState<Record<string, number>>(
+    config.personaRounds || {
+      rational_analyst: 2,
+      adventurer: 2,
+      pragmatist: 2,
+      idealist: 2,
+      conservative: 2,
+      social_navigator: 2,
+      innovator: 2,
+    }
+  );
 
   // WebSocket状态
   const [wsPhase, setWsPhase] = useState<'idle' | 'connecting' | 'running' | 'done'>('idle');
@@ -265,34 +277,28 @@ export function DecisionSimulationPage() {
 
             // Agent启动
             if (type === 'agents_start' || type === 'personas_init') {
-              console.log(`[DEBUG] 进入Agent初始化分支, type=${type}`);
+              console.log(`[Agent初始化] 收到${type}消息`, event);
               const agents = (event.agents || event.personas) as any[] || [];
               const month = (event.month as number) || 0;
               const optId = String(event.option_id || optionId);
               
-              console.log(`[Agent初始化] 收到${type}消息`);
-              console.log(`  - optId: ${optId}`);
-              console.log(`  - agents数量: ${agents.length}`);
-              console.log(`  - agents内容:`, agents);
-              console.log(`  - event.agents:`, event.agents);
-              console.log(`  - event.personas:`, event.personas);
+              console.log(`[Agent初始化] optId=${optId}, agents数量=${agents.length}`);
               
               if (optId && agents.length > 0) {
-                const agentList = agents.map((a: any) => {
-                  console.log(`  - 映射agent:`, a);
-                  return {
-                    id: String(a.id),
-                    name: String(a.name),
-                    status: 'waiting' as const,
-                    score: undefined
-                  };
-                });
-                console.log(`[Agent初始化] 设置agentList:`, agentList);
+                const agentList = agents.map((a: any) => ({
+                  id: String(a.id),
+                  name: String(a.name),
+                  status: 'waiting' as const,
+                  score: undefined,
+                  thinkingHistory: []
+                }));
+                
+                console.log(`[Agent初始化] 创建agentList:`, agentList);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   next.set(optId, agentList);
-                  console.log(`[Agent初始化] 更新后的agentsByOption:`, Array.from(next.entries()));
+                  console.log(`[Agent初始化] ✅ 已设置${agentList.length}个agents到optId=${optId}`);
                   return next;
                 });
                 
@@ -304,7 +310,7 @@ export function DecisionSimulationPage() {
                   });
                 }
               } else {
-                console.warn(`[Agent初始化] 跳过: optId=${optId}, agents.length=${agents.length}`);
+                console.warn(`[Agent初始化] ⚠️ 跳过: optId=${optId}, agents.length=${agents.length}`);
               }
             }
 
@@ -356,10 +362,11 @@ export function DecisionSimulationPage() {
               const personaId = String(event.persona_id || '');
               const personaName = String(event.persona_name || '');
               
-              console.log(`[Agent事件] ${eventType}: ${personaName}`);
+              console.log(`[Agent事件] ${eventType}: ${personaName}`, event);
               
               // Agent开始
               if (eventType === 'agent_start') {
+                console.log(`[Agent事件] ${personaName} 开始推演`);
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
@@ -373,6 +380,7 @@ export function DecisionSimulationPage() {
               // 轮次开始
               if (eventType === 'round_start') {
                 const round = event.round as number || 1;
+                console.log(`[Agent事件] 第${round}轮开始`);
                 setCurrentMonthByOption(prev => {
                   const next = new Map(prev);
                   next.set(optId, round);
@@ -382,17 +390,20 @@ export function DecisionSimulationPage() {
               
               // 思考开始
               if (eventType === 'thinking_start') {
+                console.log(`[Agent事件] ${personaName} 开始思考`);
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
-                  next.set(optId, agents.map(a => 
+                  const updated = agents.map(a => 
                     a.id === personaId ? { 
                       ...a, 
                       status: 'thinking' as const,
-                      currentMessage: '正在思考...',
+                      currentMessage: '🧠 正在深度思考...',
                       messageTimestamp: Date.now()
                     } : a
-                  ));
+                  );
+                  console.log(`[Agent事件] 更新后的agents:`, updated.find(a => a.id === personaId));
+                  next.set(optId, updated);
                   return next;
                 });
               }
@@ -404,10 +415,12 @@ export function DecisionSimulationPage() {
                 const reasoningPreview = String(event.reasoning_preview || '');
                 const round = event.round as number || 1;
                 
+                console.log(`[Agent事件] ${personaName} 思考完成: ${stance} (${score}分)`);
+                
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
-                  next.set(optId, agents.map(a => {
+                  const updated = agents.map(a => {
                     if (a.id === personaId) {
                       const historyRecord = {
                         round,
@@ -426,13 +439,15 @@ export function DecisionSimulationPage() {
                         status: 'complete' as const,
                         score,
                         stance,
-                        currentMessage: `${stance} (${score}分)`,
+                        currentMessage: `💡 ${stance} (${score}分)`,
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
                     }
                     return a;
-                  }));
+                  });
+                  console.log(`[Agent事件] 更新后的agents:`, updated.find(a => a.id === personaId));
+                  next.set(optId, updated);
                   return next;
                 });
               }
@@ -441,6 +456,8 @@ export function DecisionSimulationPage() {
               if (eventType === 'observation') {
                 const observedCount = event.observed_count as number || 0;
                 const observedPersonas = event.observed_personas as string[] || [];
+                
+                console.log(`[Agent事件] ${personaName} 观察到${observedCount}个观点`);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -460,7 +477,7 @@ export function DecisionSimulationPage() {
                   return next;
                 });
                 
-                // 3秒后清除消息
+                // 5秒后清除消息
                 setTimeout(() => {
                   setAgentsByOption(prev => {
                     const next = new Map(prev);
@@ -474,13 +491,15 @@ export function DecisionSimulationPage() {
                     ));
                     return next;
                   });
-                }, 3000);
+                }, 5000);
               }
               
               // 信心度调整
               if (eventType === 'confidence_adjusted') {
                 const newConfidence = event.new_confidence as number || 0;
                 const adjustment = event.adjustment as number || 0;
+                
+                console.log(`[Agent事件] ${personaName} 信心度调整: ${adjustment > 0 ? '+' : ''}${(adjustment * 100).toFixed(0)}%`);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -502,7 +521,7 @@ export function DecisionSimulationPage() {
                   return next;
                 });
                 
-                // 3秒后清除消息
+                // 5秒后清除消息
                 setTimeout(() => {
                   setAgentsByOption(prev => {
                     const next = new Map(prev);
@@ -516,13 +535,15 @@ export function DecisionSimulationPage() {
                     ));
                     return next;
                   });
-                }, 3000);
+                }, 5000);
               }
               
               // Agent完成
               if (eventType === 'agent_complete') {
                 const finalScore = event.final_score as number || 0;
                 const finalStance = String(event.final_stance || '');
+                
+                console.log(`[Agent事件] ${personaName} 完成推演: ${finalStance} (${finalScore}分)`);
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -532,7 +553,8 @@ export function DecisionSimulationPage() {
                       ...a, 
                       status: 'complete' as const,
                       score: finalScore,
-                      stance: finalStance
+                      stance: finalStance,
+                      currentMessage: `✅ ${finalStance} (${finalScore}分)`
                     } : a
                   ));
                   return next;

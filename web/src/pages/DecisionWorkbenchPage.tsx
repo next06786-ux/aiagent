@@ -277,11 +277,23 @@ export function DecisionWorkbenchPage() {
   function handleStartSimulation() {
     if (!sessionId || options.length === 0) return;
     
+    console.log('[决策副本] 准备显示轮数配置对话框');
+    
+    // 显示轮数配置对话框
+    setShowRoundsConfig(true);
+  }
+
+  // 确认轮数配置后启动推演
+  function handleConfirmRoundsAndStart() {
     console.log('[决策副本] 准备跳转到推演页面');
     console.log('[决策副本] sessionId:', sessionId);
     console.log('[决策副本] question:', question);
     console.log('[决策副本] options:', options);
     console.log('[决策副本] collectedInfo:', collectedInfo);
+    console.log('[决策副本] personaRounds:', personaRounds);
+    
+    // 关闭配置对话框
+    setShowRoundsConfig(false);
     
     // 显示跳转状态
     setSimulatingStatus('正在初始化推演环境...');
@@ -291,7 +303,7 @@ export function DecisionWorkbenchPage() {
       setSimulatingStatus('正在连接推演引擎...');
       
       setTimeout(() => {
-        // 跳转到推演页，携带 session_id + options，由推演页建立 WebSocket
+        // 跳转到推演页，携带 session_id + options + personaRounds
         navigate('/decision/simulation', {
           state: {
             mode: 'future',
@@ -301,6 +313,7 @@ export function DecisionWorkbenchPage() {
             options,
             collectedInfo,
             decisionType,
+            personaRounds, // 传递轮数配置
           },
         });
       }, 300);
@@ -309,6 +322,18 @@ export function DecisionWorkbenchPage() {
 
   // 启动模拟时的状态
   const [simulatingStatus, setSimulatingStatus] = useState('');
+  
+  // Agent轮数配置
+  const [showRoundsConfig, setShowRoundsConfig] = useState(false);
+  const [personaRounds, setPersonaRounds] = useState<Record<string, number>>({
+    rational_analyst: 2,
+    adventurer: 2,
+    pragmatist: 2,
+    idealist: 2,
+    conservative: 2,
+    social_navigator: 2,
+    innovator: 2,
+  });
 
   // ── 根据决策类型获取问题模板提示 ────────────────────────────
   const placeholderByType: Record<string, string> = {
@@ -873,6 +898,165 @@ export function DecisionWorkbenchPage() {
           </GlassCard>
         )}
       </div>
+      
+      {/* Agent轮数配置对话框 */}
+      {showRoundsConfig && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }} onClick={() => setShowRoundsConfig(false)}>
+          <div style={{
+            background: 'white', borderRadius: 16, padding: 32,
+            maxWidth: 600, width: '90%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 700 }}>
+              🎭 Agent推演轮数配置
+            </h2>
+            <p style={{ margin: '0 0 24px 0', color: '#666', fontSize: 14, lineHeight: 1.6 }}>
+              为每个决策人格Agent设置推演轮数（1-5轮）。轮数越多，思考越深入，但耗时也越长。
+            </p>
+            
+            <div style={{ marginBottom: 24 }}>
+              {Object.entries({
+                rational_analyst: '理性分析师',
+                adventurer: '冒险家',
+                pragmatist: '实用主义者',
+                idealist: '理想主义者',
+                conservative: '保守派',
+                social_navigator: '社交导航者',
+                innovator: '创新者',
+              }).map(([id, name]) => (
+                <div key={id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 0', borderBottom: '1px solid #f0f0f0',
+                }}>
+                  <span style={{ fontSize: 15, fontWeight: 500 }}>{name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button
+                      onClick={() => setPersonaRounds(prev => ({
+                        ...prev,
+                        [id]: Math.max(1, prev[id] - 1)
+                      }))}
+                      style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        border: '1px solid #e0e0e0', background: 'white',
+                        cursor: 'pointer', fontSize: 18, fontWeight: 600,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      −
+                    </button>
+                    <span style={{
+                      width: 40, textAlign: 'center',
+                      fontSize: 16, fontWeight: 600, color: '#0A59F7',
+                    }}>
+                      {personaRounds[id]}轮
+                    </span>
+                    <button
+                      onClick={() => setPersonaRounds(prev => ({
+                        ...prev,
+                        [id]: Math.min(5, prev[id] + 1)
+                      }))}
+                      style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        border: '1px solid #e0e0e0', background: 'white',
+                        cursor: 'pointer', fontSize: 18, fontWeight: 600,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div style={{
+              padding: 16, borderRadius: 12,
+              background: 'rgba(10, 89, 247, 0.05)',
+              border: '1px solid rgba(10, 89, 247, 0.1)',
+              marginBottom: 24,
+            }}>
+              <div style={{ fontSize: 13, color: '#666', lineHeight: 1.6 }}>
+                <div style={{ marginBottom: 8, fontWeight: 600, color: '#0A59F7' }}>💡 推荐配置：</div>
+                <div>• 快速决策（日常选择）：1轮，约30秒</div>
+                <div>• 标准决策（一般重要）：2轮，约1分钟</div>
+                <div>• 深度决策（重大选择）：3-5轮，约2-5分钟</div>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowRoundsConfig(false)}
+                style={{
+                  padding: '12px 24px', borderRadius: 10,
+                  border: '1px solid #e0e0e0', background: 'white',
+                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  // 快速设置：所有Agent 1轮
+                  setPersonaRounds({
+                    rational_analyst: 1,
+                    adventurer: 1,
+                    pragmatist: 1,
+                    idealist: 1,
+                    conservative: 1,
+                    social_navigator: 1,
+                    innovator: 1,
+                  });
+                }}
+                style={{
+                  padding: '12px 24px', borderRadius: 10,
+                  border: '1px solid #e0e0e0', background: 'white',
+                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                }}
+              >
+                快速(1轮)
+              </button>
+              <button
+                onClick={() => {
+                  // 标准设置：所有Agent 2轮
+                  setPersonaRounds({
+                    rational_analyst: 2,
+                    adventurer: 2,
+                    pragmatist: 2,
+                    idealist: 2,
+                    conservative: 2,
+                    social_navigator: 2,
+                    innovator: 2,
+                  });
+                }}
+                style={{
+                  padding: '12px 24px', borderRadius: 10,
+                  border: '1px solid #e0e0e0', background: 'white',
+                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                }}
+              >
+                标准(2轮)
+              </button>
+              <button
+                onClick={handleConfirmRoundsAndStart}
+                style={{
+                  padding: '12px 24px', borderRadius: 10,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #0A59F7, #6B48FF)',
+                  color: 'white', cursor: 'pointer',
+                  fontSize: 14, fontWeight: 600,
+                }}
+              >
+                确认并启动
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
