@@ -943,7 +943,7 @@ class DecisionPersona:
         Args:
             selected_skills: 选中的技能名称列表
             context: 执行上下文
-            status_callback: 状态回调函数
+            status_callback: 状态回调函数（WebSocket回调，接收event_type和data两个参数）
         
         Returns:
             技能执行结果字典
@@ -955,8 +955,14 @@ class DecisionPersona:
                 continue  # 混合检索单独处理
             
             try:
+                # 推送技能开始事件
                 if status_callback:
-                    await status_callback(f"【{self.name}】正在执行技能：{skill_name}")
+                    await status_callback('skill_start', {
+                        'persona_id': self.persona_id,
+                        'persona_name': self.name,
+                        'skill_name': skill_name,
+                        'timestamp': __import__('time').time()
+                    })
                 
                 result = await self.use_skill(skill_name, context)
                 
@@ -967,23 +973,36 @@ class DecisionPersona:
                     # 提取技能结果摘要
                     result_summary = self._extract_skill_result_summary(skill_name, result)
                     
+                    # 推送技能完成事件
                     if status_callback:
-                        await status_callback(
-                            f"【{self.name}】✓ {skill_name}完成\n{result_summary}",
-                            skill_result={
-                                "skill_name": skill_name,
-                                "summary": result_summary,
-                                "full_result": result
-                            }
-                        )
+                        await status_callback('skill_complete', {
+                            'persona_id': self.persona_id,
+                            'persona_name': self.name,
+                            'skill_name': skill_name,
+                            'summary': result_summary,
+                            'result': result,
+                            'timestamp': __import__('time').time()
+                        })
                 else:
                     logger.warning(f"[{self.name}] 技能执行失败: {skill_name}")
                     if status_callback:
-                        await status_callback(f"【{self.name}】❌ {skill_name}失败")
+                        await status_callback('skill_error', {
+                            'persona_id': self.persona_id,
+                            'persona_name': self.name,
+                            'skill_name': skill_name,
+                            'error': result.get('error', '未知错误'),
+                            'timestamp': __import__('time').time()
+                        })
             except Exception as e:
                 logger.error(f"[{self.name}] 技能执行异常: {skill_name} - {e}")
                 if status_callback:
-                    await status_callback(f"【{self.name}】❌ {skill_name}异常")
+                    await status_callback('skill_error', {
+                        'persona_id': self.persona_id,
+                        'persona_name': self.name,
+                        'skill_name': skill_name,
+                        'error': str(e),
+                        'timestamp': __import__('time').time()
+                    })
         
         return skill_results
     
