@@ -1082,9 +1082,6 @@ class DecisionPersona:
         # 获取可用技能列表及其详细描述
         available_skills_info = []
         for skill_name in self.skill_names:
-            if skill_name == "混合检索":
-                continue  # 混合检索会自动处理
-            
             # 为每个技能添加使用场景说明
             skill_desc = self._get_skill_description(skill_name)
             available_skills_info.append(f"  • {skill_name}: {skill_desc}")

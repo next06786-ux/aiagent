@@ -346,6 +346,10 @@ export function DecisionSimulationPage() {
 
   // 保存或更新单个选项到历史记录
   const saveOrUpdateOptionToHistory = async (optionId: string, option: any) => {
+    console.log(`[saveOrUpdateOptionToHistory] 函数被调用: optionId=${optionId}, option=`, option);
+    console.log(`[saveOrUpdateOptionToHistory] config.sessionId=${config.sessionId}`);
+    console.log(`[saveOrUpdateOptionToHistory] config.userId=${config.userId}`);
+    
     if (!config.sessionId) {
       console.warn('[自动保存] 缺少 sessionId，跳过保存');
       return;
@@ -361,6 +365,7 @@ export function DecisionSimulationPage() {
       
       console.log('[自动保存] agents 数量:', agents.length);
       console.log('[自动保存] totalScore:', totalScore);
+      console.log('[自动保存] agentsByOption keys:', Array.from(agentsByOption.keys()));
       
       if (agents.length === 0) {
         console.warn('[自动保存] agents 为空，跳过保存');
@@ -1619,27 +1624,34 @@ export function DecisionSimulationPage() {
             if (type === 'done' || type === 'complete') {
               const optId = String(event.option_id || optionId);
               
+              console.log(`[推演完成] 收到完成事件: type=${type}, optId=${optId}, option=${option.title}`);
+              
               // 标记该选项为已完成
               setCompletedOptions(prev => {
                 const next = new Set(prev);
                 next.add(optId);
+                console.log(`[推演完成] 已完成选项列表:`, Array.from(next));
                 return next;
               });
               
-              // 自动保存该选项到历史记录
-              setTimeout(async () => {
+              // 立即自动保存该选项到历史记录（不延迟）
+              (async () => {
                 try {
+                  console.log(`[自动保存] 选项 ${optId} 推演完成，开始保存...`);
                   await saveOrUpdateOptionToHistory(optId, option);
+                  console.log(`[自动保存] 选项 ${optId} 保存成功`);
                 } catch (error) {
                   console.error(`[自动保存] 选项 ${optId} 保存失败:`, error);
                 }
-              }, 3000); // 延迟3秒确保所有数据都已更新
+              })();
               
               completedCount++;
+              console.log(`[推演完成] completedCount=${completedCount}, total=${config.options?.length}`);
               
               if (completedCount === config.options?.length) {
                 setWsPhase('done');
                 setWsStatus('✓ 推演完成！');
+                console.log(`[推演完成] 所有选项推演完成`);
               }
             }
 
