@@ -408,14 +408,101 @@ export function DecisionSimulationPage() {
                 });
               }
               
+              // 技能开始
+              if (eventType === 'skill_start') {
+                const skillName = String(event.skill_name || '');
+                console.log(`[Agent事件] ${personaName} 开始执行技能: ${skillName}`);
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => 
+                    a.id === personaId ? { 
+                      ...a, 
+                      currentMessage: `🔧 执行技能: ${skillName}`,
+                      messageTimestamp: Date.now()
+                    } : a
+                  ));
+                  return next;
+                });
+              }
+              
+              // 技能完成
+              if (eventType === 'skill_complete') {
+                const skillName = String(event.skill_name || '');
+                const summary = String(event.summary || '');
+                console.log(`[Agent事件] ${personaName} 技能完成: ${skillName}`);
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => 
+                    a.id === personaId ? { 
+                      ...a, 
+                      currentMessage: `✅ ${skillName}: ${summary}`,
+                      messageTimestamp: Date.now()
+                    } : a
+                  ));
+                  return next;
+                });
+                
+                // 3秒后清除技能消息
+                setTimeout(() => {
+                  setAgentsByOption(prev => {
+                    const next = new Map(prev);
+                    const agents = next.get(optId) || [];
+                    next.set(optId, agents.map(a => 
+                      a.id === personaId ? { 
+                        ...a, 
+                        currentMessage: undefined
+                      } : a
+                    ));
+                    return next;
+                  });
+                }, 3000);
+              }
+              
+              // 技能错误
+              if (eventType === 'skill_error') {
+                const skillName = String(event.skill_name || '');
+                const error = String(event.error || '');
+                console.log(`[Agent事件] ${personaName} 技能失败: ${skillName} - ${error}`);
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => 
+                    a.id === personaId ? { 
+                      ...a, 
+                      currentMessage: `❌ ${skillName}失败`,
+                      messageTimestamp: Date.now()
+                    } : a
+                  ));
+                  return next;
+                });
+              }
+              
               // 思考完成
               if (eventType === 'thinking_complete') {
                 const stance = String(event.stance || '');
                 const score = event.score as number;
-                const reasoningPreview = String(event.reasoning_preview || '');
+                const reasoning = String(event.reasoning || '');
+                const keyPoints = (event.key_points as string[]) || [];
+                const confidence = event.confidence as number || 0.7;
                 const round = event.round as number || 1;
                 
                 console.log(`[Agent事件] ${personaName} 思考完成: ${stance} (${score}分)`);
+                console.log(`[Agent事件] 推理内容长度: ${reasoning.length}字符`);
+                
+                // 构建显示消息：完整内容
+                let displayMessage = `💡 ${stance} (${score}分)\n\n`;
+                
+                // 添加推理内容
+                if (reasoning) {
+                  displayMessage += `📝 推理过程：\n${reasoning}\n\n`;
+                }
+                
+                // 添加关键要点
+                if (keyPoints.length > 0) {
+                  displayMessage += `🔑 关键要点：\n${keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+                }
                 
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
@@ -424,12 +511,12 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       const historyRecord = {
                         round,
-                        message: reasoningPreview,
+                        message: reasoning,
                         timestamp: Date.now(),
                         score,
                         stance,
-                        keyPoints: [],
-                        reasoning: reasoningPreview,
+                        keyPoints,
+                        reasoning,
                       };
                       
                       const existingHistory = a.thinkingHistory || [];
@@ -439,7 +526,7 @@ export function DecisionSimulationPage() {
                         status: 'complete' as const,
                         score,
                         stance,
-                        currentMessage: `💡 ${stance} (${score}分)`,
+                        currentMessage: displayMessage,  // 显示完整内容
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };

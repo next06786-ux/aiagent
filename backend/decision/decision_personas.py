@@ -3484,6 +3484,7 @@ class PersonaCouncil:
             
             # 推送思考完成事件
             if status_callback:
+                reasoning = result.get('reasoning', '')
                 await status_callback('thinking_complete', {
                     'persona_id': persona_id,
                     'persona_name': persona.name,
@@ -3491,7 +3492,9 @@ class PersonaCouncil:
                     'duration': llm_duration,
                     'stance': result.get('stance', '未知'),
                     'score': result.get('score', 0),
-                    'reasoning_preview': result.get('reasoning', '')[:100] + '...' if len(result.get('reasoning', '')) > 100 else result.get('reasoning', ''),
+                    'reasoning': reasoning,  # 完整推理内容
+                    'key_points': result.get('key_points', []),  # 关键要点
+                    'confidence': result.get('confidence', 0.7),  # 信心度
                     'timestamp': time.time()
                 })
             
