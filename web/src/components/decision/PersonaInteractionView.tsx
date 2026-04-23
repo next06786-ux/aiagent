@@ -1024,7 +1024,7 @@ export function PersonaInteractionView({
                                 评分调整
                               </>
                             )}
-                            {record.action === 'stance_hold' && '✓ 坚持观点'}
+                            {record.action === 'stance_hold' && '• 坚持观点'}
                             {!['viewing', 'stance_changed', 'score_adjusted', 'stance_hold'].includes(record.action) && record.action}
                           </span>
                         )}
@@ -1041,7 +1041,7 @@ export function PersonaInteractionView({
                       {record.skillResult && (
                         <div className="record-skill-result">
                           <div className="skill-result-header">
-                            <span className="skill-icon">⚡</span>
+                            <span className="skill-icon">💡</span>
                             <span className="skill-name">{record.skillResult.skill_name}</span>
                           </div>
                           <div className="skill-result-summary">{record.skillResult.summary}</div>

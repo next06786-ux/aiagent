@@ -221,21 +221,23 @@ export function DecisionHistoryPage() {
                         padding: '12px 24px',
                         borderRadius: 12,
                         border: 'none',
-                        background: 'linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%)',
+                        background: 'linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%)',
                         color: 'white',
                         cursor: 'pointer',
                         fontSize: 14,
                         fontWeight: 600,
-                        boxShadow: '0 4px 12px rgba(107, 72, 255, 0.3)',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
                         transition: 'all 0.2s ease',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(107, 72, 255, 0.4)';
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.3)';
+                        e.currentTarget.style.background = 'linear-gradient(135deg, #2a2a2a 0%, #5a5a5a 100%)';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(107, 72, 255, 0.3)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                        e.currentTarget.style.background = 'linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%)';
                       }}
                     >
                       查看报告
@@ -246,19 +248,24 @@ export function DecisionHistoryPage() {
                     style={{
                       padding: '12px 24px',
                       borderRadius: 12,
-                      border: '1px solid #E2E8F0',
-                      background: 'white',
-                      color: '#64748B',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%)',
+                      color: 'white',
                       cursor: 'pointer',
                       fontSize: 14,
                       fontWeight: 600,
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
                       transition: 'all 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#F8FAFC';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.3)';
+                      e.currentTarget.style.background = 'linear-gradient(135deg, #2a2a2a 0%, #5a5a5a 100%)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'white';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+                      e.currentTarget.style.background = 'linear-gradient(135deg, #1a1a1a 0%, #4a4a4a 100%)';
                     }}
                   >
                     关闭

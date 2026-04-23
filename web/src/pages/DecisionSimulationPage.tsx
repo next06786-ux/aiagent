@@ -477,10 +477,24 @@ export function DecisionSimulationPage() {
       
       // 保存到数据库（会覆盖同一个 session_id 的记录）
       console.log('[自动保存] 保存到数据库...');
+      
+      // 如果 question 为空或为"无"，使用第一个选项的标题作为决策名称
+      let decisionName = config.question;
+      if (!decisionName || decisionName === '无' || decisionName === '决策分析') {
+        // 尝试从 existingOptionsData 中获取第一个选项的标题
+        const firstOptionKey = Object.keys(existingOptionsData).find(key => key.startsWith('option_'));
+        if (firstOptionKey && existingOptionsData[firstOptionKey].option_title) {
+          decisionName = existingOptionsData[firstOptionKey].option_title;
+          console.log('[自动保存] 使用第一个选项标题作为决策名称:', decisionName);
+        } else {
+          decisionName = '决策分析';
+        }
+      }
+      
       const response = await saveDecisionHistory({
         user_id: config.userId,
         session_id: config.sessionId,
-        question: config.question,
+        question: decisionName,
         decision_type: config.decisionType || 'general',
         options_data: existingOptionsData  // 包含所有已完成选项的数据
       });
