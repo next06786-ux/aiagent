@@ -1437,7 +1437,7 @@ export function DecisionSimulationPage() {
         wsCloseRef.current();
       }
     };
-  }, [config.sessionId, config.userId, config.question, config.options, config.collectedInfo, config.decisionType]);
+  }, [config.sessionId, config.userId, config.question, config.decisionType, personaRounds]); // 移除config.options和config.collectedInfo，使用更稳定的依赖
 
   // 同步liveOptions到record
   useEffect(() => {
