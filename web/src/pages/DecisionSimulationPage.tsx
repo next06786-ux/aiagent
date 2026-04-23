@@ -208,6 +208,7 @@ export function DecisionSimulationPage() {
             }
             
             const type = String(event.type || '');
+            console.log(`[推演] 选项 ${index + 1} 收到消息类型: ${type}`, event);
             
             // 连接成功
             if (wsPhaseRef.current === 'connecting' && type !== 'error') {
@@ -264,23 +265,34 @@ export function DecisionSimulationPage() {
 
             // Agent启动
             if (type === 'agents_start' || type === 'personas_init') {
+              console.log(`[DEBUG] 进入Agent初始化分支, type=${type}`);
               const agents = (event.agents || event.personas) as any[] || [];
               const month = (event.month as number) || 0;
               const optId = String(event.option_id || optionId);
               
-              console.log(`[Agent初始化] 收到${type}消息, optId: ${optId}, agents数量: ${agents.length}`, agents);
+              console.log(`[Agent初始化] 收到${type}消息`);
+              console.log(`  - optId: ${optId}`);
+              console.log(`  - agents数量: ${agents.length}`);
+              console.log(`  - agents内容:`, agents);
+              console.log(`  - event.agents:`, event.agents);
+              console.log(`  - event.personas:`, event.personas);
               
               if (optId && agents.length > 0) {
-                setAgentsByOption(prev => {
-                  const next = new Map(prev);
-                  const agentList = agents.map((a: any) => ({
+                const agentList = agents.map((a: any) => {
+                  console.log(`  - 映射agent:`, a);
+                  return {
                     id: String(a.id),
                     name: String(a.name),
                     status: 'waiting' as const,
                     score: undefined
-                  }));
-                  console.log(`[Agent初始化] 设置agentList:`, agentList);
+                  };
+                });
+                console.log(`[Agent初始化] 设置agentList:`, agentList);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
                   next.set(optId, agentList);
+                  console.log(`[Agent初始化] 更新后的agentsByOption:`, Array.from(next.entries()));
                   return next;
                 });
                 
