@@ -587,7 +587,17 @@ export function PersonaInteractionView({
 
       {/* 消息气泡 - 独立渲染，不在节点内部 */}
       {displayPersonas.map((persona, index) => {
-        if (!persona.currentMessage) return null;
+        // 🆕 如果没有currentMessage但有score和stance，自动生成消息
+        let displayMessage = persona.currentMessage;
+        if (!displayMessage && persona.score !== undefined && persona.stance) {
+          displayMessage = `${persona.stance} (${persona.score}分)`;
+          console.log(`[消息气泡] 自动生成消息: ${persona.name} - ${displayMessage}`);
+        }
+        
+        if (!displayMessage) {
+          console.log(`[消息气泡] 跳过渲染: ${persona.name} - 无消息`);
+          return null;
+        }
 
         const pos = getPersonaPosition(index, displayPersonas.length);
         const color = personaColors[persona.id] || '#999';
@@ -600,16 +610,16 @@ export function PersonaInteractionView({
         const bubbleY = 50 + bubbleRadius * Math.sin(angle);
         
         // 检测是否是立场改变的消息
-        const isStanceChange = persona.currentMessage.includes('⚠️改变立场') || persona.currentMessage.includes('改变了立场');
+        const isStanceChange = displayMessage.includes('⚠️改变立场') || displayMessage.includes('改变了立场');
         
         // 根据action类型添加CSS类
         const actionClass = persona.messageAction ? `action-${persona.messageAction}` : '';
         
         // 智能截断消息：如果太长则显示前150个字符
         const maxLength = 150;
-        const shortMessage = persona.currentMessage.length > maxLength 
-          ? persona.currentMessage.substring(0, maxLength) + '...' 
-          : persona.currentMessage;
+        const shortMessage = displayMessage.length > maxLength 
+          ? displayMessage.substring(0, maxLength) + '...' 
+          : displayMessage;
         
         return (
           <div 

@@ -994,19 +994,25 @@ export function DecisionSimulationPage() {
                       
                       const existingHistory = a.thinkingHistory || [];
                       
+                      // 🆕 设置最终消息，并且永久保持（不自动清除）
+                      const finalMessage = `✅ ${finalStance} (${finalScore}分)`;
+                      console.log(`[Agent事件] 设置最终消息: ${finalMessage}`);
+                      
                       return {
                         ...a,
                         status: 'complete' as const,
                         score: finalScore,
                         stance: finalStance,
-                        currentMessage: `✅ ${finalStance} (${finalScore}分)`,
+                        currentMessage: finalMessage,
                         messageTimestamp: Date.now(),
+                        messageAction: undefined,  // 清除之前的action
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
                     }
                     return a;
                   });
                   console.log(`[Agent事件] Agent完成，更新后的agents:`, updated.find(a => a.id === personaId));
+                  console.log(`[Agent事件] currentMessage:`, updated.find(a => a.id === personaId)?.currentMessage);
                   next.set(optId, updated);
                   return next;
                 });
