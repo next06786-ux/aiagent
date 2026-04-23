@@ -394,43 +394,97 @@ class LLMService:
         
         return response.choices[0].message.content
     
-    def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7):
+    def chat_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7, response_format: Optional[str] = None):
         """
         流式对话接口（支持思考过程展示）
         
         Args:
             messages: 消息列表
             temperature: 温度参数
+            response_format: 响应格式，可选 "json_object"
         
         Yields:
             {"type": "thinking", "content": "..."} 或 {"type": "answer", "content": "..."}
         """
         try:
             if self.provider == LLMProvider.QWEN:
-                yield from self._chat_qwen_stream(messages, temperature)
+                yield from self._chat_qwen_stream(messages, temperature, response_format)
             elif self.provider == LLMProvider.TRANSFORMERS:
                 yield from self._chat_transformers_stream(messages, temperature)
             else:
                 # 其他提供商暂不支持流式
-                content = self.chat(messages, temperature)
+                content = self.chat(messages, temperature, response_format)
                 yield {"type": "answer", "content": content}
         except Exception as e:
             print(f"LLM 流式调用失败: {e}")
             yield {"type": "error", "content": str(e)}
     
-    def _chat_qwen_stream(self, messages: List[Dict[str, str]], temperature: float):
+    async def chat_stream_async(self, messages: List[Dict[str, str]], temperature: float = 0.7, response_format: Optional[str] = None):
+        """
+        异步流式对话接口
+        
+        Args:
+            messages: 消息列表
+            temperature: 温度参数
+            response_format: 响应格式，可选 "json_object"
+        
+        Yields:
+            {"type": "thinking", "content": "..."} 或 {"type": "answer", "content": "..."}
+        """
+        import asyncio
+        import concurrent.futures
+        
+        # 在线程池中执行同步的流式生成
+        if not hasattr(self, '_thread_pool'):
+            max_workers = int(os.getenv("LLM_THREAD_POOL_SIZE", "100"))
+            self._thread_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="llm_worker"
+            )
+        
+        # 使用队列在线程和协程之间传递数据
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        
+        def stream_worker():
+            try:
+                for chunk in self.chat_stream(messages, temperature, response_format):
+                    # 使用call_soon_threadsafe而不是run_coroutine_threadsafe
+                    loop.call_soon_threadsafe(queue.put_nowait, chunk)
+            except Exception as e:
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "content": str(e)})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+        
+        # 启动流式生成线程
+        self._thread_pool.submit(stream_worker)
+        
+        # 从队列中读取并yield
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            yield chunk
+    
+    def _chat_qwen_stream(self, messages: List[Dict[str, str]], temperature: float, response_format: Optional[str] = None):
         """通义千问流式对话（支持深度思考模式）"""
         try:
-            completion = self.client.chat.completions.create(
-                model="qwen-plus",  # 深度思考模型
-                messages=messages,
-                temperature=temperature,
-                stream=True,
-                extra_body={"enable_thinking": True},  # 启用深度思考
-                timeout=30
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "stream": True,
+                "timeout": 60
+            }
+            
+            # 添加 JSON 响应格式支持
+            if response_format == "json_object":
+                kwargs["response_format"] = {"type": "json_object"}
+            
+            completion = self.client.chat.completions.create(**kwargs)
             
             is_answering = False  # 是否进入回复阶段
+            accumulated_content = ""  # 累积的内容
             
             for chunk in completion:
                 if chunk.choices and len(chunk.choices) > 0:
@@ -447,28 +501,26 @@ class LLMService:
                         if not is_answering:
                             # 第一次收到回答内容，标记进入回复阶段
                             is_answering = True
-                        # 发送回答内容
+                        # 累积内容
+                        accumulated_content += delta.content
+                        # 发送回答内容片段
                         yield {"type": "answer", "content": delta.content}
+            
+            # 如果是JSON格式，验证完整性
+            if response_format == "json_object" and accumulated_content:
+                try:
+                    json.loads(accumulated_content)  # 验证JSON有效性
+                except json.JSONDecodeError:
+                    logger.warning(f"流式JSON响应不完整，尝试修复")
         
         except Exception as e:
-            print(f"Qwen深度思考模式失败: {e}")
+            logger.error(f"Qwen流式调用失败: {e}")
             # 降级到普通模式
             try:
-                completion = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature,
-                    stream=True,
-                    timeout=30
-                )
-                
-                for chunk in completion:
-                    if chunk.choices and len(chunk.choices) > 0:
-                        delta = chunk.choices[0].delta
-                        if hasattr(delta, "content") and delta.content:
-                            yield {"type": "answer", "content": delta.content}
+                content = self._chat_qwen(messages, temperature, response_format)
+                yield {"type": "answer", "content": content}
             except Exception as e2:
-                print(f"Qwen普通模式也失败: {e2}")
+                logger.error(f"Qwen普通模式也失败: {e2}")
                 yield {"type": "error", "content": str(e2)}
     
     def _chat_transformers(self, messages: List[Dict[str, str]], temperature: float) -> str:

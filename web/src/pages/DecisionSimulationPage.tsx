@@ -399,11 +399,41 @@ export function DecisionSimulationPage() {
                       ...a, 
                       status: 'thinking' as const,
                       currentMessage: '🧠 正在深度思考...',
-                      messageTimestamp: Date.now()
+                      messageTimestamp: Date.now(),
+                      streamingMessage: ''  // 初始化流式消息
                     } : a
                   );
                   console.log(`[Agent事件] 更新后的agents:`, updated.find(a => a.id === personaId));
                   next.set(optId, updated);
+                  return next;
+                });
+              }
+              
+              // 思考片段（流式输出）
+              if (eventType === 'thinking_chunk') {
+                const content = String(event.content || '');
+                const chunkType = String(event.type || 'answer');  // thinking 或 answer
+                
+                console.log(`[Agent事件] ${personaName} 思考片段: ${content.substring(0, 20)}...`);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const streamingMessage = (a.streamingMessage || '') + content;
+                      const displayPrefix = chunkType === 'thinking' ? '💭 思考中: ' : '📝 分析中: ';
+                      
+                      return {
+                        ...a,
+                        status: 'thinking' as const,
+                        currentMessage: displayPrefix + streamingMessage.substring(0, 150) + (streamingMessage.length > 150 ? '...' : ''),
+                        messageTimestamp: Date.now(),
+                        streamingMessage: streamingMessage
+                      };
+                    }
+                    return a;
+                  }));
                   return next;
                 });
               }
@@ -415,13 +445,27 @@ export function DecisionSimulationPage() {
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
-                  next.set(optId, agents.map(a => 
-                    a.id === personaId ? { 
-                      ...a, 
-                      currentMessage: `🔧 执行技能: ${skillName}`,
-                      messageTimestamp: Date.now()
-                    } : a
-                  ));
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      // 添加到历史记录
+                      const historyRecord = {
+                        round: context.get('round') || 1,
+                        message: `开始执行技能: ${skillName}`,
+                        timestamp: Date.now(),
+                        action: 'skill_start',
+                        skillName: skillName,
+                      };
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        currentMessage: `🔧 执行技能: ${skillName}`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
                   return next;
                 });
               }
@@ -430,17 +474,37 @@ export function DecisionSimulationPage() {
               if (eventType === 'skill_complete') {
                 const skillName = String(event.skill_name || '');
                 const summary = String(event.summary || '');
+                const result = event.result as any;
                 console.log(`[Agent事件] ${personaName} 技能完成: ${skillName}`);
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
                   const agents = next.get(optId) || [];
-                  next.set(optId, agents.map(a => 
-                    a.id === personaId ? { 
-                      ...a, 
-                      currentMessage: `✅ ${skillName}: ${summary}`,
-                      messageTimestamp: Date.now()
-                    } : a
-                  ));
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      // 添加到历史记录
+                      const historyRecord = {
+                        round: context.get('round') || 1,
+                        message: summary || `技能执行完成: ${skillName}`,
+                        timestamp: Date.now(),
+                        action: 'skill_complete',
+                        skillName: skillName,
+                        skillResult: {
+                          skill_name: skillName,
+                          summary: summary,
+                          result: result
+                        }
+                      };
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        currentMessage: `✅ ${skillName}: ${summary}`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
                   return next;
                 });
                 

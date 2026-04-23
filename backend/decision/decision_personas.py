@@ -12,13 +12,14 @@
 版本: 1.0
 日期: 2026-04-18
 """
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 import asyncio
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +483,124 @@ class DecisionPersona:
         # 记录觉醒
         if self.current_interpretation:
             self.current_interpretation.add_reasoning_step(f"[觉醒] 开始分析选项: {option.get('title', '')}")
+    
+    async def _analyze_with_stream(
+        self,
+        prompt: str,
+        temperature: float = 0.7,
+        response_format: Optional[str] = None,
+        status_callback: Optional[Callable] = None,
+        persona_id: str = None,
+        persona_name: str = None,
+        round_num: int = 1
+    ) -> str:
+        """
+        使用流式输出进行分析
+        
+        Args:
+            prompt: 分析提示词
+            temperature: 温度参数
+            response_format: 响应格式
+            status_callback: 状态回调函数
+            persona_id: 人格ID
+            persona_name: 人格名称
+            round_num: 轮次
+        
+        Returns:
+            完整的分析结果
+        """
+        from backend.llm.llm_service import get_llm_service
+        
+        llm = get_llm_service()
+        if not llm or not llm.enabled:
+            # 降级：使用非流式
+            return await asyncio.to_thread(
+                llm.chat,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                response_format=response_format
+            )
+        
+        accumulated_content = ""
+        accumulated_thinking = ""
+        last_chunk_time = time.time()
+        chunk_buffer = ""  # 缓冲区，积累一定字符后再发送
+        BUFFER_SIZE = 20  # 每20个字符发送一次
+        
+        try:
+            async for chunk in llm.chat_stream_async(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                response_format=response_format
+            ):
+                chunk_type = chunk.get("type")
+                content = chunk.get("content", "")
+                
+                if chunk_type == "thinking":
+                    # 思考过程
+                    accumulated_thinking += content
+                    chunk_buffer += content
+                    
+                    # 当缓冲区达到一定大小或距离上次发送超过0.1秒时，发送
+                    if len(chunk_buffer) >= BUFFER_SIZE or (time.time() - last_chunk_time) > 0.1:
+                        if status_callback and chunk_buffer:
+                            await status_callback('thinking_chunk', {
+                                'persona_id': persona_id,
+                                'persona_name': persona_name,
+                                'round': round_num,
+                                'content': chunk_buffer,
+                                'type': 'thinking',
+                                'timestamp': time.time()
+                            })
+                        chunk_buffer = ""
+                        last_chunk_time = time.time()
+                
+                elif chunk_type == "answer":
+                    # 回答内容
+                    accumulated_content += content
+                    chunk_buffer += content
+                    
+                    # 当缓冲区达到一定大小或距离上次发送超过0.1秒时，发送
+                    if len(chunk_buffer) >= BUFFER_SIZE or (time.time() - last_chunk_time) > 0.1:
+                        if status_callback and chunk_buffer:
+                            await status_callback('thinking_chunk', {
+                                'persona_id': persona_id,
+                                'persona_name': persona_name,
+                                'round': round_num,
+                                'content': chunk_buffer,
+                                'type': 'answer',
+                                'timestamp': time.time()
+                            })
+                        chunk_buffer = ""
+                        last_chunk_time = time.time()
+                
+                elif chunk_type == "error":
+                    logger.error(f"[{persona_name}] 流式分析错误: {content}")
+                    raise RuntimeError(content)
+            
+            # 发送剩余的缓冲内容
+            if chunk_buffer and status_callback:
+                await status_callback('thinking_chunk', {
+                    'persona_id': persona_id,
+                    'persona_name': persona_name,
+                    'round': round_num,
+                    'content': chunk_buffer,
+                    'type': 'answer',
+                    'timestamp': time.time()
+                })
+            
+            logger.info(f"[{persona_name}] 流式分析完成: thinking={len(accumulated_thinking)}字符, answer={len(accumulated_content)}字符")
+            return accumulated_content
+        
+        except Exception as e:
+            logger.error(f"[{persona_name}] 流式分析失败: {e}")
+            # 降级到非流式
+            return await asyncio.to_thread(
+                llm.chat,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                response_format=response_format
+            )
     
     async def _phase_independent_thinking(
         self,
@@ -1976,12 +2095,20 @@ class RationalAnalyst(DecisionPersona):
         )
         
         try:
-            response = await asyncio.to_thread(
-                llm.chat,
-                messages=[{"role": "user", "content": prompt_data["user"]}],
+            # 🆕 使用流式输出
+            status_callback = context.get("status_callback")
+            round_num = context.get('round', 1)
+            
+            response = await self._analyze_with_stream(
+                prompt=prompt_data["user"],
                 temperature=prompt_data["temperature"],
-                response_format=prompt_data["return_format"]
+                response_format=prompt_data["return_format"],
+                status_callback=status_callback,
+                persona_id=self.persona_id,
+                persona_name=self.name,
+                round_num=round_num
             )
+            
             result = json.loads(response)
             
             # 记录到私有解读层（第3层）
