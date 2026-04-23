@@ -268,15 +268,19 @@ export function DecisionSimulationPage() {
               const month = (event.month as number) || 0;
               const optId = String(event.option_id || optionId);
               
+              console.log(`[Agent初始化] 收到${type}消息, optId: ${optId}, agents数量: ${agents.length}`, agents);
+              
               if (optId && agents.length > 0) {
                 setAgentsByOption(prev => {
                   const next = new Map(prev);
-                  next.set(optId, agents.map((a: any) => ({
+                  const agentList = agents.map((a: any) => ({
                     id: String(a.id),
                     name: String(a.name),
                     status: 'waiting' as const,
                     score: undefined
-                  })));
+                  }));
+                  console.log(`[Agent初始化] 设置agentList:`, agentList);
+                  next.set(optId, agentList);
                   return next;
                 });
                 
@@ -287,6 +291,8 @@ export function DecisionSimulationPage() {
                     return next;
                   });
                 }
+              } else {
+                console.warn(`[Agent初始化] 跳过: optId=${optId}, agents.length=${agents.length}`);
               }
             }
 
