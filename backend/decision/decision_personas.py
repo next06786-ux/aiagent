@@ -246,39 +246,15 @@ class DecisionPersona:
                 continue
             
             try:
-                # 发送状态更新：开始执行
-                if status_callback:
-                    await status_callback(f"【{self.name}】正在执行技能：{skill_name}")
-                
                 result = await self.use_skill(skill_name, context)
                 
                 if result.get("success"):
                     skill_results[skill_name] = result
                     logger.info(f"[{self.name}] 技能执行成功: {skill_name}")
-                    
-                    # 提取技能结果摘要
-                    result_summary = self._extract_skill_result_summary(skill_name, result)
-                    
-                    # 发送详细的成功状态（包含结果摘要）
-                    if status_callback:
-                        await status_callback(
-                            f"【{self.name}】✓ {skill_name}完成\n{result_summary}",
-                            skill_result={
-                                "skill_name": skill_name,
-                                "summary": result_summary,
-                                "full_result": result
-                            }
-                        )
                 else:
                     logger.warning(f"[{self.name}] 技能执行失败: {skill_name} - {result.get('error', '未知错误')}")
-                    
-                    # 发送失败状态
-                    if status_callback:
-                        await status_callback(f"【{self.name}】❌ {skill_name}失败")
             except Exception as e:
                 logger.error(f"[{self.name}] 技能执行异常: {skill_name} - {e}")
-                if status_callback:
-                    await status_callback(f"【{self.name}】❌ {skill_name}异常")
         
         return skill_results
     
