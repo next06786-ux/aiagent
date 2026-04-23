@@ -189,6 +189,9 @@ export function DecisionSimulationPage() {
     }
   `;
 
+  // 报告缓存 - 每个选项只生成一次
+  const [reportCache, setReportCache] = useState<Map<string, DecisionReport>>(new Map());
+  
   // 报告处理函数
   const handleViewReport = async (optionId: string) => {
     const option = config.options?.find((_, idx) => `option_${idx + 1}` === optionId);
@@ -198,9 +201,19 @@ export function DecisionSimulationPage() {
       return;
     }
 
-    setIsGeneratingReport(true);
     setReportOptionId(optionId);
     setReportOptionTitle(option.title);
+
+    // 检查缓存
+    const cachedReport = reportCache.get(optionId);
+    if (cachedReport) {
+      console.log('[报告] 使用缓存的报告:', optionId);
+      setCurrentReport(cachedReport);
+      setShowReportModal(true);
+      return;
+    }
+
+    setIsGeneratingReport(true);
 
     try {
       // 获取该选项的所有 Agent 数据
@@ -231,6 +244,13 @@ export function DecisionSimulationPage() {
       console.log('[报告] 生成成功:', response);
       
       if (response.success && response.report) {
+        // 缓存报告
+        setReportCache(prev => {
+          const next = new Map(prev);
+          next.set(optionId, response.report);
+          return next;
+        });
+        
         setCurrentReport(response.report);
         setShowReportModal(true);
       } else {
@@ -344,10 +364,88 @@ export function DecisionSimulationPage() {
       console.log('[自动保存] agents 数量:', agents.length);
       console.log('[自动保存] totalScore:', totalScore);
       
-      // 如果 agents 为空，说明数据还没准备好，跳过保存
+      // 如果 agents 为空，尝试从后端获取推演结果
       if (agents.length === 0) {
-        console.warn('[自动保存] agents 数据为空，跳过保存');
-        return;
+        console.warn('[自动保存] agentsByOption 中 agents 为空，尝试从后端获取数据');
+        
+        try {
+          // 从后端获取推演结果
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/decision/enhanced/history/${config.userId}`);
+          if (!response.ok) {
+            console.error('[自动保存] 获取后端数据失败');
+            return;
+          }
+          
+          const data = await response.json();
+          console.log('[自动保存] 后端返回数据:', data);
+          
+          // 查找匹配的 session
+          const matchingSession = data.histories?.find((h: any) => h.session_id === config.sessionId);
+          if (!matchingSession || !matchingSession.personas || matchingSession.personas.length === 0) {
+            console.warn('[自动保存] 后端也没有 agents 数据，跳过保存');
+            return;
+          }
+          
+          console.log('[自动保存] 从后端获取到', matchingSession.personas.length, '个 agents');
+          
+          // 使用后端数据构建 sceneData
+          const backendAgents = matchingSession.personas.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            status: 'complete',
+            stance: p.stance || '未知',
+            score: p.score || 0,
+            thinking_history: p.thinking_history || [],
+            final_message: p.final_message || ''
+          }));
+          
+          // 生成报告
+          console.log('[自动保存] 生成报告...');
+          const reportResponse = await generateDecisionReport({
+            question: config.question,
+            option_title: option.title,
+            option_description: option.description || '',
+            agents_data: backendAgents.map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              stance: a.stance,
+              score: a.score,
+              reasoning: a.thinking_history?.map((h: any) => h.message).join('\n') || ''
+            })),
+            total_score: matchingSession.total_score || 0
+          });
+          
+          const report = reportResponse.success ? reportResponse.report : null;
+          
+          // 构建场景数据
+          const sceneData = {
+            option_id: optionId,
+            option_title: option.title,
+            option_description: option.description || '',
+            total_score: matchingSession.total_score || 0,
+            current_round: matchingSession.current_round || 0,
+            agents: backendAgents,
+            report: report,
+            completed_at: new Date().toISOString()
+          };
+          
+          // 保存到数据库
+          console.log('[自动保存] 使用后端数据保存到数据库...');
+          const saveResponse = await saveDecisionHistory({
+            user_id: config.userId,
+            session_id: config.sessionId,
+            question: config.question,
+            decision_type: config.decisionType || 'general',
+            options_data: sceneData
+          });
+          
+          console.log('[自动保存] 保存成功:', saveResponse);
+          return;
+          
+        } catch (error) {
+          console.error('[自动保存] 从后端获取数据失败:', error);
+          return;
+        }
       }
       
       // 生成报告
@@ -1751,13 +1849,15 @@ export function DecisionSimulationPage() {
     const optionId = `option_${selectedOptionIndex + 1}`;
     const personas = agentsByOption.get(optionId);
     const hasPersonas = personas && personas.length > 0;
+    const isCompleted = completedOptions.has(optionId);
     
     console.log(`[渲染检查] optionId=${optionId}, hasPersonas=${hasPersonas}, personas数量=${personas?.length || 0}, agentsByOption.size=${agentsByOption.size}`);
     console.log(`[渲染检查] 所有optionIds:`, Array.from(agentsByOption.keys()));
-    console.log(`[渲染检查] wsPhase=${wsPhase}`);
+    console.log(`[渲染检查] wsPhase=${wsPhase}, isCompleted=${isCompleted}`);
     
-    return hasPersonas;
-  }, [selectedOptionIndex, agentsByOption, agentsByOption.size, wsPhase]); // 添加 wsPhase 作为依赖
+    // 如果该选项已完成但没有 personas 数据，也返回 true（避免一直显示加载）
+    return hasPersonas || isCompleted;
+  }, [selectedOptionIndex, agentsByOption, agentsByOption.size, wsPhase, completedOptions]); // 添加 completedOptions 作为依赖
   
   console.log('[DecisionSimulationPage] canRenderPersonas:', canRenderPersonas);
   
@@ -1786,7 +1886,7 @@ export function DecisionSimulationPage() {
         boxShadow: '0 4px 24px rgba(0, 0, 0, 0.04)' 
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => navigate('/emergence-dashboard')} style={{ 
+          <button onClick={() => navigate('/decision/options')} style={{ 
             background: 'rgba(10, 89, 247, 0.06)', border: 'none', borderRadius: 12, 
             padding: '10px 16px', color: '#0A59F7', cursor: 'pointer', fontSize: 14, fontWeight: 600,
             display: 'flex', alignItems: 'center', gap: 6,

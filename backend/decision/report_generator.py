@@ -52,11 +52,11 @@ class DecisionReportGenerator:
                 total_score
             )
             
-            # 调用 LLM 生成报告
+            # 调用 LLM 生成报告 - 使用 qwen-plus 模型获得更好的报告质量
             messages = [
                 {
                     "role": "system",
-                    "content": "你是一个专业的决策分析师，擅长综合多方观点生成清晰的分析报告。"
+                    "content": "你是一位资深的人生决策顾问，拥有丰富的咨询经验。你擅长从多个维度深入分析重大人生选择，并给出切实可行、有洞察力的建议。你的建议总是基于事实和数据，语言真诚接地气，能真正帮助人们做出明智的决策。"
                 },
                 {
                     "role": "user",
@@ -66,7 +66,8 @@ class DecisionReportGenerator:
             
             response = await self.llm_service.chat_async(
                 messages=messages,
-                temperature=0.7
+                temperature=0.7,
+                model="qwen3.6-plus"  # 使用 qwen3.6-plus 模型生成高质量报告
             )
             
             # 解析响应 - chat_async 直接返回字符串
@@ -102,44 +103,73 @@ class DecisionReportGenerator:
     ) -> str:
         """构建报告生成提示词"""
         
-        # 整理 Agent 观点
-        agents_summary = []
+        # 整理 Agent 观点和推理过程
+        agents_analysis = []
         for agent in agents_data:
-            agents_summary.append(
-                f"- {agent.get('name', '未知')}: {agent.get('stance', '未知')} "
-                f"(评分: {agent.get('score', 0)})"
+            name = agent.get('name', '未知')
+            stance = agent.get('stance', '未知')
+            score = agent.get('score', 0)
+            reasoning = agent.get('reasoning', '')
+            
+            # 提取推理的关键点（前200字）
+            key_reasoning = reasoning[:200] + '...' if len(reasoning) > 200 else reasoning
+            
+            agents_analysis.append(
+                f"【{name}】{stance} (评分: {score})\n"
+                f"核心观点: {key_reasoning if key_reasoning else '暂无详细分析'}"
             )
         
-        agents_text = "\n".join(agents_summary)
+        agents_text = "\n\n".join(agents_analysis)
         
-        prompt = f"""请为以下决策选项生成一份综合分析报告。
+        prompt = f"""你是一位资深的人生决策顾问，擅长从多个维度分析重大人生选择，并给出切实可行的建议。
 
-【决策问题】
+【用户面临的决策】
 {question}
 
-【分析选项】
-标题: {option_title}
-描述: {option_description}
+【当前分析的选项】
+{option_title}
+{option_description if option_description else ''}
 
-【Agent 评估结果】
+【7位专业顾问的深度分析】
 {agents_text}
 
-【综合评分】
-{total_score:.1f} 分
+【综合评分】{total_score:.1f}/100
 
-请生成一份结构化的分析报告，包含以下部分：
+请基于以上7位顾问的专业分析，生成一份**真正有价值、可落地执行**的决策报告。
 
-1. 总体评价（2-3句话概括）
-2. 关键洞察（3-5个要点）
-3. 主要优势（3-5个要点）
-4. 潜在风险（3-5个要点）
-5. 综合建议（2-3句话）
+## 报告要求
 
-要求：
-- 语言简洁专业
-- 观点基于 Agent 的分析结果
-- 突出关键信息
-- 避免重复
+1. **总体评价**（100-150字）
+   - 用通俗易懂的语言概括这个选项的核心特点
+   - 明确指出这个选项最适合什么样的人
+   - 给出一个清晰的总体判断
+
+2. **关键洞察**（3-5个要点）
+   - 提炼出最重要的、容易被忽视的关键信息
+   - 每个洞察要具体、可验证
+   - 避免空洞的套话
+
+3. **主要优势**（3-5个要点）
+   - 列出这个选项的实际好处
+   - 每个优势要具体说明如何实现
+   - 关注长期价值和短期收益
+
+4. **潜在风险**（3-5个要点）
+   - 指出可能遇到的实际困难和挑战
+   - 每个风险要说明发生概率和影响程度
+   - 提供应对建议
+
+5. **行动建议**（150-200字）
+   - 如果选择这个方案，具体应该怎么做
+   - 给出3-5个可执行的行动步骤
+   - 说明需要准备什么、注意什么
+
+## 写作风格要求
+- 语言真诚、接地气，像朋友聊天一样
+- 避免官话套话，要说人话
+- 数据和事实优先，少用形容词
+- 每个建议都要具体可行，不要泛泛而谈
+- 站在用户角度思考，真正帮助他们做决策
 
 请按以下格式输出：
 
@@ -161,7 +191,7 @@ class DecisionReportGenerator:
 - [风险2]
 - [风险3]
 
-## 综合建议
+## 行动建议
 [内容]
 """
         
@@ -200,7 +230,7 @@ class DecisionReportGenerator:
                 current_section = 'strengths'
             elif '潜在风险' in line:
                 current_section = 'risks'
-            elif '综合建议' in line:
+            elif '行动建议' in line or '综合建议' in line:
                 current_section = 'recommendation'
             elif line.startswith('- ') or line.startswith('• '):
                 # 列表项
