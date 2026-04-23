@@ -62,6 +62,8 @@ function parseRouteState(
 }
 
 export function DecisionSimulationPage() {
+  console.log('[DecisionSimulationPage] 组件开始渲染');
+  
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -70,6 +72,8 @@ export function DecisionSimulationPage() {
     () => parseRouteState(location.state, user?.user_id || '', searchParams),
     [location.state, searchParams, user],
   );
+  
+  console.log('[DecisionSimulationPage] config:', config);
 
   // 状态管理
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
@@ -1437,6 +1441,8 @@ export function DecisionSimulationPage() {
     const optionId = `option_${selectedOptionIndex + 1}`;
     const liveOption = liveOptions.get(optionId);
     
+    console.log('[activeOption] 计算中...', { optionId, hasLiveOption: !!liveOption, selectedOptionIndex });
+    
     if (liveOption) {
       return liveOption;
     }
@@ -1444,6 +1450,10 @@ export function DecisionSimulationPage() {
     // 如果 liveOptions 中没有，尝试从 record 获取
     return record?.options[selectedOptionIndex] || null;
   }, [selectedOptionIndex, liveOptions, record]);
+
+  console.log('[DecisionSimulationPage] activeOption:', activeOption);
+  console.log('[DecisionSimulationPage] agentsByOption.size:', agentsByOption.size);
+  console.log('[DecisionSimulationPage] selectedOptionIndex:', selectedOptionIndex);
 
   // 渲染保护 - 只要有智能体数据就可以渲染
   const canRenderPersonas = useMemo(() => {
@@ -1457,6 +1467,8 @@ export function DecisionSimulationPage() {
     
     return hasPersonas;
   }, [selectedOptionIndex, agentsByOption, agentsByOption.size, wsPhase]); // 添加 wsPhase 作为依赖
+  
+  console.log('[DecisionSimulationPage] canRenderPersonas:', canRenderPersonas);
   
   // 调试：监听 agentsByOption 变化
   useEffect(() => {
