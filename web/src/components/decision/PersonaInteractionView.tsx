@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { PersonaAvatar } from './PersonaAvatar';
 import './PersonaInteractionView.css';
 
@@ -80,17 +80,63 @@ export function PersonaInteractionView({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   
+  // 观察连线动画状态
+  const [observationLines, setObservationLines] = useState<Array<{
+    id: string;
+    from: string;  // 观察者 persona id
+    to: string[];  // 被观察者 persona ids
+    timestamp: number;
+  }>>([]);
+  
+  // 监听 personas 的 thinkingHistory，检测 observe_others 事件
+  useEffect(() => {
+    personas.forEach(persona => {
+      const history = persona.thinkingHistory || [];
+      const latestObserve = history
+        .filter(h => h.event_type === 'phase_complete' && (h as any).phase === 'observe_others')
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+      
+      if (latestObserve) {
+        const observedPersonas = (latestObserve as any).observed_personas || [];
+        const observedIds = observedPersonas.map((p: any) => p.id);
+        
+        // 检查是否已经有这个观察关系的动画
+        const hasAnimation = observationLines.some(
+          line => line.from === persona.id && line.timestamp === latestObserve.timestamp
+        );
+        
+        if (!hasAnimation && observedIds.length > 0) {
+          const lineId = `${persona.id}_${latestObserve.timestamp}`;
+          console.log(`[连线动画] ${persona.name} 观察 ${observedIds.length} 个Agent`);
+          
+          setObservationLines(prev => [...prev, {
+            id: lineId,
+            from: persona.id,
+            to: observedIds,
+            timestamp: latestObserve.timestamp,
+          }]);
+          
+          // 2.5秒后移除连线
+          setTimeout(() => {
+            setObservationLines(prev => prev.filter(l => l.id !== lineId));
+          }, 2500);
+        }
+      }
+    });
+  }, [personas]);
+  
   // 分数影响动画状态
   const [scoreImpactAnimations, setScoreImpactAnimations] = useState<Array<{
     id: string;
     personaId: string;
+    score: number;  // 分数值
     timestamp: number;
   }>>([]);
   
   // 监听personas的score变化，触发动画
   useEffect(() => {
     personas.forEach(persona => {
-      if (persona.score !== undefined && persona.status === 'complete') {
+      if (persona.score !== undefined && persona.status === 'thinking') {
         // 检查是否已经有这个persona的动画
         const hasAnimation = scoreImpactAnimations.some(anim => anim.personaId === persona.id);
         if (!hasAnimation) {
@@ -99,13 +145,14 @@ export function PersonaInteractionView({
           setScoreImpactAnimations(prev => [...prev, {
             id: animId,
             personaId: persona.id,
+            score: persona.score,
             timestamp: Date.now(),
           }]);
           
-          // 1.5秒后移除动画
+          // 2秒后移除动画
           setTimeout(() => {
             setScoreImpactAnimations(prev => prev.filter(a => a.id !== animId));
-          }, 1500);
+          }, 2000);
         }
       }
     });
@@ -349,7 +396,12 @@ export function PersonaInteractionView({
         position: 'relative',
       }}>
       {/* 中心选项 */}
-      <div className="center-option">
+      <div 
+        className={`center-option ${scoreImpactAnimations.length > 0 ? 'score-impact-center' : ''}`}
+        style={{
+          transition: 'all 0.3s ease-out',
+        }}
+      >
         <div className="option-title">{optionTitle}</div>
         {currentMonth > 0 && (
           <div className="option-month">第 {currentMonth} 轮</div>
@@ -386,7 +438,7 @@ export function PersonaInteractionView({
         </div>
       </div>
 
-      {/* 分数影响动画 - 从persona到中心的实线 */}
+      {/* 分数影响动画 - 从persona到中心的实线 + 粒子效果 */}
       {scoreImpactAnimations.map(anim => {
         const personaIndex = displayPersonas.findIndex(p => p.id === anim.personaId);
         if (personaIndex === -1) return null;
@@ -394,55 +446,108 @@ export function PersonaInteractionView({
         const personaPos = getPersonaPosition(personaIndex, displayPersonas.length);
         const centerPos = { x: 50, y: 50 };
         const color = personaColors[anim.personaId] || '#999';
+        const score = anim.score;
+        const isPositive = score >= 0;
+        
+        // 生成粒子
+        const particles = Array.from({ length: 8 }, (_, i) => {
+          const angle = (i / 8) * Math.PI * 2;
+          const distance = 30 + Math.random() * 20;
+          return {
+            id: `${anim.id}-particle-${i}`,
+            tx: Math.cos(angle) * distance,
+            ty: Math.sin(angle) * distance,
+            delay: i * 0.05,
+          };
+        });
         
         return (
-          <svg 
-            key={anim.id}
-            className="score-impact-line"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-              zIndex: 15,
-            }}
-          >
-            <defs>
-              <linearGradient id={`gradient-${anim.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor={color} stopOpacity="0" />
-                <stop offset="50%" stopColor={color} stopOpacity="1" />
-                <stop offset="100%" stopColor={color} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <line
-              x1={`${personaPos.x}%`}
-              y1={`${personaPos.y}%`}
-              x2={`${centerPos.x}%`}
-              y2={`${centerPos.y}%`}
-              stroke={`url(#gradient-${anim.id})`}
-              strokeWidth="3"
+          <React.Fragment key={anim.id}>
+            {/* 连线动画 */}
+            <svg 
+              className="score-impact-line"
               style={{
-                animation: 'scoreImpactPulse 1.5s ease-out',
-              }}
-            />
-            {/* 移动的光点 */}
-            <circle
-              r="4"
-              fill={color}
-              style={{
-                animation: 'scoreImpactMove 1.5s ease-out',
-                animationFillMode: 'forwards',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+                zIndex: 15,
               }}
             >
-              <animateMotion
-                dur="1.5s"
-                path={`M ${personaPos.x},${personaPos.y} L ${centerPos.x},${centerPos.y}`}
-                fill="freeze"
+              <defs>
+                <linearGradient id={`gradient-${anim.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={color} stopOpacity="0" />
+                  <stop offset="50%" stopColor={color} stopOpacity="1" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <line
+                x1={`${personaPos.x}%`}
+                y1={`${personaPos.y}%`}
+                x2={`${centerPos.x}%`}
+                y2={`${centerPos.y}%`}
+                stroke={`url(#gradient-${anim.id})`}
+                strokeWidth="3"
+                style={{
+                  animation: 'scoreImpactPulse 2s ease-out',
+                }}
               />
-            </circle>
-          </svg>
+              {/* 移动的光点 */}
+              <circle
+                r="5"
+                fill={color}
+                filter="url(#glow)"
+                style={{
+                  animation: 'scoreImpactMove 1.5s ease-out',
+                  animationFillMode: 'forwards',
+                }}
+              >
+                <animateMotion
+                  dur="1.5s"
+                  path={`M ${personaPos.x},${personaPos.y} L ${centerPos.x},${centerPos.y}`}
+                  fill="freeze"
+                />
+              </circle>
+              <defs>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                  <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+            </svg>
+            
+            {/* 粒子效果 - 从中心向外扩散 */}
+            {particles.map(particle => (
+              <div
+                key={particle.id}
+                className="score-particle"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  backgroundColor: color,
+                  '--tx': `${particle.tx}px`,
+                  '--ty': `${particle.ty}px`,
+                  animationDelay: `${particle.delay}s`,
+                  zIndex: 18,
+                } as React.CSSProperties}
+              />
+            ))}
+            
+            {/* 分数变化显示 */}
+            <div
+              className={`score-number-indicator ${isPositive ? 'positive' : 'negative'}`}
+              style={{
+                zIndex: 20,
+              }}
+            >
+              {isPositive ? '+' : ''}{score.toFixed(1)}
+            </div>
+          </React.Fragment>
         );
       })}
 
@@ -620,7 +725,7 @@ export function PersonaInteractionView({
         const bubbleY = 50 + bubbleRadius * Math.sin(angle);
         
         // 检测是否是立场改变的消息
-        const isStanceChange = displayMessage.includes('⚠️改变立场') || displayMessage.includes('改变了立场');
+        const isStanceChange = displayMessage.includes('[立场已改变]') || displayMessage.includes('改变了立场');
         
         // 根据action类型添加CSS类
         const actionClass = persona.messageAction ? `action-${persona.messageAction}` : '';
@@ -678,6 +783,68 @@ export function PersonaInteractionView({
             <div className="message-more">详细 →</div>
           </div>
         );
+      })}
+
+      {/* 观察连线动画 */}
+      {observationLines.map(line => {
+        const fromIndex = displayPersonas.findIndex(p => p.id === line.from);
+        if (fromIndex === -1) return null;
+        
+        const fromPos = getPersonaPosition(fromIndex, displayPersonas.length);
+        const fromColor = personaColors[line.from] || '#999';
+        
+        return line.to.map(toId => {
+          const toIndex = displayPersonas.findIndex(p => p.id === toId);
+          if (toIndex === -1) return null;
+          
+          const toPos = getPersonaPosition(toIndex, displayPersonas.length);
+          
+          return (
+            <svg
+              key={`observe-line-${line.id}-${toId}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                pointerEvents: 'none',
+                zIndex: 3,
+              }}
+            >
+              <defs>
+                <linearGradient id={`gradient-${line.id}-${toId}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={fromColor} stopOpacity="0.8" />
+                  <stop offset="100%" stopColor={fromColor} stopOpacity="0.2" />
+                </linearGradient>
+              </defs>
+              <line
+                x1={`${fromPos.x}%`}
+                y1={`${fromPos.y}%`}
+                x2={`${toPos.x}%`}
+                y2={`${toPos.y}%`}
+                stroke={`url(#gradient-${line.id}-${toId})`}
+                strokeWidth="2"
+                strokeDasharray="8,4"
+                className="observation-line"
+                style={{
+                  animation: 'observation-line-flow 2.5s ease-out forwards',
+                }}
+              />
+              {/* 箭头 */}
+              <circle
+                cx={`${toPos.x}%`}
+                cy={`${toPos.y}%`}
+                r="4"
+                fill={fromColor}
+                className="observation-arrow"
+                style={{
+                  animation: 'observation-arrow-pulse 2.5s ease-out forwards',
+                }}
+              />
+            </svg>
+          );
+        });
       })}
 
       {/* 交互连线和对话 */}

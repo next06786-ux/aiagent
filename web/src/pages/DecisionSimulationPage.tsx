@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PersonaInteractionView } from '../components/decision/PersonaInteractionView';
+import { DecisionReportModal } from '../components/decision/DecisionReportModal';
 import { useAuth } from '../hooks/useAuth';
 import { openDecisionSimulationSocket } from '../services/decision';
+import { generateDecisionReport, saveDecisionHistory, DecisionReport } from '../services/decisionHistory';
 import type { DecisionOption } from '../types/api';
 import { buildFallbackDecisionGraph } from '../utils/decisionGraph';
 
@@ -143,6 +145,14 @@ export function DecisionSimulationPage() {
   // 推演控制状态
   const [pausedOptions, setPausedOptions] = useState<Set<string>>(new Set());
   const [activeOptionId, setActiveOptionId] = useState<string | null>(null);
+  
+  // 报告相关状态
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [currentReport, setCurrentReport] = useState<DecisionReport | null>(null);
+  const [reportOptionTitle, setReportOptionTitle] = useState('');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [isSavingHistory, setIsSavingHistory] = useState(false);
+  const [reportOptionId, setReportOptionId] = useState<string | null>(null);
   
   const wsCloseRef = useRef<(() => void) | null>(null);
 
@@ -486,7 +496,7 @@ export function DecisionSimulationPage() {
                       // 根据不同阶段构建不同的消息
                       if (phase === 'independent_thinking' && event.result) {
                         const result = event.result as any;
-                        displayMessage = `✅ 独立思考: ${result.stance} (${result.score}分)`;
+                        displayMessage = `[独立思考] ${result.stance} (${result.score}分)`;
                         console.log(`[Agent事件] independent_thinking displayMessage:`, displayMessage);
                         historyRecord = {
                           round,
@@ -499,13 +509,13 @@ export function DecisionSimulationPage() {
                           reasoning: result.reasoning,
                           keyPoints: result.key_points
                         };
-                        // 🆕 更新Agent的分数和立场
+                        // 更新Agent的分数和立场
                         updatedAgent.score = result.score;
                         updatedAgent.stance = result.stance;
                         updatedAgent.status = 'thinking' as const;  // 继续思考中
                       } else if (phase === 'observe_others') {
                         const observedCount = event.observed_count || 0;
-                        displayMessage = `👀 观察到${observedCount}个其他Agent的观点`;
+                        displayMessage = `[查看观点] 观察到${observedCount}个其他Agent的观点`;
                         historyRecord = {
                           round,
                           message: displayMessage,
@@ -517,8 +527,8 @@ export function DecisionSimulationPage() {
                         };
                       } else if (phase === 'deep_reflection' && event.result) {
                         const result = event.result as any;
-                        const stanceChanged = result.stance_changed ? ' ⚠️ 立场已改变' : '';
-                        displayMessage = `🤔 深度反思: ${result.stance} (${result.score}分)${stanceChanged}`;
+                        const stanceChanged = result.stance_changed ? ' [立场已改变]' : '';
+                        displayMessage = `[深度反思] ${result.stance} (${result.score}分)${stanceChanged}`;
                         historyRecord = {
                           round,
                           message: displayMessage,
@@ -531,7 +541,7 @@ export function DecisionSimulationPage() {
                           keyPoints: result.key_points,
                           stance_changed: result.stance_changed
                         };
-                        // 🆕 更新Agent的分数和立场
+                        // 更新Agent的分数和立场
                         updatedAgent.score = result.score;
                         updatedAgent.stance = result.stance;
                         updatedAgent.status = 'thinking' as const;
@@ -540,7 +550,7 @@ export function DecisionSimulationPage() {
                         }
                       } else if (phase === 'decision' && event.decision) {
                         const decision = event.decision as any;
-                        displayMessage = `⚖️ 决策: ${decision.stance} (${decision.score}分, 信心${(decision.confidence * 100).toFixed(0)}%)`;
+                        displayMessage = `[决策] ${decision.stance} (${decision.score}分, 信心${(decision.confidence * 100).toFixed(0)}%)`;
                         historyRecord = {
                           round,
                           message: displayMessage,
@@ -553,7 +563,7 @@ export function DecisionSimulationPage() {
                           reasoning: decision.reasoning,
                           keyPoints: decision.key_points
                         };
-                        // 🆕 更新Agent的分数和立场
+                        // 更新Agent的分数和立场
                         updatedAgent.score = decision.score;
                         updatedAgent.stance = decision.stance;
                         updatedAgent.status = 'thinking' as const;  // 还在推演中
@@ -589,7 +599,7 @@ export function DecisionSimulationPage() {
                     a.id === personaId ? { 
                       ...a, 
                       status: 'thinking' as const,
-                      currentMessage: '🧠 正在深度思考...',
+                      currentMessage: '[思考中] 正在深度思考...',
                       messageTimestamp: Date.now(),
                       streamingMessage: ''  // 初始化流式消息
                     } : a
@@ -613,7 +623,7 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       const historyRecord = {
                         round,
-                        message: `💭 ${content}`,
+                        message: `[内心独白] ${content}`,
                         timestamp: Date.now(),
                         reasoning: content,
                         event_type: 'thinking_monologue'
@@ -623,7 +633,7 @@ export function DecisionSimulationPage() {
                       return {
                         ...a,
                         status: 'thinking' as const,
-                        currentMessage: `💭 内心独白`,
+                        currentMessage: `[内心独白]`,
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
@@ -648,7 +658,7 @@ export function DecisionSimulationPage() {
                     if (a.id === personaId) {
                       const historyRecord = {
                         round,
-                        message: `🎯 选择技能: ${selectedSkills.join(', ')}`,
+                        message: `[技能选择] ${selectedSkills.join(', ')}`,
                         timestamp: Date.now(),
                         reasoning: reason,
                         skillNames: selectedSkills,
@@ -658,7 +668,7 @@ export function DecisionSimulationPage() {
                       
                       return {
                         ...a,
-                        currentMessage: `🎯 准备执行: ${selectedSkills.join(', ')}`,
+                        currentMessage: `[准备执行] ${selectedSkills.join(', ')}`,
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
@@ -682,7 +692,7 @@ export function DecisionSimulationPage() {
                   next.set(optId, agents.map(a => {
                     if (a.id === personaId) {
                       const streamingMessage = (a.streamingMessage || '') + content;
-                      const displayPrefix = chunkType === 'thinking' ? '💭 思考中: ' : '📝 分析中: ';
+                      const displayPrefix = chunkType === 'thinking' ? '[思考中] ' : '[分析中] ';
                       
                       return {
                         ...a,

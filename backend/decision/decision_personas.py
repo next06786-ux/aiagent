@@ -469,7 +469,7 @@ class DecisionPersona:
         # 阶段5: 休眠
         await self._phase_sleep(option, context, final_result)
         
-        logger.info(f"✅ [{self.name}] 生命周期完成")
+        logger.info(f"[{self.name}] 生命周期完成")
         return final_result
     
     async def _phase_awaken(self, option: Dict[str, Any], context: Dict[str, Any]):
@@ -3800,7 +3800,7 @@ class PersonaCouncil:
         # 记录开始时间
         import time
         start_time = time.time()
-        logger.info(f"⏱️  [{persona.name}] 🚀 开始执行 (时间: {time.strftime('%H:%M:%S')})")
+        logger.info(f"[{persona.name}] 开始执行 (时间: {time.strftime('%H:%M:%S')})")
         
         # 获取WebSocket回调
         status_callback = context.get('status_callback')
@@ -3817,7 +3817,7 @@ class PersonaCouncil:
         for round_num in range(1, rounds + 1):
             round_start = time.time()
             logger.info(f"\n{'='*50}")
-            logger.info(f"🔄 [{persona.name}] 第{round_num}/{rounds}轮 (时间: {time.strftime('%H:%M:%S')})")
+            logger.info(f"[{persona.name}] 第{round_num}/{rounds}轮 (时间: {time.strftime('%H:%M:%S')})")
             logger.info(f"{'='*50}\n")
             
             # 推送轮次开始事件
@@ -3835,7 +3835,7 @@ class PersonaCouncil:
             context['total_rounds'] = rounds
             
             # ========== 阶段1: 独立思考 ==========
-            logger.info(f"  🧠 [{persona.name}] 阶段1: 独立思考... (时间: {time.strftime('%H:%M:%S')})")
+            logger.info(f"  [{persona.name}] 阶段1: 独立思考... (时间: {time.strftime('%H:%M:%S')})")
             
             # 推送阶段开始事件
             if status_callback:
@@ -3852,7 +3852,7 @@ class PersonaCouncil:
             thinking_result = await persona._phase_independent_thinking(option, context)
             thinking_duration = time.time() - thinking_start
             
-            logger.info(f"  ✅ [{persona.name}] 独立思考完成 (耗时: {thinking_duration:.2f}s)")
+            logger.info(f"  [{persona.name}] 独立思考完成 (耗时: {thinking_duration:.2f}s)")
             
             # 推送阶段完成事件
             if status_callback:
@@ -3871,8 +3871,24 @@ class PersonaCouncil:
                     'timestamp': time.time()
                 })
             
+            # 立即将独立思考的结果写入共享存储，供其他Agent查看
+            async with shared_views_lock:
+                shared_views[persona_id] = {
+                    'name': persona.name,
+                    'persona_id': persona_id,
+                    'round': round_num,
+                    'phase': 'independent_thinking',  # 标记当前阶段
+                    'stance': thinking_result.get('stance', '未知'),
+                    'score': thinking_result.get('score', 0),
+                    'confidence': thinking_result.get('confidence', 0.7),
+                    'reasoning': thinking_result.get('reasoning', ''),
+                    'key_points': thinking_result.get('key_points', [])
+                }
+            
+            logger.info(f"  [{persona.name}] 已将独立思考结果共享给其他Agent")
+            
             # ========== 阶段2: 查看他人观点 ==========
-            logger.info(f"  👀 [{persona.name}] 阶段2: 查看他人观点... (时间: {time.strftime('%H:%M:%S')})")
+            logger.info(f"  [{persona.name}] 阶段2: 查看他人观点... (时间: {time.strftime('%H:%M:%S')})")
             
             # 推送阶段开始事件
             if status_callback:
@@ -3892,9 +3908,9 @@ class PersonaCouncil:
                     if pid != persona_id
                 }
             
-            logger.info(f"  👀 [{persona.name}] 观察到{len(other_views)}个其他Agent的观点")
+            logger.info(f"  [{persona.name}] 观察到{len(other_views)}个其他Agent的观点")
             
-            # 推送观察事件
+            # 推送观察事件（包含被观察的Agent列表，用于前端连线动画）
             if status_callback:
                 await status_callback('phase_complete', {
                     'persona_id': persona_id,
@@ -3915,7 +3931,7 @@ class PersonaCouncil:
                 })
             
             # ========== 阶段3: 深度反思 ==========
-            logger.info(f"  🤔 [{persona.name}] 阶段3: 深度反思... (时间: {time.strftime('%H:%M:%S')})")
+            logger.info(f"  [{persona.name}] 阶段3: 深度反思... (时间: {time.strftime('%H:%M:%S')})")
             
             # 推送阶段开始事件
             if status_callback:
@@ -3934,7 +3950,7 @@ class PersonaCouncil:
             )
             reflection_duration = time.time() - reflection_start
             
-            logger.info(f"  ✅ [{persona.name}] 深度反思完成 (耗时: {reflection_duration:.2f}s)")
+            logger.info(f"  [{persona.name}] 深度反思完成 (耗时: {reflection_duration:.2f}s)")
             
             # 推送阶段完成事件
             if status_callback:
@@ -3955,7 +3971,7 @@ class PersonaCouncil:
                 })
             
             # ========== 阶段4: 决策 ==========
-            logger.info(f"  ⚖️  [{persona.name}] 阶段4: 做出决策... (时间: {time.strftime('%H:%M:%S')})")
+            logger.info(f"  [{persona.name}] 阶段4: 做出决策... (时间: {time.strftime('%H:%M:%S')})")
             
             # 推送阶段开始事件
             if status_callback:
@@ -3980,9 +3996,9 @@ class PersonaCouncil:
                 'reflection_summary': reflection_result.get('reasoning', '')[:200]  # 深度反思摘要
             }
             
-            logger.info(f"  ⚖️  [{persona.name}] 决策: {decision_result['stance']} (得分: {decision_result['score']}, 信心: {decision_result['confidence']:.2f})")
+            logger.info(f"  [{persona.name}] 决策: {decision_result['stance']} (得分: {decision_result['score']}, 信心: {decision_result['confidence']:.2f})")
             
-            # 推送决策事件
+            # 推送决策事件（包含分数变化，用于中心球体动画）
             if status_callback:
                 await status_callback('phase_complete', {
                     'persona_id': persona_id,
@@ -3990,26 +4006,30 @@ class PersonaCouncil:
                     'phase': 'decision',
                     'round': round_num,
                     'decision': decision_result,
+                    'score_impact': decision_result['score'],  # 添加分数影响信息
                     'timestamp': time.time()
                 })
             
-            # 将决策写入共享存储
+            # 将决策写入共享存储（更新为最终决策结果）
             async with shared_views_lock:
                 shared_views[persona_id] = {
                     'name': persona.name,
                     'persona_id': persona_id,
                     'round': round_num,
+                    'phase': 'decision',  # 标记为最终决策阶段
                     'stance': decision_result['stance'],
                     'score': decision_result['score'],
                     'confidence': decision_result['confidence'],
                     'reasoning': decision_result['reasoning'],
-                    'key_points': decision_result['key_points']
+                    'key_points': decision_result['key_points'],
+                    'thinking_summary': decision_result.get('thinking_summary', ''),
+                    'reflection_summary': decision_result.get('reflection_summary', '')
                 }
             
             final_result = decision_result
             
             round_duration = time.time() - round_start
-            logger.info(f"  ⏱️  [{persona.name}] 第{round_num}轮完成 (耗时: {round_duration:.2f}s)")
+            logger.info(f"  [{persona.name}] 第{round_num}轮完成 (耗时: {round_duration:.2f}s)")
             
             # 推送轮次完成事件
             if status_callback:
@@ -4022,7 +4042,7 @@ class PersonaCouncil:
                 })
         
         total_duration = time.time() - start_time
-        logger.info(f"✅ [{persona.name}] 生命周期完成，共{rounds}轮 (总耗时: {total_duration:.2f}s, 时间: {time.strftime('%H:%M:%S')})\n")
+        logger.info(f"[{persona.name}] 生命周期完成，共{rounds}轮 (总耗时: {total_duration:.2f}s, 时间: {time.strftime('%H:%M:%S')})\n")
         
         # 推送Agent完成事件
         if status_callback:

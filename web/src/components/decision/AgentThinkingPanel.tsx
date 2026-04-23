@@ -24,13 +24,13 @@ export function AgentThinkingPanel({
   const getAgentIcon = (status: string) => {
     switch (status) {
       case 'thinking':
-        return '🤔';
+        return '[思考]';
       case 'complete':
-        return '✅';
+        return '[完成]';
       case 'error':
-        return '❌';
+        return '[错误]';
       default:
-        return '🤖';
+        return '[Agent]';
     }
   };
 

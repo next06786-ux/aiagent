@@ -3708,3 +3708,228 @@ print("   - POST /api/llm/switch")
 print("   - POST /api/llm/test")
 print("   - GET /api/admin/stats")
 print("   - GET /api/admin/activities")
+
+
+# ==================== 决策历史 API ====================
+
+from backend.decision.decision_history import DecisionHistoryManager
+from backend.decision.report_generator import DecisionReportGenerator
+import uuid
+
+# 初始化决策历史管理器
+decision_history_manager = None
+
+def get_decision_history_manager():
+    """获取决策历史管理器"""
+    global decision_history_manager
+    if decision_history_manager is None:
+        try:
+            db_config = {
+                'host': os.getenv('MYSQL_HOST', 'localhost'),
+                'port': int(os.getenv('MYSQL_PORT', 3306)),
+                'user': os.getenv('MYSQL_USER', 'root'),
+                'password': os.getenv('MYSQL_PASSWORD', ''),
+                'database': os.getenv('MYSQL_DATABASE', 'lifeswarm')
+            }
+            decision_history_manager = DecisionHistoryManager(db_config)
+        except Exception as e:
+            logging.error(f"初始化决策历史管理器失败: {e}")
+            # 返回一个禁用的管理器
+            decision_history_manager = type('DisabledManager', (), {'enabled': False})()
+    return decision_history_manager
+
+
+@app.post("/api/decision/history/save")
+async def save_decision_history(request_data: Dict[str, Any]):
+    """
+    保存决策历史
+    
+    Request:
+    {
+        "user_id": "xxx",
+        "session_id": "xxx",
+        "question": "xxx",
+        "decision_type": "xxx",
+        "options_data": {...}
+    }
+    """
+    try:
+        manager = get_decision_history_manager()
+        if not getattr(manager, 'enabled', False):
+            raise HTTPException(
+                status_code=503, 
+                detail="决策历史功能暂时不可用，请安装 mysql-connector-python"
+            )
+        
+        user_id = request_data.get('user_id')
+        session_id = request_data.get('session_id')
+        question = request_data.get('question')
+        decision_type = request_data.get('decision_type', 'general')
+        options_data = request_data.get('options_data', {})
+        
+        if not all([user_id, session_id, question]):
+            raise HTTPException(status_code=400, detail="缺少必要参数")
+        
+        # 生成历史记录 ID
+        history_id = str(uuid.uuid4())
+        
+        # 保存到数据库
+        success = manager.save_history(
+            history_id=history_id,
+            user_id=user_id,
+            session_id=session_id,
+            question=question,
+            decision_type=decision_type,
+            options_data=options_data
+        )
+        
+        if success:
+            return {
+                "success": True,
+                "history_id": history_id,
+                "message": "决策历史已保存"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="保存失败")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"保存决策历史失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/decision/history/list")
+async def get_decision_history_list(
+    user_id: str,
+    limit: int = 20,
+    offset: int = 0
+):
+    """
+    获取用户的决策历史列表
+    
+    Query Parameters:
+    - user_id: 用户ID
+    - limit: 返回数量限制（默认20）
+    - offset: 偏移量（默认0）
+    """
+    try:
+        manager = get_decision_history_manager()
+        result = manager.get_history_list(user_id, limit, offset)
+        return result
+        
+    except Exception as e:
+        logging.error(f"获取决策历史列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/decision/history/detail/{history_id}")
+async def get_decision_history_detail(history_id: str):
+    """
+    获取决策历史详情
+    
+    Path Parameters:
+    - history_id: 历史记录ID
+    """
+    try:
+        manager = get_decision_history_manager()
+        history = manager.get_history_detail(history_id)
+        
+        if history:
+            return {
+                "success": True,
+                "history": history
+            }
+        else:
+            raise HTTPException(status_code=404, detail="历史记录不存在")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"获取决策历史详情失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/decision/history/delete/{history_id}")
+async def delete_decision_history(history_id: str, user_id: str):
+    """
+    删除决策历史
+    
+    Path Parameters:
+    - history_id: 历史记录ID
+    
+    Query Parameters:
+    - user_id: 用户ID（用于权限验证）
+    """
+    try:
+        manager = get_decision_history_manager()
+        success = manager.delete_history(history_id, user_id)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "历史记录已删除"
+            }
+        else:
+            raise HTTPException(status_code=404, detail="历史记录不存在或无权限")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"删除决策历史失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/decision/generate-report")
+async def generate_decision_report(request_data: Dict[str, Any]):
+    """
+    生成决策选项报告
+    
+    Request:
+    {
+        "question": "xxx",
+        "option_title": "xxx",
+        "option_description": "xxx",
+        "agents_data": [...],
+        "total_score": 85.5
+    }
+    """
+    try:
+        question = request_data.get('question', '')
+        option_title = request_data.get('option_title', '')
+        option_description = request_data.get('option_description', '')
+        agents_data = request_data.get('agents_data', [])
+        total_score = request_data.get('total_score', 0)
+        
+        # 获取 LLM 服务
+        llm_service = get_or_init_llm_service()
+        
+        # 创建报告生成器
+        generator = DecisionReportGenerator(llm_service)
+        
+        # 生成报告
+        result = await generator.generate_option_report(
+            question=question,
+            option_title=option_title,
+            option_description=option_description,
+            agents_data=agents_data,
+            total_score=total_score
+        )
+        
+        return result
+        
+    except Exception as e:
+        logging.error(f"生成决策报告失败: {e}")
+        # 返回基础报告
+        return {
+            "success": False,
+            "report": {
+                "summary": f"该选项获得综合评分 {request_data.get('total_score', 0):.1f} 分",
+                "key_insights": ["报告生成失败，请查看详细数据"],
+                "strengths": [],
+                "risks": [],
+                "recommendation": "建议查看各 Agent 的详细分析",
+                "agents_summary": request_data.get('agents_data', []),
+                "total_score": request_data.get('total_score', 0)
+            }
+        }

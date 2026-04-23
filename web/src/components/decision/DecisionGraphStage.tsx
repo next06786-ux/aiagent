@@ -235,7 +235,7 @@ function MultiAgentBotNode({ data }: NodeProps) {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'thinking': return '🤔';
+      case 'thinking': return '[思考]';
       case 'complete': return '✓';
       case 'error': return '✗';
       default: return '○';
