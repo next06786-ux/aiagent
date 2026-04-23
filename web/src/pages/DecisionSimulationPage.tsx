@@ -1432,16 +1432,29 @@ export function DecisionSimulationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveOptions, config.userId, config.question, config.options, wsPhase]);
 
-  // 计算当前选中的选项
-  const activeOption: DecisionOption | null = record?.options[selectedOptionIndex] || null;
+  // 计算当前选中的选项 - 直接从 liveOptions 获取
+  const activeOption: DecisionOption | null = useMemo(() => {
+    const optionId = `option_${selectedOptionIndex + 1}`;
+    const liveOption = liveOptions.get(optionId);
+    
+    if (liveOption) {
+      return liveOption;
+    }
+    
+    // 如果 liveOptions 中没有，尝试从 record 获取
+    return record?.options[selectedOptionIndex] || null;
+  }, [selectedOptionIndex, liveOptions, record]);
 
   // 渲染保护 - 只要有智能体数据就可以渲染
   const canRenderPersonas = useMemo(() => {
-    if (!activeOption) return false;
-    const currentOptionId = activeOption.option_id;
-    const personas = agentsByOption.get(currentOptionId);
-    return personas && personas.length > 0;
-  }, [activeOption, agentsByOption]);
+    const optionId = `option_${selectedOptionIndex + 1}`;
+    const personas = agentsByOption.get(optionId);
+    const hasPersonas = personas && personas.length > 0;
+    
+    console.log(`[渲染检查] optionId=${optionId}, hasPersonas=${hasPersonas}, personas数量=${personas?.length || 0}`);
+    
+    return hasPersonas;
+  }, [selectedOptionIndex, agentsByOption]);
 
   return (
     <div style={{ 
@@ -1699,40 +1712,27 @@ export function DecisionSimulationPage() {
         {canRenderPersonas ? (
           <PersonaInteractionView
             personas={(() => {
-              if (activeOption) {
-                const currentOptionId = activeOption.option_id;
-                return agentsByOption.get(currentOptionId) || [];
-              }
-              return [];
+              const currentOptionId = `option_${selectedOptionIndex + 1}`;
+              const personas = agentsByOption.get(currentOptionId) || [];
+              console.log(`[PersonaInteractionView] 渲染 optionId=${currentOptionId}, personas数量=${personas.length}`);
+              return personas;
             })()}
             interactions={(() => {
-              if (activeOption) {
-                const currentOptionId = activeOption.option_id;
-                return interactionsByOption.get(currentOptionId) || [];
-              }
-              return [];
+              const currentOptionId = `option_${selectedOptionIndex + 1}`;
+              return interactionsByOption.get(currentOptionId) || [];
             })()}
-            optionTitle={activeOption?.title || ''}
+            optionTitle={activeOption?.title || config.options[selectedOptionIndex]?.title || ''}
             currentMonth={(() => {
-              if (activeOption) {
-                const currentOptionId = activeOption.option_id;
-                return currentMonthByOption.get(currentOptionId);
-              }
-              return undefined;
+              const currentOptionId = `option_${selectedOptionIndex + 1}`;
+              return currentMonthByOption.get(currentOptionId);
             })()}
             isComplete={(() => {
-              if (activeOption) {
-                const currentOptionId = activeOption.option_id;
-                return completedOptions.has(currentOptionId);
-              }
-              return false;
+              const currentOptionId = `option_${selectedOptionIndex + 1}`;
+              return completedOptions.has(currentOptionId);
             })()}
             totalScore={(() => {
-              if (activeOption) {
-                const currentOptionId = activeOption.option_id;
-                return totalScoreByOption.get(currentOptionId) || 0;
-              }
-              return 0;
+              const currentOptionId = `option_${selectedOptionIndex + 1}`;
+              return totalScoreByOption.get(currentOptionId) || 0;
             })()}
           />
         ) : wsPhase === 'connecting' ? (
