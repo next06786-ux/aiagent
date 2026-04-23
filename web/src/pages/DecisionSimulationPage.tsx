@@ -1178,15 +1178,13 @@ export function DecisionSimulationPage() {
                     const totalScore = completedAgents.reduce((sum, a) => sum + (a.score || 0), 0) / completedAgents.length;
                     console.log(`[推演] ${optId} 计算总分: ${totalScore.toFixed(1)} (${completedAgents.length}/${updatedAgents.length}个完成)`);
                     
-                    // 使用setTimeout确保状态更新在下一个事件循环
-                    setTimeout(() => {
-                      setTotalScoreByOption(prevScores => {
-                        const nextScores = new Map(prevScores);
-                        nextScores.set(optId, totalScore);
-                        console.log(`[推演] ${optId} 总分已更新到state: ${totalScore.toFixed(1)}`);
-                        return nextScores;
-                      });
-                    }, 0);
+                    // 立即更新总分数，不使用 setTimeout
+                    setTotalScoreByOption(prevScores => {
+                      const nextScores = new Map(prevScores);
+                      nextScores.set(optId, totalScore);
+                      console.log(`[推演] ${optId} 总分已更新到state: ${totalScore.toFixed(1)}`);
+                      return nextScores;
+                    });
                   }
                   
                   return next;

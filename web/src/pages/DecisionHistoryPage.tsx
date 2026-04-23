@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/shell/AppShell';
 import { BackButton } from '../components/common/BackButton';
 import { useAuth } from '../hooks/useAuth';
-import { getDecisionHistoryList, deleteDecisionHistory, DecisionHistoryItem } from '../services/decisionHistory';
+import { getDecisionHistoryList, deleteDecisionHistory, DecisionHistoryListItem } from '../services/decisionHistory';
 
 export function DecisionHistoryPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [historyList, setHistoryList] = useState<DecisionHistoryItem[]>([]);
+  const [historyList, setHistoryList] = useState<DecisionHistoryListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,8 +24,9 @@ export function DecisionHistoryPage() {
     setIsLoading(true);
     setError('');
     try {
-      const list = await getDecisionHistoryList(user.user_id);
-      setHistoryList(list);
+      const response = await getDecisionHistoryList(user.user_id);
+      console.log('[历史] 加载成功:', response);
+      setHistoryList(response.histories || []);
     } catch (err) {
       console.error('[历史] 加载失败:', err);
       setError('加载历史记录失败');
@@ -35,10 +36,11 @@ export function DecisionHistoryPage() {
   };
 
   const handleDelete = async (historyId: string) => {
+    if (!user?.user_id) return;
     if (!confirm('确定要删除这条历史记录吗？')) return;
 
     try {
-      await deleteDecisionHistory(historyId);
+      await deleteDecisionHistory(historyId, user.user_id);
       setHistoryList(prev => prev.filter(item => item.id !== historyId));
     } catch (err) {
       console.error('[历史] 删除失败:', err);
@@ -46,7 +48,7 @@ export function DecisionHistoryPage() {
     }
   };
 
-  const handleView = (item: DecisionHistoryItem) => {
+  const handleView = (item: DecisionHistoryListItem) => {
     // TODO: 实现场景还原功能
     console.log('[历史] 查看详情:', item);
     alert('场景还原功能开发中...');
@@ -195,7 +197,7 @@ export function DecisionHistoryPage() {
                           <circle cx="12" cy="12" r="10"/>
                           <polyline points="12 6 12 12 16 14"/>
                         </svg>
-                        {new Date(item.createdAt).toLocaleString('zh-CN')}
+                        {new Date(item.created_at).toLocaleString('zh-CN')}
                       </span>
                       <span style={{
                         padding: '4px 12px',
@@ -205,7 +207,7 @@ export function DecisionHistoryPage() {
                         fontWeight: 600,
                         color: 'rgba(10, 89, 247, 0.9)',
                       }}>
-                        {item.optionTitle}
+                        {item.options_count} 个选项
                       </span>
                     </div>
                   </div>
@@ -235,21 +237,6 @@ export function DecisionHistoryPage() {
                     删除
                   </button>
                 </div>
-                
-                {item.report && (
-                  <div style={{
-                    marginTop: 16,
-                    padding: 16,
-                    borderRadius: 12,
-                    background: '#F8FAFC',
-                    fontSize: 14,
-                    color: '#475569',
-                    lineHeight: 1.6,
-                  }}>
-                    {item.report.summary.substring(0, 150)}
-                    {item.report.summary.length > 150 && '...'}
-                  </div>
-                )}
               </div>
             ))}
           </div>

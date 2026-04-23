@@ -476,6 +476,10 @@ export function PersonaInteractionView({
         }}>
           {totalScore.toFixed(1)}
         </div>
+        {(() => {
+          console.log(`[中间球体] 当前显示的总分: ${totalScore.toFixed(1)}`);
+          return null;
+        })()}
         <div style={{
           position: 'relative',
           zIndex: 2,
