@@ -630,9 +630,9 @@ async def simulate_single_option(websocket: WebSocket):
                         async def ws_status_callback(event_type: str, data: Dict[str, Any]):
                             """实时推送Agent状态到前端"""
                             try:
+                                # 直接发送，不嵌套在agent_event中
                                 await safe_send({
-                                    "type": "agent_event",
-                                    "event_type": event_type,
+                                    "type": event_type,
                                     "option_id": option_id,
                                     **data
                                 })

@@ -618,20 +618,19 @@ class DecisionPersona:
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        阶段2: 独立思考 - 第1轮分析
+        阶段2: 独立思考 - 第1轮分析（支持流式推理）
         
         在这个阶段，Agent会：
         1. 智能选择需要的技能
         2. 执行选中的技能
-        3. 基于技能结果进行分析
+        3. 基于技能结果进行流式分析
         """
         logger.debug(f"[{self.name}] 💭 独立思考阶段")
         
         # 发送阶段开始事件
         status_callback = context.get("status_callback")
         if status_callback:
-            await status_callback('agent_event', {
-                'event_type': 'phase_start',
+            await status_callback('phase_start', {
                 'persona_id': self.persona_id,
                 'persona_name': self.name,
                 'phase': 'independent_thinking',
@@ -657,14 +656,190 @@ class DecisionPersona:
                 status_callback
             )
         
-        # 调用子类的 analyze_option 方法进行分析
+        # 🆕 发送思考开始事件
+        if status_callback:
+            await status_callback('thinking_start', {
+                'persona_id': self.persona_id,
+                'persona_name': self.name,
+                'phase': 'independent_thinking',
+                'round': context.get('round', 1),
+                'timestamp': __import__('time').time()
+            })
+        
+        # 🆕 使用流式分析（如果LLM支持）
         context_with_skills = context.copy()
         context_with_skills['skill_results'] = skill_results
         context_with_skills['round'] = 1
         
-        result = await self.analyze_option(option, context_with_skills, {})
+        # 尝试使用流式分析
+        result = await self._analyze_with_streaming(
+            option=option,
+            context=context_with_skills,
+            other_views={},
+            phase='independent_thinking'
+        )
         
         return result
+    
+    async def _analyze_with_streaming(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        other_views: Dict[str, Any],
+        phase: str
+    ) -> Dict[str, Any]:
+        """
+        使用流式输出进行分析（独立思考或深度反思）
+        
+        Args:
+            option: 决策选项
+            context: 上下文（包含skill_results等）
+            other_views: 其他persona的观点（仅深度反思阶段）
+            phase: 当前阶段 ('independent_thinking' | 'deep_reflection')
+        
+        Returns:
+            分析结果
+        """
+        from backend.llm.llm_service import get_llm_service
+        
+        llm = get_llm_service()
+        status_callback = context.get('status_callback')
+        
+        # 如果LLM不可用，降级到非流式
+        if not llm or not llm.enabled:
+            logger.warning(f"[{self.name}] LLM不可用，使用非流式分析")
+            return await self.analyze_option(option, context, other_views)
+        
+        # 构建分析提示词
+        prompt = self._build_analysis_prompt(option, context, other_views, phase)
+        
+        logger.info(f"[{self.name}] 🌊 开始流式分析 (phase={phase})")
+        
+        # 使用已有的流式分析方法
+        try:
+            response_text = await self._analyze_with_stream(
+                prompt=prompt,
+                temperature=0.7,
+                response_format="json_object",
+                status_callback=status_callback,
+                persona_id=self.persona_id,
+                persona_name=self.name,
+                round_num=context.get('round', 1)
+            )
+            
+            # 解析JSON结果
+            result = json.loads(response_text)
+            
+            logger.info(f"[{self.name}] ✅ 流式分析完成: {result.get('stance')} ({result.get('score')}分)")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"[{self.name}] JSON解析失败: {e}")
+            # 降级：尝试从文本中提取信息
+            return {
+                "stance": "中立",
+                "score": 50,
+                "confidence": 0.5,
+                "reasoning": response_text[:500],
+                "key_points": []
+            }
+        except Exception as e:
+            logger.error(f"[{self.name}] 流式分析失败: {e}")
+            # 完全降级到非流式
+            return await self.analyze_option(option, context, other_views)
+    
+    def _build_analysis_prompt(
+        self,
+        option: Dict[str, Any],
+        context: Dict[str, Any],
+        other_views: Dict[str, Any],
+        phase: str
+    ) -> str:
+        """构建分析提示词"""
+        
+        skill_results = context.get('skill_results', {})
+        skill_results_text = ""
+        if skill_results:
+            skill_results_text = "\n【技能执行结果】\n"
+            for skill_name, result in skill_results.items():
+                summary = self._extract_skill_result_summary(skill_name, result)
+                skill_results_text += f"• {skill_name}: {summary}\n"
+        
+        if phase == 'independent_thinking':
+            # 独立思考阶段的提示词
+            prompt = f"""你是【{self.name}】，{self.description}
+
+【决策问题】
+{context.get('question', '')}
+
+【选项分析】
+标题: {option.get('title')}
+描述: {option.get('description', '')}
+{skill_results_text}
+
+请从你的角度进行独立分析，输出JSON格式：
+{{
+    "stance": "你的立场（支持/反对/中立）",
+    "score": 评分（0-100的整数）,
+    "confidence": 信心度（0-1的小数）,
+    "reasoning": "详细的推理过程（200字以内）",
+    "key_points": ["关键要点1", "关键要点2", "关键要点3"]
+}}
+
+要求：
+1. stance必须是"支持"、"反对"或"中立"之一
+2. score必须是0-100之间的整数
+3. confidence必须是0-1之间的小数
+4. reasoning要简洁清晰，不超过200字
+5. key_points列出3-5个关键要点
+"""
+        else:  # deep_reflection
+            # 深度反思阶段的提示词
+            previous_result = context.get('previous_result', {})
+            other_views_text = ""
+            if other_views:
+                other_views_text = "\n【其他Agent的观点】\n"
+                for pid, view in list(other_views.items())[:5]:
+                    other_views_text += f"• {view.get('name', pid)}: {view.get('stance')} ({view.get('score')}分)\n"
+                    if view.get('reasoning'):
+                        other_views_text += f"  理由: {view.get('reasoning', '')[:100]}...\n"
+            
+            prompt = f"""你是【{self.name}】，{self.description}
+
+【决策问题】
+{context.get('question', '')}
+
+【选项分析】
+标题: {option.get('title')}
+描述: {option.get('description', '')}
+
+【你之前的分析】
+立场: {previous_result.get('stance')}
+评分: {previous_result.get('score')}
+推理: {previous_result.get('reasoning', '')[:200]}...
+{other_views_text}{skill_results_text}
+
+请基于其他Agent的观点进行深度反思，输出JSON格式：
+{{
+    "stance": "你的立场（可能调整）",
+    "score": 评分（可能调整）,
+    "confidence": 信心度（0-1）,
+    "reasoning": "深度反思的过程（200字以内）",
+    "key_points": ["关键要点1", "关键要点2", "关键要点3"],
+    "stance_changed": true或false（立场是否改变）
+}}
+
+要求：
+1. stance必须是"支持"、"反对"或"中立"之一
+2. score必须是0-100之间的整数
+3. confidence必须是0-1之间的小数
+4. reasoning要简洁清晰，不超过200字
+5. key_points列出3-5个关键要点
+6. stance_changed表示立场是否改变
+"""
+        
+        return prompt
     
     async def _phase_observe_others(
         self,
@@ -694,21 +869,20 @@ class DecisionPersona:
         previous_result: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        阶段4: 深度反思 - 第2+轮分析
+        阶段4: 深度反思 - 第2+轮分析（支持流式推理）
         
         在这个阶段，Agent会：
         1. 考虑其他Agent的观点
         2. 智能选择是否需要补充技能
         3. 执行补充技能
-        4. 深度反思并调整立场
+        4. 深度反思并调整立场（流式输出）
         """
         logger.debug(f"[{self.name}] 🤔 深度反思阶段")
         
         # 发送阶段开始事件
         status_callback = context.get("status_callback")
         if status_callback:
-            await status_callback('agent_event', {
-                'event_type': 'phase_start',
+            await status_callback('phase_start', {
                 'persona_id': self.persona_id,
                 'persona_name': self.name,
                 'phase': 'deep_reflection',
@@ -736,13 +910,29 @@ class DecisionPersona:
                 status_callback
             )
         
-        # 调用子类的 analyze_option 方法进行深度分析
+        # 🆕 发送思考开始事件
+        if status_callback:
+            await status_callback('thinking_start', {
+                'persona_id': self.persona_id,
+                'persona_name': self.name,
+                'phase': 'deep_reflection',
+                'round': context.get('round', 1),
+                'timestamp': __import__('time').time()
+            })
+        
+        # 更新上下文
         context_with_skills = context.copy()
         context_with_skills['skill_results'] = skill_results
         context_with_skills['round'] = context.get('round', 1) + 1
         context_with_skills['previous_result'] = previous_result
         
-        result = await self.analyze_option(option, context_with_skills, other_views)
+        # 🆕 使用流式分析（如果LLM支持）
+        result = await self._analyze_with_streaming(
+            option=option,
+            context=context_with_skills,
+            other_views=other_views,
+            phase='deep_reflection'
+        )
         
         return result
     
@@ -829,8 +1019,7 @@ class DecisionPersona:
                 # 🆕 发送内心独白到前端
                 status_callback = context.get('status_callback')
                 if status_callback:
-                    await status_callback("agent_event", {
-                        "event_type": "thinking_monologue",
+                    await status_callback("thinking_monologue", {
                         "persona_id": self.persona_id,
                         "persona_name": self.name,
                         "content": thinking,
@@ -844,8 +1033,7 @@ class DecisionPersona:
                 # 🆕 发送技能选择到前端
                 status_callback = context.get('status_callback')
                 if status_callback:
-                    await status_callback("agent_event", {
-                        "event_type": "skill_selection",
+                    await status_callback("skill_selection", {
                         "persona_id": self.persona_id,
                         "persona_name": self.name,
                         "selected_skills": selected_skills,
@@ -1139,8 +1327,7 @@ class DecisionPersona:
             try:
                 # 推送技能开始事件
                 if status_callback:
-                    await status_callback('agent_event', {
-                        'event_type': 'skill_start',
+                    await status_callback('skill_start', {
                         'persona_id': self.persona_id,
                         'persona_name': self.name,
                         'skill_name': skill_name,
@@ -1158,8 +1345,7 @@ class DecisionPersona:
                     
                     # 推送技能完成事件
                     if status_callback:
-                        await status_callback('agent_event', {
-                            'event_type': 'skill_complete',
+                        await status_callback('skill_complete', {
                             'persona_id': self.persona_id,
                             'persona_name': self.name,
                             'skill_name': skill_name,
@@ -1173,8 +1359,7 @@ class DecisionPersona:
                 else:
                     logger.warning(f"[{self.name}] 技能执行失败: {skill_name}")
                     if status_callback:
-                        await status_callback('agent_event', {
-                            'event_type': 'skill_error',
+                        await status_callback('skill_error', {
                             'persona_id': self.persona_id,
                             'persona_name': self.name,
                             'skill_name': skill_name,
@@ -1187,8 +1372,7 @@ class DecisionPersona:
             except Exception as e:
                 logger.error(f"[{self.name}] 技能执行异常: {skill_name} - {e}")
                 if status_callback:
-                    await status_callback('agent_event', {
-                        'event_type': 'skill_error',
+                    await status_callback('skill_error', {
                         'persona_id': self.persona_id,
                         'persona_name': self.name,
                         'skill_name': skill_name,

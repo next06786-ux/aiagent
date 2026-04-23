@@ -110,6 +110,8 @@ export function DecisionSimulationPage() {
     stance?: string;
     currentMessage?: string;
     messageTimestamp?: number;
+    messageAction?: string;
+    streamingMessage?: string;
     thinkingHistory?: Array<{
       round: number;
       message: string;
@@ -118,6 +120,16 @@ export function DecisionSimulationPage() {
       stance?: string;
       keyPoints?: string[];
       reasoning?: string;
+      event_type?: string;
+      phase?: string;
+      action?: string;
+      skillName?: string;
+      skillNames?: string[];
+      skillResult?: any;
+      duration?: number;
+      observed_count?: number;
+      observed_personas?: string[];
+      stance_changed?: boolean;
     }>;
   }>>>(new Map());
   const [currentMonthByOption, setCurrentMonthByOption] = useState<Map<string, number>>(new Map());
@@ -355,9 +367,18 @@ export function DecisionSimulationPage() {
               });
             }
 
-            // 处理新的agent_event消息
-            if (type === 'agent_event') {
-              const eventType = String(event.event_type || '');
+            // 处理Agent事件 - 支持两种格式：
+            // 1. 直接事件类型 (type = 'phase_start', 'thinking_chunk' 等)
+            // 2. 包装格式 (type = 'agent_event', event_type = 'phase_start' 等)
+            const eventType = type === 'agent_event' ? String(event.event_type || '') : type;
+            const isAgentEvent = [
+              'agent_start', 'round_start', 'phase_start', 'phase_complete',
+              'thinking_start', 'thinking_monologue', 'skill_selection', 'thinking_chunk',
+              'skill_start', 'skill_complete', 'skill_error', 'thinking_complete',
+              'observation', 'confidence_adjusted', 'round_complete', 'agent_complete'
+            ].includes(eventType);
+            
+            if (isAgentEvent) {
               const optId = String(event.option_id || optionId);
               const personaId = String(event.persona_id || '');
               const personaName = String(event.persona_name || '');
@@ -415,6 +436,96 @@ export function DecisionSimulationPage() {
                         messageTimestamp: Date.now(),
                         thinkingHistory: [...existingHistory, historyRecord]
                       };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
+              }
+              
+              // 阶段完成
+              if (eventType === 'phase_complete') {
+                const phase = String(event.phase || '');
+                const round = (event.round as number) || 1;
+                console.log(`[Agent事件] ${personaName} 完成阶段: ${phase}`);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const existingHistory = a.thinkingHistory || [];
+                      let historyRecord: any;
+                      let displayMessage = '';
+                      
+                      // 根据不同阶段构建不同的消息
+                      if (phase === 'independent_thinking' && event.result) {
+                        const result = event.result as any;
+                        displayMessage = `✅ 独立思考: ${result.stance} (${result.score}分)`;
+                        historyRecord = {
+                          round,
+                          message: displayMessage,
+                          timestamp: Date.now(),
+                          event_type: 'phase_complete',
+                          phase: 'independent_thinking',
+                          stance: result.stance,
+                          score: result.score,
+                          reasoning: result.reasoning,
+                          keyPoints: result.key_points
+                        };
+                      } else if (phase === 'observe_others') {
+                        const observedCount = event.observed_count || 0;
+                        displayMessage = `👀 观察到${observedCount}个其他Agent的观点`;
+                        historyRecord = {
+                          round,
+                          message: displayMessage,
+                          timestamp: Date.now(),
+                          event_type: 'phase_complete',
+                          phase: 'observe_others',
+                          observed_count: observedCount,
+                          observed_personas: event.observed_personas
+                        };
+                      } else if (phase === 'deep_reflection' && event.result) {
+                        const result = event.result as any;
+                        const stanceChanged = result.stance_changed ? ' ⚠️ 立场已改变' : '';
+                        displayMessage = `🤔 深度反思: ${result.stance} (${result.score}分)${stanceChanged}`;
+                        historyRecord = {
+                          round,
+                          message: displayMessage,
+                          timestamp: Date.now(),
+                          event_type: 'phase_complete',
+                          phase: 'deep_reflection',
+                          stance: result.stance,
+                          score: result.score,
+                          reasoning: result.reasoning,
+                          keyPoints: result.key_points,
+                          stance_changed: result.stance_changed
+                        };
+                      } else if (phase === 'decision' && event.decision) {
+                        const decision = event.decision as any;
+                        displayMessage = `⚖️ 决策: ${decision.stance} (${decision.score}分, 信心${(decision.confidence * 100).toFixed(0)}%)`;
+                        historyRecord = {
+                          round,
+                          message: displayMessage,
+                          timestamp: Date.now(),
+                          event_type: 'phase_complete',
+                          phase: 'decision',
+                          stance: decision.stance,
+                          score: decision.score,
+                          confidence: decision.confidence,
+                          reasoning: decision.reasoning,
+                          keyPoints: decision.key_points
+                        };
+                      }
+                      
+                      if (historyRecord) {
+                        return {
+                          ...a,
+                          currentMessage: displayMessage,
+                          messageTimestamp: Date.now(),
+                          thinkingHistory: [...existingHistory, historyRecord]
+                        };
+                      }
                     }
                     return a;
                   }));
