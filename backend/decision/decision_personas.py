@@ -627,6 +627,19 @@ class DecisionPersona:
         """
         logger.debug(f"[{self.name}] 💭 独立思考阶段")
         
+        # 发送阶段开始事件
+        status_callback = context.get("status_callback")
+        if status_callback:
+            await status_callback('agent_event', {
+                'event_type': 'phase_start',
+                'persona_id': self.persona_id,
+                'persona_name': self.name,
+                'phase': 'independent_thinking',
+                'phase_name': '独立思考',
+                'round': context.get('round', 1),
+                'timestamp': __import__('time').time()
+            })
+        
         # 智能技能选择（像Cursor的Function Calling）
         selected_skills = await self._intelligent_skill_selection(
             option=option,
@@ -641,7 +654,7 @@ class DecisionPersona:
             skill_results = await self._execute_selected_skills(
                 selected_skills,
                 context,
-                context.get("status_callback")
+                status_callback
             )
         
         # 调用子类的 analyze_option 方法进行分析
@@ -691,6 +704,19 @@ class DecisionPersona:
         """
         logger.debug(f"[{self.name}] 🤔 深度反思阶段")
         
+        # 发送阶段开始事件
+        status_callback = context.get("status_callback")
+        if status_callback:
+            await status_callback('agent_event', {
+                'event_type': 'phase_start',
+                'persona_id': self.persona_id,
+                'persona_name': self.name,
+                'phase': 'deep_reflection',
+                'phase_name': '深度反思',
+                'round': context.get('round', 1),
+                'timestamp': __import__('time').time()
+            })
+        
         # 智能技能选择（可能需要补充技能来验证其他Agent的观点）
         selected_skills = await self._intelligent_skill_selection(
             option=option,
@@ -707,7 +733,7 @@ class DecisionPersona:
             skill_results = await self._execute_selected_skills(
                 selected_skills,
                 context,
-                context.get("status_callback")
+                status_callback
             )
         
         # 调用子类的 analyze_option 方法进行深度分析
@@ -800,10 +826,33 @@ class DecisionPersona:
             # 记录Agent的思考过程
             if thinking:
                 logger.info(f"[{self.name}] 内心独白: {thinking}")
+                # 🆕 发送内心独白到前端
+                status_callback = context.get('status_callback')
+                if status_callback:
+                    await status_callback("agent_event", {
+                        "event_type": "thinking_monologue",
+                        "persona_id": self.persona_id,
+                        "persona_name": self.name,
+                        "content": thinking,
+                        "phase": phase,
+                        "round": context.get("round", 1)
+                    })
             
             logger.info(f"[{self.name}] 技能选择 ({phase}): {selected_skills if selected_skills else '不使用技能'}")
             if reason:
                 logger.info(f"[{self.name}] 选择理由: {reason}")
+                # 🆕 发送技能选择到前端
+                status_callback = context.get('status_callback')
+                if status_callback:
+                    await status_callback("agent_event", {
+                        "event_type": "skill_selection",
+                        "persona_id": self.persona_id,
+                        "persona_name": self.name,
+                        "selected_skills": selected_skills,
+                        "reason": reason,
+                        "phase": phase,
+                        "round": context.get("round", 1)
+                    })
             
             # 记录到私有解读层
             if self.current_interpretation:
@@ -1090,10 +1139,12 @@ class DecisionPersona:
             try:
                 # 推送技能开始事件
                 if status_callback:
-                    await status_callback('skill_start', {
+                    await status_callback('agent_event', {
+                        'event_type': 'skill_start',
                         'persona_id': self.persona_id,
                         'persona_name': self.name,
                         'skill_name': skill_name,
+                        'round': context.get('round', 1),
                         'timestamp': __import__('time').time()
                     })
                 
@@ -1107,12 +1158,14 @@ class DecisionPersona:
                     
                     # 推送技能完成事件
                     if status_callback:
-                        await status_callback('skill_complete', {
+                        await status_callback('agent_event', {
+                            'event_type': 'skill_complete',
                             'persona_id': self.persona_id,
                             'persona_name': self.name,
                             'skill_name': skill_name,
                             'summary': result_summary,
                             'result': result,
+                            'round': context.get('round', 1),
                             'timestamp': __import__('time').time()
                         })
                     
@@ -1120,11 +1173,13 @@ class DecisionPersona:
                 else:
                     logger.warning(f"[{self.name}] 技能执行失败: {skill_name}")
                     if status_callback:
-                        await status_callback('skill_error', {
+                        await status_callback('agent_event', {
+                            'event_type': 'skill_error',
                             'persona_id': self.persona_id,
                             'persona_name': self.name,
                             'skill_name': skill_name,
                             'error': result.get('error', '未知错误'),
+                            'round': context.get('round', 1),
                             'timestamp': __import__('time').time()
                         })
                     return (skill_name, None)
@@ -1132,11 +1187,13 @@ class DecisionPersona:
             except Exception as e:
                 logger.error(f"[{self.name}] 技能执行异常: {skill_name} - {e}")
                 if status_callback:
-                    await status_callback('skill_error', {
+                    await status_callback('agent_event', {
+                        'event_type': 'skill_error',
                         'persona_id': self.persona_id,
                         'persona_name': self.name,
                         'skill_name': skill_name,
                         'error': str(e),
+                        'round': context.get('round', 1),
                         'timestamp': __import__('time').time()
                     })
                 return (skill_name, None)
@@ -3534,12 +3591,13 @@ class PersonaCouncil:
         shared_views_lock: asyncio.Lock
     ) -> Dict[str, Any]:
         """
-        运行智能体生命周期，并实时共享观点
+        运行智能体生命周期 - 完整的4阶段流程
         
-        每个智能体独立执行N轮推演，每轮包括：
-        1. 独立思考
-        2. 观察他人观点（从shared_views读取）
-        3. 深度反思并调整立场
+        每一轮包含4个阶段：
+        1. 独立思考 - 可执行技能，流式输出推理
+        2. 查看他人观点 - 从shared_views读取
+        3. 深度反思 - 可执行技能，流式输出反思
+        4. 决策 - 输出立场和评分
         
         Args:
             persona: 智能体实例
@@ -3592,140 +3650,179 @@ class PersonaCouncil:
             context['round'] = round_num
             context['total_rounds'] = rounds
             
-            # 第1步：独立思考
-            logger.info(f"  🧠 [{persona.name}] 独立思考... (时间: {time.strftime('%H:%M:%S')})")
+            # ========== 阶段1: 独立思考 ==========
+            logger.info(f"  🧠 [{persona.name}] 阶段1: 独立思考... (时间: {time.strftime('%H:%M:%S')})")
             
-            # 推送思考开始事件
+            # 推送阶段开始事件
             if status_callback:
-                await status_callback('thinking_start', {
+                await status_callback('phase_start', {
                     'persona_id': persona_id,
                     'persona_name': persona.name,
+                    'phase': 'independent_thinking',
+                    'phase_name': '独立思考',
                     'round': round_num,
                     'timestamp': time.time()
                 })
             
-            llm_start = time.time()
+            thinking_start = time.time()
+            thinking_result = await persona._phase_independent_thinking(option, context)
+            thinking_duration = time.time() - thinking_start
             
-            # 🆕 使用生命周期阶段方法，而不是直接调用analyze_option
-            if round_num == 1:
-                # 第1轮：独立思考阶段（包含智能技能选择）
-                result = await persona._phase_independent_thinking(option, context)
-            else:
-                # 第2+轮：深度反思阶段（包含智能技能选择）
-                # 先观察他人
-                async with shared_views_lock:
-                    other_views = {
-                        pid: view for pid, view in shared_views.items()
-                        if pid != persona_id
-                    }
-                
-                # 深度反思
-                result = await persona._phase_deep_reflection(option, context, other_views, final_result)
+            logger.info(f"  ✅ [{persona.name}] 独立思考完成 (耗时: {thinking_duration:.2f}s)")
             
-            llm_duration = time.time() - llm_start
-            logger.info(f"  ✅ [{persona.name}] LLM调用完成 (耗时: {llm_duration:.2f}s)")
-            
-            # 推送思考完成事件
+            # 推送阶段完成事件
             if status_callback:
-                reasoning = result.get('reasoning', '')
-                key_points = result.get('key_points', [])
-                logger.info(f"[{persona.name}] 📤 发送thinking_complete事件: reasoning长度={len(reasoning)}, key_points数量={len(key_points)}")
-                await status_callback('thinking_complete', {
+                await status_callback('phase_complete', {
                     'persona_id': persona_id,
                     'persona_name': persona.name,
+                    'phase': 'independent_thinking',
                     'round': round_num,
-                    'duration': llm_duration,
-                    'stance': result.get('stance', '未知'),
-                    'score': result.get('score', 0),
-                    'reasoning': reasoning,  # 完整推理内容
-                    'key_points': key_points,  # 关键要点
-                    'confidence': result.get('confidence', 0.7),  # 信心度
+                    'duration': thinking_duration,
+                    'result': {
+                        'stance': thinking_result.get('stance', '未知'),
+                        'score': thinking_result.get('score', 0),
+                        'reasoning': thinking_result.get('reasoning', ''),
+                        'key_points': thinking_result.get('key_points', [])
+                    },
                     'timestamp': time.time()
                 })
-                logger.info(f"[{persona.name}] ✅ thinking_complete事件已发送")
             
-            final_result = result
+            # ========== 阶段2: 查看他人观点 ==========
+            logger.info(f"  👀 [{persona.name}] 阶段2: 查看他人观点... (时间: {time.strftime('%H:%M:%S')})")
             
-            # 第2步：将当前观点写入共享存储
+            # 推送阶段开始事件
+            if status_callback:
+                await status_callback('phase_start', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'phase': 'observe_others',
+                    'phase_name': '查看他人观点',
+                    'round': round_num,
+                    'timestamp': time.time()
+                })
+            
+            # 从共享存储读取其他智能体的观点
+            async with shared_views_lock:
+                other_views = {
+                    pid: view for pid, view in shared_views.items()
+                    if pid != persona_id
+                }
+            
+            logger.info(f"  👀 [{persona.name}] 观察到{len(other_views)}个其他Agent的观点")
+            
+            # 推送观察事件
+            if status_callback:
+                await status_callback('phase_complete', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'phase': 'observe_others',
+                    'round': round_num,
+                    'observed_count': len(other_views),
+                    'observed_personas': [
+                        {
+                            'id': pid,
+                            'name': view.get('name'),
+                            'stance': view.get('stance'),
+                            'score': view.get('score')
+                        }
+                        for pid, view in other_views.items()
+                    ],
+                    'timestamp': time.time()
+                })
+            
+            # ========== 阶段3: 深度反思 ==========
+            logger.info(f"  🤔 [{persona.name}] 阶段3: 深度反思... (时间: {time.strftime('%H:%M:%S')})")
+            
+            # 推送阶段开始事件
+            if status_callback:
+                await status_callback('phase_start', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'phase': 'deep_reflection',
+                    'phase_name': '深度反思',
+                    'round': round_num,
+                    'timestamp': time.time()
+                })
+            
+            reflection_start = time.time()
+            reflection_result = await persona._phase_deep_reflection(
+                option, context, other_views, thinking_result
+            )
+            reflection_duration = time.time() - reflection_start
+            
+            logger.info(f"  ✅ [{persona.name}] 深度反思完成 (耗时: {reflection_duration:.2f}s)")
+            
+            # 推送阶段完成事件
+            if status_callback:
+                await status_callback('phase_complete', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'phase': 'deep_reflection',
+                    'round': round_num,
+                    'duration': reflection_duration,
+                    'result': {
+                        'stance': reflection_result.get('stance', '未知'),
+                        'score': reflection_result.get('score', 0),
+                        'reasoning': reflection_result.get('reasoning', ''),
+                        'key_points': reflection_result.get('key_points', []),
+                        'stance_changed': reflection_result.get('stance') != thinking_result.get('stance')
+                    },
+                    'timestamp': time.time()
+                })
+            
+            # ========== 阶段4: 决策 ==========
+            logger.info(f"  ⚖️  [{persona.name}] 阶段4: 做出决策... (时间: {time.strftime('%H:%M:%S')})")
+            
+            # 推送阶段开始事件
+            if status_callback:
+                await status_callback('phase_start', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'phase': 'decision',
+                    'phase_name': '决策',
+                    'round': round_num,
+                    'timestamp': time.time()
+                })
+            
+            # 综合独立思考和深度反思的结果，做出最终决策
+            decision_result = {
+                'stance': reflection_result.get('stance', thinking_result.get('stance', '未知')),
+                'score': reflection_result.get('score', thinking_result.get('score', 0)),
+                'confidence': reflection_result.get('confidence', thinking_result.get('confidence', 0.7)),
+                'reasoning': reflection_result.get('reasoning', thinking_result.get('reasoning', '')),
+                'key_points': reflection_result.get('key_points', thinking_result.get('key_points', [])),
+                'round': round_num,
+                'thinking_summary': thinking_result.get('reasoning', '')[:200],  # 独立思考摘要
+                'reflection_summary': reflection_result.get('reasoning', '')[:200]  # 深度反思摘要
+            }
+            
+            logger.info(f"  ⚖️  [{persona.name}] 决策: {decision_result['stance']} (得分: {decision_result['score']}, 信心: {decision_result['confidence']:.2f})")
+            
+            # 推送决策事件
+            if status_callback:
+                await status_callback('phase_complete', {
+                    'persona_id': persona_id,
+                    'persona_name': persona.name,
+                    'phase': 'decision',
+                    'round': round_num,
+                    'decision': decision_result,
+                    'timestamp': time.time()
+                })
+            
+            # 将决策写入共享存储
             async with shared_views_lock:
                 shared_views[persona_id] = {
                     'name': persona.name,
                     'persona_id': persona_id,
                     'round': round_num,
-                    'stance': result.get('stance', '未知'),
-                    'score': result.get('score', 0),
-                    'reasoning': result.get('reasoning', ''),
-                    'key_points': result.get('key_points', [])
+                    'stance': decision_result['stance'],
+                    'score': decision_result['score'],
+                    'confidence': decision_result['confidence'],
+                    'reasoning': decision_result['reasoning'],
+                    'key_points': decision_result['key_points']
                 }
             
-            # 第3步：观察他人（从共享存储读取其他智能体的观点）
-            if round_num > 1 or len(shared_views) > 1:  # 第1轮后或有其他人完成时
-                async with shared_views_lock:
-                    other_views = {
-                        pid: view for pid, view in shared_views.items()
-                        if pid != persona_id
-                    }
-                
-                if other_views:
-                    logger.info(f"  👀 [{persona.name}] 观察到{len(other_views)}个其他Agent的观点")
-                    
-                    # 推送观察事件
-                    if status_callback:
-                        await status_callback('observation', {
-                            'persona_id': persona_id,
-                            'persona_name': persona.name,
-                            'round': round_num,
-                            'observed_count': len(other_views),
-                            'observed_personas': [v['name'] for v in other_views.values()],
-                            'timestamp': time.time()
-                        })
-                    
-                    # 第4步：深度反思（简化版：根据他人观点调整信心度）
-                    confidence_adjustment = 0.0
-                    my_score = result.get('score', 50)
-                    my_stance = result.get('stance', '未知')
-                    stance_changed = False
-                    
-                    for other_id, other_view in other_views.items():
-                        other_score = other_view.get('score', 50)
-                        score_diff = abs(my_score - other_score)
-                        
-                        # 如果观点差异大，降低信心
-                        if score_diff > 30:
-                            confidence_adjustment -= 0.05
-                        # 如果观点相近，增加信心
-                        elif score_diff < 10:
-                            confidence_adjustment += 0.03
-                    
-                    # 更新信心度
-                    original_confidence = result.get('confidence', 0.7)
-                    new_confidence = max(0, min(1, original_confidence + confidence_adjustment))
-                    result['confidence'] = new_confidence
-                    result['adjusted_in_round'] = round_num
-                    
-                    if confidence_adjustment != 0:
-                        logger.info(f"  🤔 [{persona.name}] 信心度调整: {original_confidence:.2f} -> {new_confidence:.2f}")
-                        
-                        # 推送信心度调整事件
-                        if status_callback:
-                            await status_callback('confidence_adjusted', {
-                                'persona_id': persona_id,
-                                'persona_name': persona.name,
-                                'round': round_num,
-                                'original_confidence': original_confidence,
-                                'new_confidence': new_confidence,
-                                'adjustment': confidence_adjustment,
-                                'timestamp': time.time()
-                            })
-                    
-                    final_result = result
-                    
-                    # 更新共享观点
-                    async with shared_views_lock:
-                        shared_views[persona_id].update({
-                            'confidence': new_confidence,
-                            'reflected': True
-                        })
+            final_result = decision_result
             
             round_duration = time.time() - round_start
             logger.info(f"  ⏱️  [{persona.name}] 第{round_num}轮完成 (耗时: {round_duration:.2f}s)")
@@ -3752,6 +3849,7 @@ class PersonaCouncil:
                 'total_duration': total_duration,
                 'final_score': final_result.get('score', 0) if final_result else 0,
                 'final_stance': final_result.get('stance', '未知') if final_result else '未知',
+                'final_confidence': final_result.get('confidence', 0.7) if final_result else 0.7,
                 'timestamp': time.time()
             })
         

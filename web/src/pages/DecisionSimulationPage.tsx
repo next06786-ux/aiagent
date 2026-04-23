@@ -388,6 +388,40 @@ export function DecisionSimulationPage() {
                 });
               }
               
+              // 阶段开始
+              if (eventType === 'phase_start') {
+                const phase = String(event.phase || '');
+                const phaseName = String(event.phase_name || '');
+                const round = (event.round as number) || 1;
+                console.log(`[Agent事件] ${personaName} 进入${phaseName}阶段`);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const historyRecord = {
+                        round,
+                        message: `📍 ${phaseName}`,
+                        timestamp: Date.now(),
+                        event_type: 'phase_start',
+                        phase: phase
+                      };
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        currentMessage: `📍 ${phaseName}`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
+              }
+              
               // 思考开始
               if (eventType === 'thinking_start') {
                 console.log(`[Agent事件] ${personaName} 开始思考`);
@@ -405,6 +439,75 @@ export function DecisionSimulationPage() {
                   );
                   console.log(`[Agent事件] 更新后的agents:`, updated.find(a => a.id === personaId));
                   next.set(optId, updated);
+                  return next;
+                });
+              }
+              
+              // 内心独白
+              if (eventType === 'thinking_monologue') {
+                const content = String(event.content || '');
+                const round = (event.round as number) || 1;
+                console.log(`[Agent事件] ${personaName} 内心独白: ${content.substring(0, 100)}...`);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const historyRecord = {
+                        round,
+                        message: `💭 ${content}`,
+                        timestamp: Date.now(),
+                        reasoning: content,
+                        event_type: 'thinking_monologue'
+                      };
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        status: 'thinking' as const,
+                        currentMessage: `💭 内心独白`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
+              }
+              
+              // 技能选择
+              if (eventType === 'skill_selection') {
+                const selectedSkills = (event.selected_skills as string[]) || [];
+                const reason = String(event.reason || '');
+                const round = (event.round as number) || 1;
+                console.log(`[Agent事件] ${personaName} 选择技能: ${selectedSkills.join(', ')}`);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const historyRecord = {
+                        round,
+                        message: `🎯 选择技能: ${selectedSkills.join(', ')}`,
+                        timestamp: Date.now(),
+                        reasoning: reason,
+                        skillNames: selectedSkills,
+                        event_type: 'skill_selection'
+                      };
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        currentMessage: `🎯 准备执行: ${selectedSkills.join(', ')}`,
+                        messageTimestamp: Date.now(),
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
                   return next;
                 });
               }
@@ -673,6 +776,37 @@ export function DecisionSimulationPage() {
                     return next;
                   });
                 }, 5000);
+              }
+              
+              // 轮次完成
+              if (eventType === 'round_complete') {
+                const round = (event.round as number) || 1;
+                const duration = (event.duration as number) || 0;
+                console.log(`[Agent事件] ${personaName} 第${round}轮完成 (耗时${duration.toFixed(1)}s)`);
+                
+                setAgentsByOption(prev => {
+                  const next = new Map(prev);
+                  const agents = next.get(optId) || [];
+                  next.set(optId, agents.map(a => {
+                    if (a.id === personaId) {
+                      const historyRecord = {
+                        round,
+                        message: `✅ 第${round}轮完成`,
+                        timestamp: Date.now(),
+                        duration: duration,
+                        event_type: 'round_complete'
+                      };
+                      const existingHistory = a.thinkingHistory || [];
+                      
+                      return {
+                        ...a,
+                        thinkingHistory: [...existingHistory, historyRecord]
+                      };
+                    }
+                    return a;
+                  }));
+                  return next;
+                });
               }
               
               // Agent完成
