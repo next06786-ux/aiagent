@@ -163,25 +163,45 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
               className={`tab ${selectedTab === 'summary' ? 'active' : ''}`}
               onClick={() => setSelectedTab('summary')}
             >
-              📊 综合摘要
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+              <span>综合摘要</span>
             </button>
             <button 
               className={`tab ${selectedTab === 'patterns' ? 'active' : ''}`}
               onClick={() => setSelectedTab('patterns')}
             >
-              🔗 跨领域模式
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              <span>跨领域模式</span>
             </button>
             <button 
               className={`tab ${selectedTab === 'recommendations' ? 'active' : ''}`}
               onClick={() => setSelectedTab('recommendations')}
             >
-              🎯 战略建议
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+              </svg>
+              <span>战略建议</span>
             </button>
             <button 
               className={`tab ${selectedTab === 'action_plan' ? 'active' : ''}`}
               onClick={() => setSelectedTab('action_plan')}
             >
-              📅 行动计划
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <span>行动计划</span>
             </button>
           </div>
 
