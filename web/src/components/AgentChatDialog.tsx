@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { API_BASE_URL } from '../services/api';
 import { AgentConversationHistory } from './AgentConversationHistory';
 import '../styles/AgentChatDialog.css';
@@ -132,38 +133,40 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
             console.log('[WebSocket] tool_start - isLoading:', isLoading);
             // 确保 isLoading 为 true
             setIsLoading(true);
-            // 使用函数式更新，不依赖闭包中的currentToolCalls
-            setCurrentToolCalls(prev => {
-              console.log('[WebSocket] tool_start - 当前状态:', prev);
-              const newCalls = [...prev, {
-                tool_name: data.tool_name,
-                server_name: data.server_name,
-                status: 'running' as const,
-                timestamp: new Date().toISOString()
-              }];
-              console.log('[WebSocket] tool_start - 更新后:', newCalls);
-              console.log('[WebSocket] tool_start - 将触发重新渲染');
-              return newCalls;
+            // 使用 flushSync 强制同步渲染，确保 running 状态立即显示
+            flushSync(() => {
+              setCurrentToolCalls(prev => {
+                console.log('[WebSocket] tool_start - 当前状态:', prev);
+                const newCalls = [...prev, {
+                  tool_name: data.tool_name,
+                  server_name: data.server_name,
+                  status: 'running' as const,
+                  timestamp: new Date().toISOString()
+                }];
+                console.log('[WebSocket] tool_start - 更新后:', newCalls);
+                console.log('[WebSocket] tool_start - 强制同步渲染');
+                return newCalls;
+              });
             });
             break;
 
           case 'tool_complete':
             console.log('[WebSocket] 工具完成:', data.tool_name);
             console.log('[WebSocket] tool_complete - isLoading:', isLoading);
-            // 使用函数式更新
-            setCurrentToolCalls(prev => {
-              console.log('[WebSocket] tool_complete - 当前状态:', prev);
-              const updated = prev.map(tool => 
-                tool.tool_name === data.tool_name && tool.status === 'running'
-                  ? { ...tool, status: 'completed' as const, result: data.result, completedAt: new Date().toISOString() }
-                  : tool
-              );
-              console.log('[WebSocket] tool_complete - 更新后:', updated);
-              console.log('[WebSocket] tool_complete - 将触发重新渲染');
-              return updated;
+            // 使用 flushSync 强制同步渲染
+            flushSync(() => {
+              setCurrentToolCalls(prev => {
+                console.log('[WebSocket] tool_complete - 当前状态:', prev);
+                const updated = prev.map(tool => 
+                  tool.tool_name === data.tool_name && tool.status === 'running'
+                    ? { ...tool, status: 'completed' as const, result: data.result, completedAt: new Date().toISOString() }
+                    : tool
+                );
+                console.log('[WebSocket] tool_complete - 更新后:', updated);
+                console.log('[WebSocket] tool_complete - 强制同步渲染');
+                return updated;
+              });
             });
-            // 强制重新渲染
-            forceUpdate({});
             break;
 
           case 'tool_failed':
