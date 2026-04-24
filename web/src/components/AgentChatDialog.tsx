@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
+import { AgentConversationHistory } from './AgentConversationHistory';
 import '../styles/AgentChatDialog.css';
 
 interface Message {
@@ -31,6 +32,9 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -66,13 +70,15 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          token: token,  // 添加token到请求体
+          token: token,
           agent_type: agentType,
           message: userMessage.content,
-          conversation_history: messages.map(m => ({
+          conversation_history: messages.slice(1).map(m => ({  // 跳过欢迎消息
             role: m.role,
             content: m.content
-          }))
+          })),
+          conversation_id: conversationId,
+          conversation_title: conversationTitle
         })
       });
 
@@ -96,6 +102,17 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // 保存conversation_id
+      if (data.conversation_id && !conversationId) {
+        setConversationId(data.conversation_id);
+      }
+      
+      // 如果还没有标题，使用第一条用户消息作为标题
+      if (!conversationTitle) {
+        const title = userMessage.content.slice(0, 50) + (userMessage.content.length > 50 ? '...' : '');
+        setConversationTitle(title);
+      }
     } catch (error) {
       console.error('Agent对话失败:', error);
       const errorMessage: Message = {
@@ -125,21 +142,81 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
     }
   };
 
+  // 加载历史对话
+  const handleLoadConversation = (convId: string, historyMessages: any[]) => {
+    setConversationId(convId);
+    
+    // 转换历史消息格式
+    const loadedMessages: Message[] = historyMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp),
+      retrievalStats: msg.retrieval_stats
+    }));
+    
+    setMessages(loadedMessages);
+    setShowHistory(false);
+    
+    // 设置标题
+    if (historyMessages.length > 0) {
+      const firstUserMsg = historyMessages.find(m => m.role === 'user');
+      if (firstUserMsg) {
+        const title = firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? '...' : '');
+        setConversationTitle(title);
+      }
+    }
+  };
+
+  // 新建对话
+  const handleNewConversation = () => {
+    setMessages([{
+      role: 'assistant',
+      content: getWelcomeMessage(agentType),
+      timestamp: new Date()
+    }]);
+    setConversationId(null);
+    setConversationTitle(null);
+    setInput('');
+  };
+
   return (
-    <div className="agent-chat-overlay" onClick={onClose}>
-      <div className="agent-chat-dialog" onClick={e => e.stopPropagation()}>
-        {/* 头部 */}
-        <div className="agent-chat-header" style={{ background: agentColor }}>
-          <div className="agent-chat-header-info">
-            <h3 className="agent-chat-title">{agentName}</h3>
-            <p className="agent-chat-subtitle">专业领域对话</p>
+    <>
+      <div className="agent-chat-overlay" onClick={onClose}>
+        <div className="agent-chat-dialog" onClick={e => e.stopPropagation()}>
+          {/* 头部 */}
+          <div className="agent-chat-header" style={{ background: agentColor }}>
+            <div className="agent-chat-header-info">
+              <h3 className="agent-chat-title">{agentName}</h3>
+              <p className="agent-chat-subtitle">
+                {conversationTitle || '专业领域对话'}
+              </p>
+            </div>
+            <div className="agent-chat-header-actions">
+              <button 
+                className="agent-chat-action-btn" 
+                onClick={() => setShowHistory(true)}
+                title="对话历史"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+              <button 
+                className="agent-chat-action-btn" 
+                onClick={handleNewConversation}
+                title="新建对话"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+              <button className="agent-chat-close" onClick={onClose}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <button className="agent-chat-close" onClick={onClose}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
         {/* 快捷问题 */}
         {messages.length === 1 && (
@@ -230,6 +307,17 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
         </div>
       </div>
     </div>
+
+    {/* 历史对话面板 */}
+    {showHistory && (
+      <AgentConversationHistory
+        agentType={agentType}
+        token={token}
+        onSelectConversation={handleLoadConversation}
+        onClose={() => setShowHistory(false)}
+      />
+    )}
+  </>
   );
 }
 

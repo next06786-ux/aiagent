@@ -390,6 +390,11 @@ class ConversationHistory(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(String(50), nullable=False, index=True)
     
+    # Agent信息（新增）
+    agent_type = Column(String(20), index=True)  # relationship, education, career
+    conversation_id = Column(String(100), index=True)  # 对话会话ID
+    conversation_title = Column(String(200))  # 对话标题（自动生成）
+    
     # 对话信息
     role = Column(String(20), nullable=False)  # user, assistant
     content = Column(Text, nullable=False)
@@ -397,6 +402,7 @@ class ConversationHistory(Base):
     
     # 上下文
     context = Column(JSON)  # 对话时的上下文数据
+    retrieval_stats = Column(JSON)  # 检索统计信息
     
     # 反馈
     rating = Column(Integer)  # 1-5星评分
@@ -406,7 +412,7 @@ class ConversationHistory(Base):
     # 时间戳
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     
-    # 会话ID（用于分组对话）
+    # 会话ID（用于分组对话）- 保留兼容性
     session_id = Column(String(100), index=True)
 
 

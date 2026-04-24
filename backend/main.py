@@ -4201,12 +4201,95 @@ async def agent_chat(request_data: Dict[str, Any]):
         
         print(f"[Agent对话] LLM回复生成完成: {len(response)}字符")
         
+        # 4. 保存对话历史到数据库
+        try:
+            from backend.database.db_manager import DatabaseManager
+            from backend.database.models import ConversationHistory
+            import uuid
+            
+            db_manager = DatabaseManager()
+            session = db_manager.get_session()
+            
+            # 生成或使用conversation_id
+            conversation_id = request_data.get('conversation_id')
+            if not conversation_id:
+                conversation_id = str(uuid.uuid4())
+            
+            # 生成对话标题（使用第一条用户消息）
+            conversation_title = request_data.get('conversation_title')
+            if not conversation_title:
+                conversation_title = user_message[:50] + ('...' if len(user_message) > 50 else '')
+            
+            # 保存用户消息
+            user_record = ConversationHistory(
+                user_id=user_id,
+                agent_type=agent_type,
+                conversation_id=conversation_id,
+                conversation_title=conversation_title,
+                role='user',
+                content=user_message,
+                context={'retrieval_stats': retrieval_stats},
+                timestamp=datetime.now()
+            )
+            session.add(user_record)
+            
+            # 保存助手回复
+            assistant_record = ConversationHistory(
+                user_id=user_id,
+                agent_type=agent_type,
+                conversation_id=conversation_id,
+                conversation_title=conversation_title,
+                role='assistant',
+                content=response,
+                retrieval_stats=retrieval_stats,
+                timestamp=datetime.now()
+            )
+            session.add(assistant_record)
+            
+            session.commit()
+            session.close()
+            
+            print(f"✅ [Agent对话] 对话历史已保存: conversation_id={conversation_id}")
+            
+        except Exception as e:
+            print(f"⚠️ [Agent对话] 保存对话历史失败: {e}")
+            # 不影响主流程
+        
+        # 5. 将对话内容添加到RAG记忆（用于未来检索）
+        try:
+            from backend.learning.rag_manager import RAGManager
+            from backend.learning.production_rag_system import MemoryType
+            
+            rag_system = RAGManager.get_system(user_id)
+            
+            # 将对话内容作为经验记忆保存
+            conversation_memory = f"[{agent_type} Agent对话] 用户: {user_message}\n助手: {response}"
+            
+            rag_system.add_memory(
+                memory_type=MemoryType.CONVERSATION,
+                content=conversation_memory,
+                metadata={
+                    'source': 'agent_chat',
+                    'agent_type': agent_type,
+                    'conversation_id': conversation_id,
+                    'timestamp': datetime.now().isoformat()
+                },
+                importance=0.7
+            )
+            
+            print(f"✅ [Agent对话] 对话已添加到RAG记忆")
+            
+        except Exception as e:
+            print(f"⚠️ [Agent对话] 添加RAG记忆失败: {e}")
+            # 不影响主流程
+        
         return {
             'success': True,
             'response': response,
             'context_used': len(context) > 0,
             'retrieval_stats': retrieval_stats,
-            'agent_type': agent_type
+            'agent_type': agent_type,
+            'conversation_id': conversation_id
         }
         
     except Exception as e:
@@ -4216,6 +4299,224 @@ async def agent_chat(request_data: Dict[str, Any]):
         return {
             'success': False,
             'message': f'对话失败: {str(e)}'
+        }
+
+
+# ==================== Agent对话历史API ====================
+
+@app.get("/api/agent-conversations")
+async def get_agent_conversations(
+    token: str,
+    agent_type: str = None
+):
+    """
+    获取Agent对话历史列表
+    
+    参数：
+    - token: 用户token
+    - agent_type: Agent类型（可选，不传则返回所有Agent的对话）
+    """
+    try:
+        from backend.auth.auth_service import get_auth_service
+        from backend.database.db_manager import DatabaseManager
+        from backend.database.models import ConversationHistory
+        from sqlalchemy import func, desc
+        
+        auth_service = get_auth_service()
+        
+        # 验证token
+        user_id = auth_service.verify_token(token)
+        if not user_id:
+            return {'success': False, 'message': 'Token无效或已过期'}
+        
+        db_manager = DatabaseManager()
+        session = db_manager.get_session()
+        
+        try:
+            # 查询对话列表（按conversation_id分组）
+            query = session.query(
+                ConversationHistory.conversation_id,
+                ConversationHistory.agent_type,
+                ConversationHistory.conversation_title,
+                func.min(ConversationHistory.timestamp).label('created_at'),
+                func.max(ConversationHistory.timestamp).label('updated_at'),
+                func.count(ConversationHistory.id).label('message_count')
+            ).filter(
+                ConversationHistory.user_id == user_id,
+                ConversationHistory.conversation_id.isnot(None)
+            )
+            
+            # 如果指定了agent_type，添加过滤
+            if agent_type:
+                query = query.filter(ConversationHistory.agent_type == agent_type)
+            
+            # 分组并排序
+            conversations = query.group_by(
+                ConversationHistory.conversation_id,
+                ConversationHistory.agent_type,
+                ConversationHistory.conversation_title
+            ).order_by(desc('updated_at')).all()
+            
+            # 格式化结果
+            result = []
+            for conv in conversations:
+                result.append({
+                    'conversation_id': conv.conversation_id,
+                    'agent_type': conv.agent_type,
+                    'title': conv.conversation_title,
+                    'created_at': conv.created_at.isoformat() if conv.created_at else None,
+                    'updated_at': conv.updated_at.isoformat() if conv.updated_at else None,
+                    'message_count': conv.message_count
+                })
+            
+            return {
+                'success': True,
+                'conversations': result,
+                'total': len(result)
+            }
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        print(f"❌ 获取对话历史列表失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'message': f'获取失败: {str(e)}'
+        }
+
+
+@app.get("/api/agent-conversation/{conversation_id}")
+async def get_agent_conversation_detail(
+    conversation_id: str,
+    token: str
+):
+    """
+    获取单个对话的详细消息
+    
+    参数：
+    - conversation_id: 对话ID
+    - token: 用户token
+    """
+    try:
+        from backend.auth.auth_service import get_auth_service
+        from backend.database.db_manager import DatabaseManager
+        from backend.database.models import ConversationHistory
+        
+        auth_service = get_auth_service()
+        
+        # 验证token
+        user_id = auth_service.verify_token(token)
+        if not user_id:
+            return {'success': False, 'message': 'Token无效或已过期'}
+        
+        db_manager = DatabaseManager()
+        session = db_manager.get_session()
+        
+        try:
+            # 查询对话消息
+            messages = session.query(ConversationHistory).filter(
+                ConversationHistory.user_id == user_id,
+                ConversationHistory.conversation_id == conversation_id
+            ).order_by(ConversationHistory.timestamp).all()
+            
+            if not messages:
+                return {
+                    'success': False,
+                    'message': '对话不存在'
+                }
+            
+            # 格式化消息
+            result = []
+            for msg in messages:
+                result.append({
+                    'id': msg.id,
+                    'role': msg.role,
+                    'content': msg.content,
+                    'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
+                    'retrieval_stats': msg.retrieval_stats,
+                    'thinking': msg.thinking
+                })
+            
+            return {
+                'success': True,
+                'conversation_id': conversation_id,
+                'agent_type': messages[0].agent_type,
+                'title': messages[0].conversation_title,
+                'messages': result
+            }
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        print(f"❌ 获取对话详情失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'message': f'获取失败: {str(e)}'
+        }
+
+
+@app.delete("/api/agent-conversation/{conversation_id}")
+async def delete_agent_conversation(
+    conversation_id: str,
+    request_data: Dict[str, Any]
+):
+    """
+    删除对话历史
+    
+    请求体：
+    {
+        "token": "xxx"
+    }
+    """
+    try:
+        from backend.auth.auth_service import get_auth_service
+        from backend.database.db_manager import DatabaseManager
+        from backend.database.models import ConversationHistory
+        
+        auth_service = get_auth_service()
+        
+        token = request_data.get('token')
+        if not token:
+            return {'success': False, 'message': '缺少token'}
+        
+        # 验证token
+        user_id = auth_service.verify_token(token)
+        if not user_id:
+            return {'success': False, 'message': 'Token无效或已过期'}
+        
+        db_manager = DatabaseManager()
+        session = db_manager.get_session()
+        
+        try:
+            # 删除对话
+            deleted_count = session.query(ConversationHistory).filter(
+                ConversationHistory.user_id == user_id,
+                ConversationHistory.conversation_id == conversation_id
+            ).delete()
+            
+            session.commit()
+            
+            return {
+                'success': True,
+                'message': f'已删除 {deleted_count} 条消息'
+            }
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        print(f"❌ 删除对话失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'success': False,
+            'message': f'删除失败: {str(e)}'
         }
 
 
