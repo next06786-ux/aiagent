@@ -595,7 +595,12 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
               className={`agent-chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}
             >
               <div className="message-avatar">
-                {msg.role === 'user' ? '👤' : getAgentIcon(agentType)}
+                {msg.role === 'user' ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                ) : getAgentIcon(agentType)}
               </div>
               <div className="message-content">
                 {/* MCP工具调用动画 */}
@@ -805,13 +810,41 @@ function getWelcomeMessage(agentType: string): string {
 }
 
 // 获取Agent图标
-function getAgentIcon(agentType: string): string {
-  const icons = {
-    relationship: '👥',
-    education: '🎓',
-    career: '💼'
-  };
-  return icons[agentType as keyof typeof icons] || '🤖';
+function getAgentIcon(agentType: string): JSX.Element {
+  const iconProps = { width: "20", height: "20", viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  
+  switch (agentType) {
+    case 'relationship':
+      return (
+        <svg {...iconProps}>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      );
+    case 'education':
+      return (
+        <svg {...iconProps}>
+          <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+          <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+      );
+    case 'career':
+      return (
+        <svg {...iconProps}>
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+        </svg>
+      );
+    default:
+      return (
+        <svg {...iconProps}>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      );
+  }
 }
 
 // 获取快捷问题

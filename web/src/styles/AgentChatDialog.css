@@ -217,6 +217,11 @@
   justify-content: center;
   font-size: 1.2rem;
   flex-shrink: 0;
+  color: white;
+}
+
+.message-avatar svg {
+  flex-shrink: 0;
 }
 
 .agent-chat-message.user .message-avatar {
