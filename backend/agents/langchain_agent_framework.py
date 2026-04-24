@@ -1509,7 +1509,7 @@ Final Answer: 直接友好回复
         return "default"
     
     def _handle_agent_decision(self, context: WorkflowContext) -> str:
-        """Agent决策 - 使用LangChain ReAct Agent"""
+        """Agent决策 - 使用LangChain ReAct Agent（真正的ReAct循环）"""
         print(f"   调用LangChain ReAct Agent（支持MCP工具）")
         
         try:
@@ -1547,36 +1547,82 @@ Final Answer: 直接友好回复
             # 添加用户消息
             messages.append(HumanMessage(content=context.user_message))
             
-            # 执行Agent（会自动调用工具，回调会实时捕获工具状态）
-            print(f"   🤖 Agent开始推理...")
+            # 执行Agent（使用stream获取中间步骤）
+            print(f"   🤖 Agent开始推理（ReAct循环）...")
             
             # 配置回调
             config = {
                 "callbacks": [self.tool_callback_handler]
             }
             
-            result = self.agent_executor.invoke(
-                {"messages": messages},
-                config=config
-            )
+            # 使用stream模式，实时获取每个步骤
+            final_response = ""
+            step_count = 0
             
-            # 提取回复（LangGraph返回的是字典，包含messages列表）
-            if isinstance(result, dict):
-                if 'messages' in result and result['messages']:
-                    # 获取最后一条消息
-                    last_message = result['messages'][-1]
-                    if hasattr(last_message, 'content'):
-                        context.agent_response = last_message.content
+            try:
+                # LangGraph的stream方法会返回每个中间步骤
+                for chunk in self.agent_executor.stream(
+                    {"messages": messages},
+                    config=config
+                ):
+                    step_count += 1
+                    
+                    # 发送ReAct步骤到前端
+                    if self.websocket_callback:
+                        self._send_react_step(chunk, step_count)
+                    
+                    # 打印步骤信息（调试用）
+                    self._print_react_step(chunk, step_count)
+                    
+                    # 保存最终响应
+                    if isinstance(chunk, dict) and 'messages' in chunk:
+                        messages_in_chunk = chunk['messages']
+                        if messages_in_chunk:
+                            last_msg = messages_in_chunk[-1]
+                            if hasattr(last_msg, 'content') and last_msg.content:
+                                final_response = last_msg.content
+                
+                # 如果没有获取到响应，尝试从最终状态获取
+                if not final_response:
+                    result = self.agent_executor.invoke(
+                        {"messages": messages},
+                        config=config
+                    )
+                    if isinstance(result, dict) and 'messages' in result:
+                        last_message = result['messages'][-1]
+                        final_response = last_message.content if hasattr(last_message, 'content') else str(last_message)
+                
+                context.agent_response = final_response
+                context.metadata['mode'] = 'workflow_agent_hybrid'
+                context.metadata['agent_used'] = True
+                context.metadata['react_steps'] = step_count
+                print(f"   ✅ Agent推理完成（共{step_count}步）")
+                
+            except Exception as stream_error:
+                # 如果stream失败，回退到invoke
+                print(f"   ⚠️  Stream模式失败，回退到invoke: {stream_error}")
+                
+                result = self.agent_executor.invoke(
+                    {"messages": messages},
+                    config=config
+                )
+                
+                # 提取回复
+                if isinstance(result, dict):
+                    if 'messages' in result and result['messages']:
+                        last_message = result['messages'][-1]
+                        if hasattr(last_message, 'content'):
+                            context.agent_response = last_message.content
+                        else:
+                            context.agent_response = str(last_message)
                     else:
-                        context.agent_response = str(last_message)
+                        context.agent_response = result.get('output', str(result))
                 else:
-                    context.agent_response = result.get('output', str(result))
-            else:
-                context.agent_response = str(result)
-            
-            context.metadata['mode'] = 'workflow_agent_hybrid'
-            context.metadata['agent_used'] = True
-            print(f"   ✅ Agent推理完成")
+                    context.agent_response = str(result)
+                
+                context.metadata['mode'] = 'workflow_agent_hybrid'
+                context.metadata['agent_used'] = True
+                print(f"   ✅ Agent推理完成（invoke模式）")
             
         except Exception as e:
             print(f"   ❌ Agent执行失败: {e}")
@@ -1615,6 +1661,101 @@ Final Answer: 直接友好回复
             )
         
         return "default"
+    
+    def _send_react_step(self, chunk: dict, step_number: int):
+        """发送ReAct步骤到前端（包含SVG图标标识）"""
+        try:
+            if not self.websocket_callback:
+                return
+            
+            # 解析chunk，提取步骤信息
+            step_data = {
+                "step_number": step_number,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # 检查是否包含消息
+            if isinstance(chunk, dict) and 'messages' in chunk:
+                messages = chunk['messages']
+                if messages:
+                    last_msg = messages[-1]
+                    
+                    # 判断步骤类型
+                    if hasattr(last_msg, 'type'):
+                        msg_type = last_msg.type
+                        
+                        if msg_type == 'ai':
+                            # AI的思考或回答
+                            content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                            
+                            # 检查是否有工具调用
+                            if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
+                                # 这是Action步骤
+                                tool_call = last_msg.tool_calls[0]
+                                step_data['type'] = 'action'
+                                step_data['icon'] = 'tool'  # 前端渲染工具图标
+                                step_data['tool_name'] = tool_call.get('name', 'unknown')
+                                step_data['tool_args'] = tool_call.get('args', {})
+                                step_data['content'] = f"调用工具: {step_data['tool_name']}"
+                            else:
+                                # 这是Thought或Final Answer
+                                if content and len(content) > 0:
+                                    if any(keyword in content.lower() for keyword in ['final answer', '最终回答', '综合以上']):
+                                        step_data['type'] = 'final_answer'
+                                        step_data['icon'] = 'check'  # 前端渲染完成图标
+                                    else:
+                                        step_data['type'] = 'thought'
+                                        step_data['icon'] = 'brain'  # 前端渲染思考图标
+                                    step_data['content'] = content
+                        
+                        elif msg_type == 'tool':
+                            # 工具返回结果（Observation）
+                            step_data['type'] = 'observation'
+                            step_data['icon'] = 'eye'  # 前端渲染观察图标
+                            step_data['tool_name'] = getattr(last_msg, 'name', 'unknown')
+                            content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                            # 限制observation内容长度，避免过长
+                            if len(content) > 500:
+                                content = content[:500] + "..."
+                            step_data['content'] = content
+            
+            # 只发送有内容的步骤
+            if 'type' in step_data and 'content' in step_data:
+                self.websocket_callback("react_step", step_data)
+                
+        except Exception as e:
+            print(f"⚠️  发送ReAct步骤失败: {e}")
+    
+    def _print_react_step(self, chunk: dict, step_number: int):
+        """打印ReAct步骤（调试用）"""
+        try:
+            if isinstance(chunk, dict) and 'messages' in chunk:
+                messages = chunk['messages']
+                if messages:
+                    last_msg = messages[-1]
+                    
+                    if hasattr(last_msg, 'type'):
+                        msg_type = last_msg.type
+                        
+                        if msg_type == 'ai':
+                            content = last_msg.content if hasattr(last_msg, 'content') else ''
+                            
+                            if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
+                                tool_call = last_msg.tool_calls[0]
+                                print(f"   🎯 [步骤{step_number}] Action: 调用工具 {tool_call.get('name', 'unknown')}")
+                            elif content:
+                                if any(keyword in content.lower() for keyword in ['final answer', '最终回答']):
+                                    print(f"   ✅ [步骤{step_number}] Final Answer: {content[:100]}...")
+                                else:
+                                    print(f"   💭 [步骤{step_number}] Thought: {content[:100]}...")
+                        
+                        elif msg_type == 'tool':
+                            tool_name = getattr(last_msg, 'name', 'unknown')
+                            content = last_msg.content if hasattr(last_msg, 'content') else ''
+                            print(f"   👁️  [步骤{step_number}] Observation: 工具 {tool_name} 返回结果")
+                            
+        except Exception as e:
+            pass  # 打印失败不影响主流程
     
     def _handle_memory_save(self, context: WorkflowContext) -> str:
         """保存记忆"""
