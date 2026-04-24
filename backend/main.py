@@ -1678,12 +1678,16 @@ async def websocket_agent_chat(websocket: WebSocket):
                 
                 # 获取消息内容
                 message = request_data.get("message", "")
+                
+                # 如果是空消息且Agent已创建，说明是初始化消息，跳过处理
+                if not message and agent is not None:
+                    print(f"⏭️  [WebSocket Agent] 跳过空消息（初始化消息）")
+                    continue
+                
+                # 如果是空消息且Agent未创建，说明是第一次初始化，也跳过
                 if not message:
-                    await websocket.send_json({
-                        "type": "error",
-                        "error": "消息不能为空"
-                    })
-                    continue  # 继续等待下一条消息
+                    print(f"⏭️  [WebSocket Agent] 跳过空消息（等待用户输入）")
+                    continue
                 
                 print(f"📨 [WebSocket Agent] 收到消息: {message[:50]}...")
                 
