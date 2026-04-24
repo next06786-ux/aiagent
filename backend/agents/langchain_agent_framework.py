@@ -1050,9 +1050,12 @@ class LangChainReActAgent(ABC):
         print(f"   调用LangChain ReAct Agent（支持MCP工具）")
         
         try:
-            # 如果还没有创建Agent Executor，先创建
-            if not hasattr(self, 'agent_executor') or self.agent_executor is None:
+            # 确保Agent Executor已创建
+            if self.agent_executor is None:
+                print(f"   ⚙️  首次调用，创建Agent Executor...")
                 self.agent_executor = self._create_react_agent()
+                if self.agent_executor is None:
+                    raise Exception("Agent Executor创建失败")
             
             # 构建输入
             agent_input = {
