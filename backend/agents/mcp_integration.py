@@ -311,7 +311,10 @@ class MCPClient:
             )
             self.call_logs.append(log)
             
+            # 打印返回结果（用于调试）
+            result_preview = str(result)[:500] if result else "None"
             print(f"   ✅ 调用成功")
+            print(f"   📦 返回结果: {result_preview}")
             return result
             
         except Exception as e:
