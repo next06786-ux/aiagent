@@ -217,11 +217,17 @@ class DashScopeLLM(BaseChatModel):
         """
         绑定工具（LangGraph需要）
         
-        注意：DashScope目前不支持原生function calling，
-        这里只是为了兼容LangGraph接口，实际工具调用由Agent框架处理
+        创建一个新实例，包含绑定的工具信息
         """
-        # 返回self以支持链式调用
-        return self
+        # 创建新实例并复制工具信息
+        bound = self.__class__(
+            llm_service=self.llm_service,
+            model=self.model,
+            temperature=self.temperature
+        )
+        # 存储工具信息
+        bound._bound_tools = tools
+        return bound
     
     def _generate(
         self,
@@ -230,8 +236,10 @@ class DashScopeLLM(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> Any:
-        """生成响应（Chat Model接口）"""
+        """生成响应（Chat Model接口）- 支持工具调用"""
         from langchain_core.outputs import ChatResult, ChatGeneration
+        from langchain_core.messages.tool import ToolCall
+        import json
         
         try:
             # 转换消息格式
@@ -240,28 +248,113 @@ class DashScopeLLM(BaseChatModel):
                 if isinstance(msg, HumanMessage):
                     api_messages.append({"role": "user", "content": msg.content})
                 elif isinstance(msg, AIMessage):
-                    api_messages.append({"role": "assistant", "content": msg.content})
+                    # 处理包含工具调用的AI消息
+                    msg_dict = {"role": "assistant", "content": msg.content or ""}
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        # 添加工具调用信息
+                        msg_dict["tool_calls"] = [
+                            {
+                                "id": tc.get("id", ""),
+                                "type": "function",
+                                "function": {
+                                    "name": tc.get("name", ""),
+                                    "arguments": json.dumps(tc.get("args", {}))
+                                }
+                            }
+                            for tc in msg.tool_calls
+                        ]
+                    api_messages.append(msg_dict)
                 elif isinstance(msg, SystemMessage):
                     api_messages.append({"role": "system", "content": msg.content})
+                elif hasattr(msg, 'type') and msg.type == 'tool':
+                    # 工具执行结果消息
+                    api_messages.append({
+                        "role": "tool",
+                        "content": msg.content,
+                        "tool_call_id": getattr(msg, 'tool_call_id', '')
+                    })
                 else:
                     # 其他类型消息转为用户消息
                     api_messages.append({"role": "user", "content": str(msg.content)})
             
-            # 调用LLM
+            # 准备工具定义（优先使用绑定的工具，否则使用kwargs中的tools）
+            tools = getattr(self, '_bound_tools', None) or kwargs.get('tools')
+            tool_choice = kwargs.get('tool_choice', 'auto')
+            
+            # 转换LangChain工具格式为OpenAI格式
+            api_tools = None
+            if tools:
+                api_tools = []
+                for tool in tools:
+                    if hasattr(tool, 'name') and hasattr(tool, 'description'):
+                        # LangChain Tool对象
+                        # 安全获取参数schema
+                        parameters = {}
+                        if hasattr(tool, 'args_schema') and tool.args_schema is not None:
+                            try:
+                                parameters = tool.args_schema.schema()
+                            except Exception as e:
+                                print(f"⚠️  工具 {tool.name} 的schema获取失败: {e}")
+                                parameters = {"type": "object", "properties": {}}
+                        else:
+                            parameters = {"type": "object", "properties": {}}
+                        
+                        tool_def = {
+                            "type": "function",
+                            "function": {
+                                "name": tool.name,
+                                "description": tool.description,
+                                "parameters": parameters
+                            }
+                        }
+                        api_tools.append(tool_def)
+                    elif isinstance(tool, dict):
+                        # 已经是字典格式
+                        api_tools.append(tool)
+            
+            # 调用LLM（传递工具定义）
             response_text = self.llm_service.chat(
                 messages=api_messages,
                 temperature=self.temperature,
-                model=self.model
+                model=self.model,
+                tools=api_tools,
+                tool_choice=tool_choice
             )
             
-            # 返回AIMessage对象
-            message = AIMessage(content=response_text)
-            generation = ChatGeneration(message=message)
+            # 检查是否返回了工具调用JSON
+            if response_text.startswith('{') and '"tool_calls"' in response_text:
+                try:
+                    response_data = json.loads(response_text)
+                    tool_calls_data = response_data.get('tool_calls', [])
+                    content = response_data.get('content', '')
+                    
+                    # 构建包含工具调用的AIMessage
+                    tool_calls = []
+                    for tc in tool_calls_data:
+                        tool_calls.append(ToolCall(
+                            name=tc['function']['name'],
+                            args=json.loads(tc['function']['arguments']),
+                            id=tc.get('id', f"call_{tc['function']['name']}")
+                        ))
+                    
+                    message = AIMessage(
+                        content=content or "",
+                        tool_calls=tool_calls
+                    )
+                except json.JSONDecodeError:
+                    # JSON解析失败，当作普通文本
+                    message = AIMessage(content=response_text)
+            else:
+                # 普通文本响应
+                message = AIMessage(content=response_text)
             
+            generation = ChatGeneration(message=message)
             return ChatResult(generations=[generation])
             
         except Exception as e:
             print(f"❌ LLM调用失败: {e}")
+            import traceback
+            traceback.print_exc()
             error_message = AIMessage(content=f"Error: {str(e)}")
             return ChatResult(generations=[ChatGeneration(message=error_message)])
     
@@ -773,11 +866,23 @@ class ToolModule:
                 
                 # 包装为同步函数（LangChain需要）
                 def sync_executor(params_str: str) -> str:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # 如果事件循环已运行，创建新任务
-                        import nest_asyncio
-                        nest_asyncio.apply()
+                    try:
+                        # 尝试获取当前事件循环
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # 如果事件循环已运行，创建新任务
+                            import nest_asyncio
+                            nest_asyncio.apply()
+                            return loop.run_until_complete(executor(params_str))
+                    except RuntimeError:
+                        # 没有事件循环，创建新的
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            return loop.run_until_complete(executor(params_str))
+                        finally:
+                            loop.close()
+                    
                     return loop.run_until_complete(executor(params_str))
                 
                 return sync_executor
@@ -966,11 +1071,45 @@ class LangChainReActAgent(ABC):
             
             print(f"   创建ReAct Agent，工具数: {len(tools)}")
             
+            # 创建系统提示（强调工具使用）
+            system_prompt = self.get_system_prompt()
+            
+            # 添加工具使用指导
+            system_prompt += """
+
+## 工具使用指南
+
+你有以下工具可用：
+"""
+            for tool in tools:
+                system_prompt += f"\n- {tool.name}: {tool.description}"
+            
+            system_prompt += """
+
+## 重要规则
+
+1. 当用户询问需要最新信息、实时数据或你不确定的事实时，必须使用web_search工具
+2. 当用户询问关系分析、沟通建议时，优先使用专业分析工具
+3. 使用工具前，先思考是否真的需要工具，还是可以直接回答
+4. 如果问题很简单（如问候、闲聊），直接回答即可
+5. 使用工具后，基于工具返回的结果给出专业建议
+
+## 示例
+
+用户："清华大学在哪个城市？"
+思考：这需要准确的地理信息，应该使用web_search工具
+行动：使用web_search工具搜索"清华大学位置"
+
+用户："你好"
+思考：这是简单问候，不需要工具
+行动：直接友好回复
+"""
+            
             # 使用LangGraph创建ReAct Agent
             agent_executor = create_react_agent(
                 model=self.llm_module.langchain_llm,
                 tools=tools,
-                prompt=self.get_system_prompt()  # 使用prompt参数
+                prompt=system_prompt  # 直接传递系统提示字符串
             )
             
             print(f"   ✅ ReAct Agent创建成功")
@@ -1116,23 +1255,21 @@ class LangChainReActAgent(ABC):
                 if self.agent_executor is None:
                     raise Exception("Agent Executor创建失败")
             
-            # 构建输入
-            agent_input = {
-                "input": context.user_message,
-                "chat_history": []  # 可以添加历史对话
-            }
+            # 构建消息列表（LangGraph需要消息格式）
+            from langchain_core.messages import HumanMessage, SystemMessage
             
-            # 如果有用户背景，添加到输入
+            messages = []
+            
+            # 如果有用户背景，添加为系统消息
             if context.retrieved_memory:
-                agent_input["input"] = f"""【用户背景】
-{context.retrieved_memory}
-
-【用户问题】
-{context.user_message}"""
+                messages.append(SystemMessage(content=f"【用户背景】\n{context.retrieved_memory}"))
+            
+            # 添加用户消息
+            messages.append(HumanMessage(content=context.user_message))
             
             # 执行Agent（会自动调用工具）
             print(f"   🤖 Agent开始推理...")
-            result = self.agent_executor.invoke(agent_input)
+            result = self.agent_executor.invoke({"messages": messages})
             
             # 提取回复（LangGraph返回的是字典，包含messages列表）
             if isinstance(result, dict):
