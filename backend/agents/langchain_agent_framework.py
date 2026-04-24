@@ -277,17 +277,18 @@ class LLMModule:
 
 **simple（简单）** - 满足以下任一条件：
 1. 简单问候或闲聊（"你好"、"在吗"、"谢谢"）
-2. 单一事实查询（"什么是..."、"谁是..."、"哪里..."）
-3. 简单确认或澄清（"是的"、"对"、"不是"）
-4. 无需推理的直接回答
-5. 不需要调用工具或检索记忆
+2. 简单确认或澄清（"是的"、"对"、"不是"）
+3. 无需推理的直接回答
+4. 不需要调用工具或检索记忆
 
 **medium（中等）** - 满足以下任一条件：
-1. 需要一定分析但不复杂（"如何..."、"为什么..."）
-2. 需要检索用户历史信息
-3. 需要简单的建议或推荐
-4. 涉及1-2个维度的问题
-5. 可能需要调用1个工具
+1. 需要联网搜索最新信息（"搜索..."、"查一下..."、"最新..."）
+2. 需要调用专属工具（分析、评估、推荐、计算等）
+3. 单一事实查询（"什么是..."、"谁是..."、"哪里..."）
+4. 需要一定分析但不复杂（"如何..."、"为什么..."）
+5. 需要检索用户历史信息
+6. 需要简单的建议或推荐
+7. 涉及1-2个维度的问题
 
 **complex（复杂）** - 满足以下任一条件：
 1. 需要深度分析和推理（"帮我规划..."、"如何解决..."）
@@ -299,7 +300,9 @@ class LLMModule:
 
 【示例】
 - "你好" → simple
-- "什么是职业规划" → simple
+- "搜索职场沟通技巧" → medium（需要联网搜索）
+- "帮我分析沟通模式" → medium（需要调用工具）
+- "什么是职业规划" → medium
 - "我应该考研还是工作" → medium
 - "帮我分析我的职业发展路径，考虑我的背景和市场趋势" → complex
 - "如何改善和同事的关系" → medium
@@ -927,12 +930,12 @@ class LangChainReActAgent(ABC):
     
     def _create_workflow(self) -> Workflow:
         """
-        创建工作流
+        创建工作流 - 简化版
         
         标准流程：
-        START → MEMORY_LOAD → INTENT_CLASSIFY → 
-        ├─ simple → SIMPLE_RESPONSE → MEMORY_SAVE → END
-        └─ complex → AGENT_DECISION → MEMORY_SAVE → END
+        START → MEMORY_LOAD → INTENT_CLASSIFY → AGENT_DECISION → MEMORY_SAVE → END
+        
+        所有查询统一走Agent路径，由Agent自己决定是否需要工具
         """
         workflow = Workflow(f"{self.agent_type}_workflow")
         
@@ -953,32 +956,20 @@ class LangChainReActAgent(ABC):
             next_nodes={"default": "intent_classify"}
         ))
         
-        # 3. 意图分类
+        # 3. 意图分类（保留用于记录，但不再分流）
         workflow.add_node(WorkflowNode(
             node_id="intent_classify",
             node_type=WorkflowNodeType.INTENT_CLASSIFY,
-            description="分析用户意图和复杂度",
+            description="分析用户意图（记录用）",
             handler=self._handle_intent_classify,
-            next_nodes={
-                "simple": "simple_response",
-                "complex": "agent_decision"
-            }
+            next_nodes={"agent": "agent_decision"}  # 统一走Agent
         ))
         
-        # 4a. 简单回复（纯Workflow）
-        workflow.add_node(WorkflowNode(
-            node_id="simple_response",
-            node_type=WorkflowNodeType.SIMPLE_RESPONSE,
-            description="生成简单回复（无需Agent推理）",
-            handler=self._handle_simple_response,
-            next_nodes={"default": "memory_save"}
-        ))
-        
-        # 4b. Agent决策（调用ReAct）
+        # 4. Agent决策（统一入口）
         workflow.add_node(WorkflowNode(
             node_id="agent_decision",
             node_type=WorkflowNodeType.AGENT_DECISION,
-            description="调用Agent进行复杂推理",
+            description="Agent智能处理（自动决定是否使用工具）",
             handler=self._handle_agent_decision,
             next_nodes={"default": "memory_save"}
         ))
@@ -1014,7 +1005,7 @@ class LangChainReActAgent(ABC):
         return "default"
     
     def _handle_intent_classify(self, context: WorkflowContext) -> str:
-        """意图分类"""
+        """意图分类 - 简化版：统一走Agent路径"""
         context.intent = self.llm_module.understand_intent(
             context.user_message,
             self.memory_module.get_context_window()
@@ -1022,15 +1013,10 @@ class LangChainReActAgent(ABC):
         
         print(f"   意图: {context.intent.get('intent')}")
         print(f"   复杂度: {context.intent.get('complexity')}")
+        print(f"   → 路由到: Agent决策（统一由Agent处理）")
         
-        # 根据复杂度决定路径
-        complexity = context.intent.get('complexity', 'medium')
-        if complexity == 'simple':
-            print(f"   → 路由到: 简单回复（纯Workflow）")
-            return "simple"
-        else:
-            print(f"   → 路由到: Agent决策（ReAct推理）")
-            return "complex"
+        # 统一走Agent路径，让Agent自己决定是否需要工具
+        return "agent"
     
     def _handle_simple_response(self, context: WorkflowContext) -> str:
         """简单回复（纯Workflow，无需Agent）"""
@@ -1060,52 +1046,71 @@ class LangChainReActAgent(ABC):
         return "default"
     
     def _handle_agent_decision(self, context: WorkflowContext) -> str:
-        """Agent决策（简化ReAct实现）"""
-        print(f"   调用ReAct Agent进行推理")
+        """Agent决策 - 使用LangChain ReAct Agent"""
+        print(f"   调用LangChain ReAct Agent（支持MCP工具）")
         
         try:
-            # 构建系统提示词
-            system_prompt = self.get_system_prompt()
+            # 如果还没有创建Agent Executor，先创建
+            if not hasattr(self, 'agent_executor') or self.agent_executor is None:
+                self.agent_executor = self._create_react_agent()
+            
+            # 构建输入
+            agent_input = {
+                "input": context.user_message,
+                "chat_history": []  # 可以添加历史对话
+            }
+            
+            # 如果有用户背景，添加到输入
             if context.retrieved_memory:
-                system_prompt += f"\n\n【用户背景】\n{context.retrieved_memory}"
-            
-            # 构建工具列表描述
-            tools_desc = "\n".join([
-                f"- {tool.name}: {tool.description}"
-                for tool in self.tool_module.get_tools()
-            ])
-            
-            # 构建ReAct提示词
-            react_prompt = f"""{system_prompt}
+                agent_input["input"] = f"""【用户背景】
+{context.retrieved_memory}
 
-你可以使用以下工具：
-{tools_desc}
-
-请使用ReAct模式思考和回答：
-1. Thought: 分析问题，思考需要做什么
-2. Action: 如果需要工具，说明要使用哪个工具
-3. Final Answer: 给出最终回答
-
-用户问题：{context.user_message}"""
+【用户问题】
+{context.user_message}"""
             
-            # 调用LLM
-            messages = [
-                {"role": "system", "content": react_prompt}
-            ]
+            # 执行Agent（会自动调用工具）
+            print(f"   🤖 Agent开始推理...")
+            result = self.agent_executor.invoke(agent_input)
             
-            response = self.llm_module.llm_service.chat(
-                messages=messages,
-                temperature=0.7
-            )
+            # 提取回复
+            if isinstance(result, dict):
+                context.agent_response = result.get('output', str(result))
+            else:
+                context.agent_response = str(result)
             
-            context.agent_response = response
             context.metadata['mode'] = 'workflow_agent_hybrid'
             context.metadata['agent_used'] = True
+            print(f"   ✅ Agent推理完成")
             
         except Exception as e:
             print(f"   ❌ Agent执行失败: {e}")
-            context.agent_response = "抱歉，处理过程中遇到了问题。"
-            context.metadata['error'] = str(e)
+            import traceback
+            traceback.print_exc()
+            
+            # 降级：使用简单LLM回复
+            try:
+                system_prompt = self.get_system_prompt()
+                if context.retrieved_memory:
+                    system_prompt += f"\n\n【用户背景】\n{context.retrieved_memory}"
+                
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": context.user_message}
+                ]
+                
+                response = self.llm_module.llm_service.chat(
+                    messages=messages,
+                    temperature=0.7
+                )
+                context.agent_response = response
+                context.metadata['mode'] = 'fallback_llm'
+                context.metadata['agent_used'] = False
+                print(f"   ⚠️  降级为简单LLM回复")
+                
+            except Exception as e2:
+                print(f"   ❌ 降级也失败: {e2}")
+                context.agent_response = "抱歉，处理过程中遇到了问题。"
+                context.metadata['error'] = str(e2)
             
             # 保存错误
             self.memory_module.save_error(
