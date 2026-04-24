@@ -1686,7 +1686,7 @@ Final Answer: 直接友好回复
                         
                         if msg_type == 'ai':
                             # AI的思考或回答
-                            content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                            content = last_msg.content if hasattr(last_msg, 'content') else ''
                             
                             # 检查是否有工具调用
                             if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
@@ -1697,16 +1697,22 @@ Final Answer: 直接友好回复
                                 step_data['tool_name'] = tool_call.get('name', 'unknown')
                                 step_data['tool_args'] = tool_call.get('args', {})
                                 step_data['content'] = f"调用工具: {step_data['tool_name']}"
-                            else:
-                                # 这是Thought或Final Answer
-                                if content and len(content) > 0:
-                                    if any(keyword in content.lower() for keyword in ['final answer', '最终回答', '综合以上']):
-                                        step_data['type'] = 'final_answer'
-                                        step_data['icon'] = 'check'  # 前端渲染完成图标
-                                    else:
-                                        step_data['type'] = 'thought'
-                                        step_data['icon'] = 'brain'  # 前端渲染思考图标
-                                    step_data['content'] = content
+                                
+                                # Action步骤总是发送，即使没有content
+                                self.websocket_callback("react_step", step_data)
+                                return
+                            
+                            # 这是Thought或Final Answer（只有有内容时才发送）
+                            if content and len(content) > 0:
+                                if any(keyword in content.lower() for keyword in ['final answer', '最终回答', '综合以上', '根据以上']):
+                                    step_data['type'] = 'final_answer'
+                                    step_data['icon'] = 'check'  # 前端渲染完成图标
+                                else:
+                                    step_data['type'] = 'thought'
+                                    step_data['icon'] = 'brain'  # 前端渲染思考图标
+                                step_data['content'] = content
+                                self.websocket_callback("react_step", step_data)
+                                return
                         
                         elif msg_type == 'tool':
                             # 工具返回结果（Observation）
@@ -1714,14 +1720,14 @@ Final Answer: 直接友好回复
                             step_data['icon'] = 'eye'  # 前端渲染观察图标
                             step_data['tool_name'] = getattr(last_msg, 'name', 'unknown')
                             content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
+                            
                             # 限制observation内容长度，避免过长
                             if len(content) > 500:
                                 content = content[:500] + "..."
+                            
                             step_data['content'] = content
-            
-            # 只发送有内容的步骤
-            if 'type' in step_data and 'content' in step_data:
-                self.websocket_callback("react_step", step_data)
+                            self.websocket_callback("react_step", step_data)
+                            return
                 
         except Exception as e:
             print(f"⚠️  发送ReAct步骤失败: {e}")
@@ -1729,6 +1735,9 @@ Final Answer: 直接友好回复
     def _print_react_step(self, chunk: dict, step_number: int):
         """打印ReAct步骤（调试用）"""
         try:
+            # 打印原始chunk结构（调试用）
+            # print(f"   [DEBUG] Chunk keys: {chunk.keys() if isinstance(chunk, dict) else 'not dict'}")
+            
             if isinstance(chunk, dict) and 'messages' in chunk:
                 messages = chunk['messages']
                 if messages:
@@ -1748,14 +1757,28 @@ Final Answer: 直接友好回复
                                     print(f"   ✅ [步骤{step_number}] Final Answer: {content[:100]}...")
                                 else:
                                     print(f"   💭 [步骤{step_number}] Thought: {content[:100]}...")
+                            else:
+                                # 空content的AI消息，可能是中间状态
+                                print(f"   ⏸️  [步骤{step_number}] AI消息（无内容）")
                         
                         elif msg_type == 'tool':
                             tool_name = getattr(last_msg, 'name', 'unknown')
                             content = last_msg.content if hasattr(last_msg, 'content') else ''
-                            print(f"   👁️  [步骤{step_number}] Observation: 工具 {tool_name} 返回结果")
+                            content_preview = content[:100] if content else '(空结果)'
+                            print(f"   👁️  [步骤{step_number}] Observation: 工具 {tool_name} 返回 - {content_preview}...")
+                        
+                        else:
+                            # 其他类型的消息
+                            print(f"   ❓ [步骤{step_number}] 未知消息类型: {msg_type}")
+                    else:
+                        print(f"   ⚠️  [步骤{step_number}] 消息无type属性")
+            else:
+                # 不是标准的messages格式
+                if isinstance(chunk, dict):
+                    print(f"   📦 [步骤{step_number}] 非标准chunk: {list(chunk.keys())}")
                             
         except Exception as e:
-            pass  # 打印失败不影响主流程
+            print(f"   ⚠️  [步骤{step_number}] 打印失败: {e}")
     
     def _handle_memory_save(self, context: WorkflowContext) -> str:
         """保存记忆"""
