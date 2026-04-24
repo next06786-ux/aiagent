@@ -3967,14 +3967,12 @@ async def agent_chat(request_data: Dict[str, Any]):
             }
         
         # 验证token并获取用户ID
-        token_result = auth_service.verify_token(token)
-        if not token_result['success']:
+        user_id = auth_service.verify_token(token)
+        if not user_id:
             return {
                 'success': False,
                 'message': 'Token无效或已过期'
             }
-        
-        user_id = token_result['data']['user_id']
         
         # 获取请求参数
         agent_type = request_data.get('agent_type')
@@ -4245,11 +4243,12 @@ async def agent_import_text(request_data: Dict[str, Any]):
         if not token:
             return {'success': False, 'message': '缺少token'}
         
-        token_result = auth_service.verify_token(token)
-        if not token_result['success']:
+        # 验证token并获取用户ID
+        user_id = auth_service.verify_token(token)
+        if not user_id:
             return {'success': False, 'message': 'Token无效或已过期'}
         
-        user_id = token_result['data']['user_id']
+        print(f"✅ [Agent导入] Token验证成功，用户ID: {user_id}")
         
         # 获取参数
         agent_type = request_data.get('agent_type')
@@ -4346,11 +4345,12 @@ async def agent_import_file(
         if not token:
             return {'success': False, 'message': '缺少token'}
         
-        token_result = auth_service.verify_token(token)
-        if not token_result['success']:
+        # 验证token并获取用户ID
+        user_id = auth_service.verify_token(token)
+        if not user_id:
             return {'success': False, 'message': 'Token无效或已过期'}
         
-        user_id = token_result['data']['user_id']
+        print(f"✅ [Agent文件导入] Token验证成功，用户ID: {user_id}")
         
         # 验证参数
         if not agent_type or agent_type not in ['relationship', 'education', 'career']:
