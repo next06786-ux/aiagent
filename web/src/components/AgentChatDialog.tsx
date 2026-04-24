@@ -12,6 +12,12 @@ interface Message {
     neo4j_results: number;
     total_results: number;
   };
+  toolCalls?: Array<{
+    tool_name: string;
+    server_name: string;
+    status: 'running' | 'completed' | 'failed';
+    result?: string;
+  }>;
 }
 
 interface AgentChatDialogProps {
@@ -98,7 +104,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
         role: 'assistant',
         content: data.response,
         timestamp: new Date(),
-        retrievalStats: data.retrieval_stats
+        retrievalStats: data.retrieval_stats,
+        toolCalls: data.tool_calls
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -247,7 +254,44 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
                 {msg.role === 'user' ? '👤' : getAgentIcon(agentType)}
               </div>
               <div className="message-content">
+                {/* MCP工具调用动画 */}
+                {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="message-tool-calls">
+                    {msg.toolCalls.map((tool, toolIdx) => (
+                      <div key={toolIdx} className={`tool-call-item ${tool.status}`}>
+                        <div className="tool-call-icon">
+                          {getToolIcon(tool.tool_name)}
+                        </div>
+                        <div className="tool-call-info">
+                          <div className="tool-call-name">
+                            {getToolDisplayName(tool.tool_name)}
+                          </div>
+                          <div className="tool-call-server">
+                            {tool.server_name}
+                          </div>
+                        </div>
+                        <div className="tool-call-status">
+                          {tool.status === 'running' && (
+                            <div className="tool-status-spinner"></div>
+                          )}
+                          {tool.status === 'completed' && (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
+                          )}
+                          {tool.status === 'failed' && (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M18 6L6 18M6 6l12 12" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
                 <div className="message-text">{msg.content}</div>
+                
                 {msg.role === 'assistant' && msg.retrievalStats && msg.retrievalStats.total_results > 0 && (
                   <div className="message-retrieval-stats">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -324,9 +368,9 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 // 获取欢迎消息
 function getWelcomeMessage(agentType: string): string {
   const messages = {
-    relationship: '你好！我是人际关系Agent。我可以帮你分析社交网络、人际关系质量、沟通模式等问题。有什么想了解的吗？',
-    education: '你好！我是教育升学Agent。我可以帮你规划升学路径、分析学校选择、专业匹配等问题。有什么想咨询的吗？',
-    career: '你好！我是职业规划Agent。我可以帮你分析职业发展、技能匹配、岗位选择等问题。有什么想讨论的吗？'
+    relationship: '你好！我是你的人际关系心理学专家。我会运用社会心理学理论，帮你分析社交网络、优化沟通模式、解决关系冲突。无论是亲密关系、友谊还是职场人际，我都能提供专业的诊断和建议。',
+    education: '你好！我是你的教育规划战略顾问。我熟悉中国教育体系，能为你提供考研、保研、出国、就业等多路径的数据分析和规划建议。让我帮你做出最优的升学决策，规划未来5-10年的教育投资。',
+    career: '你好！我是你的职业发展战略规划师。我深谙各行业动态和职场生态，能帮你进行职业定位、技能规划、求职策略优化。无论是职业选择、转型还是晋升，我都能提供系统化的解决方案。'
   };
   return messages[agentType as keyof typeof messages] || '你好！有什么可以帮你的吗？';
 }
@@ -345,23 +389,51 @@ function getAgentIcon(agentType: string): string {
 function getQuickQuestions(agentType: string): string[] {
   const questions = {
     relationship: [
-      '我的社交网络健康吗？',
-      '如何改善人际关系？',
-      '我应该如何扩展社交圈？',
-      '如何处理人际冲突？'
+      '如何评估我的社交网络健康度？',
+      '怎样处理职场中的人际冲突？',
+      '如何提升我的沟通和共情能力？',
+      '亲密关系中如何建立健康边界？'
     ],
     education: [
-      '我适合考研还是就业？',
-      '如何选择专业方向？',
-      '我的学习路径合理吗？',
-      '如何提升学业竞争力？'
+      '我适合考研、就业还是出国？',
+      '如何选择最匹配的院校和专业？',
+      '怎样提升我的学业竞争力？',
+      '制定一份考研备考时间表'
     ],
     career: [
-      '我适合什么职业方向？',
-      '如何规划职业发展？',
-      '我需要提升哪些技能？',
-      '如何选择工作机会？'
+      '帮我做一个职业竞争力诊断',
+      '我适合什么职业方向和岗位？',
+      '如何规划未来5年的职业发展？',
+      '跨行业转型需要注意什么？'
     ]
   };
   return questions[agentType as keyof typeof questions] || [];
+}
+
+// 获取工具图标
+function getToolIcon(toolName: string): string {
+  if (toolName.includes('search') || toolName.includes('web')) return '🔍';
+  if (toolName.includes('analyze') || toolName.includes('assess')) return '📊';
+  if (toolName.includes('calculate')) return '🧮';
+  if (toolName.includes('generate') || toolName.includes('recommend')) return '💡';
+  if (toolName.includes('suggest')) return '💬';
+  return '🔧';
+}
+
+// 获取工具显示名称
+function getToolDisplayName(toolName: string): string {
+  const nameMap: Record<string, string> = {
+    'web_search': '联网搜索',
+    'analyze_communication_pattern': '沟通模式分析',
+    'assess_relationship_health': '关系健康评估',
+    'generate_conflict_resolution': '冲突解决方案',
+    'calculate_social_compatibility': '社交兼容性计算',
+    'suggest_conversation_topics': '对话话题推荐',
+    'calculate_gpa_requirements': 'GPA要求计算',
+    'analyze_major_prospects': '专业前景分析',
+    'generate_study_schedule': '学习计划生成',
+    'assess_exam_readiness': '考试准备度评估',
+    'recommend_universities': '院校推荐'
+  };
+  return nameMap[toolName] || toolName;
 }
