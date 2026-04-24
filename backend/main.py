@@ -1633,7 +1633,41 @@ async def websocket_agent_chat(websocket: WebSocket):
             elif agent_type == 'education':
                 mcp_host.register_server(EducationMCPServer())
             
-            # 创建LangChain Agent
+            # 创建WebSocket回调函数
+            async def websocket_callback(event_type: str, data: dict):
+                """WebSocket回调函数 - 实时发送工具状态"""
+                if event_type == "tool_call":
+                    status = data.get("status")
+                    tool_name = data.get("tool_name")
+                    
+                    if status == "running":
+                        # 工具开始执行
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": MessageType.TOOL_START,
+                            "tool_name": tool_name,
+                            "server_name": "Unknown",  # LangChain回调中没有server信息
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    elif status == "completed":
+                        # 工具执行完成
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": MessageType.TOOL_COMPLETE,
+                            "tool_name": tool_name,
+                            "server_name": "Unknown",
+                            "result": data.get("output", "")[:100],
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    elif status == "error":
+                        # 工具执行失败
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": MessageType.TOOL_FAILED,
+                            "tool_name": tool_name,
+                            "server_name": "Unknown",
+                            "error": data.get("error", ""),
+                            "timestamp": datetime.now().isoformat()
+                        })
+            
+            # 创建LangChain Agent（传入WebSocket回调）
             agent = create_langchain_agent(
                 agent_type=agent_type,
                 user_id=user_id,
@@ -1641,7 +1675,8 @@ async def websocket_agent_chat(websocket: WebSocket):
                 rag_system=rag_system,
                 retrieval_system=retrieval_system,
                 use_workflow=True,
-                mcp_host=mcp_host
+                mcp_host=mcp_host,
+                websocket_callback=websocket_callback  # 传入回调函数
             )
             
             # 异步初始化Agent（发现MCP工具）
@@ -1653,63 +1688,6 @@ async def websocket_agent_chat(websocket: WebSocket):
                     "error": f"Agent类型不支持: {agent_type}"
                 })
                 return
-            
-            # 设置WebSocket回调（在工具调用时推送状态）
-            if hasattr(agent, 'mcp_host') and agent.mcp_host:
-                # 保存原始的MCPClient.call_tool方法
-                original_client_call_tool = agent.mcp_host.client.call_tool
-                
-                # 包装MCPClient.call_tool方法，添加WebSocket推送
-                async def wrapped_client_call_tool(server, tool_name: str, parameters: dict, user_id: str, approved: bool = True):
-                    # 获取server_name
-                    server_name = server.name if server else "Unknown"
-                    
-                    print(f"[WebSocket] 工具调用开始: {tool_name}")
-                    
-                    # 发送工具开始消息
-                    await ws_manager.send_message(user_id, session_id, {
-                        "type": MessageType.TOOL_START,
-                        "tool_name": tool_name,
-                        "server_name": server_name,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    
-                    # 添加延迟，确保前端有时间接收并渲染tool_start消息
-                    # 增加到500ms，确保消息真正到达前端并渲染
-                    await asyncio.sleep(0.5)
-                    
-                    try:
-                        # 调用原始方法
-                        result = await original_client_call_tool(server, tool_name, parameters, user_id, approved)
-                        
-                        print(f"[WebSocket] 工具调用完成: {tool_name}")
-                        
-                        # 发送工具完成消息
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": MessageType.TOOL_COMPLETE,
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "result": str(result)[:100] if result else None,
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        
-                        return result
-                    except Exception as e:
-                        print(f"[WebSocket] 工具调用失败: {tool_name}, 错误: {e}")
-                        
-                        # 发送工具失败消息
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": MessageType.TOOL_FAILED,
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "error": str(e),
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        raise
-                
-                # 替换MCPClient.call_tool方法
-                agent.mcp_host.client.call_tool = wrapped_client_call_tool
-                print(f"[WebSocket] 已设置工具调用回调")
             
             # 执行Agent处理
             result = agent.process(message)

@@ -66,10 +66,40 @@ class ToolCallbackHandler(BaseCallbackHandler):
         
         Args:
             websocket_callback: WebSocket发送函数，格式为 callback(event_type, data)
+                              可以是同步或异步函数
         """
         super().__init__()
         self.websocket_callback = websocket_callback
         self.current_tool_call = None
+    
+    def _send_callback(self, event_type: str, data: dict):
+        """发送回调（支持同步和异步）"""
+        if not self.websocket_callback:
+            return
+        
+        try:
+            import asyncio
+            import inspect
+            
+            # 检查回调是否是异步函数
+            if inspect.iscoroutinefunction(self.websocket_callback):
+                # 异步回调 - 在事件循环中运行
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 如果循环正在运行，创建任务
+                        asyncio.create_task(self.websocket_callback(event_type, data))
+                    else:
+                        # 如果循环未运行，直接运行
+                        loop.run_until_complete(self.websocket_callback(event_type, data))
+                except RuntimeError:
+                    # 没有事件循环，创建新的
+                    asyncio.run(self.websocket_callback(event_type, data))
+            else:
+                # 同步回调
+                self.websocket_callback(event_type, data)
+        except Exception as e:
+            print(f"⚠️  回调发送失败: {e}")
     
     def on_tool_start(
         self,
@@ -82,13 +112,12 @@ class ToolCallbackHandler(BaseCallbackHandler):
         print(f"   🔧 工具开始: {tool_name}")
         
         # 发送 running 状态
-        if self.websocket_callback:
-            self.websocket_callback("tool_call", {
-                "tool_name": tool_name,
-                "status": "running",
-                "input": input_str,
-                "timestamp": datetime.now().isoformat()
-            })
+        self._send_callback("tool_call", {
+            "tool_name": tool_name,
+            "status": "running",
+            "input": input_str,
+            "timestamp": datetime.now().isoformat()
+        })
         
         self.current_tool_call = {
             "tool_name": tool_name,
@@ -112,14 +141,13 @@ class ToolCallbackHandler(BaseCallbackHandler):
             output_preview = output_str[:500] if len(output_str) > 500 else output_str
             
             # 发送 completed 状态
-            if self.websocket_callback:
-                self.websocket_callback("tool_call", {
-                    "tool_name": tool_name,
-                    "status": "completed",
-                    "output": output_preview,
-                    "duration": duration,
-                    "timestamp": datetime.now().isoformat()
-                })
+            self._send_callback("tool_call", {
+                "tool_name": tool_name,
+                "status": "completed",
+                "output": output_preview,
+                "duration": duration,
+                "timestamp": datetime.now().isoformat()
+            })
             
             self.current_tool_call = None
     
@@ -134,13 +162,12 @@ class ToolCallbackHandler(BaseCallbackHandler):
             print(f"   ❌ 工具错误: {tool_name} - {str(error)}")
             
             # 发送 error 状态
-            if self.websocket_callback:
-                self.websocket_callback("tool_call", {
-                    "tool_name": tool_name,
-                    "status": "error",
-                    "error": str(error),
-                    "timestamp": datetime.now().isoformat()
-                })
+            self._send_callback("tool_call", {
+                "tool_name": tool_name,
+                "status": "error",
+                "error": str(error),
+                "timestamp": datetime.now().isoformat()
+            })
             
             self.current_tool_call = None
 
