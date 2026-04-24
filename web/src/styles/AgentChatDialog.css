@@ -226,8 +226,8 @@
 .message-content {
   flex: 1;
   max-width: 70%;
-  overflow: visible;
-  height: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .agent-chat-message.user .message-content {
@@ -247,8 +247,9 @@
   word-wrap: break-word;
   white-space: pre-wrap;
   overflow-wrap: break-word;
-  max-height: none;
-  height: auto;
+  width: 100%;
+  min-height: fit-content;
+  display: block;
 }
 
 .agent-chat-message.user .message-text {
