@@ -724,6 +724,376 @@ class EducationMCPServer(MCPServer):
 
 
 
+# ==================== 职业发展 MCP Server ====================
+
+class CareerMCPServer(MCPServer):
+    """
+    职业发展专业工具 MCP Server
+    
+    提供工具：
+    1. assess_career_competitiveness - 评估职业竞争力
+    2. query_job_market - 查询职位市场信息
+    3. generate_skill_roadmap - 生成技能学习路线图
+    4. analyze_career_transition - 分析职业转型可行性
+    5. optimize_resume - 简历优化建议
+    """
+    
+    def __init__(self):
+        super().__init__(
+            server_id="career_tools",
+            name="Career Development Server",
+            description="提供职业发展规划、市场分析、技能提升等专业工具"
+        )
+    
+    async def list_tools(self) -> List[MCPTool]:
+        return [
+            MCPTool(
+                name="assess_career_competitiveness",
+                description="评估用户的职业竞争力，分析技能优势和待提升领域。输入：技能清单、工作经验、教育背景",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "skills": {
+                            "type": "string",
+                            "description": "技能清单（如：Python, 项目管理, 数据分析）"
+                        },
+                        "experience": {
+                            "type": "string",
+                            "description": "工作经验描述"
+                        },
+                        "education": {
+                            "type": "string",
+                            "description": "教育背景"
+                        },
+                        "target_position": {
+                            "type": "string",
+                            "description": "目标职位（可选）"
+                        }
+                    },
+                    "required": ["skills", "experience"]
+                },
+                server_id=self.server_id,
+                requires_approval=False
+            ),
+            MCPTool(
+                name="query_job_market",
+                description="查询职位市场信息，包括薪资范围、需求趋势、热门公司。输入：职位名称、城市",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "position": {
+                            "type": "string",
+                            "description": "职位名称（如：产品经理、Java开发）"
+                        },
+                        "city": {
+                            "type": "string",
+                            "description": "城市（如：北京、上海、深圳）"
+                        },
+                        "experience_level": {
+                            "type": "string",
+                            "description": "经验水平（应届/1-3年/3-5年/5年以上）",
+                            "default": "不限"
+                        }
+                    },
+                    "required": ["position", "city"]
+                },
+                server_id=self.server_id,
+                requires_approval=False
+            ),
+            MCPTool(
+                name="generate_skill_roadmap",
+                description="生成技能学习路线图，从当前技能到目标职位的提升路径。输入：当前技能、目标职位",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "current_skills": {
+                            "type": "string",
+                            "description": "当前技能水平"
+                        },
+                        "target_position": {
+                            "type": "string",
+                            "description": "目标职位"
+                        },
+                        "timeline": {
+                            "type": "string",
+                            "description": "学习时间线（如：3个月、6个月、1年）",
+                            "default": "6个月"
+                        }
+                    },
+                    "required": ["current_skills", "target_position"]
+                },
+                server_id=self.server_id,
+                requires_approval=False
+            ),
+            MCPTool(
+                name="analyze_career_transition",
+                description="分析职业转型的可行性和风险，提供过渡策略。输入：当前职业、目标职业",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "current_career": {
+                            "type": "string",
+                            "description": "当前职业/行业"
+                        },
+                        "target_career": {
+                            "type": "string",
+                            "description": "目标职业/行业"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "转型原因（可选）"
+                        }
+                    },
+                    "required": ["current_career", "target_career"]
+                },
+                server_id=self.server_id,
+                requires_approval=False
+            ),
+            MCPTool(
+                name="optimize_resume",
+                description="提供简历优化建议，针对目标职位优化内容和结构。输入：简历内容、目标职位",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "resume_content": {
+                            "type": "string",
+                            "description": "简历主要内容（工作经历、项目经验）"
+                        },
+                        "target_position": {
+                            "type": "string",
+                            "description": "目标职位"
+                        }
+                    },
+                    "required": ["resume_content", "target_position"]
+                },
+                server_id=self.server_id,
+                requires_approval=False
+            )
+        ]
+    
+    async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
+        """执行职业发展工具"""
+        
+        if tool_name == "assess_career_competitiveness":
+            skills = parameters.get("skills", "")
+            experience = parameters.get("experience", "")
+            education = parameters.get("education", "")
+            target = parameters.get("target_position", "")
+            
+            # 模拟竞争力评估
+            return {
+                "overall_score": 75,
+                "strengths": [
+                    "技术深度：具备扎实的专业技能",
+                    "项目经验：有实际项目落地经验",
+                    "学习能力：教育背景良好"
+                ],
+                "weaknesses": [
+                    "跨领域能力：建议拓展相关领域知识",
+                    "软技能：可加强沟通和团队协作能力"
+                ],
+                "improvement_suggestions": [
+                    "深化核心技术栈，成为领域专家",
+                    "参与开源项目，提升影响力",
+                    "培养跨职能协作经验",
+                    "建立个人技术品牌（博客/演讲）"
+                ],
+                "market_position": "中等偏上，具备较强竞争力"
+            }
+        
+        elif tool_name == "query_job_market":
+            position = parameters.get("position", "")
+            city = parameters.get("city", "")
+            level = parameters.get("experience_level", "不限")
+            
+            # 模拟市场数据
+            return {
+                "position": position,
+                "city": city,
+                "salary_range": {
+                    "min": 15000,
+                    "max": 35000,
+                    "median": 25000,
+                    "currency": "CNY/月"
+                },
+                "demand_trend": "需求旺盛，同比增长15%",
+                "hot_companies": [
+                    "字节跳动",
+                    "阿里巴巴",
+                    "腾讯",
+                    "美团",
+                    "快手"
+                ],
+                "required_skills": [
+                    "专业技能（必备）",
+                    "项目经验（2年以上）",
+                    "团队协作能力",
+                    "学习能力"
+                ],
+                "career_prospects": "发展前景良好，晋升路径清晰",
+                "tips": [
+                    f"{city}地区{position}岗位竞争激烈",
+                    "建议突出项目成果和数据指标",
+                    "关注行业头部公司和成长型企业"
+                ]
+            }
+        
+        elif tool_name == "generate_skill_roadmap":
+            current = parameters.get("current_skills", "")
+            target = parameters.get("target_position", "")
+            timeline = parameters.get("timeline", "6个月")
+            
+            # 模拟技能路线图
+            return {
+                "timeline": timeline,
+                "phases": [
+                    {
+                        "phase": "第1阶段：基础巩固（1-2个月）",
+                        "goals": [
+                            "补齐核心技能短板",
+                            "建立系统化知识体系"
+                        ],
+                        "actions": [
+                            "完成相关技术课程学习",
+                            "阅读经典技术书籍",
+                            "练习基础算法和数据结构"
+                        ]
+                    },
+                    {
+                        "phase": "第2阶段：项目实战（2-3个月）",
+                        "goals": [
+                            "积累实际项目经验",
+                            "形成可展示的作品集"
+                        ],
+                        "actions": [
+                            "参与开源项目贡献",
+                            "开发个人项目",
+                            "模拟真实业务场景"
+                        ]
+                    },
+                    {
+                        "phase": "第3阶段：体系构建（1-2个月）",
+                        "goals": [
+                            "建立完整技能体系",
+                            "准备求职材料"
+                        ],
+                        "actions": [
+                            "总结项目经验和技术博客",
+                            "优化简历和作品集",
+                            "准备面试和技术分享"
+                        ]
+                    }
+                ],
+                "resources": [
+                    "在线课程：Coursera, Udemy",
+                    "技术社区：GitHub, Stack Overflow",
+                    "学习平台：LeetCode, 掘金"
+                ],
+                "milestones": [
+                    "2个月：完成核心技能学习",
+                    "4个月：完成2-3个项目",
+                    "6个月：达到目标职位要求"
+                ]
+            }
+        
+        elif tool_name == "analyze_career_transition":
+            current = parameters.get("current_career", "")
+            target = parameters.get("target_career", "")
+            reason = parameters.get("reason", "")
+            
+            # 模拟转型分析
+            return {
+                "feasibility": "中等可行",
+                "difficulty_level": "中等",
+                "transferable_skills": [
+                    "项目管理经验",
+                    "沟通协调能力",
+                    "行业理解"
+                ],
+                "skill_gaps": [
+                    "目标领域专业技能",
+                    "相关工具和技术栈",
+                    "行业特定知识"
+                ],
+                "transition_strategy": {
+                    "phase1": "技能准备（3-6个月）：学习目标领域核心技能",
+                    "phase2": "经验积累（6-12个月）：通过项目/实习积累经验",
+                    "phase3": "正式转型（12个月后）：寻找目标职位机会"
+                },
+                "risks": [
+                    "薪资可能短期下降",
+                    "需要重新建立职业网络",
+                    "学习曲线较陡峭"
+                ],
+                "opportunities": [
+                    "进入新兴高增长领域",
+                    "拓展职业发展空间",
+                    "实现个人兴趣和价值"
+                ],
+                "recommendations": [
+                    "先通过副业或兼职测试适配度",
+                    "建立目标领域的人脉网络",
+                    "保持财务缓冲应对过渡期",
+                    "制定详细的学习和转型计划"
+                ]
+            }
+        
+        elif tool_name == "optimize_resume":
+            content = parameters.get("resume_content", "")
+            target = parameters.get("target_position", "")
+            
+            # 模拟简历优化建议
+            return {
+                "overall_assessment": "简历内容较完整，但需要针对目标职位优化",
+                "structure_suggestions": [
+                    "突出与目标职位最相关的经验",
+                    "使用STAR法则描述项目成果",
+                    "量化工作成果（数据、指标）"
+                ],
+                "content_optimization": {
+                    "strengths_to_highlight": [
+                        "相关项目经验",
+                        "技术栈匹配度",
+                        "团队协作成果"
+                    ],
+                    "areas_to_improve": [
+                        "增加具体的业务影响数据",
+                        "补充技术深度的体现",
+                        "添加行业认可的成就"
+                    ]
+                },
+                "keyword_suggestions": [
+                    f"{target}相关的核心技能关键词",
+                    "行业热门技术栈",
+                    "项目管理方法论"
+                ],
+                "formatting_tips": [
+                    "保持简洁，控制在2页以内",
+                    "使用清晰的层次结构",
+                    "突出重点信息（加粗、列表）",
+                    "确保无错别字和格式问题"
+                ],
+                "action_items": [
+                    "重写工作经历，突出量化成果",
+                    "调整技能部分，匹配JD要求",
+                    "添加项目亮点和技术难点",
+                    "请行业人士review并提供反馈"
+                ]
+            }
+        
+        else:
+            raise ValueError(f"未知工具: {tool_name}")
+    
+    async def list_resources(self):
+        return []
+    
+    async def list_prompts(self):
+        return []
+    
+    async def read_resource(self, uri: str):
+        return None
+
+
 # ==================== 通用工具：联网搜索 MCP Server（阿里云OpenSearch）====================
 
 class WebSearchMCPServer(MCPServer):

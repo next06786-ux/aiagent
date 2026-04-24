@@ -1,6 +1,6 @@
 """
-Agent对话路由 - 使用新的LangChain + Workflow + MCP架构
-Agent Chat Routes - Using New LangChain + Workflow + MCP Architecture
+Agent对话路由 - 使用配置驱动的MCP架构
+Agent Chat Routes - Using Configuration-Driven MCP Architecture
 """
 from flask import Blueprint, request, jsonify
 from backend.auth.auth_middleware import require_auth
@@ -8,12 +8,6 @@ from backend.llm.llm_service import get_llm_service
 from backend.learning.production_rag_system import ProductionRAGSystem
 from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
 from backend.agents.langchain_specialized_agents import create_langchain_agent
-from backend.agents.mcp_integration import MCPHost
-from backend.agents.specialized_mcp_servers import (
-    WebSearchMCPServer,
-    RelationshipMCPServer,
-    EducationMCPServer
-)
 from typing import List, Dict, Any
 import asyncio
 
@@ -23,7 +17,7 @@ agent_chat_bp = Blueprint('agent_chat', __name__)
 _agent_cache = {}
 
 def _get_or_create_agent(user_id: str, agent_type: str):
-    """获取或创建Agent实例（使用新架构 + MCP搜索）"""
+    """获取或创建Agent实例（配置驱动架构）"""
     cache_key = f"{user_id}_{agent_type}"
     
     if cache_key in _agent_cache:
@@ -41,25 +35,7 @@ def _get_or_create_agent(user_id: str, agent_type: str):
         # 初始化检索系统
         retrieval_system = UnifiedHybridRetrieval(user_id)
         
-        # ===== 创建MCP Host并注册工具 =====
-        mcp_host = MCPHost(user_id=user_id)
-        
-        # 1. 注册联网搜索（所有Agent共享）
-        mcp_host.register_server(WebSearchMCPServer())
-        print(f"  ✓ 已注册联网搜索工具")
-        
-        # 2. 根据Agent类型注册专属工具
-        if agent_type == 'relationship':
-            mcp_host.register_server(RelationshipMCPServer())
-            print(f"  ✓ 已注册人际关系专属工具")
-        elif agent_type == 'education':
-            mcp_host.register_server(EducationMCPServer())
-            print(f"  ✓ 已注册教育规划专属工具")
-        elif agent_type == 'career':
-            # CareerMCPServer 待实现
-            print(f"  ⚠ 职业发展专属工具待实现")
-        
-        # 创建Agent（传入MCP Host）
+        # 创建Agent（配置驱动，自动注册MCP服务器）
         agent = create_langchain_agent(
             agent_type=agent_type,
             user_id=user_id,
@@ -67,7 +43,7 @@ def _get_or_create_agent(user_id: str, agent_type: str):
             rag_system=rag_system,
             retrieval_system=retrieval_system,
             use_workflow=True,  # 启用Workflow混合模式
-            mcp_host=mcp_host   # 传入MCP Host
+            mcp_host=None  # 自动创建并注册配置中的MCP服务器
         )
         
         # 异步初始化Agent（发现MCP工具）
@@ -79,7 +55,7 @@ def _get_or_create_agent(user_id: str, agent_type: str):
         # 缓存Agent
         _agent_cache[cache_key] = agent
         
-        print(f"✅ 为用户 {user_id} 创建 {agent_type} Agent（已集成联网搜索）")
+        print(f"✅ 为用户 {user_id} 创建 {agent_type} Agent（配置驱动架构）")
         return agent
         
     except Exception as e:

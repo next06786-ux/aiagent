@@ -1,13 +1,12 @@
 """
-Agent模块 - LangChain ReAct实现
-LangChain-based ReAct Agent Architecture
+Agent模块 - LangChain ReAct实现（MCP架构）
+LangChain-based ReAct Agent Architecture (MCP-based)
 
 导出：
 - LangChainReActAgent: Agent基类
-- RelationshipAgent: 人际关系Agent
-- EducationAgent: 教育规划Agent
-- CareerAgent: 职业规划Agent
-- create_langchain_agent: Agent工厂函数
+- ConfigurableAgent: 可配置Agent（基于配置文件）
+- create_langchain_agent: Agent工厂函数（配置驱动）
+- load_agent_config: 配置加载函数
 """
 
 from backend.agents.langchain_agent_framework import (
@@ -21,10 +20,9 @@ from backend.agents.langchain_agent_framework import (
 )
 
 from backend.agents.langchain_specialized_agents import (
-    RelationshipAgent,
-    EducationAgent,
-    CareerAgent,
-    create_langchain_agent
+    ConfigurableAgent,
+    create_langchain_agent,
+    load_agent_config
 )
 
 __all__ = [
@@ -35,8 +33,7 @@ __all__ = [
     'AgentMessage',
     'ReActStep',
     'DashScopeLLM',
-    'RelationshipAgent',
-    'EducationAgent',
-    'CareerAgent',
-    'create_langchain_agent'
+    'ConfigurableAgent',
+    'create_langchain_agent',
+    'load_agent_config'
 ]

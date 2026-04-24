@@ -1583,17 +1583,10 @@ async def websocket_agent_chat(websocket: WebSocket):
                     
                     print(f"🤖 [WebSocket Agent] 初始化: user_id={user_id}, agent_type={agent_type}")
                     
-                    # 创建Agent（只创建一次，后续复用）
+                    # 创建Agent（只创建一次，后续复用）- 使用配置驱动架构
                     from backend.agents.langchain_specialized_agents import create_langchain_agent
                     from backend.learning.rag_manager import RAGManager
                     from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
-                    from backend.agents.mcp_integration import MCPHost
-                    from backend.agents.specialized_mcp_servers import (
-                        WebSearchMCPServer,
-                        RelationshipMCPServer,
-                        EducationMCPServer
-                    )
-                    import os
                     
                     # 获取系统实例
                     llm_service = get_or_init_llm_service()
@@ -1606,25 +1599,6 @@ async def websocket_agent_chat(websocket: WebSocket):
                     
                     rag_system = RAGManager.get_system(user_id)
                     retrieval_system = UnifiedHybridRetrieval(user_id)
-                    
-                    # 创建MCP Host
-                    mcp_host = MCPHost(user_id=user_id)
-                    
-                    # 注册工具
-                    search_api_key = os.getenv("QWEN_SEARCH_API_KEY")
-                    search_host = os.getenv("QWEN_SEARCH_HOST")
-                    
-                    mcp_host.register_server(WebSearchMCPServer(
-                        api_key=search_api_key,
-                        host=search_host,
-                        workspace=os.getenv("QWEN_SEARCH_WORKSPACE", "default"),
-                        service_id=os.getenv("QWEN_SEARCH_SERVICE_ID", "ops-web-search-001")
-                    ))
-                    
-                    if agent_type == 'relationship':
-                        mcp_host.register_server(RelationshipMCPServer())
-                    elif agent_type == 'education':
-                        mcp_host.register_server(EducationMCPServer())
                     
                     # 创建WebSocket回调
                     loop = asyncio.get_event_loop()
@@ -1687,7 +1661,7 @@ async def websocket_agent_chat(websocket: WebSocket):
                         except Exception as e:
                             print(f"⚠️  回调执行失败: {event_type} - {e}")
                     
-                    # 创建Agent
+                    # 创建Agent（配置驱动，自动注册MCP服务器）
                     agent = create_langchain_agent(
                         agent_type=agent_type,
                         user_id=user_id,
@@ -1695,7 +1669,7 @@ async def websocket_agent_chat(websocket: WebSocket):
                         rag_system=rag_system,
                         retrieval_system=retrieval_system,
                         use_workflow=True,
-                        mcp_host=mcp_host,
+                        mcp_host=None,  # 自动创建并注册配置中的MCP服务器
                         websocket_callback=sync_callback_wrapper
                     )
                     
@@ -4253,13 +4227,13 @@ async def agent_chat(request_data: Dict[str, Any]):
         if not agent_type or not user_message:
             return {'success': False, 'message': '缺少必要参数'}
         
-        # 使用LangChain ReAct Agent系统（支持MCP）
+        # 使用LangChain ReAct Agent系统（配置驱动架构）
         from backend.agents.langchain_specialized_agents import create_langchain_agent
         from backend.learning.rag_manager import RAGManager
         from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
         
         print(f"\n[Agent对话] 用户: {user_id}, Agent类型: {agent_type}")
-        print(f"[Agent对话] 使用LangChain ReAct框架 + Workflow混合模式")
+        print(f"[Agent对话] 使用LangChain ReAct框架 + Workflow混合模式（配置驱动）")
         
         # 获取系统实例
         llm_service = get_or_init_llm_service()
@@ -4269,36 +4243,7 @@ async def agent_chat(request_data: Dict[str, Any]):
         rag_system = RAGManager.get_system(user_id)
         retrieval_system = UnifiedHybridRetrieval(user_id)
         
-        # 创建MCP Host并注册工具
-        from backend.agents.mcp_integration import MCPHost
-        from backend.agents.specialized_mcp_servers import (
-            WebSearchMCPServer,
-            RelationshipMCPServer,
-            EducationMCPServer
-        )
-        
-        mcp_host = MCPHost(user_id=user_id)
-        
-        # 注册联网搜索（所有Agent共享）- 显式传递环境变量
-        import os
-        search_api_key = os.getenv("QWEN_SEARCH_API_KEY")
-        search_host = os.getenv("QWEN_SEARCH_HOST")
-        print(f"[DEBUG] 搜索API配置: api_key={'已设置' if search_api_key else '未设置'}, host={'已设置' if search_host else '未设置'}")
-        
-        mcp_host.register_server(WebSearchMCPServer(
-            api_key=search_api_key,
-            host=search_host,
-            workspace=os.getenv("QWEN_SEARCH_WORKSPACE", "default"),
-            service_id=os.getenv("QWEN_SEARCH_SERVICE_ID", "ops-web-search-001")
-        ))
-        
-        # 根据Agent类型注册专属工具
-        if agent_type == 'relationship':
-            mcp_host.register_server(RelationshipMCPServer())
-        elif agent_type == 'education':
-            mcp_host.register_server(EducationMCPServer())
-        
-        # 创建LangChain Agent
+        # 创建LangChain Agent（配置驱动，自动注册MCP服务器）
         agent = create_langchain_agent(
             agent_type=agent_type,
             user_id=user_id,
@@ -4306,7 +4251,7 @@ async def agent_chat(request_data: Dict[str, Any]):
             rag_system=rag_system,
             retrieval_system=retrieval_system,
             use_workflow=True,  # 启用Workflow混合模式
-            mcp_host=mcp_host  # 启用MCP工具
+            mcp_host=None  # 自动创建并注册配置中的MCP服务器
         )
         
         # 异步初始化Agent（发现MCP工具）
