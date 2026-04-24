@@ -1732,15 +1732,22 @@ async def websocket_agent_chat(websocket: WebSocket):
             # 创建一个同步包装器，从线程中调用
             def sync_callback_wrapper(event_type: str, data: dict):
                 """同步包装器，使用 run_coroutine_threadsafe"""
+                print(f"[Sync Wrapper] 收到回调: {event_type}")
                 try:
                     future = asyncio.run_coroutine_threadsafe(
                         wrapped_callback(event_type, data),
                         loop
                     )
                     # 等待完成，但设置短超时
-                    future.result(timeout=0.5)
+                    result = future.result(timeout=0.5)
+                    print(f"[Sync Wrapper] 回调完成: {event_type}")
+                    return result
+                except TimeoutError:
+                    print(f"⚠️  回调超时: {event_type}")
                 except Exception as e:
-                    print(f"⚠️  回调执行失败: {e}")
+                    print(f"⚠️  回调执行失败: {event_type} - {e}")
+                    import traceback
+                    traceback.print_exc()
             
             # 重新创建 Agent，使用同步包装器
             agent = create_langchain_agent(
