@@ -29,9 +29,11 @@ try:
     from langchain_core.language_models import BaseLLM
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.callbacks import CallbackManagerForLLMRun
+    from langchain_core.callbacks.base import BaseCallbackHandler
     from langchain_core.tools import Tool
     from langchain_core.prompts import PromptTemplate
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
+    from langchain_core.outputs import LLMResult
     
     # 简化实现：不使用AgentExecutor，直接用LLM
     LANGCHAIN_VERSION = "new"
@@ -43,12 +45,104 @@ except ImportError:
     from langchain_core.language_models import BaseLLM
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.callbacks import CallbackManagerForLLMRun
+    from langchain_core.callbacks.base import BaseCallbackHandler
     from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
+    from langchain_core.outputs import LLMResult
     from langchain.memory import ConversationBufferMemory
     LANGCHAIN_VERSION = "old"
 
 # MCP导入
 from backend.agents.mcp_integration import MCPHost, MCPTool, ParallelFunctionCaller
+
+
+# ==================== 工具调用回调处理器 ====================
+
+class ToolCallbackHandler(BaseCallbackHandler):
+    """工具调用回调处理器 - 实时捕获工具调用状态"""
+    
+    def __init__(self, websocket_callback=None):
+        """
+        初始化回调处理器
+        
+        Args:
+            websocket_callback: WebSocket发送函数，格式为 callback(event_type, data)
+        """
+        super().__init__()
+        self.websocket_callback = websocket_callback
+        self.current_tool_call = None
+    
+    def on_tool_start(
+        self,
+        serialized: Dict[str, Any],
+        input_str: str,
+        **kwargs: Any
+    ) -> None:
+        """工具开始执行时调用"""
+        tool_name = serialized.get("name", "unknown_tool")
+        print(f"   🔧 工具开始: {tool_name}")
+        
+        # 发送 running 状态
+        if self.websocket_callback:
+            self.websocket_callback("tool_call", {
+                "tool_name": tool_name,
+                "status": "running",
+                "input": input_str,
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        self.current_tool_call = {
+            "tool_name": tool_name,
+            "input": input_str,
+            "start_time": datetime.now()
+        }
+    
+    def on_tool_end(
+        self,
+        output: str,
+        **kwargs: Any
+    ) -> None:
+        """工具执行完成时调用"""
+        if self.current_tool_call:
+            tool_name = self.current_tool_call["tool_name"]
+            duration = (datetime.now() - self.current_tool_call["start_time"]).total_seconds()
+            print(f"   ✅ 工具完成: {tool_name} (耗时: {duration:.2f}s)")
+            
+            # 转换输出为字符串并限制长度
+            output_str = str(output) if output else ""
+            output_preview = output_str[:500] if len(output_str) > 500 else output_str
+            
+            # 发送 completed 状态
+            if self.websocket_callback:
+                self.websocket_callback("tool_call", {
+                    "tool_name": tool_name,
+                    "status": "completed",
+                    "output": output_preview,
+                    "duration": duration,
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            self.current_tool_call = None
+    
+    def on_tool_error(
+        self,
+        error: Exception,
+        **kwargs: Any
+    ) -> None:
+        """工具执行出错时调用"""
+        if self.current_tool_call:
+            tool_name = self.current_tool_call["tool_name"]
+            print(f"   ❌ 工具错误: {tool_name} - {str(error)}")
+            
+            # 发送 error 状态
+            if self.websocket_callback:
+                self.websocket_callback("tool_call", {
+                    "tool_name": tool_name,
+                    "status": "error",
+                    "error": str(error),
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            self.current_tool_call = None
 
 
 # ==================== 数据结构定义 ====================
@@ -1073,12 +1167,17 @@ class LangChainReActAgent(ABC):
         rag_system,
         retrieval_system,
         use_workflow: bool = True,  # 是否启用Workflow混合模式
-        mcp_host: Optional[MCPHost] = None  # MCP Host（可选）
+        mcp_host: Optional[MCPHost] = None,  # MCP Host（可选）
+        websocket_callback: Optional[Callable] = None  # WebSocket回调函数
     ):
         self.agent_type = agent_type
         self.user_id = user_id
         self.use_workflow = use_workflow
         self.mcp_host = mcp_host
+        self.websocket_callback = websocket_callback
+        
+        # 初始化工具回调处理器
+        self.tool_callback_handler = ToolCallbackHandler(websocket_callback)
         
         # 初始化模块
         self.llm_module = LLMModule(llm_service)
@@ -1339,9 +1438,18 @@ class LangChainReActAgent(ABC):
             # 添加用户消息
             messages.append(HumanMessage(content=context.user_message))
             
-            # 执行Agent（会自动调用工具）
+            # 执行Agent（会自动调用工具，回调会实时捕获工具状态）
             print(f"   🤖 Agent开始推理...")
-            result = self.agent_executor.invoke({"messages": messages})
+            
+            # 配置回调
+            config = {
+                "callbacks": [self.tool_callback_handler]
+            }
+            
+            result = self.agent_executor.invoke(
+                {"messages": messages},
+                config=config
+            )
             
             # 提取回复（LangGraph返回的是字典，包含messages列表）
             if isinstance(result, dict):

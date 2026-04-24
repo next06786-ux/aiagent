@@ -210,7 +210,8 @@ def create_langchain_agent(
     rag_system,
     retrieval_system,
     use_workflow: bool = True,  # 默认启用Workflow混合模式
-    mcp_host = None  # MCP Host（可选）
+    mcp_host = None,  # MCP Host（可选）
+    websocket_callback = None  # WebSocket回调函数（可选）
 ) -> LangChainReActAgent:
     """
     创建基于LangChain的Agent实例
@@ -227,6 +228,9 @@ def create_langchain_agent(
         mcp_host: MCP Host实例（可选）
             - 如果提供，将启用MCP动态工具发现
             - Agent需要调用 await agent.initialize() 来发现工具
+        websocket_callback: WebSocket回调函数（可选）
+            - 格式：callback(event_type, data)
+            - 用于实时发送工具调用状态
     
     Returns:
         LangChain Agent实例
@@ -248,5 +252,6 @@ def create_langchain_agent(
         rag_system=rag_system,
         retrieval_system=retrieval_system,
         use_workflow=use_workflow,
-        mcp_host=mcp_host
+        mcp_host=mcp_host,
+        websocket_callback=websocket_callback
     )
