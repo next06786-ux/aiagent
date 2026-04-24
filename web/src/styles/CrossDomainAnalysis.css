@@ -149,6 +149,13 @@
   background: #f5f5f5;
   border-radius: 6px;
   animation: pulse 2s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.loading-steps .step svg {
+  flex-shrink: 0;
 }
 
 @keyframes pulse {
@@ -164,6 +171,13 @@
   border-radius: 8px;
   border-left: 4px solid #c62828;
   margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-message svg {
+  flex-shrink: 0;
 }
 
 /* 分析结果 */

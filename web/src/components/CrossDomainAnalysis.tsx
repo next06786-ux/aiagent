@@ -94,10 +94,34 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
         <div className="loading-state">
           <div className="loading-spinner"></div>
           <div className="loading-steps">
-            <div className="step">📦 初始化共享记忆空间...</div>
-            <div className="step">🤖 执行多Agent协作...</div>
-            <div className="step">🔗 识别跨领域关联...</div>
-            <div className="step">🎯 生成综合战略...</div>
+            <div className="step">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              </svg>
+              <span>初始化共享记忆空间...</span>
+            </div>
+            <div className="step">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+              </svg>
+              <span>执行多Agent协作...</span>
+            </div>
+            <div className="step">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              <span>识别跨领域关联...</span>
+            </div>
+            <div className="step">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+              </svg>
+              <span>生成综合战略...</span>
+            </div>
           </div>
         </div>
       )}
@@ -105,7 +129,12 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
       {/* 错误提示 */}
       {error && (
         <div className="error-message">
-          ❌ {error}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+          <span>{error}</span>
         </div>
       )}
 
