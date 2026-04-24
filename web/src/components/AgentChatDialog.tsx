@@ -121,27 +121,32 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
           case 'tool_start':
             console.log('[WebSocket] 工具开始:', data.tool_name);
+            console.log('[WebSocket] 当前currentToolCalls:', currentToolCalls);
             // 添加running状态的工具调用
-            setCurrentToolCalls(prev => [
-              ...prev,
-              {
+            setCurrentToolCalls(prev => {
+              const newCalls = [...prev, {
                 tool_name: data.tool_name,
                 server_name: data.server_name,
                 status: 'running'
-              }
-            ]);
+              }];
+              console.log('[WebSocket] 更新后currentToolCalls:', newCalls);
+              return newCalls;
+            });
             break;
 
           case 'tool_complete':
             console.log('[WebSocket] 工具完成:', data.tool_name);
+            console.log('[WebSocket] 当前currentToolCalls:', currentToolCalls);
             // 更新工具状态为completed
-            setCurrentToolCalls(prev => 
-              prev.map(tool => 
+            setCurrentToolCalls(prev => {
+              const updated = prev.map(tool => 
                 tool.tool_name === data.tool_name && tool.status === 'running'
                   ? { ...tool, status: 'completed', result: data.result }
                   : tool
-              )
-            );
+              );
+              console.log('[WebSocket] 更新后currentToolCalls:', updated);
+              return updated;
+            });
             break;
 
           case 'tool_failed':
@@ -158,6 +163,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
           case 'response':
             console.log('[WebSocket] 收到响应');
+            console.log('[WebSocket] 当前currentToolCalls:', currentToolCalls);
+            console.log('[WebSocket] isLoading:', isLoading);
             // 创建助手消息
             const assistantMessage: Message = {
               role: 'assistant',
@@ -166,6 +173,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
               retrievalStats: data.metadata?.retrieval_stats,
               toolCalls: data.metadata?.tool_calls || currentToolCalls
             };
+            
+            console.log('[WebSocket] 创建的消息:', assistantMessage);
             
             setMessages(prev => [...prev, assistantMessage]);
             setCurrentToolCalls([]); // 清空工具调用
