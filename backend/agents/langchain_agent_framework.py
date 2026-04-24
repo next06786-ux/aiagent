@@ -85,22 +85,29 @@ class ToolCallbackHandler(BaseCallbackHandler):
             if inspect.iscoroutinefunction(self.websocket_callback):
                 # 异步回调 - 在事件循环中运行
                 try:
-                    loop = asyncio.get_event_loop()
+                    # 尝试获取当前运行的事件循环
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        # 没有运行的循环，尝试获取默认循环
+                        loop = asyncio.get_event_loop()
+                    
                     # 使用 run_coroutine_threadsafe 从线程中调用异步函数
                     future = asyncio.run_coroutine_threadsafe(
                         self.websocket_callback(event_type, data),
                         loop
                     )
-                    # 等待完成（最多1秒）
-                    future.result(timeout=1.0)
-                except RuntimeError:
-                    # 没有事件循环，跳过
-                    print(f"⚠️  无法发送回调：没有运行的事件循环")
+                    # 不等待完成，让它在后台运行
+                    # future.result(timeout=1.0)
+                except Exception as e:
+                    # 静默失败，不打印警告
+                    pass
             else:
                 # 同步回调
                 self.websocket_callback(event_type, data)
         except Exception as e:
-            print(f"⚠️  回调发送失败: {e}")
+            # 静默失败
+            pass
     
     def on_tool_start(
         self,
@@ -811,7 +818,13 @@ class MemoryModule:
             # 检查回调是否是异步函数
             if inspect.iscoroutinefunction(self.websocket_callback):
                 try:
-                    loop = asyncio.get_event_loop()
+                    # 尝试获取当前运行的事件循环
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        # 没有运行的循环，尝试获取默认循环
+                        loop = asyncio.get_event_loop()
+                    
                     # 使用 run_coroutine_threadsafe 从线程中调用异步函数
                     future = asyncio.run_coroutine_threadsafe(
                         self.websocket_callback("memory_retrieval", {
@@ -821,10 +834,9 @@ class MemoryModule:
                         }),
                         loop
                     )
-                    # 等待完成（最多1秒）
-                    future.result(timeout=1.0)
-                except RuntimeError:
-                    # 没有事件循环，跳过
+                    # 不等待完成，让它在后台运行
+                except Exception:
+                    # 静默失败
                     pass
             else:
                 # 同步回调
@@ -833,8 +845,9 @@ class MemoryModule:
                     **data,
                     "timestamp": datetime.now().isoformat()
                 })
-        except Exception as e:
-            print(f"⚠️  检索回调发送失败: {e}")
+        except Exception:
+            # 静默失败
+            pass
     
     def save_task_result(
         self,
