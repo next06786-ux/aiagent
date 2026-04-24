@@ -86,15 +86,16 @@ class ToolCallbackHandler(BaseCallbackHandler):
                 # 异步回调 - 在事件循环中运行
                 try:
                     loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # 如果循环正在运行，创建任务
-                        asyncio.create_task(self.websocket_callback(event_type, data))
-                    else:
-                        # 如果循环未运行，直接运行
-                        loop.run_until_complete(self.websocket_callback(event_type, data))
+                    # 使用 run_coroutine_threadsafe 从线程中调用异步函数
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.websocket_callback(event_type, data),
+                        loop
+                    )
+                    # 等待完成（最多1秒）
+                    future.result(timeout=1.0)
                 except RuntimeError:
-                    # 没有事件循环，创建新的
-                    asyncio.run(self.websocket_callback(event_type, data))
+                    # 没有事件循环，跳过
+                    print(f"⚠️  无法发送回调：没有运行的事件循环")
             else:
                 # 同步回调
                 self.websocket_callback(event_type, data)
@@ -608,10 +609,11 @@ class MemoryModule:
        - Redis：热点缓存
     """
     
-    def __init__(self, user_id: str, rag_system, retrieval_system):
+    def __init__(self, user_id: str, rag_system, retrieval_system, websocket_callback=None):
         self.user_id = user_id
         self.rag_system = rag_system
         self.retrieval_system = retrieval_system
+        self.websocket_callback = websocket_callback
         
         # 上下文窗口（短期记忆）
         self.context_window: List[AgentMessage] = []
@@ -721,6 +723,13 @@ class MemoryModule:
         """
         print(f"🔍 从外部记忆检索 (原因: {reason})")
         
+        # 发送检索开始消息
+        self._send_retrieval_callback("retrieval_start", {
+            "query": query,
+            "reason": reason,
+            "agent_type": agent_type
+        })
+        
         try:
             from backend.learning.unified_hybrid_retrieval import RetrievalConfig, RetrievalStrategy
             
@@ -758,13 +767,74 @@ class MemoryModule:
                     'timestamp': datetime.now().isoformat()
                 })
                 
+                # 发送检索完成消息
+                self._send_retrieval_callback("retrieval_complete", {
+                    "query": query,
+                    "reason": reason,
+                    "results_count": len(retrieval_context.results),
+                    "sources": [r.source for r in retrieval_context.results[:3]]  # 前3个来源
+                })
+                
                 return retrieved
+            
+            # 没有结果
+            self._send_retrieval_callback("retrieval_complete", {
+                "query": query,
+                "reason": reason,
+                "results_count": 0,
+                "sources": []
+            })
             
             return ""
             
         except Exception as e:
             print(f"❌ 外部记忆检索失败: {e}")
+            
+            # 发送检索失败消息
+            self._send_retrieval_callback("retrieval_error", {
+                "query": query,
+                "reason": reason,
+                "error": str(e)
+            })
+            
             return ""
+    
+    def _send_retrieval_callback(self, event_type: str, data: dict):
+        """发送检索回调消息"""
+        if not self.websocket_callback:
+            return
+        
+        try:
+            import asyncio
+            import inspect
+            
+            # 检查回调是否是异步函数
+            if inspect.iscoroutinefunction(self.websocket_callback):
+                try:
+                    loop = asyncio.get_event_loop()
+                    # 使用 run_coroutine_threadsafe 从线程中调用异步函数
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.websocket_callback("memory_retrieval", {
+                            "type": event_type,
+                            **data,
+                            "timestamp": datetime.now().isoformat()
+                        }),
+                        loop
+                    )
+                    # 等待完成（最多1秒）
+                    future.result(timeout=1.0)
+                except RuntimeError:
+                    # 没有事件循环，跳过
+                    pass
+            else:
+                # 同步回调
+                self.websocket_callback("memory_retrieval", {
+                    "type": event_type,
+                    **data,
+                    "timestamp": datetime.now().isoformat()
+                })
+        except Exception as e:
+            print(f"⚠️  检索回调发送失败: {e}")
     
     def save_task_result(
         self,
@@ -1208,7 +1278,7 @@ class LangChainReActAgent(ABC):
         
         # 初始化模块
         self.llm_module = LLMModule(llm_service)
-        self.memory_module = MemoryModule(user_id, rag_system, retrieval_system)
+        self.memory_module = MemoryModule(user_id, rag_system, retrieval_system, websocket_callback)
         self.tool_module = ToolModule(self.memory_module, agent_type, mcp_host)
         
         # 注册专属工具

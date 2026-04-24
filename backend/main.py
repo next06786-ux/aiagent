@@ -1635,7 +1635,7 @@ async def websocket_agent_chat(websocket: WebSocket):
             
             # 创建WebSocket回调函数
             async def websocket_callback(event_type: str, data: dict):
-                """WebSocket回调函数 - 实时发送工具状态"""
+                """WebSocket回调函数 - 实时发送工具状态和记忆检索状态"""
                 if event_type == "tool_call":
                     status = data.get("status")
                     tool_name = data.get("tool_name")
@@ -1671,6 +1671,45 @@ async def websocket_agent_chat(websocket: WebSocket):
                             "server_name": "Unknown",
                             "error": data.get("error", ""),
                             "timestamp": datetime.now().isoformat()
+                        })
+                        await asyncio.sleep(0)
+                
+                elif event_type == "memory_retrieval":
+                    # 记忆检索事件
+                    retrieval_type = data.get("type")
+                    
+                    if retrieval_type == "retrieval_start":
+                        # 检索开始
+                        print(f"[WebSocket Callback] 发送 retrieval_start: {data.get('reason')}")
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": "retrieval_start",
+                            "query": data.get("query"),
+                            "reason": data.get("reason"),
+                            "agent_type": data.get("agent_type"),
+                            "timestamp": data.get("timestamp")
+                        })
+                        await asyncio.sleep(0)
+                    elif retrieval_type == "retrieval_complete":
+                        # 检索完成
+                        print(f"[WebSocket Callback] 发送 retrieval_complete: {data.get('results_count')} 条结果")
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": "retrieval_complete",
+                            "query": data.get("query"),
+                            "reason": data.get("reason"),
+                            "results_count": data.get("results_count"),
+                            "sources": data.get("sources", []),
+                            "timestamp": data.get("timestamp")
+                        })
+                        await asyncio.sleep(0)
+                    elif retrieval_type == "retrieval_error":
+                        # 检索失败
+                        print(f"[WebSocket Callback] 发送 retrieval_error: {data.get('error')}")
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": "retrieval_error",
+                            "query": data.get("query"),
+                            "reason": data.get("reason"),
+                            "error": data.get("error"),
+                            "timestamp": data.get("timestamp")
                         })
                         await asyncio.sleep(0)
             
