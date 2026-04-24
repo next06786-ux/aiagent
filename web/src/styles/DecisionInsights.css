@@ -1063,6 +1063,50 @@
   transform: translateY(-1px) scale(1.02);
 }
 
+/* Agent按钮组 */
+.insights-agent-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.insights-agent-btn-primary {
+  flex: 1;
+  min-width: 100px;
+}
+
+.insights-agent-btn-chat,
+.insights-agent-btn-import {
+  padding: 14px 20px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  background: white;
+  color: #2c2c2c;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.insights-agent-btn-chat:hover,
+.insights-agent-btn-import:hover {
+  background: linear-gradient(135deg, #2c2c2c, #3a3a3a);
+  color: white;
+  border-color: transparent;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.insights-agent-btn-chat:active,
+.insights-agent-btn-import:active {
+  transform: translateY(-1px);
+}
+
 /* ── 返回按钮 ────────────────────────────────────── */
 .insights-back-btn {
   background: #f3f4f6;

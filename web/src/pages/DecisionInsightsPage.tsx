@@ -9,6 +9,8 @@ import {
 } from '../services/agentInsightsService';
 import { IframeLive2DAvatar } from '../components/IframeLive2DAvatar';
 import { CrossDomainAnalysis } from '../components/CrossDomainAnalysis';
+import { AgentChatDialog } from '../components/AgentChatDialog';
+import { AgentDataImport } from '../components/AgentDataImport';
 import '../styles/DecisionInsights.css';
 
 interface AgentCard {
@@ -34,6 +36,20 @@ export function DecisionInsightsPage() {
   
   // 视图模式：'agents' | 'cross-domain'
   const [viewMode, setViewMode] = useState<'agents' | 'cross-domain'>('agents');
+  
+  // Agent对话状态
+  const [chatAgent, setChatAgent] = useState<{
+    type: 'relationship' | 'education' | 'career';
+    name: string;
+    color: string;
+  } | null>(null);
+  
+  // Agent导入资料状态
+  const [importAgent, setImportAgent] = useState<{
+    type: 'relationship' | 'education' | 'career';
+    name: string;
+    color: string;
+  } | null>(null);
 
   const agents: AgentCard[] = [
     {
@@ -262,12 +278,44 @@ export function DecisionInsightsPage() {
                     
                     <h3 className="insights-agent-name">{agent.name}</h3>
                     <p className="insights-agent-desc">{agent.description}</p>
-                    <button 
-                      className="insights-agent-btn"
-                      style={{ background: agent.color }}
-                    >
-                      查看报告
-                    </button>
+                    <div className="insights-agent-actions">
+                      <button 
+                        className="insights-agent-btn insights-agent-btn-primary"
+                        style={{ background: agent.color }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAgentClick(agent.type);
+                        }}
+                      >
+                        查看报告
+                      </button>
+                      <button 
+                        className="insights-agent-btn insights-agent-btn-chat"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setChatAgent({
+                            type: agent.type,
+                            name: agent.name,
+                            color: agent.color
+                          });
+                        }}
+                      >
+                        💬 对话
+                      </button>
+                      <button 
+                        className="insights-agent-btn insights-agent-btn-import"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImportAgent({
+                            type: agent.type,
+                            name: agent.name,
+                            color: agent.color
+                          });
+                        }}
+                      >
+                        📁 导入
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -469,6 +517,32 @@ export function DecisionInsightsPage() {
             </div>
           )}
         </div>
+
+        {/* Agent对话弹窗 */}
+        {chatAgent && token && (
+          <AgentChatDialog
+            agentType={chatAgent.type}
+            agentName={chatAgent.name}
+            agentColor={chatAgent.color}
+            token={token}
+            onClose={() => setChatAgent(null)}
+          />
+        )}
+
+        {/* Agent导入资料弹窗 */}
+        {importAgent && token && (
+          <AgentDataImport
+            agentType={importAgent.type}
+            agentName={importAgent.name}
+            agentColor={importAgent.color}
+            token={token}
+            onClose={() => setImportAgent(null)}
+            onImportSuccess={() => {
+              // 导入成功后可以刷新或显示提示
+              console.log('资料导入成功');
+            }}
+          />
+        )}
       </div>
     </AppShell>
   );
