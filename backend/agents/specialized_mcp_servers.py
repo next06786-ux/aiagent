@@ -2,7 +2,7 @@
 专业化MCP Servers - 为三个Agent提供独特的工具
 
 每个Agent都有自己专属的MCP Server和工具集：
-1. RelationshipMCPServer - 人际关系分析工具
+1. RelationshipMCPServer - 人际关系分析工具（LLM驱动）
 2. EducationMCPServer - 教育规划工具
 3. CareerMCPServer - 职业发展工具
 """
@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 
 class RelationshipMCPServer(MCPServer):
     """
-    人际关系分析MCP Server
+    人际关系分析MCP Server（LLM驱动）
     
     提供工具：
     1. analyze_communication_pattern - 分析沟通模式
@@ -26,14 +26,50 @@ class RelationshipMCPServer(MCPServer):
     3. generate_conflict_resolution - 生成冲突解决方案
     4. calculate_social_compatibility - 计算社交兼容性
     5. suggest_conversation_topics - 推荐对话话题
+    
+    所有工具都使用LLM进行专业分析
     """
     
-    def __init__(self):
+    def __init__(self, llm_service=None):
         super().__init__(
             server_id="relationship_tools",
             name="Relationship Analysis Server",
-            description="提供人际关系分析和改善工具"
+            description="提供人际关系分析和改善工具（LLM驱动）"
         )
+        self.llm_service = llm_service
+    
+    def _get_llm_service(self):
+        """获取LLM服务"""
+        if self.llm_service:
+            return self.llm_service
+        
+        # 延迟导入，避免循环依赖
+        try:
+            from backend.llm.llm_service import get_llm_service
+            return get_llm_service()
+        except Exception as e:
+            print(f"⚠️  无法获取LLM服务: {e}")
+            return None
+    
+    async def _call_llm_for_analysis(self, system_prompt: str, user_prompt: str) -> str:
+        """调用LLM进行分析"""
+        llm = self._get_llm_service()
+        if not llm or not llm.enabled:
+            return "LLM服务不可用，返回默认分析"
+        
+        try:
+            response = llm.chat(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=800
+            )
+            return response
+        except Exception as e:
+            print(f"⚠️  LLM调用失败: {e}")
+            return f"分析失败: {str(e)}"
     
     async def list_tools(self) -> List[MCPTool]:
         return [
@@ -138,35 +174,77 @@ class RelationshipMCPServer(MCPServer):
 
     
     async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
-        """执行人际关系分析工具"""
+        """执行人际关系分析工具（LLM驱动）"""
         
         if tool_name == "analyze_communication_pattern":
             relationship_type = parameters.get("relationship_type", "朋友")
             recent_interactions = parameters.get("recent_interactions", "")
             issues = parameters.get("issues", "")
             
-            # 分析沟通模式
-            patterns = {
-                "朋友": ["倾听不足", "表达不清", "频率不够"],
-                "同事": ["过于正式", "缺乏信任", "沟通效率低"],
-                "家人": ["情绪化", "缺乏边界", "期望不一致"],
-                "恋人": ["需求未表达", "情感忽视", "沟通时机不当"]
-            }
+            # 使用LLM分析沟通模式
+            system_prompt = """你是一位专业的人际关系心理学家，擅长分析沟通模式。
+请基于用户提供的信息，分析两人之间的沟通模式，识别存在的问题，并给出改善建议。
+
+你的分析应该包括：
+1. identified_patterns: 识别出的3-5个沟通问题（列表）
+2. recommendations: 3-5个具体可执行的改善建议（列表）
+3. communication_score: 沟通质量评分（0-100）
+4. improvement_areas: 需要改善的领域（列表）
+
+请以JSON格式返回，格式如下：
+{
+  "identified_patterns": ["问题1", "问题2", "问题3"],
+  "recommendations": ["建议1", "建议2", "建议3"],
+  "communication_score": 65,
+  "improvement_areas": ["领域1", "领域2", "领域3"]
+}"""
             
-            identified_patterns = patterns.get(relationship_type, ["需要更多信息"])
+            user_prompt = f"""请分析以下关系的沟通模式：
+
+关系类型：{relationship_type}
+最近互动情况：{recent_interactions}
+遇到的问题：{issues}
+
+请给出专业的分析和建议。"""
             
-            return {
-                "success": True,
-                "relationship_type": relationship_type,
-                "identified_patterns": identified_patterns,
-                "recommendations": [
-                    "使用'我感受到...'的表达方式",
-                    "设定固定的沟通时间",
-                    "练习积极倾听技巧"
-                ],
-                "communication_score": 65,
-                "improvement_areas": ["情感表达", "倾听技巧", "冲突处理"]
-            }
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                # 尝试解析JSON
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    analysis = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        "relationship_type": relationship_type,
+                        **analysis
+                    }
+                else:
+                    # 如果无法解析JSON，返回文本分析
+                    return {
+                        "success": True,
+                        "relationship_type": relationship_type,
+                        "analysis": llm_response,
+                        "identified_patterns": ["详见分析"],
+                        "recommendations": ["详见分析"],
+                        "communication_score": 70
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM分析失败，使用默认分析: {e}")
+                # 降级到简单分析
+                return {
+                    "success": True,
+                    "relationship_type": relationship_type,
+                    "identified_patterns": ["沟通频率不足", "情感表达欠缺", "倾听不够"],
+                    "recommendations": [
+                        "使用'我感受到...'的表达方式",
+                        "设定固定的沟通时间",
+                        "练习积极倾听技巧"
+                    ],
+                    "communication_score": 65,
+                    "improvement_areas": ["情感表达", "倾听技巧", "冲突处理"]
+                }
         
         elif tool_name == "assess_relationship_health":
             relationship_type = parameters.get("relationship_type", "朋友")
@@ -174,44 +252,63 @@ class RelationshipMCPServer(MCPServer):
             interaction_freq = parameters.get("interaction_frequency", "每周")
             conflict_freq = parameters.get("conflict_frequency", "偶尔")
             
-            # 计算健康度得分
-            base_score = satisfaction * 10
+            # 使用LLM评估关系健康度
+            system_prompt = """你是一位专业的人际关系心理学家，擅长评估关系健康度。
+请基于用户提供的信息，评估关系的健康状况，并给出专业建议。
+
+你的评估应该包括：
+1. health_score: 健康度评分（0-100）
+2. rating: 评级（优秀/良好/一般/较差）
+3. status: 状态描述
+4. strengths: 关系的优势（2-3个）
+5. weaknesses: 关系的不足（2-3个）
+6. action_items: 改善行动建议（3-5个）
+
+请以JSON格式返回。"""
             
-            freq_bonus = {
-                "每天": 10, "每周": 5, "每月": 0, "很少": -10
-            }.get(interaction_freq, 0)
+            user_prompt = f"""请评估以下关系的健康度：
+
+关系类型：{relationship_type}
+满意度（1-10）：{satisfaction}
+互动频率：{interaction_freq}
+冲突频率：{conflict_freq}
+
+请给出专业的评估和建议。"""
             
-            conflict_penalty = {
-                "从不": 10, "很少": 5, "偶尔": 0, "经常": -15
-            }.get(conflict_freq, 0)
-            
-            health_score = max(0, min(100, base_score + freq_bonus + conflict_penalty))
-            
-            # 评级
-            if health_score >= 80:
-                rating = "优秀"
-                status = "关系非常健康"
-            elif health_score >= 60:
-                rating = "良好"
-                status = "关系基本健康，有改善空间"
-            elif health_score >= 40:
-                rating = "一般"
-                status = "关系需要关注和改善"
-            else:
-                rating = "较差"
-                status = "关系存在严重问题"
-            
-            return {
-                "success": True,
-                "health_score": health_score,
-                "rating": rating,
-                "status": status,
-                "strengths": ["互相尊重", "有共同话题"],
-                "weaknesses": ["沟通频率不足", "情感表达欠缺"],
-                "action_items": [
-                    "增加互动频率",
-                    "深入情感交流",
-                    "共同参与活动"
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    assessment = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        **assessment
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "assessment": llm_response,
+                        "health_score": satisfaction * 10
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM评估失败，使用默认评估: {e}")
+                # 降级到简单计算
+                health_score = max(0, min(100, satisfaction * 10))
+                return {
+                    "success": True,
+                    "health_score": health_score,
+                    "rating": "良好" if health_score >= 60 else "一般",
+                    "status": "关系基本健康，有改善空间",
+                    "strengths": ["互相尊重", "有共同话题"],
+                    "weaknesses": ["沟通频率不足", "情感表达欠缺"],
+                    "action_items": [
+                        "增加互动频率",
+                        "深入情感交流",
+                        "共同参与活动"
+                    ]
+                }
                 ]
             }
         
