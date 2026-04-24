@@ -199,7 +199,7 @@ class AdminService:
             session.close()
     
     def get_system_stats(self) -> Dict[str, Any]:
-        """获取系统统计信息"""
+        """获取系统统计信息 - 包含决策相关数据"""
         session = self.db_manager.get_session()
         
         try:
@@ -218,6 +218,9 @@ class AdminService:
             active_users_24h = session.query(func.count(User.id))\
                                      .filter(User.last_login >= one_day_ago).scalar()
             
+            # 决策统计 - 从文件系统读取（因为决策历史存储在JSON文件中）
+            decision_stats = self._get_decision_stats()
+            
             return {
                 'success': True,
                 'data': {
@@ -228,12 +231,101 @@ class AdminService:
                         'new_7d': new_users_7d,
                         'active_24h': active_users_24h
                     },
+                    'decisions': decision_stats,
                     'timestamp': datetime.now().isoformat()
                 }
             }
             
         finally:
             session.close()
+    
+    def _get_decision_stats(self) -> Dict[str, Any]:
+        """获取决策统计数据"""
+        import os
+        import json
+        from pathlib import Path
+        
+        try:
+            # 决策历史存储路径
+            history_dir = Path('./data/decision_history')
+            
+            if not history_dir.exists():
+                return {
+                    'total': 0,
+                    'today': 0,
+                    'this_week': 0,
+                    'by_category': {},
+                    'avg_options': 0
+                }
+            
+            total_decisions = 0
+            today_decisions = 0
+            week_decisions = 0
+            category_count = {}
+            total_options = 0
+            
+            today = datetime.now().date()
+            week_ago = datetime.now() - timedelta(days=7)
+            
+            # 遍历所有用户的决策历史
+            for user_dir in history_dir.iterdir():
+                if not user_dir.is_dir():
+                    continue
+                
+                history_file = user_dir / 'history.json'
+                if not history_file.exists():
+                    continue
+                
+                try:
+                    with open(history_file, 'r', encoding='utf-8') as f:
+                        histories = json.load(f)
+                    
+                    for history in histories:
+                        total_decisions += 1
+                        
+                        # 统计选项数量
+                        options_count = len(history.get('options_data', {}).get('options', []))
+                        total_options += options_count
+                        
+                        # 统计分类
+                        category = history.get('category', '未分类')
+                        category_count[category] = category_count.get(category, 0) + 1
+                        
+                        # 统计时间
+                        created_at_str = history.get('created_at', '')
+                        if created_at_str:
+                            try:
+                                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                                if created_at.date() == today:
+                                    today_decisions += 1
+                                if created_at >= week_ago:
+                                    week_decisions += 1
+                            except:
+                                pass
+                
+                except Exception as e:
+                    print(f"读取决策历史失败 {history_file}: {e}")
+                    continue
+            
+            avg_options = round(total_options / total_decisions, 1) if total_decisions > 0 else 0
+            
+            return {
+                'total': total_decisions,
+                'today': today_decisions,
+                'this_week': week_decisions,
+                'by_category': category_count,
+                'avg_options': avg_options
+            }
+            
+        except Exception as e:
+            print(f"获取决策统计失败: {e}")
+            return {
+                'total': 0,
+                'today': 0,
+                'this_week': 0,
+                'by_category': {},
+                'avg_options': 0
+            }
     
     def get_recent_activities(self, limit: int = 20) -> Dict[str, Any]:
         """获取最近活动"""

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { API_BASE_URL } from '../services/api';
 import '../styles/AdminPage.css';
 
 interface PentagramNode {
@@ -23,8 +24,17 @@ interface UserStats {
   active_24h: number;
 }
 
+interface DecisionStats {
+  total: number;
+  today: number;
+  this_week: number;
+  by_category: Record<string, number>;
+  avg_options: number;
+}
+
 interface SystemStats {
   users: UserStats;
+  decisions: DecisionStats;
   timestamp: string;
 }
 
@@ -59,7 +69,7 @@ export function AdminPage() {
         const auth = JSON.parse(authData);
         const token = auth.token;
         
-        const response = await fetch('http://localhost:5001/api/admin/stats', {
+        const response = await fetch(`${API_BASE_URL}/api/admin/stats`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -102,10 +112,7 @@ export function AdminPage() {
       id: 'stats',
       title: '系统统计',
       subtitle: '数据分析',
-      action: () => {
-        // 刷新统计数据
-        window.location.reload();
-      },
+      route: '/admin/stats',
       top: '24%',
       left: '84%',
       gradient: ['#B0D9FF', '#7DBDFF'],
@@ -145,7 +152,7 @@ export function AdminPage() {
           if (authData) {
             const auth = JSON.parse(authData);
             try {
-              await fetch('http://localhost:5001/api/auth/logout', {
+              await fetch(`${API_BASE_URL}/api/auth/logout`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -374,28 +381,66 @@ export function AdminPage() {
           
           <h2 className="admin-side-title">系统概览</h2>
           {stats && (
-            <div className="admin-stats-summary">
-              <div className="admin-stat-item">
-                <span className="admin-stat-label">总用户</span>
-                <span className="admin-stat-value">{stats.users.total}</span>
+            <>
+              <div className="admin-stats-section">
+                <h3 className="admin-stats-section-title">用户数据</h3>
+                <div className="admin-stats-summary">
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">总用户</span>
+                    <span className="admin-stat-value">{stats.users.total}</span>
+                  </div>
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">活跃用户</span>
+                    <span className="admin-stat-value">{stats.users.active}</span>
+                  </div>
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">24h活跃</span>
+                    <span className="admin-stat-value">{stats.users.active_24h}</span>
+                  </div>
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">7天新增</span>
+                    <span className="admin-stat-value">{stats.users.new_7d}</span>
+                  </div>
+                </div>
               </div>
-              <div className="admin-stat-item">
-                <span className="admin-stat-label">活跃用户</span>
-                <span className="admin-stat-value">{stats.users.active}</span>
+              
+              <div className="admin-stats-section">
+                <h3 className="admin-stats-section-title">决策数据</h3>
+                <div className="admin-stats-summary">
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">总决策数</span>
+                    <span className="admin-stat-value admin-stat-primary">{stats.decisions.total}</span>
+                  </div>
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">今日决策</span>
+                    <span className="admin-stat-value admin-stat-primary">{stats.decisions.today}</span>
+                  </div>
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">本周决策</span>
+                    <span className="admin-stat-value admin-stat-primary">{stats.decisions.this_week}</span>
+                  </div>
+                  <div className="admin-stat-item">
+                    <span className="admin-stat-label">平均选项</span>
+                    <span className="admin-stat-value admin-stat-primary">{stats.decisions.avg_options}</span>
+                  </div>
+                </div>
+                
+                {Object.keys(stats.decisions.by_category).length > 0 && (
+                  <div className="admin-category-stats">
+                    <h4 className="admin-category-title">决策分类</h4>
+                    {Object.entries(stats.decisions.by_category)
+                      .sort(([, a], [, b]) => b - a)
+                      .slice(0, 5)
+                      .map(([category, count]) => (
+                        <div key={category} className="admin-category-item">
+                          <span className="admin-category-name">{category}</span>
+                          <span className="admin-category-count">{count}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
-              <div className="admin-stat-item">
-                <span className="admin-stat-label">24h活跃</span>
-                <span className="admin-stat-value">{stats.users.active_24h}</span>
-              </div>
-              <div className="admin-stat-item">
-                <span className="admin-stat-label">7天新增</span>
-                <span className="admin-stat-value">{stats.users.new_7d}</span>
-              </div>
-              <div className="admin-stat-item">
-                <span className="admin-stat-label">禁用用户</span>
-                <span className="admin-stat-value admin-stat-inactive">{stats.users.inactive}</span>
-              </div>
-            </div>
+            </>
           )}
           
           <div className="admin-quick-actions">
