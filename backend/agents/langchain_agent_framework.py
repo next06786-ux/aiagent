@@ -27,10 +27,11 @@ import asyncio
 try:
     # 尝试新版API
     from langchain_core.language_models import BaseLLM
+    from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.callbacks import CallbackManagerForLLMRun
     from langchain_core.tools import Tool
     from langchain_core.prompts import PromptTemplate
-    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
     
     # 简化实现：不使用AgentExecutor，直接用LLM
     LANGCHAIN_VERSION = "new"
@@ -40,7 +41,9 @@ except ImportError:
     from langchain.tools import Tool, BaseTool
     from langchain.prompts import PromptTemplate
     from langchain_core.language_models import BaseLLM
+    from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.callbacks import CallbackManagerForLLMRun
+    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
     from langchain.memory import ConversationBufferMemory
     LANGCHAIN_VERSION = "old"
 
@@ -186,9 +189,9 @@ class Workflow:
 
 # ==================== 自定义LLM包装器 ====================
 
-class DashScopeLLM(BaseLLM):
+class DashScopeLLM(BaseChatModel):
     """
-    DashScope LLM包装器，适配LangChain接口
+    DashScope LLM包装器，适配LangChain Chat Model接口
     """
     llm_service: Any = None
     model: str = "qwen-turbo"
@@ -210,31 +213,57 @@ class DashScopeLLM(BaseLLM):
     def _llm_type(self) -> str:
         return "dashscope"
     
+    def bind_tools(self, tools: List[Any], **kwargs: Any) -> "DashScopeLLM":
+        """
+        绑定工具（LangGraph需要）
+        
+        注意：DashScope目前不支持原生function calling，
+        这里只是为了兼容LangGraph接口，实际工具调用由Agent框架处理
+        """
+        # 返回self以支持链式调用
+        return self
+    
     def _generate(
         self,
-        prompts: List[str],
+        messages: List[BaseMessage],
         stop: Optional[List[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> Any:
-        """生成响应（新版API要求）"""
-        from langchain_core.outputs import LLMResult, Generation
+        """生成响应（Chat Model接口）"""
+        from langchain_core.outputs import ChatResult, ChatGeneration
         
-        generations = []
-        for prompt in prompts:
-            try:
-                messages = [{"role": "user", "content": prompt}]
-                response = self.llm_service.chat(
-                    messages=messages,
-                    temperature=self.temperature,
-                    model=self.model
-                )
-                generations.append([Generation(text=response)])
-            except Exception as e:
-                print(f"❌ LLM调用失败: {e}")
-                generations.append([Generation(text=f"Error: {str(e)}")])
-        
-        return LLMResult(generations=generations)
+        try:
+            # 转换消息格式
+            api_messages = []
+            for msg in messages:
+                if isinstance(msg, HumanMessage):
+                    api_messages.append({"role": "user", "content": msg.content})
+                elif isinstance(msg, AIMessage):
+                    api_messages.append({"role": "assistant", "content": msg.content})
+                elif isinstance(msg, SystemMessage):
+                    api_messages.append({"role": "system", "content": msg.content})
+                else:
+                    # 其他类型消息转为用户消息
+                    api_messages.append({"role": "user", "content": str(msg.content)})
+            
+            # 调用LLM
+            response_text = self.llm_service.chat(
+                messages=api_messages,
+                temperature=self.temperature,
+                model=self.model
+            )
+            
+            # 返回AIMessage对象
+            message = AIMessage(content=response_text)
+            generation = ChatGeneration(message=message)
+            
+            return ChatResult(generations=[generation])
+            
+        except Exception as e:
+            print(f"❌ LLM调用失败: {e}")
+            error_message = AIMessage(content=f"Error: {str(e)}")
+            return ChatResult(generations=[ChatGeneration(message=error_message)])
     
     def _call(
         self,
@@ -923,10 +952,40 @@ class LangChainReActAgent(ABC):
         pass
     
     def _create_react_agent(self) -> Any:
-        """创建LangChain ReAct Agent（简化实现）"""
-        # 新版LangChain使用更简单的方式
-        # 我们直接使用LLM + 工具，不依赖AgentExecutor
-        return None  # 简化实现，直接在_handle_agent_decision中调用LLM
+        """创建LangChain ReAct Agent（使用LangGraph）"""
+        try:
+            # 新版LangChain使用LangGraph
+            from langgraph.prebuilt import create_react_agent
+            
+            # 获取工具列表
+            tools = self.tool_module.get_tools()
+            
+            if not tools:
+                print("⚠️  没有可用工具，无法创建Agent")
+                return None
+            
+            print(f"   创建ReAct Agent，工具数: {len(tools)}")
+            
+            # 使用LangGraph创建ReAct Agent
+            agent_executor = create_react_agent(
+                model=self.llm_module.langchain_llm,
+                tools=tools,
+                prompt=self.get_system_prompt()  # 使用prompt参数
+            )
+            
+            print(f"   ✅ ReAct Agent创建成功")
+            return agent_executor
+            
+        except ImportError as e:
+            print(f"❌ 导入失败: {e}")
+            print(f"   请安装: pip install langgraph")
+            return None
+            
+        except Exception as e:
+            print(f"❌ 创建Agent失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def _create_workflow(self) -> Workflow:
         """
@@ -1075,9 +1134,17 @@ class LangChainReActAgent(ABC):
             print(f"   🤖 Agent开始推理...")
             result = self.agent_executor.invoke(agent_input)
             
-            # 提取回复
+            # 提取回复（LangGraph返回的是字典，包含messages列表）
             if isinstance(result, dict):
-                context.agent_response = result.get('output', str(result))
+                if 'messages' in result and result['messages']:
+                    # 获取最后一条消息
+                    last_message = result['messages'][-1]
+                    if hasattr(last_message, 'content'):
+                        context.agent_response = last_message.content
+                    else:
+                        context.agent_response = str(last_message)
+                else:
+                    context.agent_response = result.get('output', str(result))
             else:
                 context.agent_response = str(result)
             
