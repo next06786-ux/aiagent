@@ -66,6 +66,7 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          token: token,  // 添加token到请求体
           agent_type: agentType,
           message: userMessage.content,
           conversation_history: messages.map(m => ({
@@ -80,6 +81,12 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
       }
 
       const data = await response.json();
+      
+      console.log('Agent对话响应:', data);
+
+      if (!data.success) {
+        throw new Error(data.message || '对话失败');
+      }
 
       const assistantMessage: Message = {
         role: 'assistant',

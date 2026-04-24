@@ -4186,16 +4186,22 @@ async def agent_chat(request_data: Dict[str, Any]):
         # 3. 调用LLM生成回复
         llm_service = get_or_init_llm_service()
         if not llm_service or not llm_service.enabled:
+            print(f"❌ [Agent对话] LLM服务不可用")
             return {
                 'success': False,
                 'message': 'LLM服务不可用'
             }
+        
+        print(f"[Agent对话] 开始调用LLM生成回复...")
+        print(f"[Agent对话] 消息数量: {len(messages)}")
         
         response = llm_service.chat(
             messages=messages,
             temperature=0.7,
             max_tokens=500
         )
+        
+        print(f"[Agent对话] LLM回复生成完成: {len(response)}字符")
         
         return {
             'success': True,
@@ -4324,7 +4330,8 @@ async def agent_import_text(request_data: Dict[str, Any]):
 @app.post("/api/agent-import-file")
 async def agent_import_file(
     file: UploadFile = File(...),
-    agent_type: str = None
+    agent_type: str = None,
+    token: str = None
 ):
     """
     Agent文件资料导入
@@ -4332,16 +4339,146 @@ async def agent_import_file(
     支持格式：.txt, .md, .pdf, .docx
     """
     try:
-        # 从请求头获取token
-        from fastapi import Request, Header
-        from typing import Optional
+        # 验证token
+        from backend.auth.auth_service import get_auth_service
+        auth_service = get_auth_service()
         
-        # 注意：这里需要从请求中获取token
-        # 由于FastAPI的限制，我们需要修改函数签名
+        if not token:
+            return {'success': False, 'message': '缺少token'}
+        
+        token_result = auth_service.verify_token(token)
+        if not token_result['success']:
+            return {'success': False, 'message': 'Token无效或已过期'}
+        
+        user_id = token_result['data']['user_id']
+        
+        # 验证参数
+        if not agent_type or agent_type not in ['relationship', 'education', 'career']:
+            return {'success': False, 'message': '无效的Agent类型'}
+        
+        # 检查文件类型
+        filename = file.filename.lower()
+        if not any(filename.endswith(ext) for ext in ['.txt', '.md', '.pdf', '.docx']):
+            return {'success': False, 'message': '不支持的文件格式，仅支持 .txt, .md, .pdf, .docx'}
+        
+        # 读取文件内容
+        content = await file.read()
+        
+        # 根据文件类型解析内容
+        text_content = ""
+        
+        if filename.endswith('.txt') or filename.endswith('.md'):
+            # 文本文件直接解码
+            try:
+                text_content = content.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    text_content = content.decode('gbk')
+                except:
+                    return {'success': False, 'message': '文件编码错误，请使用UTF-8或GBK编码'}
+        
+        elif filename.endswith('.pdf'):
+            # PDF文件解析
+            try:
+                import PyPDF2
+                import io
+                
+                pdf_file = io.BytesIO(content)
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                
+                text_parts = []
+                for page in pdf_reader.pages:
+                    text_parts.append(page.extract_text())
+                
+                text_content = '\n'.join(text_parts)
+            except ImportError:
+                return {'success': False, 'message': 'PDF解析功能未安装，请联系管理员'}
+            except Exception as e:
+                return {'success': False, 'message': f'PDF解析失败: {str(e)}'}
+        
+        elif filename.endswith('.docx'):
+            # DOCX文件解析
+            try:
+                import docx
+                import io
+                
+                docx_file = io.BytesIO(content)
+                doc = docx.Document(docx_file)
+                
+                text_parts = []
+                for paragraph in doc.paragraphs:
+                    if paragraph.text.strip():
+                        text_parts.append(paragraph.text)
+                
+                text_content = '\n'.join(text_parts)
+            except ImportError:
+                return {'success': False, 'message': 'DOCX解析功能未安装，请联系管理员'}
+            except Exception as e:
+                return {'success': False, 'message': f'DOCX解析失败: {str(e)}'}
+        
+        if not text_content.strip():
+            return {'success': False, 'message': '文件内容为空'}
+        
+        # 获取RAG系统
+        from backend.learning.rag_manager import RAGManager
+        from backend.learning.production_rag_system import MemoryType
+        
+        rag_system = RAGManager.get_system(user_id)
+        
+        # 根据Agent类型确定记忆类型和领域
+        memory_type_map = {
+            'relationship': MemoryType.KNOWLEDGE,
+            'education': MemoryType.KNOWLEDGE,
+            'career': MemoryType.KNOWLEDGE
+        }
+        
+        domain_map = {
+            'relationship': 'relationship',
+            'education': 'education',
+            'career': 'career'
+        }
+        
+        memory_type = memory_type_map[agent_type]
+        domain = domain_map[agent_type]
+        
+        # 分段处理文本（按行分割，过滤空行）
+        lines = [line.strip() for line in text_content.split('\n') if line.strip()]
+        
+        if not lines:
+            return {'success': False, 'message': '文件内容为空'}
+        
+        # 批量导入
+        imported_count = 0
+        for line in lines:
+            # 跳过太短的行（少于5个字符）
+            if len(line) < 5:
+                continue
+            
+            try:
+                rag_system.add_memory(
+                    memory_type=memory_type,
+                    content=line,
+                    metadata={
+                        'source': 'file_import',
+                        'agent_type': agent_type,
+                        'domain': domain,
+                        'filename': file.filename,
+                        'imported_at': datetime.now().isoformat()
+                    },
+                    importance=0.8
+                )
+                imported_count += 1
+            except Exception as e:
+                print(f"⚠️ 导入单条记忆失败: {e}")
+                continue
+        
+        print(f"✅ [Agent文件导入] 用户{user_id}从文件{file.filename}向{agent_type} Agent导入了{imported_count}条记忆")
         
         return {
-            'success': False,
-            'message': '文件导入功能开发中，请使用文本导入'
+            'success': True,
+            'message': f'成功从文件导入{imported_count}条记忆',
+            'count': imported_count,
+            'filename': file.filename
         }
         
     except Exception as e:

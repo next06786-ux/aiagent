@@ -46,6 +46,7 @@ export function AgentDataImport({
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          token: token,  // 添加token到请求体
           agent_type: agentType,
           import_type: 'text',
           content: textContent
@@ -94,6 +95,7 @@ export function AgentDataImport({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('agent_type', agentType);
+      formData.append('token', token);  // 添加token到FormData
 
       const response = await fetch(`${API_BASE_URL}/api/agent-import-file`, {
         method: 'POST',
