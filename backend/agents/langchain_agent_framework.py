@@ -1126,13 +1126,27 @@ class ToolModule:
     
     def _register_default_tools(self):
         """注册默认工具"""
-        # 记忆检索工具（任务开始时）
-        memory_tool = Tool(
-            name="retrieve_memory",
-            description="从外部记忆中检索相关信息。适用场景：任务开始时加载背景、遇到陌生问题、需要事实核查。输入：查询文本",
-            func=self._retrieve_memory_tool
+        # RAG混合检索工具（可多次调用）
+        rag_tool = Tool(
+            name="retrieve_user_data",
+            description="""从用户的历史数据和知识库中检索相关信息（RAG混合检索）。
+            
+适用场景：
+1. 需要了解用户的历史背景、偏好、经历时
+2. 需要查找用户之前提到过的信息时
+3. 需要基于用户的真实情况进行个性化分析时
+4. 遇到需要用户具体数据支持的问题时
+
+重要提示：
+- 这个工具会从用户的对话历史、导入的数据、知识图谱中检索信息
+- 检索到的信息应该融入到其他工具的参数中，实现个性化分析
+- 可以多次调用，每次使用不同的查询关键词获取不同维度的信息
+
+输入：查询文本（描述你想了解用户的什么信息）
+输出：相关的用户背景信息""",
+            func=self._retrieve_user_data_tool
         )
-        self.tools.append(memory_tool)
+        self.tools.append(rag_tool)
         
         # 当前时间工具
         time_tool = Tool(
@@ -1165,17 +1179,19 @@ class ToolModule:
     
     # ===== 默认工具实现 =====
     
-    def _retrieve_memory_tool(self, query: str) -> str:
-        """记忆检索工具（智能判断检索原因）"""
+    def _retrieve_user_data_tool(self, query: str) -> str:
+        """RAG混合检索工具（可多次调用）"""
         try:
-            # 简单的原因判断（实际可以用LLM判断）
+            # 智能判断检索原因
             reason = "general"
-            if "背景" in query or "历史" in query or "之前" in query:
+            if "背景" in query or "历史" in query or "之前" in query or "以前" in query:
                 reason = "task_start"
-            elif "不知道" in query or "不了解" in query or "陌生" in query:
+            elif "不知道" in query or "不了解" in query or "陌生" in query or "不清楚" in query:
                 reason = "unknown_problem"
-            elif "确认" in query or "核实" in query or "是否" in query:
+            elif "确认" in query or "核实" in query or "是否" in query or "验证" in query:
                 reason = "fact_check"
+            
+            print(f"   🔍 RAG检索: {query} (原因: {reason})")
             
             context = self.memory_module.retrieve_from_external_memory(
                 query,
@@ -1184,9 +1200,9 @@ class ToolModule:
                 reason=reason
             )
             if context:
-                return f"检索到相关信息：\n{context}"
+                return f"检索到的用户相关信息：\n{context}\n\n提示：请将这些信息融入到后续工具调用的参数中，实现个性化分析。"
             else:
-                return "未找到相关信息"
+                return "未找到相关的用户信息。可能用户还没有提供相关背景，或者需要调整查询关键词。"
         except Exception as e:
             return f"检索失败: {str(e)}"
     
@@ -1320,6 +1336,120 @@ class LangChainReActAgent(ABC):
 3. **多工具协作**：复杂问题可以调用多个工具，从不同角度分析，综合结果后给出全面建议
 4. **工具增强可信度**：使用工具的分析结果会让你的回答更有说服力和专业性
 5. **智能工具使用**：根据实际需要决定调用哪些工具，避免不必要的重复调用
+6. **结合用户背景（重要）**：如果系统提供了【用户背景】信息，你必须在调用工具时将这些背景信息融入到工具参数中，实现个性化分析
+
+## 如何结合用户背景使用工具（关键）
+
+当系统提供了【用户背景】信息时，你需要：
+
+**步骤1：理解用户背景**
+- 仔细阅读【用户背景】部分，提取关键信息（如：性格特点、历史经历、偏好、目标等）
+- 识别哪些背景信息与当前问题相关
+
+**步骤2：将背景融入工具参数**
+- 在调用工具时，把相关的用户背景信息写入工具的参数描述中
+- 让工具的LLM分析能够基于用户的真实情况进行个性化分析
+
+**示例1：人际关系分析**
+```
+用户背景：性格内向，不善于表达情感，曾经因为沟通问题失去过一段友谊
+用户问题：我和新同事关系不太好，怎么办？
+
+❌ 错误做法（忽略背景）：
+analyze_communication_pattern(
+  relationship_type="同事",
+  recent_interactions="关系不太好",
+  issues="不知道"
+)
+
+✅ 正确做法（融入背景）：
+analyze_communication_pattern(
+  relationship_type="同事",
+  recent_interactions="我是一个性格内向的人，不太善于主动表达情感。最近和新同事的互动比较少，感觉关系有些疏远。",
+  issues="我曾经因为沟通问题失去过友谊，担心这次也会出现类似问题。我的内向性格让我不知道如何主动改善关系。"
+)
+```
+
+**示例2：职业规划**
+```
+用户背景：计算机专业大三学生，GPA 3.6，有一次实习经历，对AI方向感兴趣但不确定
+用户问题：我应该考研还是工作？
+
+❌ 错误做法（忽略背景）：
+analyze_career_path(
+  current_situation="大三学生",
+  options="考研或工作"
+)
+
+✅ 正确做法（融入背景）：
+analyze_career_path(
+  current_situation="我是计算机专业大三学生，目前GPA 3.6，有一次互联网公司的实习经历。我对AI方向很感兴趣，但还不确定是否要深入研究。",
+  options="考研（可以深入学习AI理论）或直接工作（积累实践经验）",
+  concerns="不确定自己是否适合做研究，也担心工作后就没机会深造了"
+)
+```
+
+**示例3：教育规划**
+```
+用户背景：目标是申请美国TOP30大学的CS专业，托福105，GRE 325，有两篇论文
+用户问题：我的GPA 3.5够吗？
+
+❌ 错误做法（忽略背景）：
+calculate_gpa_requirements(
+  target_university="美国大学",
+  current_gpa=3.5
+)
+
+✅ 正确做法（融入背景）：
+calculate_gpa_requirements(
+  target_university="美国TOP30大学",
+  major="计算机科学",
+  current_gpa=3.5,
+  additional_scores="托福105分，GRE 325分，有两篇学术论文发表"
+)
+```
+
+**核心要点**：
+- 用户背景不是可选的，而是必须利用的关键信息
+- 将背景信息转化为工具参数的具体描述，而不是简单复制
+- 让工具的LLM能够基于用户的真实情况进行分析，而不是给出通用建议
+- 这样工具返回的结果会更加个性化、更有针对性、更有价值
+
+## 如何使用retrieve_user_data工具（RAG检索）
+
+**重要**：系统在对话开始时会自动加载一次用户背景，但这可能不够全面。你可以在需要时主动调用`retrieve_user_data`工具获取更多用户信息。
+
+**何时调用retrieve_user_data**：
+1. 系统提供的【用户背景】信息不够详细或不够相关
+2. 需要了解用户在特定领域的历史经历（如：职业经历、教育背景、人际关系史）
+3. 需要查找用户之前提到过但当前对话中没有的信息
+4. 需要验证或补充用户的某些信息
+
+**调用示例**：
+```
+用户问题：我应该如何改善和领导的关系？
+系统背景：（只有基本信息，没有职场相关内容）
+
+步骤1：先调用retrieve_user_data获取职场背景
+retrieve_user_data("用户的职场经历、与领导相处的历史、工作环境")
+
+步骤2：基于检索结果，调用专业工具
+analyze_communication_pattern(
+  relationship_type="上下级",
+  recent_interactions="[融入检索到的具体职场互动信息]",
+  issues="[融入检索到的历史问题]"
+)
+```
+
+**多次检索策略**：
+- 第一次检索：获取宏观背景（如"用户的教育背景和职业目标"）
+- 第二次检索：获取具体细节（如"用户在AI领域的学习经历"）
+- 第三次检索：获取相关经验（如"用户之前的求职经历"）
+
+**检索结果的使用**：
+- 检索到的信息应该立即融入到后续工具调用的参数中
+- 不要只是告诉用户"我检索到了你的信息"，而是要实际使用这些信息
+- 让每个工具调用都基于用户的真实情况，而不是假设或通用场景
 
 ## 何时使用工具
 
@@ -1349,31 +1479,69 @@ class LangChainReActAgent(ABC):
 
 ## 工作流程
 
-1. **Thought（思考）**：分析用户问题，判断需要哪些工具
-2. **Action（行动）**：调用最相关的工具
-3. **Observation（观察）**：仔细阅读工具返回的结果
-4. **Thought（再思考）**：
+1. **Thought（思考）**：分析用户问题，判断需要哪些信息和工具
+2. **Action（可选）**：如果需要更多用户背景，先调用retrieve_user_data
+3. **Observation（可选）**：查看检索到的用户信息
+4. **Thought（再思考）**：基于用户背景，决定调用哪个专业工具
+5. **Action（行动）**：调用专业工具（参数中融入用户背景）
+6. **Observation（观察）**：仔细阅读工具返回的结果
+7. **Thought（再思考）**：
    - 这个结果是否已经足够回答问题？
    - 如果不够，我需要什么额外信息？
    - 应该调用哪个其他工具来获取这些信息？
-5. **Action（可选）**：如果确实需要，调用另一个不同的工具
-6. **Observation（可选）**：查看新工具的结果
-7. **Final Answer（最终回答）**：综合所有信息，给出专业建议
+8. **Action（可选）**：如果确实需要，调用另一个不同的工具
+9. **Observation（可选）**：查看新工具的结果
+10. **Final Answer（最终回答）**：综合所有信息，给出专业建议
 
 ## 示例
 
-**示例1：人际关系问题（多工具协作）**
+**示例1：人际关系问题（先检索背景，再多工具协作）**
 用户："我和朋友关系紧张，怎么办？"
-Thought: 需要评估关系健康度和分析沟通模式
-Action: 调用assess_relationship_health
-Observation: 健康度60分，关系一般
-Thought: 知道了健康度，现在需要了解具体的沟通问题
-Action: 调用analyze_communication_pattern
-Observation: 沟通问题：倾听不足、表达不清
-Thought: 已经有了健康度和沟通分析，足够给出建议了
+系统背景：（只有基本信息）
+
+Thought: 需要了解用户的人际关系历史和性格特点
+Action: retrieve_user_data("用户的性格特点、人际关系历史、社交模式")
+Observation: 用户性格内向，曾因沟通问题失去友谊，不善表达情感
+Thought: 现在有了背景，需要评估当前关系健康度
+Action: assess_relationship_health(
+  relationship_type="朋友",
+  interaction_frequency="每周",
+  satisfaction_level=4,
+  conflict_frequency="经常",
+  additional_context="我是性格内向的人，不善于表达情感，曾经因为沟通问题失去过友谊"
+)
+Observation: 健康度55分，关系紧张，需要改善沟通
+Thought: 知道了健康度，现在需要分析具体的沟通问题
+Action: analyze_communication_pattern(
+  relationship_type="朋友",
+  recent_interactions="最近互动减少，对话时感觉有距离感。我因为内向不太主动联系。",
+  issues="担心重蹈覆辙，不知道如何主动修复关系。我的内向性格让我很难开口。"
+)
+Observation: 识别出沟通障碍：主动性不足、情感表达欠缺、倾听不够
+Thought: 已经有了健康度评估和沟通分析，足够给出建议了
 Final Answer: 综合建议...
 
-**示例2：搜索问题（单次调用）**
+**示例2：职业规划（多次检索不同维度）**
+用户："我应该考研还是工作？"
+系统背景：（只有基本学历信息）
+
+Thought: 需要了解用户的教育背景和职业目标
+Action: retrieve_user_data("用户的专业、GPA、实习经历、职业兴趣")
+Observation: 计算机专业大三，GPA 3.6，有一次实习，对AI感兴趣
+Thought: 还需要了解用户的长期规划和顾虑
+Action: retrieve_user_data("用户的职业规划、考研意向、对未来的期望")
+Observation: 想进大厂，但也想深入学习AI，担心工作后没机会深造
+Thought: 现在有足够背景，可以分析职业路径
+Action: analyze_career_path(
+  current_situation="计算机专业大三学生，GPA 3.6，有互联网公司实习经历，对AI方向感兴趣但不确定是否要深入研究",
+  options="考研（深入学习AI理论，提升学历竞争力）vs 直接工作（进大厂积累实践经验，快速成长）",
+  goals="长期目标是进入顶尖科技公司，从事AI相关工作",
+  concerns="担心工作后就没机会深造，也担心读研后错过最佳就业时机"
+)
+Observation: 工具返回详细的路径分析和建议
+Final Answer: 基于你的情况...
+
+**示例3：搜索问题（单次调用）**
 用户："今年的诺贝尔奖得主是谁？"
 Thought: 需要最新信息，使用web_search
 Action: 调用web_search("今年诺贝尔奖得主")
@@ -1381,15 +1549,22 @@ Observation: 获得搜索结果
 Thought: 搜索结果已经包含了答案，不需要再搜索
 Final Answer: 基于搜索结果回答
 
-**示例3：搜索需要调整（合理的重复调用）**
-用户："最新的AI技术趋势"
-Thought: 需要搜索最新信息
-Action: 调用web_search("AI技术趋势")
-Observation: 结果太宽泛，不够具体
-Thought: 需要更具体的搜索词
-Action: 调用web_search("2024年AI技术突破")
-Observation: 获得更具体的结果
-Final Answer: 基于搜索结果回答
+**示例4：教育规划（先检索再分析）**
+用户："我的GPA能申请到好学校吗？"
+系统背景：（没有详细的申请信息）
+
+Thought: 需要了解用户的完整申请背景
+Action: retrieve_user_data("用户的GPA、标准化考试成绩、目标院校、专业方向")
+Observation: GPA 3.5，托福105，GRE 325，目标美国TOP30 CS专业，有两篇论文
+Thought: 现在有完整信息，可以分析录取概率
+Action: calculate_gpa_requirements(
+  target_university="美国TOP30大学",
+  major="计算机科学",
+  current_gpa=3.5,
+  additional_scores="托福105分，GRE 325分，有两篇学术论文发表，一次科研项目经历"
+)
+Observation: 工具返回GPA要求和录取概率分析
+Final Answer: 基于分析结果给出建议...
 """
             
             # 使用LangGraph创建ReAct Agent
