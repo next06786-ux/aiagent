@@ -1642,14 +1642,18 @@ async def websocket_agent_chat(websocket: WebSocket):
                     
                     if status == "running":
                         # 工具开始执行
+                        print(f"[WebSocket Callback] 发送 tool_start: {tool_name}")
                         await ws_manager.send_message(user_id, session_id, {
                             "type": MessageType.TOOL_START,
                             "tool_name": tool_name,
                             "server_name": "Unknown",  # LangChain回调中没有server信息
                             "timestamp": datetime.now().isoformat()
                         })
+                        # 强制刷新，确保消息立即发送
+                        await asyncio.sleep(0)
                     elif status == "completed":
                         # 工具执行完成
+                        print(f"[WebSocket Callback] 发送 tool_complete: {tool_name}")
                         await ws_manager.send_message(user_id, session_id, {
                             "type": MessageType.TOOL_COMPLETE,
                             "tool_name": tool_name,
@@ -1657,8 +1661,10 @@ async def websocket_agent_chat(websocket: WebSocket):
                             "result": data.get("output", "")[:100],
                             "timestamp": datetime.now().isoformat()
                         })
+                        await asyncio.sleep(0)
                     elif status == "error":
                         # 工具执行失败
+                        print(f"[WebSocket Callback] 发送 tool_failed: {tool_name}")
                         await ws_manager.send_message(user_id, session_id, {
                             "type": MessageType.TOOL_FAILED,
                             "tool_name": tool_name,
@@ -1666,6 +1672,7 @@ async def websocket_agent_chat(websocket: WebSocket):
                             "error": data.get("error", ""),
                             "timestamp": datetime.now().isoformat()
                         })
+                        await asyncio.sleep(0)
             
             # 创建LangChain Agent（传入WebSocket回调）
             agent = create_langchain_agent(
@@ -1689,8 +1696,16 @@ async def websocket_agent_chat(websocket: WebSocket):
                 })
                 return
             
-            # 执行Agent处理
-            result = agent.process(message)
+            # 在单独的线程中执行Agent处理（避免阻塞事件循环）
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = await loop.run_in_executor(
+                    pool,
+                    agent.process,
+                    message
+                )
             
             # 收集工具调用信息
             tool_calls = result.get('tool_calls', [])
