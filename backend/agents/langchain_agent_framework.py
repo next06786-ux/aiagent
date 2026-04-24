@@ -1367,10 +1367,11 @@ Final Answer: 直接友好回复
 """
             
             # 使用LangGraph创建ReAct Agent
+            # state_modifier用于添加系统提示词
             agent_executor = create_react_agent(
                 model=self.llm_module.langchain_llm,
                 tools=tools,
-                prompt=system_prompt  # 直接传递系统提示字符串
+                state_modifier=system_prompt  # 使用state_modifier传递系统提示
             )
             
             print(f"   ✅ ReAct Agent创建成功")
