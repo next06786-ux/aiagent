@@ -85,13 +85,14 @@ def load_agent_config(config_path: str = None) -> Dict[str, Any]:
         return json.load(f)
 
 
-def create_mcp_server(server_config: Dict[str, Any], env_vars: Dict[str, str] = None) -> Any:
+def create_mcp_server(server_config: Dict[str, Any], env_vars: Dict[str, str] = None, llm_service = None) -> Any:
     """
     根据配置创建MCP服务器实例
     
     Args:
         server_config: 服务器配置，包含 class, module, init_params
         env_vars: 环境变量字典（用于替换 ${VAR} 格式的变量）
+        llm_service: LLM服务实例（用于需要LLM的MCP服务器）
     
     Returns:
         MCP服务器实例
@@ -110,6 +111,11 @@ def create_mcp_server(server_config: Dict[str, Any], env_vars: Dict[str, str] = 
             if isinstance(value, str) and value.startswith('${') and value.endswith('}'):
                 env_var_name = value[2:-1]
                 init_params[key] = env_vars.get(env_var_name, '')
+    
+    # 检查服务器是否需要llm_service参数
+    # RelationshipMCPServer, EducationMCPServer, CareerMCPServer 需要LLM
+    if class_name in ['RelationshipMCPServer', 'EducationMCPServer', 'CareerMCPServer']:
+        init_params['llm_service'] = llm_service
     
     # 创建实例
     return server_class(**init_params)
@@ -167,7 +173,7 @@ def create_langchain_agent(
             if server_id in mcp_servers_config:
                 server_config = mcp_servers_config[server_id]
                 try:
-                    server_instance = create_mcp_server(server_config, env_vars)
+                    server_instance = create_mcp_server(server_config, env_vars, llm_service)
                     mcp_host.register_server(server_instance)
                     print(f"   ✓ 已注册MCP服务器: {server_id}")
                 except Exception as e:

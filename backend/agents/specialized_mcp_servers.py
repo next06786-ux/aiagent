@@ -63,8 +63,7 @@ class RelationshipMCPServer(MCPServer):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
-                max_tokens=800
+                temperature=0.7
             )
             return response
         except Exception as e:
@@ -309,135 +308,218 @@ class RelationshipMCPServer(MCPServer):
                         "共同参与活动"
                     ]
                 }
-                ]
-            }
         
         elif tool_name == "generate_conflict_resolution":
             conflict_type = parameters.get("conflict_type", "误解")
             your_position = parameters.get("your_position", "")
             other_position = parameters.get("other_position", "")
             
-            strategies = {
-                "价值观": {
-                    "approach": "尊重差异，寻找共同点",
-                    "steps": [
-                        "承认双方价值观的合理性",
-                        "寻找核心共同价值",
-                        "在行动层面寻求妥协"
-                    ]
-                },
-                "利益": {
-                    "approach": "双赢思维，创造性解决",
-                    "steps": [
-                        "明确双方真实需求",
-                        "寻找利益交集",
-                        "探索创新解决方案"
-                    ]
-                },
-                "误解": {
-                    "approach": "澄清事实，重建信任",
-                    "steps": [
-                        "坦诚沟通，澄清误解",
-                        "表达真实意图",
-                        "重建信任基础"
-                    ]
-                },
-                "情感": {
-                    "approach": "情感共鸣，修复关系",
-                    "steps": [
-                        "表达和倾听情感",
-                        "承认对方感受",
-                        "共同寻找解决方案"
-                    ]
+            # 使用LLM生成冲突解决方案
+            system_prompt = """你是一位专业的冲突调解专家和心理咨询师。
+请基于冲突类型和双方立场，提供专业的冲突解决方案。
+
+你的方案应该包括：
+1. resolution_approach: 解决方法（一句话概括）
+2. detailed_steps: 详细步骤（3-5个具体步骤）
+3. communication_tips: 沟通技巧（2-3个）
+4. expected_outcome: 预期结果
+5. potential_challenges: 可能遇到的挑战（2-3个）
+
+请以JSON格式返回。"""
+            
+            user_prompt = f"""请为以下冲突提供解决方案：
+
+冲突类型：{conflict_type}
+我的立场：{your_position if your_position else '未提供'}
+对方立场：{other_position if other_position else '未提供'}
+
+请给出专业的调解方案和具体步骤。"""
+            
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    resolution = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        "conflict_type": conflict_type,
+                        **resolution
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "conflict_type": conflict_type,
+                        "resolution": llm_response
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM生成方案失败，使用默认方案: {e}")
+                # 降级到简单方案
+                return {
+                    "success": True,
+                    "conflict_type": conflict_type,
+                    "resolution_approach": "坦诚沟通，寻求共识",
+                    "detailed_steps": [
+                        "选择合适的时间和地点进行对话",
+                        "使用'我'语句表达感受，避免指责",
+                        "积极倾听对方的观点和感受",
+                        "寻找双方都能接受的解决方案",
+                        "达成共识后明确行动计划"
+                    ],
+                    "communication_tips": [
+                        "保持冷静和尊重",
+                        "关注问题本身而非人身攻击",
+                        "寻找共同利益点"
+                    ],
+                    "expected_outcome": "通过理性沟通达成互相理解和妥协"
                 }
-            }
-            
-            strategy = strategies.get(conflict_type, strategies["误解"])
-            
-            return {
-                "success": True,
-                "conflict_type": conflict_type,
-                "resolution_approach": strategy["approach"],
-                "step_by_step_guide": strategy["steps"],
-                "communication_script": f"我理解你的{conflict_type}，让我们一起找到解决方案...",
-                "expected_outcome": "双方达成理解和共识",
-                "follow_up_actions": ["定期检查", "持续沟通", "调整策略"]
-            }
         
         elif tool_name == "calculate_social_compatibility":
             your_traits = parameters.get("your_traits", "")
             other_traits = parameters.get("other_traits", "")
             shared_interests = parameters.get("shared_interests", "")
             
-            # 简化的兼容性计算
-            compatibility_score = 70  # 基础分
+            # 使用LLM计算社交兼容性
+            system_prompt = """你是一位专业的人际关系分析师，擅长评估两人的社交兼容性。
+请基于双方的性格特征、兴趣爱好等信息，分析他们的兼容性。
+
+你的分析应该包括：
+1. compatibility_score: 兼容性得分（0-100）
+2. compatibility_level: 兼容性等级（高/中/低）
+3. matching_traits: 相似特质（2-3个）
+4. complementary_traits: 互补特质（2-3个）
+5. potential_challenges: 潜在挑战（2-3个）
+6. relationship_advice: 关系建议（一段话）
+
+请以JSON格式返回。"""
             
-            if shared_interests:
-                compatibility_score += 15
+            user_prompt = f"""请分析以下两人的社交兼容性：
+
+我的特征：{your_traits}
+对方特征：{other_traits}
+共同兴趣：{shared_interests if shared_interests else '未提供'}
+
+请给出专业的兼容性分析。"""
             
-            if "内向" in your_traits and "内向" in other_traits:
-                compatibility_score += 10
-            elif "外向" in your_traits and "外向" in other_traits:
-                compatibility_score += 10
-            
-            return {
-                "success": True,
-                "compatibility_score": min(100, compatibility_score),
-                "compatibility_level": "高" if compatibility_score >= 80 else "中" if compatibility_score >= 60 else "一般",
-                "matching_traits": ["都重视沟通", "价值观相似"],
-                "complementary_traits": ["一个外向一个内向，互补性强"],
-                "potential_challenges": ["需要更多共同兴趣", "沟通方式需要磨合"],
-                "relationship_advice": "你们有很好的兼容性基础，建议多培养共同兴趣"
-            }
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    compatibility = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        **compatibility
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "analysis": llm_response,
+                        "compatibility_score": 75
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM分析失败，使用默认分析: {e}")
+                # 降级到简单分析
+                return {
+                    "success": True,
+                    "compatibility_score": 75,
+                    "compatibility_level": "中等",
+                    "matching_traits": ["都重视沟通", "价值观相似"],
+                    "complementary_traits": ["性格互补，一个外向一个内向"],
+                    "potential_challenges": ["需要更多共同兴趣", "沟通方式需要磨合"],
+                    "relationship_advice": "你们有良好的兼容性基础，建议多培养共同兴趣，尊重彼此差异"
+                }
         
         elif tool_name == "suggest_conversation_topics":
             relationship_type = parameters.get("relationship_type", "朋友")
             interests = parameters.get("interests", "")
             context = parameters.get("context", "日常")
             
-            topic_suggestions = {
-                "朋友": [
-                    "最近看的电影/剧集",
-                    "共同的兴趣爱好",
-                    "未来的计划和梦想",
-                    "有趣的生活经历"
-                ],
-                "同事": [
-                    "工作项目进展",
-                    "行业趋势和见解",
-                    "职业发展规划",
-                    "工作之外的兴趣"
-                ],
-                "家人": [
-                    "家庭近况和关心",
-                    "童年回忆",
-                    "未来家庭计划",
-                    "健康和生活方式"
-                ],
-                "恋人": [
-                    "彼此的感受和需求",
-                    "共同的未来规划",
-                    "浪漫的回忆",
-                    "深层的价值观"
-                ]
-            }
+            # 使用LLM推荐对话话题
+            system_prompt = """你是一位专业的社交沟通顾问，擅长推荐合适的对话话题。
+请基于关系类型、对方兴趣和对话场景，推荐5-7个具体的对话话题。
+
+你的推荐应该包括：
+1. topics: 话题列表（5-7个具体话题）
+2. icebreakers: 开场白建议（2-3个）
+3. conversation_tips: 对话技巧（2-3个）
+4. topics_to_avoid: 应避免的话题（2-3个）
+
+请以JSON格式返回。"""
             
-            topics = topic_suggestions.get(relationship_type, topic_suggestions["朋友"])
+            user_prompt = f"""请为以下情况推荐对话话题：
+
+关系类型：{relationship_type}
+对方兴趣：{interests if interests else '未提供'}
+对话场景：{context}
+
+请推荐具体、实用的对话话题。"""
             
-            return {
-                "success": True,
-                "suggested_topics": topics,
-                "conversation_starters": [
-                    f"最近你对{interests}有什么新的想法吗？",
-                    "我一直想和你聊聊...",
-                    "你觉得...怎么样？"
-                ],
-                "tips": [
-                    "保持开放和好奇的态度",
-                    "多问开放式问题",
-                    "分享自己的真实感受"
-                ]
-            }
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    suggestions = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        "relationship_type": relationship_type,
+                        "context": context,
+                        **suggestions
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "relationship_type": relationship_type,
+                        "suggestions": llm_response
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM推荐失败，使用默认话题: {e}")
+                # 降级到默认话题
+                default_topics = {
+                    "朋友": [
+                        "最近看的电影或剧集",
+                        "共同的兴趣爱好",
+                        "未来的计划和梦想",
+                        "有趣的生活经历",
+                        "推荐的书籍或音乐"
+                    ],
+                    "同事": [
+                        "工作项目进展",
+                        "行业趋势和见解",
+                        "职业发展规划",
+                        "工作之外的兴趣"
+                    ],
+                    "家人": [
+                        "家庭近况和关心",
+                        "童年回忆",
+                        "未来家庭计划",
+                        "健康和生活方式"
+                    ]
+                }
+                
+                topics = default_topics.get(relationship_type, default_topics["朋友"])
+                
+                return {
+                    "success": True,
+                    "relationship_type": relationship_type,
+                    "context": context,
+                    "topics": topics,
+                    "icebreakers": [
+                        "最近过得怎么样？",
+                        "有什么新鲜事吗？",
+                        "周末有什么计划？"
+                    ],
+                    "conversation_tips": [
+                        "保持真诚和开放",
+                        "积极倾听对方",
+                        "分享自己的经历"
+                    ],
+                    "topics_to_avoid": ["敏感话题", "过于私人的问题"]
+                }
         
         else:
             raise ValueError(f"未知工具: {tool_name}")
@@ -457,7 +539,7 @@ class RelationshipMCPServer(MCPServer):
 
 class EducationMCPServer(MCPServer):
     """
-    教育规划MCP Server
+    教育规划MCP Server（LLM驱动）
     
     提供工具：
     1. calculate_gpa_requirements - 计算目标院校GPA要求
@@ -467,12 +549,44 @@ class EducationMCPServer(MCPServer):
     5. recommend_universities - 推荐院校
     """
     
-    def __init__(self):
+    def __init__(self, llm_service=None):
         super().__init__(
             server_id="education_tools",
             name="Education Planning Server",
-            description="提供教育规划和升学指导工具"
+            description="提供教育规划和升学指导工具（LLM驱动）"
         )
+        self.llm_service = llm_service
+    
+    def _get_llm_service(self):
+        """获取LLM服务"""
+        if self.llm_service:
+            return self.llm_service
+        
+        try:
+            from backend.llm.llm_service import get_llm_service
+            return get_llm_service()
+        except Exception as e:
+            print(f"⚠️  无法获取LLM服务: {e}")
+            return None
+    
+    async def _call_llm_for_analysis(self, system_prompt: str, user_prompt: str) -> str:
+        """调用LLM进行分析"""
+        llm = self._get_llm_service()
+        if not llm or not llm.enabled:
+            return "LLM服务不可用，返回默认分析"
+        
+        try:
+            response = llm.chat(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7
+            )
+            return response
+        except Exception as e:
+            print(f"⚠️  LLM调用失败: {e}")
+            return f"分析失败: {str(e)}"
     
     async def list_tools(self) -> List[MCPTool]:
         return [
@@ -561,115 +675,138 @@ class EducationMCPServer(MCPServer):
 
     
     async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
-        """执行教育规划工具"""
+        """执行教育规划工具（LLM驱动）"""
         
         if tool_name == "calculate_gpa_requirements":
             target_university = parameters.get("target_university", "")
             major = parameters.get("major", "计算机科学")
             current_gpa = parameters.get("current_gpa", 3.0)
+            additional_scores = parameters.get("additional_scores", "")
             
-            # 模拟不同院校的GPA要求
-            university_requirements = {
-                "清华大学": {"min_gpa": 3.7, "competitive_gpa": 3.9},
-                "北京大学": {"min_gpa": 3.7, "competitive_gpa": 3.9},
-                "复旦大学": {"min_gpa": 3.5, "competitive_gpa": 3.8},
-                "上海交通大学": {"min_gpa": 3.5, "competitive_gpa": 3.8},
-                "浙江大学": {"min_gpa": 3.4, "competitive_gpa": 3.7}
-            }
+            # 使用LLM分析GPA要求和录取概率
+            system_prompt = """你是一位专业的升学规划顾问，擅长分析院校录取要求。
+请基于目标院校、专业和当前GPA，分析录取要求和概率。
+
+你的分析应该包括：
+1. min_gpa_required: 最低GPA要求（数字）
+2. competitive_gpa: 有竞争力的GPA（数字）
+3. admission_probability: 录取概率描述
+4. status: 当前状态评价
+5. gpa_gap: GPA差距（数字）
+6. recommendations: 提升建议（3-5条）
+
+请以JSON格式返回。"""
             
-            requirements = university_requirements.get(
-                target_university,
-                {"min_gpa": 3.0, "competitive_gpa": 3.5}
-            )
+            user_prompt = f"""请分析以下申请情况：
+
+目标院校：{target_university}
+目标专业：{major}
+当前GPA：{current_gpa}
+其他成绩：{additional_scores if additional_scores else '未提供'}
+
+请给出专业的录取分析和建议。"""
             
-            # 计算录取概率
-            if current_gpa >= requirements["competitive_gpa"]:
-                probability = "高（80-90%）"
-                status = "优秀"
-            elif current_gpa >= requirements["min_gpa"]:
-                probability = "中等（50-70%）"
-                status = "达标"
-            else:
-                probability = "较低（20-40%）"
-                status = "需要提升"
-            
-            gap = max(0, requirements["competitive_gpa"] - current_gpa)
-            
-            return {
-                "success": True,
-                "target_university": target_university,
-                "major": major,
-                "current_gpa": current_gpa,
-                "min_gpa_required": requirements["min_gpa"],
-                "competitive_gpa": requirements["competitive_gpa"],
-                "admission_probability": probability,
-                "status": status,
-                "gpa_gap": round(gap, 2),
-                "recommendations": [
-                    f"需要提升GPA {gap:.2f}分以达到竞争力水平" if gap > 0 else "GPA已达标，保持优势",
-                    "增加科研项目经历",
-                    "准备高质量推荐信",
-                    "提升标准化考试成绩"
-                ]
-            }
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    analysis = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        "target_university": target_university,
+                        "major": major,
+                        "current_gpa": current_gpa,
+                        **analysis
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "target_university": target_university,
+                        "analysis": llm_response
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM分析失败，使用默认分析: {e}")
+                # 降级到简单分析
+                gap = max(0, 3.7 - current_gpa)
+                return {
+                    "success": True,
+                    "target_university": target_university,
+                    "major": major,
+                    "current_gpa": current_gpa,
+                    "min_gpa_required": 3.5,
+                    "competitive_gpa": 3.7,
+                    "admission_probability": "中等" if current_gpa >= 3.5 else "较低",
+                    "status": "达标" if current_gpa >= 3.5 else "需要提升",
+                    "gpa_gap": round(gap, 2),
+                    "recommendations": [
+                        f"需要提升GPA {gap:.2f}分" if gap > 0 else "GPA已达标",
+                        "增加科研项目经历",
+                        "准备高质量推荐信"
+                    ]
+                }
         
         elif tool_name == "analyze_major_prospects":
             major_name = parameters.get("major_name", "")
             focus_areas = parameters.get("focus_areas", "就业率")
             
-            # 专业数据库（示例）
-            major_data = {
-                "计算机科学": {
-                    "employment_rate": 95,
-                    "average_salary": "15-25万",
-                    "growth_trend": "持续增长",
-                    "difficulty": "中等偏高",
-                    "hot_directions": ["人工智能", "大数据", "云计算"]
-                },
-                "金融学": {
-                    "employment_rate": 88,
-                    "average_salary": "12-20万",
-                    "growth_trend": "稳定",
-                    "difficulty": "中等",
-                    "hot_directions": ["金融科技", "量化投资", "风险管理"]
-                },
-                "电子工程": {
-                    "employment_rate": 92,
-                    "average_salary": "12-18万",
-                    "growth_trend": "稳定增长",
-                    "difficulty": "高",
-                    "hot_directions": ["芯片设计", "物联网", "5G通信"]
+            # 使用LLM分析专业前景
+            system_prompt = """你是一位专业的教育和职业规划顾问，擅长分析专业就业前景。
+请基于专业名称和关注维度，提供全面的专业前景分析。
+
+你的分析应该包括：
+1. employment_rate: 就业率（百分比字符串）
+2. average_salary: 平均薪资范围
+3. growth_trend: 发展趋势描述
+4. learning_difficulty: 学习难度
+5. hot_directions: 热门方向（3-5个）
+6. market_demand: 市场需求（高/中/低）
+7. career_paths: 职业路径（3-5个）
+8. skill_requirements: 技能要求（3-5个）
+
+请以JSON格式返回。"""
+            
+            user_prompt = f"""请分析以下专业的前景：
+
+专业名称：{major_name}
+关注维度：{focus_areas}
+
+请给出全面的专业前景分析。"""
+            
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    analysis = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        "major_name": major_name,
+                        **analysis
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "major_name": major_name,
+                        "analysis": llm_response
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM分析失败，使用默认分析: {e}")
+                # 降级到默认分析
+                return {
+                    "success": True,
+                    "major_name": major_name,
+                    "employment_rate": "85%",
+                    "average_salary": "10-20万",
+                    "growth_trend": "稳定发展",
+                    "learning_difficulty": "中等",
+                    "hot_directions": ["方向1", "方向2", "方向3"],
+                    "market_demand": "中等",
+                    "career_paths": ["职业路径1", "职业路径2"],
+                    "skill_requirements": ["技能1", "技能2"]
                 }
-            }
-            
-            data = major_data.get(major_name, {
-                "employment_rate": 85,
-                "average_salary": "8-15万",
-                "growth_trend": "稳定",
-                "difficulty": "中等",
-                "hot_directions": ["待补充"]
-            })
-            
-            return {
-                "success": True,
-                "major_name": major_name,
-                "employment_rate": f"{data['employment_rate']}%",
-                "average_salary": data["average_salary"],
-                "growth_trend": data["growth_trend"],
-                "learning_difficulty": data["difficulty"],
-                "hot_directions": data["hot_directions"],
-                "market_demand": "高" if data["employment_rate"] > 90 else "中等",
-                "career_paths": [
-                    "互联网公司技术岗",
-                    "科研院所研究员",
-                    "创业公司核心成员"
-                ],
-                "skill_requirements": [
-                    "扎实的专业基础",
-                    "实践项目经验",
-                    "持续学习能力"
-                ]
-            }
         
         elif tool_name == "generate_study_schedule":
             goal = parameters.get("goal", "")
@@ -825,7 +962,7 @@ class EducationMCPServer(MCPServer):
 
 class CareerMCPServer(MCPServer):
     """
-    职业发展专业工具 MCP Server
+    职业发展专业工具 MCP Server（LLM驱动）
     
     提供工具：
     1. assess_career_competitiveness - 评估职业竞争力
@@ -835,12 +972,44 @@ class CareerMCPServer(MCPServer):
     5. optimize_resume - 简历优化建议
     """
     
-    def __init__(self):
+    def __init__(self, llm_service=None):
         super().__init__(
             server_id="career_tools",
             name="Career Development Server",
-            description="提供职业发展规划、市场分析、技能提升等专业工具"
+            description="提供职业发展规划、市场分析、技能提升等专业工具（LLM驱动）"
         )
+        self.llm_service = llm_service
+    
+    def _get_llm_service(self):
+        """获取LLM服务"""
+        if self.llm_service:
+            return self.llm_service
+        
+        try:
+            from backend.llm.llm_service import get_llm_service
+            return get_llm_service()
+        except Exception as e:
+            print(f"⚠️  无法获取LLM服务: {e}")
+            return None
+    
+    async def _call_llm_for_analysis(self, system_prompt: str, user_prompt: str) -> str:
+        """调用LLM进行分析"""
+        llm = self._get_llm_service()
+        if not llm or not llm.enabled:
+            return "LLM服务不可用，返回默认分析"
+        
+        try:
+            response = llm.chat(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7
+            )
+            return response
+        except Exception as e:
+            print(f"⚠️  LLM调用失败: {e}")
+            return f"分析失败: {str(e)}"
     
     async def list_tools(self) -> List[MCPTool]:
         return [
@@ -969,7 +1138,7 @@ class CareerMCPServer(MCPServer):
         ]
     
     async def call_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
-        """执行职业发展工具"""
+        """执行职业发展工具（LLM驱动）"""
         
         if tool_name == "assess_career_competitiveness":
             skills = parameters.get("skills", "")
@@ -977,63 +1146,123 @@ class CareerMCPServer(MCPServer):
             education = parameters.get("education", "")
             target = parameters.get("target_position", "")
             
-            # 模拟竞争力评估
-            return {
-                "overall_score": 75,
-                "strengths": [
-                    "技术深度：具备扎实的专业技能",
-                    "项目经验：有实际项目落地经验",
-                    "学习能力：教育背景良好"
-                ],
-                "weaknesses": [
-                    "跨领域能力：建议拓展相关领域知识",
-                    "软技能：可加强沟通和团队协作能力"
-                ],
-                "improvement_suggestions": [
-                    "深化核心技术栈，成为领域专家",
-                    "参与开源项目，提升影响力",
-                    "培养跨职能协作经验",
-                    "建立个人技术品牌（博客/演讲）"
-                ],
-                "market_position": "中等偏上，具备较强竞争力"
-            }
+            # 使用LLM评估职业竞争力
+            system_prompt = """你是一位专业的职业规划顾问，擅长评估职业竞争力。
+请基于技能、经验和教育背景，评估职业竞争力。
+
+你的评估应该包括：
+1. overall_score: 综合评分（0-100）
+2. strengths: 优势（3-5条）
+3. weaknesses: 不足（2-3条）
+4. improvement_suggestions: 提升建议（3-5条）
+5. market_position: 市场定位描述
+
+请以JSON格式返回。"""
+            
+            user_prompt = f"""请评估以下职业竞争力：
+
+技能清单：{skills}
+工作经验：{experience}
+教育背景：{education}
+目标职位：{target if target else '未指定'}
+
+请给出专业的竞争力评估。"""
+            
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    assessment = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        **assessment
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "assessment": llm_response,
+                        "overall_score": 75
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM评估失败，使用默认评估: {e}")
+                # 降级到默认评估
+                return {
+                    "success": True,
+                    "overall_score": 75,
+                    "strengths": ["技术深度好", "项目经验丰富"],
+                    "weaknesses": ["跨领域能力待提升"],
+                    "improvement_suggestions": ["深化核心技术", "拓展相关领域"],
+                    "market_position": "中等偏上"
+                }
         
         elif tool_name == "query_job_market":
             position = parameters.get("position", "")
             city = parameters.get("city", "")
             level = parameters.get("experience_level", "不限")
             
-            # 模拟市场数据
-            return {
-                "position": position,
-                "city": city,
-                "salary_range": {
-                    "min": 15000,
-                    "max": 35000,
-                    "median": 25000,
-                    "currency": "CNY/月"
-                },
-                "demand_trend": "需求旺盛，同比增长15%",
-                "hot_companies": [
-                    "字节跳动",
-                    "阿里巴巴",
-                    "腾讯",
-                    "美团",
-                    "快手"
-                ],
-                "required_skills": [
-                    "专业技能（必备）",
-                    "项目经验（2年以上）",
-                    "团队协作能力",
-                    "学习能力"
-                ],
-                "career_prospects": "发展前景良好，晋升路径清晰",
-                "tips": [
-                    f"{city}地区{position}岗位竞争激烈",
-                    "建议突出项目成果和数据指标",
-                    "关注行业头部公司和成长型企业"
-                ]
-            }
+            # 使用LLM查询职位市场信息
+            system_prompt = """你是一位专业的职业市场分析师，擅长分析职位市场信息。
+请基于职位名称、城市和经验水平，提供市场分析。
+
+你的分析应该包括：
+1. salary_range: 薪资范围（包含min, max, median, currency）
+2. demand_trend: 需求趋势描述
+3. hot_companies: 热门公司（3-5个）
+4. required_skills: 必备技能（3-5个）
+5. career_prospects: 职业前景描述
+6. tips: 求职建议（2-3条）
+
+请以JSON格式返回。"""
+            
+            user_prompt = f"""请分析以下职位市场：
+
+职位名称：{position}
+城市：{city}
+经验水平：{level}
+
+请给出详细的市场分析。"""
+            
+            try:
+                llm_response = await self._call_llm_for_analysis(system_prompt, user_prompt)
+                
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', llm_response)
+                if json_match:
+                    analysis = json.loads(json_match.group())
+                    return {
+                        "success": True,
+                        "position": position,
+                        "city": city,
+                        **analysis
+                    }
+                else:
+                    return {
+                        "success": True,
+                        "position": position,
+                        "city": city,
+                        "analysis": llm_response
+                    }
+            except Exception as e:
+                print(f"⚠️  LLM分析失败，使用默认分析: {e}")
+                # 降级到默认分析
+                return {
+                    "success": True,
+                    "position": position,
+                    "city": city,
+                    "salary_range": {
+                        "min": 15000,
+                        "max": 35000,
+                        "median": 25000,
+                        "currency": "CNY/月"
+                    },
+                    "demand_trend": "需求旺盛",
+                    "hot_companies": ["公司1", "公司2", "公司3"],
+                    "required_skills": ["技能1", "技能2", "技能3"],
+                    "career_prospects": "发展前景良好",
+                    "tips": ["建议1", "建议2"]
+                }
         
         elif tool_name == "generate_skill_roadmap":
             current = parameters.get("current_skills", "")
