@@ -679,7 +679,7 @@ class MemoryModule:
             from backend.learning.production_rag_system import MemoryType
             
             self.rag_system.add_memory(
-                memory_type=MemoryType.TASK_RESULT,
+                memory_type=MemoryType.TASK_COMPLETION,
                 content=content,
                 metadata={
                     'task': task_description,
@@ -767,12 +767,13 @@ class MemoryModule:
             from backend.learning.production_rag_system import MemoryType
             
             self.rag_system.add_memory(
-                memory_type=MemoryType.ERROR_LOG,
+                memory_type=MemoryType.EXPERIENCE,
                 content=content,
                 metadata={
                     'error': error_message,
                     'context': error_context,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.now().isoformat(),
+                    'type': 'error'
                 },
                 importance=0.95  # 错误经验非常重要，避免重蹈覆辙
             )
