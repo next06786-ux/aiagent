@@ -1367,12 +1367,15 @@ Final Answer: 直接友好回复
 """
             
             # 使用LangGraph创建ReAct Agent
-            # state_modifier用于添加系统提示词
+            # LangGraph的create_react_agent不支持自定义系统提示
+            # 系统提示需要在调用时通过messages传递
             agent_executor = create_react_agent(
                 model=self.llm_module.langchain_llm,
-                tools=tools,
-                state_modifier=system_prompt  # 使用state_modifier传递系统提示
+                tools=tools
             )
+            
+            # 保存系统提示词，在调用时使用
+            self.system_prompt_for_agent = system_prompt
             
             print(f"   ✅ ReAct Agent创建成功")
             return agent_executor
@@ -1521,6 +1524,10 @@ Final Answer: 直接友好回复
             from langchain_core.messages import HumanMessage, SystemMessage
             
             messages = []
+            
+            # 添加系统提示词（包含工具使用指导）
+            if hasattr(self, 'system_prompt_for_agent'):
+                messages.append(SystemMessage(content=self.system_prompt_for_agent))
             
             # 如果有用户背景，添加为系统消息
             if context.retrieved_memory:
