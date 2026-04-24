@@ -226,6 +226,8 @@
 .message-content {
   flex: 1;
   max-width: 70%;
+  overflow: visible;
+  height: auto;
 }
 
 .agent-chat-message.user .message-content {
@@ -243,6 +245,10 @@
   color: #2c2c2c;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   word-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-height: none;
+  height: auto;
 }
 
 .agent-chat-message.user .message-text {
