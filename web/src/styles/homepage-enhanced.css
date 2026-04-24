@@ -348,9 +348,9 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* Position 7 agents in a circle */
+/* Position 7 agents in a perfect circle */
 .ls-arch-agent-1 {
-  top: 5%;
+  top: 8%;
   left: 50%;
   transform: translateX(-50%);
   animation-delay: 0s;
@@ -358,25 +358,25 @@
 
 .ls-arch-agent-2 {
   top: 20%;
-  right: 15%;
+  right: 16%;
   animation-delay: -0.6s;
 }
 
 .ls-arch-agent-3 {
   top: 50%;
-  right: 5%;
+  right: 8%;
   transform: translateY(-50%);
   animation-delay: -1.2s;
 }
 
 .ls-arch-agent-4 {
   bottom: 20%;
-  right: 15%;
+  right: 16%;
   animation-delay: -1.8s;
 }
 
 .ls-arch-agent-5 {
-  bottom: 5%;
+  bottom: 8%;
   left: 50%;
   transform: translateX(-50%);
   animation-delay: -2.4s;
@@ -384,13 +384,13 @@
 
 .ls-arch-agent-6 {
   bottom: 20%;
-  left: 15%;
+  left: 16%;
   animation-delay: -3.0s;
 }
 
 .ls-arch-agent-7 {
   top: 50%;
-  left: 5%;
+  left: 8%;
   transform: translateY(-50%);
   animation-delay: -3.6s;
 }
