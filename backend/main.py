@@ -28,6 +28,26 @@ logging.getLogger("fastapi").setLevel(logging.WARNING)
 # 但允许决策相关的日志显示
 logging.getLogger("backend.decision").setLevel(logging.INFO)
 
+# 过滤恶意扫描的404日志
+class ScanFilter(logging.Filter):
+    """过滤常见的恶意扫描路径"""
+    SCAN_PATTERNS = [
+        'db.zip', 'database.php', 'credentials', 'api.log', 'env.sql',
+        'backup.log', 'database.bak', 'admin.key', 'debug.conf', 'keys',
+        'application.ts', 'database.py', 'info.php', 'index.tar', 'index.gz',
+        'database.cfg', 'credentials.bak', 'index.yaml', 'help/info'
+    ]
+    
+    def filter(self, record):
+        # 检查日志消息是否包含扫描路径
+        message = record.getMessage()
+        if '404 Not Found' in message:
+            return not any(pattern in message for pattern in self.SCAN_PATTERNS)
+        return True
+
+# 应用过滤器到uvicorn的access日志
+logging.getLogger("uvicorn.access").addFilter(ScanFilter())
+
 # 设置 HuggingFace 离线模式(避免网络问题)
 os.environ['HF_HUB_OFFLINE'] = '1'
 

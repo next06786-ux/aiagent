@@ -50,6 +50,7 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
     status: 'running' | 'completed' | 'failed';
     result?: string;
   }>>([]);
+  const [, forceUpdate] = useState({});  // 用于强制重新渲染
 
   // 自动滚动到底部
   useEffect(() => {
@@ -127,11 +128,13 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
               const newCalls = [...prev, {
                 tool_name: data.tool_name,
                 server_name: data.server_name,
-                status: 'running'
+                status: 'running' as const
               }];
               console.log('[WebSocket] tool_start - 更新后:', newCalls);
               return newCalls;
             });
+            // 强制重新渲染
+            forceUpdate({});
             break;
 
           case 'tool_complete':
@@ -147,6 +150,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
               console.log('[WebSocket] tool_complete - 更新后:', updated);
               return updated;
             });
+            // 强制重新渲染
+            forceUpdate({});
             break;
 
           case 'tool_failed':
@@ -180,7 +185,12 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
               console.log('[WebSocket] 创建的消息:', assistantMessage);
               
               setMessages(prev => [...prev, assistantMessage]);
-              setIsLoading(false);
+              
+              // 延迟1秒再清空工具调用和设置isLoading=false，让用户能看到completed状态的动画
+              setTimeout(() => {
+                setCurrentToolCalls([]);
+                setIsLoading(false);
+              }, 1000);
               
               // 保存conversation_id
               if (data.metadata?.conversation_id && !conversationId) {
@@ -197,8 +207,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
               ws.close();
               wsRef.current = null;
               
-              // 返回空数组清空工具调用
-              return [];
+              // 返回当前的工具调用（不清空，延迟清空）
+              return prevToolCalls;
             });
             break;
 
@@ -429,8 +439,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
             </div>
           ))}
           
-          {/* 实时工具调用动画（加载中） */}
-          {isLoading && currentToolCalls.length > 0 && (
+          {/* 实时工具调用动画（不依赖isLoading，只要有工具调用就显示） */}
+          {currentToolCalls.length > 0 && (
             <div className="agent-chat-message assistant">
               <div className="message-avatar">{getAgentIcon(agentType)}</div>
               <div className="message-content">
