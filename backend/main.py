@@ -1516,18 +1516,20 @@ from backend.websocket_manager import ws_manager, MessageType
 @app.websocket("/ws/agent-chat")
 async def websocket_agent_chat(websocket: WebSocket):
     """
-    WebSocket Agent对话接口 - 实时推送工具调用状态
+    WebSocket Agent对话接口 - 支持多轮对话
     
     消息格式:
     客户端发送: {
-        "token": "xxx",
-        "agent_type": "relationship|education|career",
+        "token": "xxx",  # 仅第一次消息需要
+        "agent_type": "relationship|education|career",  # 仅第一次消息需要
         "message": "你好",
         "conversation_id": "xxx" (可选)
     }
     
     服务端返回:
     - {"type": "connected", "session_id": "xxx"}
+    - {"type": "retrieval_start", ...}
+    - {"type": "retrieval_complete", ...}
     - {"type": "tool_start", "tool_name": "xxx", "server_name": "xxx"}
     - {"type": "tool_complete", "tool_name": "xxx", "result": "xxx"}
     - {"type": "tool_failed", "tool_name": "xxx", "error": "xxx"}
@@ -1537,6 +1539,9 @@ async def websocket_agent_chat(websocket: WebSocket):
     import uuid
     session_id = f"agent_session_{uuid.uuid4().hex[:16]}"
     user_id = None
+    agent = None  # 复用同一个Agent实例
+    agent_type = None
+    sync_callback_wrapper = None
     
     try:
         # 接受连接
@@ -1549,275 +1554,220 @@ async def websocket_agent_chat(websocket: WebSocket):
             "session_id": session_id
         })
         
-        # 接收客户端消息
-        message_data = await websocket.receive_text()
-        request_data = json.loads(message_data)
-        
-        # 验证token
-        from backend.auth.auth_service import get_auth_service
-        auth_service = get_auth_service()
-        token = request_data.get("token", "")
-        user_id = auth_service.verify_token(token)
-        
-        if not user_id:
-            await websocket.send_json({
-                "type": "error",
-                "error": "Token无效或已过期"
-            })
-            await websocket.close()
-            return
-        
-        # 注册WebSocket连接
-        await ws_manager.connect(websocket, user_id, session_id)
-        
-        # 获取请求参数
-        agent_type = request_data.get("agent_type", "relationship")
-        message = request_data.get("message", "")
-        conversation_id = request_data.get("conversation_id")
-        conversation_history = request_data.get("conversation_history", [])
-        
-        if not message:
-            await websocket.send_json({
-                "type": "error",
-                "error": "消息不能为空"
-            })
-            return
-        
-        print(f"📨 [WebSocket Agent] 收到消息: user_id={user_id}, agent_type={agent_type}, message={message[:50]}...")
-        
-        # 处理Agent对话
-        try:
-            from backend.agents.langchain_specialized_agents import create_langchain_agent
-            from backend.learning.rag_manager import RAGManager
-            from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
-            
-            print(f"\n[WebSocket Agent] 用户: {user_id}, Agent类型: {agent_type}")
-            
-            # 获取系统实例
-            llm_service = get_or_init_llm_service()
-            if not llm_service or not llm_service.enabled:
-                await websocket.send_json({
-                    "type": "error",
-                    "error": "LLM服务不可用"
-                })
-                return
-            
-            rag_system = RAGManager.get_system(user_id)
-            retrieval_system = UnifiedHybridRetrieval(user_id)
-            
-            # 创建MCP Host并注册工具
-            from backend.agents.mcp_integration import MCPHost
-            from backend.agents.specialized_mcp_servers import (
-                WebSearchMCPServer,
-                RelationshipMCPServer,
-                EducationMCPServer
-            )
-            
-            mcp_host = MCPHost(user_id=user_id)
-            
-            # 注册联网搜索（所有Agent共享）
-            import os
-            search_api_key = os.getenv("QWEN_SEARCH_API_KEY")
-            search_host = os.getenv("QWEN_SEARCH_HOST")
-            
-            mcp_host.register_server(WebSearchMCPServer(
-                api_key=search_api_key,
-                host=search_host,
-                workspace=os.getenv("QWEN_SEARCH_WORKSPACE", "default"),
-                service_id=os.getenv("QWEN_SEARCH_SERVICE_ID", "ops-web-search-001")
-            ))
-            
-            # 根据Agent类型注册专属工具
-            if agent_type == 'relationship':
-                mcp_host.register_server(RelationshipMCPServer())
-            elif agent_type == 'education':
-                mcp_host.register_server(EducationMCPServer())
-            
-            # 创建WebSocket回调函数
-            async def websocket_callback(event_type: str, data: dict):
-                """WebSocket回调函数 - 实时发送工具状态和记忆检索状态"""
-                if event_type == "tool_call":
-                    status = data.get("status")
-                    tool_name = data.get("tool_name")
-                    
-                    if status == "running":
-                        # 工具开始执行
-                        print(f"[WebSocket Callback] 发送 tool_start: {tool_name}")
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": MessageType.TOOL_START,
-                            "tool_name": tool_name,
-                            "server_name": "Unknown",  # LangChain回调中没有server信息
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        # 强制刷新，确保消息立即发送
-                        await asyncio.sleep(0)
-                    elif status == "completed":
-                        # 工具执行完成
-                        print(f"[WebSocket Callback] 发送 tool_complete: {tool_name}")
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": MessageType.TOOL_COMPLETE,
-                            "tool_name": tool_name,
-                            "server_name": "Unknown",
-                            "result": data.get("output", "")[:100],
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        await asyncio.sleep(0)
-                    elif status == "error":
-                        # 工具执行失败
-                        print(f"[WebSocket Callback] 发送 tool_failed: {tool_name}")
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": MessageType.TOOL_FAILED,
-                            "tool_name": tool_name,
-                            "server_name": "Unknown",
-                            "error": data.get("error", ""),
-                            "timestamp": datetime.now().isoformat()
-                        })
-                        await asyncio.sleep(0)
+        # ===== 主循环：持续接收消息 =====
+        while True:
+            try:
+                # 接收客户端消息
+                message_data = await websocket.receive_text()
+                request_data = json.loads(message_data)
                 
-                elif event_type == "memory_retrieval":
-                    # 记忆检索事件
-                    retrieval_type = data.get("type")
+                # 第一次消息：验证token并创建Agent
+                if user_id is None:
+                    from backend.auth.auth_service import get_auth_service
+                    auth_service = get_auth_service()
+                    token = request_data.get("token", "")
+                    user_id = auth_service.verify_token(token)
                     
-                    if retrieval_type == "retrieval_start":
-                        # 检索开始
-                        print(f"[WebSocket Callback] 发送 retrieval_start: {data.get('reason')}")
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": "retrieval_start",
-                            "query": data.get("query"),
-                            "reason": data.get("reason"),
-                            "agent_type": data.get("agent_type"),
-                            "timestamp": data.get("timestamp")
+                    if not user_id:
+                        await websocket.send_json({
+                            "type": "error",
+                            "error": "Token无效或已过期"
                         })
-                        await asyncio.sleep(0)
-                    elif retrieval_type == "retrieval_complete":
-                        # 检索完成
-                        print(f"[WebSocket Callback] 发送 retrieval_complete: {data.get('results_count')} 条结果")
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": "retrieval_complete",
-                            "query": data.get("query"),
-                            "reason": data.get("reason"),
-                            "results_count": data.get("results_count"),
-                            "sources": data.get("sources", []),
-                            "timestamp": data.get("timestamp")
-                        })
-                        await asyncio.sleep(0)
-                    elif retrieval_type == "retrieval_error":
-                        # 检索失败
-                        print(f"[WebSocket Callback] 发送 retrieval_error: {data.get('error')}")
-                        await ws_manager.send_message(user_id, session_id, {
-                            "type": "retrieval_error",
-                            "query": data.get("query"),
-                            "reason": data.get("reason"),
-                            "error": data.get("error"),
-                            "timestamp": data.get("timestamp")
-                        })
-                        await asyncio.sleep(0)
-            
-            # 在单独的线程中执行Agent处理（避免阻塞事件循环）
-            import concurrent.futures
-            loop = asyncio.get_event_loop()
-            
-            # 将事件循环引用存储到全局变量，供回调使用
-            import threading
-            _thread_local = threading.local()
-            _thread_local.event_loop = loop
-            
-            # 修改回调函数，使其能访问事件循环
-            original_callback = websocket_callback
-            
-            async def wrapped_callback(event_type: str, data: dict):
-                """包装的回调，确保在正确的事件循环中执行"""
-                await original_callback(event_type, data)
-            
-            # 创建一个同步包装器，从线程中调用
-            def sync_callback_wrapper(event_type: str, data: dict):
-                """同步包装器，使用 run_coroutine_threadsafe"""
-                print(f"[Sync Wrapper] 收到回调: {event_type}")
-                try:
-                    future = asyncio.run_coroutine_threadsafe(
-                        wrapped_callback(event_type, data),
-                        loop
+                        break
+                    
+                    # 注册WebSocket连接
+                    await ws_manager.connect(websocket, user_id, session_id)
+                    
+                    # 获取Agent类型
+                    agent_type = request_data.get("agent_type", "relationship")
+                    
+                    print(f"🤖 [WebSocket Agent] 初始化: user_id={user_id}, agent_type={agent_type}")
+                    
+                    # 创建Agent（只创建一次，后续复用）
+                    from backend.agents.langchain_specialized_agents import create_langchain_agent
+                    from backend.learning.rag_manager import RAGManager
+                    from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
+                    from backend.agents.mcp_integration import MCPHost
+                    from backend.agents.specialized_mcp_servers import (
+                        WebSearchMCPServer,
+                        RelationshipMCPServer,
+                        EducationMCPServer
                     )
-                    # 等待完成，但设置短超时
-                    result = future.result(timeout=0.5)
-                    print(f"[Sync Wrapper] 回调完成: {event_type}")
-                    return result
-                except TimeoutError:
-                    print(f"⚠️  回调超时: {event_type}")
-                except Exception as e:
-                    print(f"⚠️  回调执行失败: {event_type} - {e}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # 重新创建 Agent，使用同步包装器
-            agent = create_langchain_agent(
-                agent_type=agent_type,
-                user_id=user_id,
-                llm_service=llm_service,
-                rag_system=rag_system,
-                retrieval_system=retrieval_system,
-                use_workflow=True,
-                mcp_host=mcp_host,
-                websocket_callback=sync_callback_wrapper  # 使用同步包装器
-            )
-            
-            # 异步初始化Agent（发现MCP工具）
-            await agent.initialize()
-            
-            if not agent:
+                    import os
+                    
+                    # 获取系统实例
+                    llm_service = get_or_init_llm_service()
+                    if not llm_service or not llm_service.enabled:
+                        await websocket.send_json({
+                            "type": "error",
+                            "error": "LLM服务不可用"
+                        })
+                        break
+                    
+                    rag_system = RAGManager.get_system(user_id)
+                    retrieval_system = UnifiedHybridRetrieval(user_id)
+                    
+                    # 创建MCP Host
+                    mcp_host = MCPHost(user_id=user_id)
+                    
+                    # 注册工具
+                    search_api_key = os.getenv("QWEN_SEARCH_API_KEY")
+                    search_host = os.getenv("QWEN_SEARCH_HOST")
+                    
+                    mcp_host.register_server(WebSearchMCPServer(
+                        api_key=search_api_key,
+                        host=search_host,
+                        workspace=os.getenv("QWEN_SEARCH_WORKSPACE", "default"),
+                        service_id=os.getenv("QWEN_SEARCH_SERVICE_ID", "ops-web-search-001")
+                    ))
+                    
+                    if agent_type == 'relationship':
+                        mcp_host.register_server(RelationshipMCPServer())
+                    elif agent_type == 'education':
+                        mcp_host.register_server(EducationMCPServer())
+                    
+                    # 创建WebSocket回调
+                    loop = asyncio.get_event_loop()
+                    
+                    def sync_callback_wrapper(event_type: str, data: dict):
+                        """同步包装器"""
+                        async def send_callback():
+                            if event_type == "tool_call":
+                                status = data.get("status")
+                                tool_name = data.get("tool_name")
+                                
+                                if status == "running":
+                                    await ws_manager.send_message(user_id, session_id, {
+                                        "type": "tool_start",
+                                        "tool_name": tool_name,
+                                        "server_name": "Unknown",
+                                        "timestamp": datetime.now().isoformat()
+                                    })
+                                elif status == "completed":
+                                    await ws_manager.send_message(user_id, session_id, {
+                                        "type": "tool_complete",
+                                        "tool_name": tool_name,
+                                        "server_name": "Unknown",
+                                        "result": data.get("output", "")[:100],
+                                        "timestamp": datetime.now().isoformat()
+                                    })
+                                elif status == "error":
+                                    await ws_manager.send_message(user_id, session_id, {
+                                        "type": "tool_failed",
+                                        "tool_name": tool_name,
+                                        "server_name": "Unknown",
+                                        "error": data.get("error", ""),
+                                        "timestamp": datetime.now().isoformat()
+                                    })
+                            
+                            elif event_type == "memory_retrieval":
+                                retrieval_type = data.get("type")
+                                
+                                if retrieval_type == "retrieval_start":
+                                    await ws_manager.send_message(user_id, session_id, {
+                                        "type": "retrieval_start",
+                                        "query": data.get("query"),
+                                        "reason": data.get("reason"),
+                                        "agent_type": data.get("agent_type"),
+                                        "timestamp": data.get("timestamp")
+                                    })
+                                elif retrieval_type == "retrieval_complete":
+                                    await ws_manager.send_message(user_id, session_id, {
+                                        "type": "retrieval_complete",
+                                        "query": data.get("query"),
+                                        "reason": data.get("reason"),
+                                        "results_count": data.get("results_count"),
+                                        "sources": data.get("sources", []),
+                                        "timestamp": data.get("timestamp")
+                                    })
+                        
+                        try:
+                            future = asyncio.run_coroutine_threadsafe(send_callback(), loop)
+                            return future.result(timeout=0.5)
+                        except Exception as e:
+                            print(f"⚠️  回调执行失败: {event_type} - {e}")
+                    
+                    # 创建Agent
+                    agent = create_langchain_agent(
+                        agent_type=agent_type,
+                        user_id=user_id,
+                        llm_service=llm_service,
+                        rag_system=rag_system,
+                        retrieval_system=retrieval_system,
+                        use_workflow=True,
+                        mcp_host=mcp_host,
+                        websocket_callback=sync_callback_wrapper
+                    )
+                    
+                    await agent.initialize()
+                    print(f"✅ [WebSocket Agent] Agent创建完成，等待消息...")
+                
+                # 获取消息内容
+                message = request_data.get("message", "")
+                if not message:
+                    await websocket.send_json({
+                        "type": "error",
+                        "error": "消息不能为空"
+                    })
+                    continue  # 继续等待下一条消息
+                
+                print(f"📨 [WebSocket Agent] 收到消息: {message[:50]}...")
+                
+                # 处理消息
+                import concurrent.futures
+                loop = asyncio.get_event_loop()
+                
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = await loop.run_in_executor(
+                        pool,
+                        agent.process,
+                        message
+                    )
+                
+                # 发送响应
+                await ws_manager.send_message(user_id, session_id, {
+                    "type": "response",
+                    "content": result['response'],
+                    "metadata": {
+                        "mode": result.get('mode'),
+                        "agent_used": result.get('agent_used'),
+                        "tool_calls": result.get('tool_calls', []),
+                        "retrieval_stats": result.get('retrieval_stats', {})
+                    },
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                print(f"✅ [WebSocket Agent] 消息处理完成，等待下一条消息...")
+                
+            except WebSocketDisconnect:
+                print(f"✓ [WebSocket Agent] 客户端主动断开连接")
+                break
+            except json.JSONDecodeError:
                 await websocket.send_json({
                     "type": "error",
-                    "error": f"Agent类型不支持: {agent_type}"
+                    "error": "消息格式错误"
                 })
-                return
-            
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = await loop.run_in_executor(
-                    pool,
-                    agent.process,
-                    message
-                )
-            
-            # 收集工具调用信息
-            tool_calls = result.get('tool_calls', [])
-            
-            # 发送最终响应
-            await ws_manager.send_message(user_id, session_id, {
-                "type": MessageType.RESPONSE,
-                "content": result['response'],
-                "metadata": {
-                    "mode": result.get('mode'),
-                    "agent_used": result.get('agent_used'),
-                    "tool_calls": tool_calls,
-                    "retrieval_stats": result.get('retrieval_stats', {})
-                },
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            print(f"✅ [WebSocket Agent] 处理完成: {len(tool_calls)} 个工具调用")
-            
-        except Exception as e:
-            print(f"❌ [WebSocket Agent] 处理失败: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            await ws_manager.send_message(user_id, session_id, {
-                "type": MessageType.ERROR,
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            })
+                continue
+            except Exception as e:
+                print(f"❌ [WebSocket Agent] 处理消息失败: {e}")
+                import traceback
+                traceback.print_exc()
+                await websocket.send_json({
+                    "type": "error",
+                    "error": str(e)
+                })
+                continue  # 继续等待下一条消息
     
     except WebSocketDisconnect:
         print(f"✓ [WebSocket Agent] 连接已断开: {session_id}")
-        if user_id:
-            ws_manager.disconnect(user_id, session_id)
-    
     except Exception as e:
         print(f"❌ [WebSocket Agent] 错误: {e}")
         import traceback
         traceback.print_exc()
+    finally:
         if user_id:
             ws_manager.disconnect(user_id, session_id)
+        print(f"🔌 [WebSocket Agent] 连接清理完成: {session_id}")
 
 
 # ==================== WebSocket 流式聊天API ====================
