@@ -1489,6 +1489,195 @@ async def speech_to_text(file: UploadFile = File(...)):
         return {"code": 500, "message": str(e), "data": {"text": ""}}
 
 
+# ==================== WebSocket Agent对话API ====================
+
+from backend.websocket_manager import ws_manager, MessageType
+
+@app.websocket("/ws/agent-chat")
+async def websocket_agent_chat(websocket: WebSocket):
+    """
+    WebSocket Agent对话接口 - 实时推送工具调用状态
+    
+    消息格式:
+    客户端发送: {
+        "token": "xxx",
+        "agent_type": "relationship|education|career",
+        "message": "你好",
+        "conversation_id": "xxx" (可选)
+    }
+    
+    服务端返回:
+    - {"type": "connected", "session_id": "xxx"}
+    - {"type": "tool_start", "tool_name": "xxx", "server_name": "xxx"}
+    - {"type": "tool_complete", "tool_name": "xxx", "result": "xxx"}
+    - {"type": "tool_failed", "tool_name": "xxx", "error": "xxx"}
+    - {"type": "response", "content": "xxx", "tool_calls": [...]}
+    - {"type": "error", "error": "xxx"}
+    """
+    import uuid
+    session_id = f"agent_session_{uuid.uuid4().hex[:16]}"
+    user_id = None
+    
+    try:
+        # 接受连接
+        await websocket.accept()
+        print(f"✅ [WebSocket Agent] 连接已建立: {session_id}")
+        
+        # 发送连接成功消息
+        await websocket.send_json({
+            "type": "connected",
+            "session_id": session_id
+        })
+        
+        # 接收客户端消息
+        message_data = await websocket.receive_text()
+        request_data = json.loads(message_data)
+        
+        # 验证token
+        from backend.auth.auth_service import get_auth_service
+        auth_service = get_auth_service()
+        token = request_data.get("token", "")
+        user_id = auth_service.verify_token(token)
+        
+        if not user_id:
+            await websocket.send_json({
+                "type": "error",
+                "error": "Token无效或已过期"
+            })
+            await websocket.close()
+            return
+        
+        # 注册WebSocket连接
+        await ws_manager.connect(websocket, user_id, session_id)
+        
+        # 获取请求参数
+        agent_type = request_data.get("agent_type", "relationship")
+        message = request_data.get("message", "")
+        conversation_id = request_data.get("conversation_id")
+        conversation_history = request_data.get("conversation_history", [])
+        
+        if not message:
+            await websocket.send_json({
+                "type": "error",
+                "error": "消息不能为空"
+            })
+            return
+        
+        print(f"📨 [WebSocket Agent] 收到消息: user_id={user_id}, agent_type={agent_type}, message={message[:50]}...")
+        
+        # 处理Agent对话
+        try:
+            from backend.agents.langchain_specialized_agents import get_specialized_agent
+            
+            # 获取Agent实例
+            agent = await get_specialized_agent(
+                agent_type=agent_type,
+                user_id=user_id
+            )
+            
+            if not agent:
+                await websocket.send_json({
+                    "type": "error",
+                    "error": f"Agent类型不支持: {agent_type}"
+                })
+                return
+            
+            # 设置WebSocket回调（在工具调用时推送状态）
+            if hasattr(agent, 'mcp_host') and agent.mcp_host:
+                # 保存原始的call_tool方法
+                original_call_tool = agent.mcp_host.call_tool
+                
+                # 包装call_tool方法，添加WebSocket推送
+                async def wrapped_call_tool(tool_name: str, parameters: dict):
+                    # 获取server_name
+                    tool = agent.mcp_host.discovered_tools.get(tool_name)
+                    server_name = "Unknown"
+                    if tool:
+                        server = agent.mcp_host.servers.get(tool.server_id)
+                        if server:
+                            server_name = server.name
+                    
+                    # 发送工具开始消息
+                    await ws_manager.send_message(user_id, session_id, {
+                        "type": MessageType.TOOL_START,
+                        "tool_name": tool_name,
+                        "server_name": server_name,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
+                    try:
+                        # 调用原始方法
+                        result = await original_call_tool(tool_name, parameters)
+                        
+                        # 发送工具完成消息
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": MessageType.TOOL_COMPLETE,
+                            "tool_name": tool_name,
+                            "server_name": server_name,
+                            "result": str(result)[:100] if result else None,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                        
+                        return result
+                    except Exception as e:
+                        # 发送工具失败消息
+                        await ws_manager.send_message(user_id, session_id, {
+                            "type": MessageType.TOOL_FAILED,
+                            "tool_name": tool_name,
+                            "server_name": server_name,
+                            "error": str(e),
+                            "timestamp": datetime.now().isoformat()
+                        })
+                        raise
+                
+                # 替换call_tool方法
+                agent.mcp_host.call_tool = wrapped_call_tool
+            
+            # 执行Agent处理
+            result = agent.process(message)
+            
+            # 收集工具调用信息
+            tool_calls = result.get('tool_calls', [])
+            
+            # 发送最终响应
+            await ws_manager.send_message(user_id, session_id, {
+                "type": MessageType.RESPONSE,
+                "content": result['response'],
+                "metadata": {
+                    "mode": result.get('mode'),
+                    "agent_used": result.get('agent_used'),
+                    "tool_calls": tool_calls,
+                    "retrieval_stats": result.get('retrieval_stats', {})
+                },
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            print(f"✅ [WebSocket Agent] 处理完成: {len(tool_calls)} 个工具调用")
+            
+        except Exception as e:
+            print(f"❌ [WebSocket Agent] 处理失败: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            await ws_manager.send_message(user_id, session_id, {
+                "type": MessageType.ERROR,
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            })
+    
+    except WebSocketDisconnect:
+        print(f"✓ [WebSocket Agent] 连接已断开: {session_id}")
+        if user_id:
+            ws_manager.disconnect(user_id, session_id)
+    
+    except Exception as e:
+        print(f"❌ [WebSocket Agent] 错误: {e}")
+        import traceback
+        traceback.print_exc()
+        if user_id:
+            ws_manager.disconnect(user_id, session_id)
+
+
 # ==================== WebSocket 流式聊天API ====================
 
 @app.websocket("/ws/chat")

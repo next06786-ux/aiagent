@@ -43,6 +43,13 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
   const [conversationTitle, setConversationTitle] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const [currentToolCalls, setCurrentToolCalls] = useState<Array<{
+    tool_name: string;
+    server_name: string;
+    status: 'running' | 'completed' | 'failed';
+    result?: string;
+  }>>([]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -54,7 +61,17 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
     inputRef.current?.focus();
   }, []);
 
-  // 发送消息
+  // 清理WebSocket连接
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, []);
+
+  // 发送消息（使用WebSocket）
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -67,96 +84,153 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setCurrentToolCalls([]); // 清空当前工具调用
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/agent-chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
+      // 创建WebSocket连接
+      const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/agent-chat';
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      // 连接打开
+      ws.onopen = () => {
+        console.log('[WebSocket] 连接已建立');
+        
+        // 发送消息
+        ws.send(JSON.stringify({
           token: token,
           agent_type: agentType,
           message: userMessage.content,
-          conversation_history: messages.slice(1).map(m => ({  // 跳过欢迎消息
+          conversation_id: conversationId,
+          conversation_history: messages.slice(1).map(m => ({
             role: m.role,
             content: m.content
-          })),
-          conversation_id: conversationId,
-          conversation_title: conversationTitle
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('对话请求失败');
-      }
-
-      const data = await response.json();
-      
-      console.log('Agent对话响应:', data);
-
-      if (!data.success) {
-        throw new Error(data.message || '对话失败');
-      }
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date(),
-        retrievalStats: data.retrieval_stats,
-        toolCalls: data.tool_calls
+          }))
+        }));
       };
 
-      console.log('[DEBUG] Agent响应:', {
-        response: data.response?.substring(0, 100),
-        tool_calls: data.tool_calls,
-        tool_calls_length: data.tool_calls?.length,
-        tool_calls_type: typeof data.tool_calls,
-        retrieval_stats: data.retrieval_stats
-      });
+      // 接收消息
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('[WebSocket] 收到消息:', data);
 
-      // 验证tool_calls数据
-      if (data.tool_calls) {
-        console.log('[DEBUG] 工具调用详情:');
-        data.tool_calls.forEach((tool: any, idx: number) => {
-          console.log(`  ${idx + 1}. ${tool.tool_name}`, {
-            server_name: tool.server_name,
-            status: tool.status,
-            result: tool.result?.substring(0, 50)
-          });
-        });
-      } else {
-        console.log('[DEBUG] ⚠️ tool_calls为空或undefined');
-      }
+        switch (data.type) {
+          case 'connected':
+            console.log('[WebSocket] 会话ID:', data.session_id);
+            break;
 
-      console.log('[DEBUG] 创建的消息对象:', {
-        role: assistantMessage.role,
-        hasToolCalls: !!assistantMessage.toolCalls,
-        toolCallsCount: assistantMessage.toolCalls?.length
-      });
+          case 'tool_start':
+            console.log('[WebSocket] 工具开始:', data.tool_name);
+            // 添加running状态的工具调用
+            setCurrentToolCalls(prev => [
+              ...prev,
+              {
+                tool_name: data.tool_name,
+                server_name: data.server_name,
+                status: 'running'
+              }
+            ]);
+            break;
 
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // 保存conversation_id
-      if (data.conversation_id && !conversationId) {
-        setConversationId(data.conversation_id);
-      }
-      
-      // 如果还没有标题，使用第一条用户消息作为标题
-      if (!conversationTitle) {
-        const title = userMessage.content.slice(0, 50) + (userMessage.content.length > 50 ? '...' : '');
-        setConversationTitle(title);
-      }
+          case 'tool_complete':
+            console.log('[WebSocket] 工具完成:', data.tool_name);
+            // 更新工具状态为completed
+            setCurrentToolCalls(prev => 
+              prev.map(tool => 
+                tool.tool_name === data.tool_name && tool.status === 'running'
+                  ? { ...tool, status: 'completed', result: data.result }
+                  : tool
+              )
+            );
+            break;
+
+          case 'tool_failed':
+            console.log('[WebSocket] 工具失败:', data.tool_name, data.error);
+            // 更新工具状态为failed
+            setCurrentToolCalls(prev => 
+              prev.map(tool => 
+                tool.tool_name === data.tool_name && tool.status === 'running'
+                  ? { ...tool, status: 'failed', result: data.error }
+                  : tool
+              )
+            );
+            break;
+
+          case 'response':
+            console.log('[WebSocket] 收到响应');
+            // 创建助手消息
+            const assistantMessage: Message = {
+              role: 'assistant',
+              content: data.content,
+              timestamp: new Date(),
+              retrievalStats: data.metadata?.retrieval_stats,
+              toolCalls: data.metadata?.tool_calls || currentToolCalls
+            };
+            
+            setMessages(prev => [...prev, assistantMessage]);
+            setCurrentToolCalls([]); // 清空工具调用
+            setIsLoading(false);
+            
+            // 保存conversation_id
+            if (data.metadata?.conversation_id && !conversationId) {
+              setConversationId(data.metadata.conversation_id);
+            }
+            
+            // 如果还没有标题，使用第一条用户消息作为标题
+            if (!conversationTitle) {
+              const title = userMessage.content.slice(0, 50) + (userMessage.content.length > 50 ? '...' : '');
+              setConversationTitle(title);
+            }
+            
+            // 关闭WebSocket
+            ws.close();
+            wsRef.current = null;
+            break;
+
+          case 'error':
+            console.error('[WebSocket] 错误:', data.error);
+            const errorMessage: Message = {
+              role: 'assistant',
+              content: '抱歉，我现在遇到了一些问题。请稍后再试。',
+              timestamp: new Date()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            setCurrentToolCalls([]);
+            setIsLoading(false);
+            ws.close();
+            wsRef.current = null;
+            break;
+        }
+      };
+
+      // 连接错误
+      ws.onerror = (error) => {
+        console.error('[WebSocket] 连接错误:', error);
+        const errorMessage: Message = {
+          role: 'assistant',
+          content: '抱歉，连接失败。请稍后再试。',
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        setCurrentToolCalls([]);
+        setIsLoading(false);
+      };
+
+      // 连接关闭
+      ws.onclose = () => {
+        console.log('[WebSocket] 连接已关闭');
+        wsRef.current = null;
+      };
+
     } catch (error) {
-      console.error('Agent对话失败:', error);
+      console.error('WebSocket连接失败:', error);
       const errorMessage: Message = {
         role: 'assistant',
         content: '抱歉，我现在遇到了一些问题。请稍后再试。',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
-    } finally {
+      setCurrentToolCalls([]);
       setIsLoading(false);
     }
   };
@@ -273,18 +347,7 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
         {/* 消息列表 */}
         <div className="agent-chat-messages">
-          {messages.map((msg, idx) => {
-            // 调试日志
-            if (msg.role === 'assistant' && idx === messages.length - 1) {
-              console.log('[DEBUG] 渲染最新消息:', {
-                idx,
-                hasToolCalls: !!msg.toolCalls,
-                toolCallsLength: msg.toolCalls?.length,
-                toolCalls: msg.toolCalls
-              });
-            }
-            
-            return (
+          {messages.map((msg, idx) => (
             <div
               key={idx}
               className={`agent-chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}
@@ -349,9 +412,50 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
                 </div>
               </div>
             </div>
-          );
-          })}
-          {isLoading && (
+          ))}
+          
+          {/* 实时工具调用动画（加载中） */}
+          {isLoading && currentToolCalls.length > 0 && (
+            <div className="agent-chat-message assistant">
+              <div className="message-avatar">{getAgentIcon(agentType)}</div>
+              <div className="message-content">
+                <div className="message-tool-calls">
+                  {currentToolCalls.map((tool, toolIdx) => (
+                    <div key={toolIdx} className={`tool-call-item ${tool.status}`}>
+                      <div className="tool-call-icon">
+                        {getToolIcon(tool.tool_name)}
+                      </div>
+                      <div className="tool-call-info">
+                        <div className="tool-call-name">
+                          {getToolDisplayName(tool.tool_name)}
+                        </div>
+                        <div className="tool-call-server">
+                          {tool.server_name}
+                        </div>
+                      </div>
+                      <div className="tool-call-status">
+                        {tool.status === 'running' && (
+                          <div className="tool-status-spinner"></div>
+                        )}
+                        {tool.status === 'completed' && (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                        )}
+                        {tool.status === 'failed' && (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {isLoading && currentToolCalls.length === 0 && (
             <div className="agent-chat-message assistant">
               <div className="message-avatar">{getAgentIcon(agentType)}</div>
               <div className="message-content">
