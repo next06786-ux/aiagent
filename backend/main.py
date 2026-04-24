@@ -3998,8 +3998,18 @@ async def agent_chat(request_data: Dict[str, Any]):
         
         mcp_host = MCPHost(user_id=user_id)
         
-        # 注册联网搜索（所有Agent共享）
-        mcp_host.register_server(WebSearchMCPServer())
+        # 注册联网搜索（所有Agent共享）- 显式传递环境变量
+        import os
+        search_api_key = os.getenv("QWEN_SEARCH_API_KEY")
+        search_host = os.getenv("QWEN_SEARCH_HOST")
+        print(f"[DEBUG] 搜索API配置: api_key={'已设置' if search_api_key else '未设置'}, host={'已设置' if search_host else '未设置'}")
+        
+        mcp_host.register_server(WebSearchMCPServer(
+            api_key=search_api_key,
+            host=search_host,
+            workspace=os.getenv("QWEN_SEARCH_WORKSPACE", "default"),
+            service_id=os.getenv("QWEN_SEARCH_SERVICE_ID", "ops-web-search-001")
+        ))
         
         # 根据Agent类型注册专属工具
         if agent_type == 'relationship':
