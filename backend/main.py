@@ -4097,7 +4097,8 @@ async def agent_chat(request_data: Dict[str, Any]):
             'agent_used': result.get('agent_used', False),  # 是否使用了Agent推理
             'execution_path': result.get('execution_path', []),  # Workflow执行路径
             'tasks_executed': len(result.get('tasks_executed', [])),
-            'tools_used': result.get('tools_used', [])
+            'tools_used': result.get('tools_used', []),
+            'tool_calls': result.get('tool_calls', [])  # MCP工具调用信息
         }
         
     except Exception as e:
