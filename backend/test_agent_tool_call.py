@@ -77,7 +77,7 @@ def test_agent_with_tool_call():
     print("测试: 需要联网搜索的查询")
     print("="*70)
     
-    test_query = "清华大学在哪个城市？"
+    test_query = "2024年最新的职场人际关系研究有哪些？"
     print(f"\n用户问题: {test_query}")
     print("\n" + "-"*70)
     

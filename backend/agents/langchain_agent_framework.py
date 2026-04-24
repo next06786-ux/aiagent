@@ -888,11 +888,82 @@ class ToolModule:
                 
                 return sync_executor
             
-            # 转换为LangChain Tool
-            langchain_tool = Tool(
+            # 转换为LangChain StructuredTool（支持多参数）
+            from langchain_core.tools import StructuredTool
+            from pydantic import BaseModel, Field, create_model
+            from typing import Optional
+            
+            # 从MCP工具的parameters构建Pydantic模型
+            fields = {}
+            if mcp_tool.parameters and 'properties' in mcp_tool.parameters:
+                for prop_name, prop_info in mcp_tool.parameters['properties'].items():
+                    field_type = str  # 默认类型
+                    if prop_info.get('type') == 'integer':
+                        field_type = int
+                    elif prop_info.get('type') == 'number':
+                        field_type = float
+                    elif prop_info.get('type') == 'boolean':
+                        field_type = bool
+                    
+                    # 检查是否必需
+                    is_required = prop_name in mcp_tool.parameters.get('required', [])
+                    
+                    # 获取默认值
+                    default_value = prop_info.get('default')
+                    
+                    if is_required:
+                        fields[prop_name] = (field_type, Field(description=prop_info.get('description', '')))
+                    else:
+                        # 对于可选字段，使用...作为默认值标记（Pydantic v2）
+                        if default_value is not None:
+                            fields[prop_name] = (field_type, Field(default=default_value, description=prop_info.get('description', '')))
+                        else:
+                            fields[prop_name] = (Optional[field_type], Field(default=None, description=prop_info.get('description', '')))
+            
+            # 创建动态Pydantic模型（确保至少有一个字段）
+            if not fields:
+                # 如果没有参数定义，创建一个空的schema
+                fields = {'__dummy__': (Optional[str], Field(default=None, description='Placeholder'))}
+            
+            ArgsSchema = create_model(f"{mcp_tool.name}_args", **fields)
+            
+            # 创建同步包装函数（接受关键字参数）
+            def create_sync_wrapper(tool_name: str):
+                async def async_executor(**kwargs) -> str:
+                    """MCP工具异步执行器"""
+                    try:
+                        # 调用MCP工具
+                        result = await self.mcp_host.call_tool(tool_name, kwargs)
+                        return json.dumps(result, ensure_ascii=False)
+                    except Exception as e:
+                        return f"工具调用失败: {str(e)}"
+                
+                def sync_wrapper(**kwargs) -> str:
+                    """同步包装器"""
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            import nest_asyncio
+                            nest_asyncio.apply()
+                            return loop.run_until_complete(async_executor(**kwargs))
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            return loop.run_until_complete(async_executor(**kwargs))
+                        finally:
+                            loop.close()
+                    
+                    return loop.run_until_complete(async_executor(**kwargs))
+                
+                return sync_wrapper
+            
+            langchain_tool = StructuredTool(
                 name=mcp_tool.name,
                 description=f"{mcp_tool.description} (MCP工具，来自{mcp_tool.server_id})",
-                func=create_executor(mcp_tool.name)
+                func=create_sync_wrapper(mcp_tool.name),
+                args_schema=ArgsSchema,
+                coroutine=None  # 我们已经处理了异步
             )
             
             self.tools.append(langchain_tool)
@@ -1344,17 +1415,21 @@ class LangChainReActAgent(ABC):
             metadata=context.metadata
         ))
         
-        # 保存任务结果
+        # 保存任务结果（只在没有错误时保存）
         if not context.metadata.get('error'):
-            self.memory_module.save_task_result(
-                task_description=context.user_message,
-                result=context.agent_response,
-                success=True,
-                key_findings=[
-                    f"意图: {context.intent.get('intent')}",
-                    f"模式: {context.metadata.get('mode')}"
-                ]
-            )
+            try:
+                self.memory_module.save_task_result(
+                    task_description=context.user_message,
+                    result=context.agent_response,
+                    success=True,
+                    key_findings=[
+                        f"意图: {context.intent.get('intent')}",
+                        f"模式: {context.metadata.get('mode')}",
+                        f"工具调用: {len(context.metadata.get('tool_calls', []))}"
+                    ]
+                )
+            except Exception as e:
+                print(f"⚠️  保存任务结果失败（非致命错误）: {e}")
         
         return "default"
     

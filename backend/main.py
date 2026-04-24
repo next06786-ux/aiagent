@@ -3988,11 +3988,24 @@ async def agent_chat(request_data: Dict[str, Any]):
         rag_system = RAGManager.get_system(user_id)
         retrieval_system = UnifiedHybridRetrieval(user_id)
         
-        # 可选：创建MCP Host（如果需要动态工具）
-        # from backend.agents.mcp_integration import MCPHost, GithubMCPServer
-        # mcp_host = MCPHost(user_id)
-        # mcp_host.register_server(GithubMCPServer())
-        # 注意：如果使用MCP，需要 await agent.initialize()
+        # 创建MCP Host并注册工具
+        from backend.agents.mcp_integration import MCPHost
+        from backend.agents.specialized_mcp_servers import (
+            WebSearchMCPServer,
+            RelationshipMCPServer,
+            EducationMCPServer
+        )
+        
+        mcp_host = MCPHost(user_id=user_id)
+        
+        # 注册联网搜索（所有Agent共享）
+        mcp_host.register_server(WebSearchMCPServer())
+        
+        # 根据Agent类型注册专属工具
+        if agent_type == 'relationship':
+            mcp_host.register_server(RelationshipMCPServer())
+        elif agent_type == 'education':
+            mcp_host.register_server(EducationMCPServer())
         
         # 创建LangChain Agent
         agent = create_langchain_agent(
@@ -4002,12 +4015,15 @@ async def agent_chat(request_data: Dict[str, Any]):
             rag_system=rag_system,
             retrieval_system=retrieval_system,
             use_workflow=True,  # 启用Workflow混合模式
-            mcp_host=None  # 暂不启用MCP（可选功能）
+            mcp_host=mcp_host  # 启用MCP工具
         )
         
-        # 如果使用MCP，需要异步初始化
-        # import asyncio
-        # asyncio.run(agent.initialize())
+        # 异步初始化Agent（发现MCP工具）
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(agent.initialize())
+        loop.close()
         
         # 处理消息（LangChain ReAct模式）
         result = agent.process(user_message)
