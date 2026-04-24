@@ -1713,7 +1713,36 @@ async def websocket_agent_chat(websocket: WebSocket):
                         })
                         await asyncio.sleep(0)
             
-            # 创建LangChain Agent（传入WebSocket回调）
+            # 在单独的线程中执行Agent处理（避免阻塞事件循环）
+            import concurrent.futures
+            loop = asyncio.get_event_loop()
+            
+            # 将事件循环引用存储到全局变量，供回调使用
+            import threading
+            _thread_local = threading.local()
+            _thread_local.event_loop = loop
+            
+            # 修改回调函数，使其能访问事件循环
+            original_callback = websocket_callback
+            
+            async def wrapped_callback(event_type: str, data: dict):
+                """包装的回调，确保在正确的事件循环中执行"""
+                await original_callback(event_type, data)
+            
+            # 创建一个同步包装器，从线程中调用
+            def sync_callback_wrapper(event_type: str, data: dict):
+                """同步包装器，使用 run_coroutine_threadsafe"""
+                try:
+                    future = asyncio.run_coroutine_threadsafe(
+                        wrapped_callback(event_type, data),
+                        loop
+                    )
+                    # 等待完成，但设置短超时
+                    future.result(timeout=0.5)
+                except Exception as e:
+                    print(f"⚠️  回调执行失败: {e}")
+            
+            # 重新创建 Agent，使用同步包装器
             agent = create_langchain_agent(
                 agent_type=agent_type,
                 user_id=user_id,
@@ -1722,7 +1751,7 @@ async def websocket_agent_chat(websocket: WebSocket):
                 retrieval_system=retrieval_system,
                 use_workflow=True,
                 mcp_host=mcp_host,
-                websocket_callback=websocket_callback  # 传入回调函数
+                websocket_callback=sync_callback_wrapper  # 使用同步包装器
             )
             
             # 异步初始化Agent（发现MCP工具）
@@ -1734,10 +1763,6 @@ async def websocket_agent_chat(websocket: WebSocket):
                     "error": f"Agent类型不支持: {agent_type}"
                 })
                 return
-            
-            # 在单独的线程中执行Agent处理（避免阻塞事件循环）
-            import concurrent.futures
-            loop = asyncio.get_event_loop()
             
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 result = await loop.run_in_executor(
