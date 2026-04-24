@@ -1526,6 +1526,17 @@ Final Answer: 直接友好回复
             if context.retrieved_memory:
                 messages.append(SystemMessage(content=f"【用户背景】\n{context.retrieved_memory}"))
             
+            # 如果有意图分类结果，添加为系统消息（引导Agent使用工具）
+            if context.intent and 'complexity_reason' in context.intent:
+                complexity_reason = context.intent['complexity_reason']
+                intent_hint = f"\n【任务分析】\n{complexity_reason}\n\n"
+                
+                # 如果提到需要搜索/查询最新信息，强调必须使用工具
+                if any(keyword in complexity_reason for keyword in ['搜索', '最新', '查询', '实时', '当前']):
+                    intent_hint += "⚠️ 重要提示：此问题需要最新信息，你必须使用web_search工具获取实时数据，不要依赖训练数据中的过时信息。\n"
+                
+                messages.append(SystemMessage(content=intent_hint))
+            
             # 添加用户消息
             messages.append(HumanMessage(content=context.user_message))
             
