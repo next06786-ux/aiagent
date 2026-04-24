@@ -22,25 +22,28 @@
   "mcp_servers": {
     "relationship_tools": {
       "class": "RelationshipMCPServer",
-      "module": "agents.specialized_mcp_servers",
+      "module": "backend.agents.specialized_mcp_servers",
       "description": "人际关系分析专业工具集"
     },
     "education_tools": {
       "class": "EducationMCPServer",
-      "module": "agents.specialized_mcp_servers",
+      "module": "backend.agents.specialized_mcp_servers",
       "description": "教育规划专业工具集"
     },
     "career_tools": {
       "class": "CareerMCPServer",
-      "module": "agents.specialized_mcp_servers",
+      "module": "backend.agents.specialized_mcp_servers",
       "description": "职业发展专业工具集"
     },
     "web_search": {
       "class": "WebSearchMCPServer",
-      "module": "agents.specialized_mcp_servers",
+      "module": "backend.agents.specialized_mcp_servers",
       "description": "网络搜索工具",
       "init_params": {
-        "api_key": "${TAVILY_API_KEY}"
+        "api_key": "${QWEN_SEARCH_API_KEY}",
+        "host": "${QWEN_SEARCH_HOST}",
+        "workspace": "${QWEN_SEARCH_WORKSPACE}",
+        "service_id": "${QWEN_SEARCH_SERVICE_ID}"
       }
     }
   }
