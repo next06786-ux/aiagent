@@ -4,7 +4,7 @@ LifeSwarm 后端服务 - FastAPI 应用主入口
 import os
 import sys
 import time
-from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -4630,8 +4630,8 @@ async def agent_import_text(request_data: Dict[str, Any]):
 @app.post("/api/agent-import-file")
 async def agent_import_file(
     file: UploadFile = File(...),
-    agent_type: str = None,
-    token: str = None
+    agent_type: str = Form(None),
+    token: str = Form(None)
 ):
     """
     Agent文件资料导入
