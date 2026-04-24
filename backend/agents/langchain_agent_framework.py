@@ -492,7 +492,8 @@ class LLMModule:
     
     def __init__(self, llm_service):
         self.llm_service = llm_service
-        self.langchain_llm = DashScopeLLM(llm_service)
+        # Agent使用qwen-plus模型，提供更强的推理能力
+        self.langchain_llm = DashScopeLLM(llm_service, model="qwen-plus")
     
     def understand_intent(self, user_message: str, context: List[AgentMessage]) -> Dict[str, Any]:
         """理解用户意图"""
@@ -686,7 +687,8 @@ class MemoryModule:
         query: str,
         agent_type: str,
         max_results: int = 5,
-        reason: str = "general"
+        reason: str = "general",
+        use_cache: bool = True
     ) -> str:
         """
         从外部记忆检索（读取时机）
@@ -696,6 +698,7 @@ class MemoryModule:
             agent_type: Agent类型
             max_results: 最大结果数
             reason: 检索原因（'task_start', 'unknown_problem', 'fact_check'）
+            use_cache: 是否使用缓存（默认True，工具调用时建议False）
         
         读取时机：
         1. task_start: 任务开始时加载用户偏好和历史背景
@@ -716,7 +719,8 @@ class MemoryModule:
             
             config = RetrievalConfig(
                 strategy=RetrievalStrategy.HYBRID_PARALLEL,
-                max_results=max_results
+                max_results=max_results,
+                cache_enabled=use_cache  # 根据参数控制缓存
             )
             
             # 根据Agent类型设置领域过滤
@@ -1193,11 +1197,13 @@ class ToolModule:
             
             print(f"   🔍 RAG检索: {query} (原因: {reason})")
             
+            # 工具调用时禁用缓存，确保获取最新数据
             context = self.memory_module.retrieve_from_external_memory(
                 query,
                 self.agent_type,
                 max_results=5,
-                reason=reason
+                reason=reason,
+                use_cache=False  # 工具调用时不使用缓存
             )
             if context:
                 return f"检索到的用户相关信息：\n{context}\n\n提示：请将这些信息融入到后续工具调用的参数中，实现个性化分析。"
