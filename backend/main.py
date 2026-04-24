@@ -4111,12 +4111,13 @@ async def agent_chat(request_data: Dict[str, Any]):
                 query_type = QueryType.SEMANTIC
                 domain_filter = None
             
+            # 将domain_filter添加到config中
+            config.domain_filter = domain_filter
+            
             # 执行混合检索
             retrieval_context = retrieval.retrieve(
                 query=user_message,
-                query_type=query_type,
-                config=config,
-                domain_filter=domain_filter
+                config=config
             )
             
             # 统计检索结果
@@ -4195,8 +4196,7 @@ async def agent_chat(request_data: Dict[str, Any]):
         
         response = llm_service.chat(
             messages=messages,
-            temperature=0.7,
-            max_tokens=500
+            temperature=0.7
         )
         
         print(f"[Agent对话] LLM回复生成完成: {len(response)}字符")
