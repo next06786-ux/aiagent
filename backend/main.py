@@ -1567,13 +1567,65 @@ async def websocket_agent_chat(websocket: WebSocket):
         
         # 处理Agent对话
         try:
-            from backend.agents.langchain_specialized_agents import get_specialized_agent
+            from backend.agents.langchain_specialized_agents import create_langchain_agent
+            from backend.learning.rag_manager import RAGManager
+            from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
             
-            # 获取Agent实例
-            agent = await get_specialized_agent(
-                agent_type=agent_type,
-                user_id=user_id
+            print(f"\n[WebSocket Agent] 用户: {user_id}, Agent类型: {agent_type}")
+            
+            # 获取系统实例
+            llm_service = get_or_init_llm_service()
+            if not llm_service or not llm_service.enabled:
+                await websocket.send_json({
+                    "type": "error",
+                    "error": "LLM服务不可用"
+                })
+                return
+            
+            rag_system = RAGManager.get_system(user_id)
+            retrieval_system = UnifiedHybridRetrieval(user_id)
+            
+            # 创建MCP Host并注册工具
+            from backend.agents.mcp_integration import MCPHost
+            from backend.agents.specialized_mcp_servers import (
+                WebSearchMCPServer,
+                RelationshipMCPServer,
+                EducationMCPServer
             )
+            
+            mcp_host = MCPHost(user_id=user_id)
+            
+            # 注册联网搜索（所有Agent共享）
+            import os
+            search_api_key = os.getenv("QWEN_SEARCH_API_KEY")
+            search_host = os.getenv("QWEN_SEARCH_HOST")
+            
+            mcp_host.register_server(WebSearchMCPServer(
+                api_key=search_api_key,
+                host=search_host,
+                workspace=os.getenv("QWEN_SEARCH_WORKSPACE", "default"),
+                service_id=os.getenv("QWEN_SEARCH_SERVICE_ID", "ops-web-search-001")
+            ))
+            
+            # 根据Agent类型注册专属工具
+            if agent_type == 'relationship':
+                mcp_host.register_server(RelationshipMCPServer())
+            elif agent_type == 'education':
+                mcp_host.register_server(EducationMCPServer())
+            
+            # 创建LangChain Agent
+            agent = create_langchain_agent(
+                agent_type=agent_type,
+                user_id=user_id,
+                llm_service=llm_service,
+                rag_system=rag_system,
+                retrieval_system=retrieval_system,
+                use_workflow=True,
+                mcp_host=mcp_host
+            )
+            
+            # 异步初始化Agent（发现MCP工具）
+            await agent.initialize()
             
             if not agent:
                 await websocket.send_json({
