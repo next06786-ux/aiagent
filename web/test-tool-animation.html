@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工具调用动画测试</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+
+    .test-section {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .test-section h2 {
+      margin-top: 0;
+      color: #666;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    /* 工具调用样式 */
+    .message-tool-calls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 3px solid #4a90e2;
+    }
+
+    .tool-call-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: white;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .tool-call-item.running {
+      border-left: 3px solid #4a90e2;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(74, 144, 226, 0);
+      }
+    }
+
+    .tool-call-item.completed {
+      border-left: 3px solid #52c41a;
+      animation: popIn 0.3s ease-out;
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: scale(0.95);
+      }
+      50% {
+        transform: scale(1.02);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    .tool-call-item.failed {
+      border-left: 3px solid #ff4d4f;
+      animation: shake 0.5s ease-out;
+    }
+
+    @keyframes shake {
+      0%, 100% {
+        transform: translateX(0);
+      }
+      25% {
+        transform: translateX(-5px);
+      }
+      75% {
+        transform: translateX(5px);
+      }
+    }
+
+    .tool-call-icon {
+      font-size: 20px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      border-radius: 6px;
+    }
+
+    .tool-call-item.running .tool-call-icon {
+      animation: rotate 2s linear infinite;
+    }
+
+    @keyframes rotate {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tool-call-info {
+      flex: 1;
+    }
+
+    .tool-call-name {
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .tool-call-server {
+      font-size: 12px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .tool-call-status {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tool-status-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #e0e0e0;
+      border-top-color: #4a90e2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tool-call-status svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .tool-call-item.completed .tool-call-status svg {
+      color: #52c41a;
+    }
+
+    .tool-call-item.failed .tool-call-status svg {
+      color: #ff4d4f;
+    }
+
+    button {
+      padding: 8px 16px;
+      margin: 5px;
+      border: none;
+      border-radius: 6px;
+      background: #4a90e2;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #357abd;
+    }
+
+    .controls {
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔧 工具调用动画测试</h1>
+
+  <div class="test-section">
+    <h2>状态：Running（运行中）</h2>
+    <div class="message-tool-calls">
+      <div class="tool-call-item running">
+        <div class="tool-call-icon">🔍</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">智能联网搜索</div>
+          <div class="tool-call-server">Web Search Server</div>
+        </div>
+        <div class="tool-call-status">
+          <div class="tool-status-spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>状态：Completed（完成）</h2>
+    <div class="message-tool-calls">
+      <div class="tool-call-item completed">
+        <div class="tool-call-icon">🔍</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">智能联网搜索</div>
+          <div class="tool-call-server">Web Search Server</div>
+        </div>
+        <div class="tool-call-status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>状态：Failed（失败）</h2>
+    <div class="message-tool-calls">
+      <div class="tool-call-item failed">
+        <div class="tool-call-icon">🔍</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">智能联网搜索</div>
+          <div class="tool-call-server">Web Search Server</div>
+        </div>
+        <div class="tool-call-status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>多个工具调用</h2>
+    <div class="message-tool-calls">
+      <div class="tool-call-item completed">
+        <div class="tool-call-icon">🔍</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">智能联网搜索</div>
+          <div class="tool-call-server">Web Search Server</div>
+        </div>
+        <div class="tool-call-status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </div>
+      </div>
+      <div class="tool-call-item completed">
+        <div class="tool-call-icon">💬</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">分析沟通模式</div>
+          <div class="tool-call-server">Relationship Analysis Server</div>
+        </div>
+        <div class="tool-call-status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </div>
+      </div>
+      <div class="tool-call-item completed">
+        <div class="tool-call-icon">❤️</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">评估关系健康度</div>
+          <div class="tool-call-server">Relationship Analysis Server</div>
+        </div>
+        <div class="tool-call-status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-section">
+    <h2>动态演示</h2>
+    <div id="dynamic-demo" class="message-tool-calls"></div>
+    <div class="controls">
+      <button onclick="simulateToolCall()">模拟工具调用</button>
+      <button onclick="clearDemo()">清空</button>
+    </div>
+  </div>
+
+  <script>
+    const tools = [
+      { name: '智能联网搜索', icon: '🔍', server: 'Web Search Server' },
+      { name: '分析沟通模式', icon: '💬', server: 'Relationship Analysis Server' },
+      { name: '评估关系健康度', icon: '❤️', server: 'Relationship Analysis Server' },
+      { name: '生成冲突解决方案', icon: '🤝', server: 'Relationship Analysis Server' },
+      { name: '计算社交兼容性', icon: '🎯', server: 'Relationship Analysis Server' }
+    ];
+
+    function simulateToolCall() {
+      const demo = document.getElementById('dynamic-demo');
+      const tool = tools[Math.floor(Math.random() * tools.length)];
+      
+      // 创建工具调用元素
+      const toolItem = document.createElement('div');
+      toolItem.className = 'tool-call-item running';
+      toolItem.innerHTML = `
+        <div class="tool-call-icon">${tool.icon}</div>
+        <div class="tool-call-info">
+          <div class="tool-call-name">${tool.name}</div>
+          <div class="tool-call-server">${tool.server}</div>
+        </div>
+        <div class="tool-call-status">
+          <div class="tool-status-spinner"></div>
+        </div>
+      `;
+      
+      demo.appendChild(toolItem);
+      
+      // 2秒后变为完成状态
+      setTimeout(() => {
+        toolItem.className = 'tool-call-item completed';
+        toolItem.querySelector('.tool-call-status').innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        `;
+      }, 2000);
+    }
+
+    function clearDemo() {
+      document.getElementById('dynamic-demo').innerHTML = '';
+    }
+
+    // 自动演示
+    console.log('工具调用动画测试页面已加载');
+    console.log('点击"模拟工具调用"按钮查看动画效果');
+  </script>
+</body>
+</html>

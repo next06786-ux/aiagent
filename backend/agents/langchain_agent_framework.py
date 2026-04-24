@@ -1466,19 +1466,28 @@ class LangChainReActAgent(ABC):
             agent_type=self.agent_type
         )
         
+        # 清空之前的工具调用记录（每次对话重新开始）
+        if self.mcp_host and hasattr(self.mcp_host, 'client'):
+            self.mcp_host.client.call_logs = []
+        
         # 执行工作流
         context = self.workflow.execute(context)
         
-        # 收集MCP工具调用信息
+        # 收集MCP工具调用信息（从本次对话的日志）
         tool_calls = []
         if self.mcp_host and hasattr(self.mcp_host, 'client') and hasattr(self.mcp_host.client, 'call_logs'):
-            for log in self.mcp_host.client.call_logs[-10:]:  # 最近10次调用
+            for log in self.mcp_host.client.call_logs:  # 使用所有日志，不限制数量
                 tool_calls.append({
                     'tool_name': log.tool_name,
                     'server_name': self._get_server_name_by_id(log.server_id),
                     'status': 'completed' if log.success else 'failed',
                     'result': str(log.result)[:100] if log.result else None
                 })
+        
+        print(f"\n[DEBUG] 本次对话工具调用数: {len(tool_calls)}")
+        if tool_calls:
+            for i, tool in enumerate(tool_calls, 1):
+                print(f"  {i}. {tool['tool_name']} - {tool['status']}")
         
         return {
             'response': context.agent_response,

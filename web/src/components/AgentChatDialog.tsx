@@ -108,6 +108,34 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
         toolCalls: data.tool_calls
       };
 
+      console.log('[DEBUG] Agent响应:', {
+        response: data.response?.substring(0, 100),
+        tool_calls: data.tool_calls,
+        tool_calls_length: data.tool_calls?.length,
+        tool_calls_type: typeof data.tool_calls,
+        retrieval_stats: data.retrieval_stats
+      });
+
+      // 验证tool_calls数据
+      if (data.tool_calls) {
+        console.log('[DEBUG] 工具调用详情:');
+        data.tool_calls.forEach((tool: any, idx: number) => {
+          console.log(`  ${idx + 1}. ${tool.tool_name}`, {
+            server_name: tool.server_name,
+            status: tool.status,
+            result: tool.result?.substring(0, 50)
+          });
+        });
+      } else {
+        console.log('[DEBUG] ⚠️ tool_calls为空或undefined');
+      }
+
+      console.log('[DEBUG] 创建的消息对象:', {
+        role: assistantMessage.role,
+        hasToolCalls: !!assistantMessage.toolCalls,
+        toolCallsCount: assistantMessage.toolCalls?.length
+      });
+
       setMessages(prev => [...prev, assistantMessage]);
       
       // 保存conversation_id
@@ -245,7 +273,18 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
         {/* 消息列表 */}
         <div className="agent-chat-messages">
-          {messages.map((msg, idx) => (
+          {messages.map((msg, idx) => {
+            // 调试日志
+            if (msg.role === 'assistant' && idx === messages.length - 1) {
+              console.log('[DEBUG] 渲染最新消息:', {
+                idx,
+                hasToolCalls: !!msg.toolCalls,
+                toolCallsLength: msg.toolCalls?.length,
+                toolCalls: msg.toolCalls
+              });
+            }
+            
+            return (
             <div
               key={idx}
               className={`agent-chat-message ${msg.role === 'user' ? 'user' : 'assistant'}`}
@@ -310,7 +349,8 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
           {isLoading && (
             <div className="agent-chat-message assistant">
               <div className="message-avatar">{getAgentIcon(agentType)}</div>
