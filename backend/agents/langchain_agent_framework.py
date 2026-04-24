@@ -267,11 +267,11 @@ class DashScopeLLM(BaseChatModel):
                 elif isinstance(msg, SystemMessage):
                     api_messages.append({"role": "system", "content": msg.content})
                 elif hasattr(msg, 'type') and msg.type == 'tool':
-                    # 工具执行结果消息
+                    # 工具执行结果消息 - 转换为用户消息（通义千问兼容）
+                    tool_name = getattr(msg, 'name', 'unknown_tool')
                     api_messages.append({
-                        "role": "tool",
-                        "content": msg.content,
-                        "tool_call_id": getattr(msg, 'tool_call_id', '')
+                        "role": "user",
+                        "content": f"[工具 {tool_name} 返回结果]\n{msg.content}"
                     })
                 else:
                     # 其他类型消息转为用户消息
