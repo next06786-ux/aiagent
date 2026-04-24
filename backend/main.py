@@ -3940,18 +3940,15 @@ async def generate_decision_report(request_data: Dict[str, Any]):
 @app.post("/api/agent-chat")
 async def agent_chat(request_data: Dict[str, Any]):
     """
-    Agent对话接口
+    Agent对话接口 - 使用四模块架构
     
     请求体：
     {
-        "user_id": "user_001",
         "token": "xxx",
         "agent_type": "relationship" | "education" | "career",
         "message": "用户消息",
-        "conversation_history": [
-            {"role": "user", "content": "..."},
-            {"role": "assistant", "content": "..."}
-        ]
+        "conversation_id": "xxx" (可选),
+        "conversation_title": "xxx" (可选)
     }
     """
     try:
@@ -3961,335 +3958,124 @@ async def agent_chat(request_data: Dict[str, Any]):
         
         token = request_data.get('token')
         if not token:
-            return {
-                'success': False,
-                'message': '缺少token'
-            }
+            return {'success': False, 'message': '缺少token'}
         
         # 验证token并获取用户ID
         user_id = auth_service.verify_token(token)
         if not user_id:
-            return {
-                'success': False,
-                'message': 'Token无效或已过期'
-            }
+            return {'success': False, 'message': 'Token无效或已过期'}
         
         # 获取请求参数
         agent_type = request_data.get('agent_type')
         user_message = request_data.get('message')
-        conversation_history = request_data.get('conversation_history', [])
         
         if not agent_type or not user_message:
-            return {
-                'success': False,
-                'message': '缺少必要参数'
-            }
+            return {'success': False, 'message': '缺少必要参数'}
         
-        # Agent系统提示词
-        AGENT_SYSTEM_PROMPTS = {
-            'relationship': """你是一位专业的人际关系分析师Agent。你的专长包括：
-- 社交网络分析
-- 人际关系质量评估
-- 沟通模式优化
-- 社交技能提升
-- 人际冲突处理
-
-你的回答应该：
-1. 基于用户的实际情况（从知识图谱和记忆系统中检索）
-2. 提供具体、可操作的建议
-3. 保持专业、友善的语气
-4. 关注用户的情感需求
-5. 每次回答控制在200字以内，简洁明了
-
-记住：你是人际关系领域的专家，专注于帮助用户改善社交生活。""",
-
-            'education': """你是一位专业的教育升学规划师Agent。你的专长包括：
-- 升学路径规划（考研/就业/出国）
-- 学校和专业选择建议
-- 学习方法优化
-- 学业竞争力提升
-- 课程规划建议
-
-你的回答应该：
-1. 基于用户的学业背景和目标
-2. 提供数据支持的分析
-3. 给出清晰的行动步骤
-4. 考虑用户的实际情况
-5. 每次回答控制在200字以内，简洁明了
-
-记住：你是教育规划领域的专家，专注于帮助学生做出明智的升学决策。""",
-
-            'career': """你是一位专业的职业发展规划师Agent。你的专长包括：
-- 职业方向选择
-- 技能匹配分析
-- 职业发展路径规划
-- 求职策略建议
-- 工作机会评估
-
-你的回答应该：
-1. 基于用户的技能和兴趣
-2. 结合市场需求和趋势
-3. 提供实用的职业建议
-4. 关注长期职业发展
-5. 每次回答控制在200字以内，简洁明了
-
-记住：你是职业规划领域的专家，专注于帮助用户实现职业目标。"""
-        }
+        # 使用LangChain ReAct Agent系统（支持MCP）
+        from backend.agents.langchain_specialized_agents import create_langchain_agent
+        from backend.learning.rag_manager import RAGManager
+        from backend.learning.unified_hybrid_retrieval import UnifiedHybridRetrieval
         
-        if agent_type not in AGENT_SYSTEM_PROMPTS:
-            return {
-                'success': False,
-                'message': '无效的Agent类型'
-            }
+        print(f"\n[Agent对话] 用户: {user_id}, Agent类型: {agent_type}")
+        print(f"[Agent对话] 使用LangChain ReAct框架 + Workflow混合模式")
         
-        # 1. 使用RAG+Neo4j混合检索获取相关信息
-        context = ""
-        retrieval_stats = {
-            'rag_results': 0,
-            'neo4j_results': 0,
-            'total_results': 0
-        }
-        
-        try:
-            from backend.learning.unified_hybrid_retrieval import (
-                UnifiedHybridRetrieval, 
-                QueryType, 
-                RetrievalConfig,
-                RetrievalStrategy
-            )
-            
-            print(f"[Agent对话] 开始混合检索: agent_type={agent_type}, query={user_message[:50]}...")
-            
-            # 创建混合检索系统
-            retrieval = UnifiedHybridRetrieval(user_id=user_id)
-            
-            # 根据Agent类型配置检索策略
-            if agent_type == 'relationship':
-                # 人际关系：优先使用图检索（关系网络）
-                config = RetrievalConfig(
-                    strategy=RetrievalStrategy.HYBRID_PARALLEL,
-                    graph_weight=0.7,  # 图检索权重70%
-                    vector_weight=0.3,  # 向量检索权重30%
-                    max_results=10,
-                    expand_relations=True,  # 扩展关系
-                    max_relation_depth=2
-                )
-                query_type = QueryType.RELATIONAL
-                domain_filter = 'relationship'
-                
-            elif agent_type == 'education':
-                # 教育升学：平衡使用图检索和向量检索
-                config = RetrievalConfig(
-                    strategy=RetrievalStrategy.HYBRID_PARALLEL,
-                    graph_weight=0.5,  # 图检索权重50%
-                    vector_weight=0.5,  # 向量检索权重50%
-                    max_results=10,
-                    expand_relations=True,
-                    query_expansion=True  # 查询扩展
-                )
-                query_type = QueryType.ANALYTICAL
-                domain_filter = 'education'
-                
-            elif agent_type == 'career':
-                # 职业规划：优先使用向量检索（技能匹配）
-                config = RetrievalConfig(
-                    strategy=RetrievalStrategy.HYBRID_PARALLEL,
-                    graph_weight=0.4,  # 图检索权重40%
-                    vector_weight=0.6,  # 向量检索权重60%
-                    max_results=10,
-                    query_expansion=True,
-                    use_synonyms=True  # 使用同义词
-                )
-                query_type = QueryType.SEMANTIC
-                domain_filter = 'career'
-            else:
-                # 默认配置
-                config = RetrievalConfig(
-                    strategy=RetrievalStrategy.ADAPTIVE,
-                    max_results=10
-                )
-                query_type = QueryType.SEMANTIC
-                domain_filter = None
-            
-            # 将domain_filter添加到config中
-            config.domain_filter = domain_filter
-            
-            # 执行混合检索
-            retrieval_context = retrieval.retrieve(
-                query=user_message,
-                config=config
-            )
-            
-            # 统计检索结果
-            if retrieval_context and retrieval_context.results:
-                retrieval_stats['total_results'] = len(retrieval_context.results)
-                retrieval_stats['rag_results'] = retrieval_context.vector_results
-                retrieval_stats['neo4j_results'] = retrieval_context.graph_results
-                
-                print(f"[Agent对话] 混合检索完成: 总计{retrieval_stats['total_results']}条 "
-                      f"(RAG:{retrieval_stats['rag_results']}, Neo4j:{retrieval_stats['neo4j_results']})")
-                
-                # 构建上下文（分类展示）
-                context_parts = []
-                
-                # 分离图检索和向量检索的结果
-                graph_results = [r for r in retrieval_context.results if r.source == 'neo4j' or r.source == 'graph']
-                vector_results = [r for r in retrieval_context.results if r.source == 'vector' or r.source == 'rag']
-                
-                # 添加图检索结果（关系和实体）
-                if graph_results:
-                    context_parts.append("【知识图谱信息】")
-                    for result in graph_results[:3]:  # 最多3条
-                        context_parts.append(f"- {result.content}")
-                
-                # 添加向量检索结果（记忆和经验）
-                if vector_results:
-                    context_parts.append("\n【历史记忆】")
-                    for result in vector_results[:3]:  # 最多3条
-                        context_parts.append(f"- {result.content}")
-                
-                context = "\n".join(context_parts)
-                
-                print(f"[Agent对话] 上下文构建完成: {len(context)}字符")
-            else:
-                print(f"[Agent对话] 未找到相关信息")
-                
-        except Exception as e:
-            print(f"❌ [Agent对话] 混合检索失败: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # 2. 构建对话消息
-        messages = []
-        
-        # 系统提示词
-        system_prompt = AGENT_SYSTEM_PROMPTS[agent_type]
-        if context:
-            system_prompt += f"\n\n用户相关信息：\n{context}"
-        
-        messages.append({
-            "role": "system",
-            "content": system_prompt
-        })
-        
-        # 添加历史对话（最多保留最近5轮）
-        recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-        messages.extend(recent_history)
-        
-        # 添加当前用户消息
-        messages.append({
-            "role": "user",
-            "content": user_message
-        })
-        
-        # 3. 调用LLM生成回复
+        # 获取系统实例
         llm_service = get_or_init_llm_service()
         if not llm_service or not llm_service.enabled:
-            print(f"❌ [Agent对话] LLM服务不可用")
-            return {
-                'success': False,
-                'message': 'LLM服务不可用'
-            }
+            return {'success': False, 'message': 'LLM服务不可用'}
         
-        print(f"[Agent对话] 开始调用LLM生成回复...")
-        print(f"[Agent对话] 消息数量: {len(messages)}")
+        rag_system = RAGManager.get_system(user_id)
+        retrieval_system = UnifiedHybridRetrieval(user_id)
         
-        response = llm_service.chat(
-            messages=messages,
-            temperature=0.7
+        # 可选：创建MCP Host（如果需要动态工具）
+        # from backend.agents.mcp_integration import MCPHost, GithubMCPServer
+        # mcp_host = MCPHost(user_id)
+        # mcp_host.register_server(GithubMCPServer())
+        # 注意：如果使用MCP，需要 await agent.initialize()
+        
+        # 创建LangChain Agent
+        agent = create_langchain_agent(
+            agent_type=agent_type,
+            user_id=user_id,
+            llm_service=llm_service,
+            rag_system=rag_system,
+            retrieval_system=retrieval_system,
+            use_workflow=True,  # 启用Workflow混合模式
+            mcp_host=None  # 暂不启用MCP（可选功能）
         )
         
-        print(f"[Agent对话] LLM回复生成完成: {len(response)}字符")
+        # 如果使用MCP，需要异步初始化
+        # import asyncio
+        # asyncio.run(agent.initialize())
         
-        # 4. 保存对话历史到数据库
+        # 处理消息（LangChain ReAct模式）
+        result = agent.process(user_message)
+        
+        # 保存对话历史到数据库
+        conversation_id = request_data.get('conversation_id')
+        if not conversation_id:
+            import uuid
+            conversation_id = str(uuid.uuid4())
+        
+        conversation_title = request_data.get('conversation_title')
+        if not conversation_title:
+            conversation_title = user_message[:50] + ('...' if len(user_message) > 50 else '')
+        
         try:
             from backend.database.db_manager import DatabaseManager
             from backend.database.models import ConversationHistory
-            import uuid
             
             db_manager = DatabaseManager()
             session = db_manager.get_session()
             
-            # 生成或使用conversation_id
-            conversation_id = request_data.get('conversation_id')
-            if not conversation_id:
-                conversation_id = str(uuid.uuid4())
-            
-            # 生成对话标题（使用第一条用户消息）
-            conversation_title = request_data.get('conversation_title')
-            if not conversation_title:
-                conversation_title = user_message[:50] + ('...' if len(user_message) > 50 else '')
-            
-            # 保存用户消息
-            user_record = ConversationHistory(
-                user_id=user_id,
-                agent_type=agent_type,
-                conversation_id=conversation_id,
-                conversation_title=conversation_title,
-                role='user',
-                content=user_message,
-                context={'retrieval_stats': retrieval_stats},
-                timestamp=datetime.now()
-            )
-            session.add(user_record)
-            
-            # 保存助手回复
-            assistant_record = ConversationHistory(
-                user_id=user_id,
-                agent_type=agent_type,
-                conversation_id=conversation_id,
-                conversation_title=conversation_title,
-                role='assistant',
-                content=response,
-                retrieval_stats=retrieval_stats,
-                timestamp=datetime.now()
-            )
-            session.add(assistant_record)
-            
-            session.commit()
-            session.close()
-            
-            print(f"✅ [Agent对话] 对话历史已保存: conversation_id={conversation_id}")
-            
+            try:
+                # 保存用户消息
+                user_record = ConversationHistory(
+                    user_id=user_id,
+                    agent_type=agent_type,
+                    conversation_id=conversation_id,
+                    conversation_title=conversation_title,
+                    role='user',
+                    content=user_message,
+                    context={'retrieval_stats': result['retrieval_stats']},
+                    timestamp=datetime.now()
+                )
+                session.add(user_record)
+                
+                # 保存助手回复
+                assistant_record = ConversationHistory(
+                    user_id=user_id,
+                    agent_type=agent_type,
+                    conversation_id=conversation_id,
+                    conversation_title=conversation_title,
+                    role='assistant',
+                    content=result['response'],
+                    retrieval_stats=result['retrieval_stats'],
+                    timestamp=datetime.now()
+                )
+                session.add(assistant_record)
+                
+                session.commit()
+                print(f"✅ [Agent对话] 对话历史已保存: conversation_id={conversation_id}")
+                
+            finally:
+                session.close()
+                
         except Exception as e:
             print(f"⚠️ [Agent对话] 保存对话历史失败: {e}")
             # 不影响主流程
         
-        # 5. 将对话内容添加到RAG记忆（用于未来检索）
-        try:
-            from backend.learning.rag_manager import RAGManager
-            from backend.learning.production_rag_system import MemoryType
-            
-            rag_system = RAGManager.get_system(user_id)
-            
-            # 将对话内容作为经验记忆保存
-            conversation_memory = f"[{agent_type} Agent对话] 用户: {user_message}\n助手: {response}"
-            
-            rag_system.add_memory(
-                memory_type=MemoryType.CONVERSATION,
-                content=conversation_memory,
-                metadata={
-                    'source': 'agent_chat',
-                    'agent_type': agent_type,
-                    'conversation_id': conversation_id,
-                    'timestamp': datetime.now().isoformat()
-                },
-                importance=0.7
-            )
-            
-            print(f"✅ [Agent对话] 对话已添加到RAG记忆")
-            
-        except Exception as e:
-            print(f"⚠️ [Agent对话] 添加RAG记忆失败: {e}")
-            # 不影响主流程
-        
         return {
             'success': True,
-            'response': response,
-            'context_used': len(context) > 0,
-            'retrieval_stats': retrieval_stats,
-            'agent_type': agent_type,
-            'conversation_id': conversation_id
+            'response': result['response'],
+            'retrieval_stats': result['retrieval_stats'],
+            'conversation_id': conversation_id,
+            'mode': result.get('mode', 'unknown'),  # workflow_only / workflow_agent_hybrid / pure_agent
+            'agent_used': result.get('agent_used', False),  # 是否使用了Agent推理
+            'execution_path': result.get('execution_path', []),  # Workflow执行路径
+            'tasks_executed': len(result.get('tasks_executed', [])),
+            'tools_used': result.get('tools_used', [])
         }
         
     except Exception as e:

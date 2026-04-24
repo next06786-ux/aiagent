@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>消息气泡渲染测试</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, rgba(240, 247, 255, 0.4) 0%, rgba(232, 244, 255, 0.3) 100%);
+    }
+    
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 {
+      margin: 0 0 24px 0;
+      color: #1A1A1A;
+    }
+    
+    .test-section {
+      margin-bottom: 32px;
+      padding: 20px;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+    
+    .test-section h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: #0A59F7;
+    }
+    
+    .persona-container {
+      position: relative;
+      width: 100%;
+      height: 600px;
+      background: linear-gradient(135deg, rgba(240, 247, 255, 0.4) 0%, rgba(232, 244, 255, 0.3) 100%);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    
+    /* Agent节点样式 */
+    .persona-node {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+    }
+    
+    .persona-avatar {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(0, 0, 0, 0.85);
+      border: 1.5px solid rgba(184, 220, 255, 0.6);
+      background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.85) 30%, rgba(255, 255, 255, 0.6) 70%), linear-gradient(135deg, #E8F4FF 0%, #B8DCFF 100%);
+      box-shadow: 0 10px 40px rgba(10, 89, 247, 0.15);
+    }
+    
+    /* 消息气泡样式 */
+    .persona-message-bubble {
+      position: absolute;
+      background: white;
+      border: 2px solid #0A59F7;
+      border-radius: 12px;
+      padding: 10px 12px;
+      min-width: 200px;
+      max-width: 400px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      z-index: 50;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+    }
+    
+    .persona-message-bubble:hover {
+      transform: translate(-50%, -50%) scale(1.05);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+      z-index: 60;
+    }
+    
+    .message-content {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #1A1A1A;
+      word-wrap: break-word;
+    }
+    
+    .message-more {
+      margin-top: 6px;
+      font-size: 10px;
+      color: #0A59F7;
+      font-weight: 600;
+      text-align: right;
+    }
+    
+    .log-output {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 16px;
+    }
+    
+    .log-entry {
+      margin-bottom: 4px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .log-success {
+      color: #34C759;
+    }
+    
+    .log-error {
+      color: #FF3B30;
+    }
+    
+    .log-info {
+      color: #0A59F7;
+    }
+    
+    button {
+      background: linear-gradient(135deg, #0A59F7, #6B48FF);
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      margin-right: 8px;
+      transition: all 0.2s ease;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(10, 89, 247, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>🧪 消息气泡渲染测试</h1>
+    
+    <div class="test-section">
+      <h2>测试1: 基础渲染测试</h2>
+      <p>测试消息气泡是否能正确渲染在Agent节点外侧</p>
+      <button onclick="runTest1()">运行测试1</button>
+      <button onclick="clearTest1()">清除</button>
+      <div id="test1-container" class="persona-container"></div>
+      <div id="test1-log" class="log-output"></div>
+    </div>
+    
+    <div class="test-section">
+      <h2>测试2: z-index层级测试</h2>
+      <p>测试消息气泡的z-index是否高于Agent节点，确保不被遮挡</p>
+      <button onclick="runTest2()">运行测试2</button>
+      <button onclick="clearTest2()">清除</button>
+      <div id="test2-container" class="persona-container"></div>
+      <div id="test2-log" class="log-output"></div>
+    </div>
+    
+    <div class="test-section">
+      <h2>测试3: 动态消息更新测试</h2>
+      <p>模拟WebSocket消息更新，测试消息气泡的动态渲染</p>
+      <button onclick="runTest3()">运行测试3</button>
+      <button onclick="stopTest3()">停止</button>
+      <button onclick="clearTest3()">清除</button>
+      <div id="test3-container" class="persona-container"></div>
+      <div id="test3-log" class="log-output"></div>
+    </div>
+  </div>
+  
+  <script>
+    // 测试数据
+    const testPersonas = [
+      { id: 'rational_analyst', name: '理性分析师', currentMessage: '💭 正在分析数据...' },
+      { id: 'adventurer', name: '冒险家', currentMessage: '🚀 发现新机会！' },
+      { id: 'pragmatist', name: '实用主义者', currentMessage: '⚙️ 评估可行性中' },
+      { id: 'idealist', name: '理想主义者', currentMessage: '✨ 这符合我们的价值观' },
+      { id: 'conservative', name: '保守派', currentMessage: '🛡️ 需要谨慎考虑风险' },
+      { id: 'social_navigator', name: '社交导向者', currentMessage: '🤝 考虑人际影响' },
+      { id: 'innovator', name: '创新者', currentMessage: '💡 有创新的解决方案' },
+    ];
+    
+    let test3Interval = null;
+    
+    function log(containerId, message, type = 'info') {
+      const logContainer = document.getElementById(containerId);
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    function getPersonaPosition(index, total) {
+      const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
+      const radius = 35;
+      const x = 50 + radius * Math.cos(angle);
+      const y = 50 + radius * Math.sin(angle);
+      return { x, y };
+    }
+    
+    function getBubblePosition(index, total) {
+      const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
+      const bubbleRadius = 52;
+      const x = 50 + bubbleRadius * Math.cos(angle);
+      const y = 50 + bubbleRadius * Math.sin(angle);
+      return { x, y };
+    }
+    
+    // 测试1: 基础渲染
+    function runTest1() {
+      const container = document.getElementById('test1-container');
+      container.innerHTML = '';
+      log('test1-log', '开始测试1: 基础渲染', 'info');
+      
+      testPersonas.forEach((persona, index) => {
+        const pos = getPersonaPosition(index, testPersonas.length);
+        const bubblePos = getBubblePosition(index, testPersonas.length);
+        
+        // 创建Agent节点
+        const node = document.createElement('div');
+        node.className = 'persona-node';
+        node.style.left = `${pos.x}%`;
+        node.style.top = `${pos.y}%`;
+        node.innerHTML = `<div class="persona-avatar">${persona.name}</div>`;
+        container.appendChild(node);
+        
+        log('test1-log', `✓ 创建Agent节点: ${persona.name} at (${pos.x.toFixed(1)}%, ${pos.y.toFixed(1)}%)`, 'success');
+        
+        // 创建消息气泡
+        if (persona.currentMessage) {
+          const bubble = document.createElement('div');
+          bubble.className = 'persona-message-bubble';
+          bubble.style.left = `${bubblePos.x}%`;
+          bubble.style.top = `${bubblePos.y}%`;
+          bubble.innerHTML = `
+            <div class="message-content">${persona.currentMessage}</div>
+            <div class="message-more">详细 →</div>
+          `;
+          container.appendChild(bubble);
+          
+          log('test1-log', `✓ 创建消息气泡: ${persona.name} - "${persona.currentMessage}" at (${bubblePos.x.toFixed(1)}%, ${bubblePos.y.toFixed(1)}%)`, 'success');
+        }
+      });
+      
+      log('test1-log', `✅ 测试1完成: 渲染了${testPersonas.length}个Agent和${testPersonas.length}个消息气泡`, 'success');
+    }
+    
+    function clearTest1() {
+      document.getElementById('test1-container').innerHTML = '';
+      document.getElementById('test1-log').innerHTML = '';
+    }
+    
+    // 测试2: z-index层级
+    function runTest2() {
+      const container = document.getElementById('test2-container');
+      container.innerHTML = '';
+      log('test2-log', '开始测试2: z-index层级测试', 'info');
+      
+      // 只测试一个Agent，让气泡和节点重叠
+      const persona = testPersonas[0];
+      const pos = { x: 50, y: 50 }; // 中心位置
+      
+      // 创建Agent节点
+      const node = document.createElement('div');
+      node.className = 'persona-node';
+      node.style.left = `${pos.x}%`;
+      node.style.top = `${pos.y}%`;
+      node.innerHTML = `<div class="persona-avatar">${persona.name}<br><small>z-index: 10</small></div>`;
+      container.appendChild(node);
+      
+      const nodeZIndex = window.getComputedStyle(node).zIndex;
+      log('test2-log', `✓ Agent节点 z-index: ${nodeZIndex}`, 'info');
+      
+      // 创建消息气泡（稍微偏移，但会部分重叠）
+      const bubble = document.createElement('div');
+      bubble.className = 'persona-message-bubble';
+      bubble.style.left = `${pos.x + 10}%`;
+      bubble.style.top = `${pos.y + 10}%`;
+      bubble.innerHTML = `
+        <div class="message-content">${persona.currentMessage}<br><small>z-index: 50</small></div>
+        <div class="message-more">详细 →</div>
+      `;
+      container.appendChild(bubble);
+      
+      const bubbleZIndex = window.getComputedStyle(bubble).zIndex;
+      log('test2-log', `✓ 消息气泡 z-index: ${bubbleZIndex}`, 'info');
+      
+      if (parseInt(bubbleZIndex) > parseInt(nodeZIndex)) {
+        log('test2-log', `✅ 测试通过: 消息气泡(${bubbleZIndex}) > Agent节点(${nodeZIndex})`, 'success');
+      } else {
+        log('test2-log', `❌ 测试失败: 消息气泡(${bubbleZIndex}) <= Agent节点(${nodeZIndex})`, 'error');
+      }
+    }
+    
+    function clearTest2() {
+      document.getElementById('test2-container').innerHTML = '';
+      document.getElementById('test2-log').innerHTML = '';
+    }
+    
+    // 测试3: 动态更新
+    function runTest3() {
+      const container = document.getElementById('test3-container');
+      container.innerHTML = '';
+      log('test3-log', '开始测试3: 动态消息更新', 'info');
+      
+      // 创建所有Agent节点
+      const nodes = testPersonas.map((persona, index) => {
+        const pos = getPersonaPosition(index, testPersonas.length);
+        const node = document.createElement('div');
+        node.className = 'persona-node';
+        node.style.left = `${pos.x}%`;
+        node.style.top = `${pos.y}%`;
+        node.innerHTML = `<div class="persona-avatar">${persona.name}</div>`;
+        container.appendChild(node);
+        return { persona, pos, node };
+      });
+      
+      log('test3-log', `✓ 创建了${nodes.length}个Agent节点`, 'success');
+      
+      // 模拟WebSocket消息更新
+      let messageIndex = 0;
+      const messages = [
+        '💭 内心独白: 这个方案需要深入分析...',
+        '🎯 选择技能: 风险评估, 联网搜索',
+        '🔧 执行技能: 风险评估',
+        '✅ 风险评估完成',
+        '🔧 执行技能: 联网搜索',
+        '✅ 联网搜索完成',
+        '📊 分析结果: 支持 (75分)',
+      ];
+      
+      test3Interval = setInterval(() => {
+        if (messageIndex >= messages.length) {
+          stopTest3();
+          log('test3-log', '✅ 测试3完成: 所有消息已更新', 'success');
+          return;
+        }
+        
+        // 随机选择一个Agent更新消息
+        const randomIndex = Math.floor(Math.random() * nodes.length);
+        const { persona, pos } = nodes[randomIndex];
+        const bubblePos = getBubblePosition(randomIndex, nodes.length);
+        
+        // 移除旧气泡
+        const oldBubbles = container.querySelectorAll('.persona-message-bubble');
+        oldBubbles.forEach(b => {
+          if (b.dataset.personaId === persona.id) {
+            b.remove();
+          }
+        });
+        
+        // 创建新气泡
+        const bubble = document.createElement('div');
+        bubble.className = 'persona-message-bubble';
+        bubble.dataset.personaId = persona.id;
+        bubble.style.left = `${bubblePos.x}%`;
+        bubble.style.top = `${bubblePos.y}%`;
+        bubble.innerHTML = `
+          <div class="message-content">${messages[messageIndex]}</div>
+          <div class="message-more">详细 →</div>
+        `;
+        container.appendChild(bubble);
+        
+        log('test3-log', `✓ 更新消息: ${persona.name} - "${messages[messageIndex]}"`, 'success');
+        
+        messageIndex++;
+      }, 1500);
+    }
+    
+    function stopTest3() {
+      if (test3Interval) {
+        clearInterval(test3Interval);
+        test3Interval = null;
+        log('test3-log', '⏸ 测试已停止', 'info');
+      }
+    }
+    
+    function clearTest3() {
+      stopTest3();
+      document.getElementById('test3-container').innerHTML = '';
+      document.getElementById('test3-log').innerHTML = '';
+    }
+  </script>
+</body>
+</html>
