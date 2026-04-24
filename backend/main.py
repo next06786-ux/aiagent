@@ -4019,11 +4019,7 @@ async def agent_chat(request_data: Dict[str, Any]):
         )
         
         # 异步初始化Agent（发现MCP工具）
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(agent.initialize())
-        loop.close()
+        await agent.initialize()
         
         # 处理消息（LangChain ReAct模式）
         result = agent.process(user_message)
