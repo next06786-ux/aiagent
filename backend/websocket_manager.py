@@ -17,14 +17,14 @@ class ConnectionManager:
         self.active_connections: Dict[str, Dict[str, WebSocket]] = {}
         
     async def connect(self, websocket: WebSocket, user_id: str, session_id: str):
-        """接受新连接"""
-        await websocket.accept()
+        """注册连接（不调用accept，由调用方负责）"""
+        # 不再调用 websocket.accept()，因为调用方已经accept了
         
         if user_id not in self.active_connections:
             self.active_connections[user_id] = {}
         
         self.active_connections[user_id][session_id] = websocket
-        print(f"✅ [WebSocket] 用户 {user_id} 连接成功 (session: {session_id})")
+        print(f"✅ [WebSocket] 用户 {user_id} 连接已注册 (session: {session_id})")
         
     def disconnect(self, user_id: str, session_id: str):
         """断开连接"""
