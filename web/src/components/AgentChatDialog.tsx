@@ -76,6 +76,18 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
     inputRef.current?.focus();
   }, []);
 
+  // 自动调整输入框高度
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    
+    // 重置高度以获取正确的scrollHeight
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      // 设置新高度，但不超过max-height
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`;
+    }
+  };
+
   // 在组件挂载时建立WebSocket连接
   useEffect(() => {
     const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/agent-chat';
@@ -425,6 +437,12 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    
+    // 重置输入框高度
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
+    
     setIsLoading(true);
     setCurrentToolCalls([]);
     setCurrentRetrieval(null);
@@ -744,7 +762,7 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
             className="agent-chat-input"
             placeholder={`向${agentName}提问...`}
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             rows={1}
             disabled={isLoading}
