@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket 工具调用时序测试</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .controls h2 {
+      margin-top: 0;
+      font-size: 16px;
+      color: #666;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 6px;
+      background: #4a90e2;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #357abd;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .chat-container {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      min-height: 400px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .agent-chat-message {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      animation: messageSlideIn 0.3s ease-out;
+    }
+
+    @keyframes messageSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .message-content {
+      flex: 1;
+      background: #f8f9fa;
+      padding: 12px 16px;
+      border-radius: 12px;
+    }
+
+    /* 工具调用样式 */
+    .message-tool-calls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 3px solid #4a90e2;
+    }
+
+    .tool-call-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: white;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .tool-call-item.running {
+      border-left: 3px solid #4a90e2;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(74, 144, 226, 0);
+      }
+    }
+
+    .tool-call-item.completed {
+      border-left: 3px solid #52c41a;
+    }
+
+    .tool-call-icon {
+      font-size: 20px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+
+    .tool-call-item.running .tool-call-icon {
+      animation: rotate 2s linear infinite;
+    }
+
+    @keyframes rotate {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tool-call-info {
+      flex: 1;
+    }
+
+    .tool-call-name {
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .tool-call-server {
+      font-size: 12px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .tool-call-status {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .tool-status-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #e0e0e0;
+      border-top-color: #4a90e2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tool-call-status svg {
+      width: 16px;
+      height: 16px;
+      color: #52c41a;
+    }
+
+    .logs {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+
+    .log-entry {
+      margin: 4px 0;
+      padding: 2px 0;
+    }
+
+    .log-time {
+      color: #858585;
+    }
+
+    .log-event {
+      color: #4ec9b0;
+      font-weight: bold;
+    }
+
+    .log-data {
+      color: #ce9178;
+    }
+
+    .status-bar {
+      background: white;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+
+    .status-indicator.active {
+      background: #52c41a;
+      animation: blink 1s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+  <h1>🔧 WebSocket 工具调用时序测试</h1>
+  <p class="subtitle">模拟真实的 WebSocket 消息流程，测试工具调用动画显示</p>
+
+  <div class="controls">
+    <h2>测试场景</h2>
+    <button onclick="testQuickCall()">快速调用（1秒）</button>
+    <button onclick="testNormalCall()">正常调用（3秒）</button>
+    <button onclick="testSlowCall()">慢速调用（5秒）</button>
+    <button onclick="testMultipleTools()">多工具调用</button>
+    <button onclick="clearAll()">清空</button>
+  </div>
+
+  <div class="chat-container" id="chatContainer">
+    <p style="color: #999; text-align: center; padding: 40px 0;">点击上方按钮开始测试</p>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-item">
+      <div class="status-indicator" id="statusIndicator"></div>
+      <span id="statusText">就绪</span>
+    </div>
+    <div class="status-item">
+      <span id="timerText">耗时: 0ms</span>
+    </div>
+  </div>
+
+  <div class="logs" id="logs"></div>
+
+  <script>
+    let startTime = 0;
+    let timerInterval = null;
+
+    function log(event, data = '') {
+      const logs = document.getElementById('logs');
+      const time = new Date().toLocaleTimeString('zh-CN', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        fractionalSecondDigits: 3
+      });
+      
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-event">${event}</span> <span class="log-data">${data}</span>`;
+      logs.appendChild(entry);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function setStatus(text, active = false) {
+      document.getElementById('statusText').textContent = text;
+      const indicator = document.getElementById('statusIndicator');
+      if (active) {
+        indicator.classList.add('active');
+      } else {
+        indicator.classList.remove('active');
+      }
+    }
+
+    function startTimer() {
+      startTime = Date.now();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        document.getElementById('timerText').textContent = `耗时: ${elapsed}ms`;
+      }, 10);
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      const elapsed = Date.now() - startTime;
+      document.getElementById('timerText').textContent = `耗时: ${elapsed}ms`;
+    }
+
+    function simulateToolCall(toolName, toolIcon, serverName, duration) {
+      const container = document.getElementById('chatContainer');
+      
+      // 清空容器
+      container.innerHTML = '';
+      
+      log('开始模拟', `工具: ${toolName}, 持续时间: ${duration}ms`);
+      setStatus('工具调用中...', true);
+      startTimer();
+
+      // 1. tool_start - 创建消息容器
+      log('tool_start', toolName);
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'agent-chat-message assistant';
+      messageDiv.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-tool-calls" id="toolCallsContainer">
+            <div class="tool-call-item running" id="toolCallItem">
+              <div class="tool-call-icon">${toolIcon}</div>
+              <div class="tool-call-info">
+                <div class="tool-call-name">${toolName}</div>
+                <div class="tool-call-server">${serverName}</div>
+              </div>
+              <div class="tool-call-status">
+                <div class="tool-status-spinner"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      container.appendChild(messageDiv);
+
+      // 2. tool_complete - 更新状态
+      setTimeout(() => {
+        log('tool_complete', toolName);
+        const toolItem = document.getElementById('toolCallItem');
+        toolItem.className = 'tool-call-item completed';
+        toolItem.querySelector('.tool-call-status').innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        `;
+      }, duration);
+
+      // 3. response - 显示最终结果
+      setTimeout(() => {
+        log('response', '收到最终响应');
+        setStatus('完成', false);
+        stopTimer();
+        
+        // 延迟500ms后移除工具调用显示
+        setTimeout(() => {
+          const toolCallsContainer = document.getElementById('toolCallsContainer');
+          if (toolCallsContainer) {
+            toolCallsContainer.style.opacity = '0';
+            toolCallsContainer.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => {
+              messageDiv.querySelector('.message-content').innerHTML = `
+                <p style="margin: 0;">2023年的数学界"诺贝尔奖"——阿贝尔奖授予了美国得克萨斯大学奥斯汀分校的路易斯·卡法雷利教授。</p>
+              `;
+            }, 300);
+          }
+        }, 500);
+      }, duration + 100);
+    }
+
+    function testQuickCall() {
+      log('=== 测试场景: 快速调用 ===');
+      simulateToolCall('智能联网搜索', '🔍', 'Web Search Server', 1000);
+    }
+
+    function testNormalCall() {
+      log('=== 测试场景: 正常调用（模拟真实情况）===');
+      simulateToolCall('智能联网搜索', '🔍', 'Web Search Server', 3000);
+    }
+
+    function testSlowCall() {
+      log('=== 测试场景: 慢速调用 ===');
+      simulateToolCall('智能联网搜索', '🔍', 'Web Search Server', 5000);
+    }
+
+    function testMultipleTools() {
+      log('=== 测试场景: 多工具调用 ===');
+      const container = document.getElementById('chatContainer');
+      container.innerHTML = '';
+      
+      setStatus('多工具调用中...', true);
+      startTimer();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'agent-chat-message assistant';
+      messageDiv.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-tool-calls" id="toolCallsContainer"></div>
+        </div>
+      `;
+      container.appendChild(messageDiv);
+
+      const tools = [
+        { name: '智能联网搜索', icon: '🔍', server: 'Web Search Server', delay: 0, duration: 2000 },
+        { name: '分析沟通模式', icon: '💬', server: 'Relationship Analysis Server', delay: 500, duration: 1500 },
+        { name: '评估关系健康度', icon: '❤️', server: 'Relationship Analysis Server', delay: 1000, duration: 2500 }
+      ];
+
+      const toolCallsContainer = document.getElementById('toolCallsContainer');
+
+      tools.forEach((tool, index) => {
+        setTimeout(() => {
+          log('tool_start', tool.name);
+          const toolItem = document.createElement('div');
+          toolItem.className = 'tool-call-item running';
+          toolItem.id = `tool-${index}`;
+          toolItem.innerHTML = `
+            <div class="tool-call-icon">${tool.icon}</div>
+            <div class="tool-call-info">
+              <div class="tool-call-name">${tool.name}</div>
+              <div class="tool-call-server">${tool.server}</div>
+            </div>
+            <div class="tool-call-status">
+              <div class="tool-status-spinner"></div>
+            </div>
+          `;
+          toolCallsContainer.appendChild(toolItem);
+
+          // 完成
+          setTimeout(() => {
+            log('tool_complete', tool.name);
+            toolItem.className = 'tool-call-item completed';
+            toolItem.querySelector('.tool-call-status').innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            `;
+          }, tool.duration);
+        }, tool.delay);
+      });
+
+      // 所有工具完成后
+      setTimeout(() => {
+        log('response', '所有工具调用完成');
+        setStatus('完成', false);
+        stopTimer();
+      }, Math.max(...tools.map(t => t.delay + t.duration)) + 100);
+    }
+
+    function clearAll() {
+      document.getElementById('chatContainer').innerHTML = '<p style="color: #999; text-align: center; padding: 40px 0;">点击上方按钮开始测试</p>';
+      document.getElementById('logs').innerHTML = '';
+      setStatus('就绪', false);
+      document.getElementById('timerText').textContent = '耗时: 0ms';
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      log('清空完成');
+    }
+
+    // 初始化
+    log('测试页面已加载');
+    log('提示', '点击上方按钮测试不同场景的工具调用动画');
+  </script>
+</body>
+</html>

@@ -52,6 +52,13 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
   }>>([]);
   const [, forceUpdate] = useState({});  // 用于强制重新渲染
 
+  // 监听工具调用状态变化
+  useEffect(() => {
+    console.log('[useEffect] currentToolCalls 变化:', currentToolCalls);
+    console.log('[useEffect] isLoading:', isLoading);
+    console.log('[useEffect] 应该显示动画:', isLoading && currentToolCalls.length > 0);
+  }, [currentToolCalls, isLoading]);
+
   // 自动滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -122,32 +129,37 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
           case 'tool_start':
             console.log('[WebSocket] 工具开始:', data.tool_name);
+            console.log('[WebSocket] tool_start - isLoading:', isLoading);
+            // 确保 isLoading 为 true
+            setIsLoading(true);
             // 使用函数式更新，不依赖闭包中的currentToolCalls
             setCurrentToolCalls(prev => {
               console.log('[WebSocket] tool_start - 当前状态:', prev);
               const newCalls = [...prev, {
                 tool_name: data.tool_name,
                 server_name: data.server_name,
-                status: 'running' as const
+                status: 'running' as const,
+                timestamp: new Date().toISOString()
               }];
               console.log('[WebSocket] tool_start - 更新后:', newCalls);
+              console.log('[WebSocket] tool_start - 将触发重新渲染');
               return newCalls;
             });
-            // 强制重新渲染
-            forceUpdate({});
             break;
 
           case 'tool_complete':
             console.log('[WebSocket] 工具完成:', data.tool_name);
+            console.log('[WebSocket] tool_complete - isLoading:', isLoading);
             // 使用函数式更新
             setCurrentToolCalls(prev => {
               console.log('[WebSocket] tool_complete - 当前状态:', prev);
               const updated = prev.map(tool => 
                 tool.tool_name === data.tool_name && tool.status === 'running'
-                  ? { ...tool, status: 'completed' as const, result: data.result }
+                  ? { ...tool, status: 'completed' as const, result: data.result, completedAt: new Date().toISOString() }
                   : tool
               );
               console.log('[WebSocket] tool_complete - 更新后:', updated);
+              console.log('[WebSocket] tool_complete - 将触发重新渲染');
               return updated;
             });
             // 强制重新渲染
@@ -439,12 +451,17 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
           ))}
           
           {/* 实时工具调用动画（加载中） */}
-          {isLoading && currentToolCalls.length > 0 && (
+          {(() => {
+            console.log('[Render] isLoading:', isLoading, 'currentToolCalls:', currentToolCalls);
+            return isLoading && currentToolCalls.length > 0;
+          })() && (
             <div className="agent-chat-message assistant">
               <div className="message-avatar">{getAgentIcon(agentType)}</div>
               <div className="message-content">
                 <div className="message-tool-calls">
-                  {currentToolCalls.map((tool, toolIdx) => (
+                  {currentToolCalls.map((tool, toolIdx) => {
+                    console.log('[Render] 渲染工具:', tool);
+                    return (
                     <div key={toolIdx} className={`tool-call-item ${tool.status}`}>
                       <div className="tool-call-icon">
                         {getToolIcon(tool.tool_name)}
@@ -473,7 +490,7 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
                         )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
             </div>
