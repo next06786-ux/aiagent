@@ -65,7 +65,12 @@ export function DecisionReportModal({
               <ul className="insights-list">
                 {report.key_insights.map((insight, index) => (
                   <li key={index} className="insight-item">
-                    <span className="insight-icon">💡</span>
+                    <span className="insight-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                        <circle cx="12" cy="12" r="5"/>
+                      </svg>
+                    </span>
                     <span className="insight-text">{insight}</span>
                   </li>
                 ))}
@@ -80,7 +85,11 @@ export function DecisionReportModal({
               <ul className="strengths-list">
                 {report.strengths.map((strength, index) => (
                   <li key={index} className="strength-item">
-                    <span className="strength-icon">✓</span>
+                    <span className="strength-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </span>
                     <span className="strength-text">{strength}</span>
                   </li>
                 ))}
@@ -95,7 +104,13 @@ export function DecisionReportModal({
               <ul className="risks-list">
                 {report.risks.map((risk, index) => (
                   <li key={index} className="risk-item">
-                    <span className="risk-icon">⚠</span>
+                    <span className="risk-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                    </span>
                     <span className="risk-text">{risk}</span>
                   </li>
                 ))}

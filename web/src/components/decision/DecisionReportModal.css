@@ -225,7 +225,18 @@
   align-items: center;
   justify-content: center;
   margin-right: 12px;
-  font-size: 16px;
+}
+
+.insight-icon svg {
+  color: #3b82f6;
+}
+
+.strength-icon svg {
+  color: #10b981;
+}
+
+.risk-icon svg {
+  color: #ef4444;
 }
 
 .insight-text,
