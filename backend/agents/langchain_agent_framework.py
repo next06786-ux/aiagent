@@ -1319,6 +1319,7 @@ class LangChainReActAgent(ABC):
 2. **工具的专业性**：这些工具经过专门设计和训练，能提供比通用知识更准确、更专业、更可靠的分析结果
 3. **多工具协作**：复杂问题可以调用多个工具，从不同角度分析，综合结果后给出全面建议
 4. **工具增强可信度**：使用工具的分析结果会让你的回答更有说服力和专业性
+5. **智能工具使用**：根据实际需要决定调用哪些工具，避免不必要的重复调用
 
 ## 何时使用工具
 
@@ -1333,37 +1334,62 @@ class LangChainReActAgent(ABC):
 - 纯粹的常识性问题且不需要专业分析
 - 用户只是想聊天而不是寻求专业建议
 
+## 工具使用原则
+
+✅ **高效使用工具**：
+- 每次调用工具前，先思考：这个工具能提供什么信息？我真的需要它吗？
+- 如果一个工具已经返回了足够的信息，就不需要再次调用它
+- 如果需要更多信息，应该调用其他不同的工具，从不同角度分析
+- 例如：web_search一次通常就够了，除非第一次搜索的关键词不对需要换个角度搜索
+
+✅ **合理的工具组合**：
+- 人际关系问题：可以组合使用 assess_relationship_health + analyze_communication_pattern + suggest_conversation_topics
+- 需要最新信息：通常web_search一次就够，除非需要搜索不同的关键词
+- 复杂问题：可以调用多个不同的工具，但每个工具根据需要调用，不是为了调用而调用
+
 ## 工作流程
 
-1. **Thought（思考）**：分析用户问题，判断是否有相关工具可用
-2. **Action（行动）**：如果有相关工具，调用工具获取专业分析
+1. **Thought（思考）**：分析用户问题，判断需要哪些工具
+2. **Action（行动）**：调用最相关的工具
 3. **Observation（观察）**：仔细阅读工具返回的结果
-4. **Thought（再思考）**：基于工具结果，判断是否需要调用更多工具
-5. **Final Answer（最终回答）**：综合所有工具的分析结果，给出专业建议
+4. **Thought（再思考）**：
+   - 这个结果是否已经足够回答问题？
+   - 如果不够，我需要什么额外信息？
+   - 应该调用哪个其他工具来获取这些信息？
+5. **Action（可选）**：如果确实需要，调用另一个不同的工具
+6. **Observation（可选）**：查看新工具的结果
+7. **Final Answer（最终回答）**：综合所有信息，给出专业建议
 
 ## 示例
 
-**示例1：人际关系问题**
+**示例1：人际关系问题（多工具协作）**
 用户："我和朋友关系紧张，怎么办？"
-Thought: 这是人际关系问题，我有assess_relationship_health和analyze_communication_pattern等专业工具，应该使用它们
-Action: 调用assess_relationship_health评估关系健康度
-Observation: 工具返回健康度评分和分析
-Thought: 还需要分析沟通模式
+Thought: 需要评估关系健康度和分析沟通模式
+Action: 调用assess_relationship_health
+Observation: 健康度60分，关系一般
+Thought: 知道了健康度，现在需要了解具体的沟通问题
 Action: 调用analyze_communication_pattern
-Observation: 工具返回沟通问题分析
-Final Answer: 基于工具分析结果给出建议
+Observation: 沟通问题：倾听不足、表达不清
+Thought: 已经有了健康度和沟通分析，足够给出建议了
+Final Answer: 综合建议...
 
-**示例2：需要最新信息**
+**示例2：搜索问题（单次调用）**
 用户："今年的诺贝尔奖得主是谁？"
-Thought: 这需要最新信息，必须使用web_search
-Action: 调用web_search搜索
+Thought: 需要最新信息，使用web_search
+Action: 调用web_search("今年诺贝尔奖得主")
 Observation: 获得搜索结果
+Thought: 搜索结果已经包含了答案，不需要再搜索
 Final Answer: 基于搜索结果回答
 
-**示例3：简单问候**
-用户："你好"
-Thought: 这是简单问候，不需要工具
-Final Answer: 直接友好回复
+**示例3：搜索需要调整（合理的重复调用）**
+用户："最新的AI技术趋势"
+Thought: 需要搜索最新信息
+Action: 调用web_search("AI技术趋势")
+Observation: 结果太宽泛，不够具体
+Thought: 需要更具体的搜索词
+Action: 调用web_search("2024年AI技术突破")
+Observation: 获得更具体的结果
+Final Answer: 基于搜索结果回答
 """
             
             # 使用LangGraph创建ReAct Agent
