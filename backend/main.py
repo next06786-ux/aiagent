@@ -1674,6 +1674,9 @@ async def websocket_agent_chat(websocket: WebSocket):
                         "timestamp": datetime.now().isoformat()
                     })
                     
+                    # 添加小延迟，确保前端有时间接收并渲染tool_start消息
+                    await asyncio.sleep(0.1)
+                    
                     try:
                         # 调用原始方法
                         result = await original_client_call_tool(server, tool_name, parameters, user_id, approved)
