@@ -1636,18 +1636,15 @@ async def websocket_agent_chat(websocket: WebSocket):
             
             # 设置WebSocket回调（在工具调用时推送状态）
             if hasattr(agent, 'mcp_host') and agent.mcp_host:
-                # 保存原始的call_tool方法
-                original_call_tool = agent.mcp_host.call_tool
+                # 保存原始的MCPClient.call_tool方法
+                original_client_call_tool = agent.mcp_host.client.call_tool
                 
-                # 包装call_tool方法，添加WebSocket推送
-                async def wrapped_call_tool(tool_name: str, parameters: dict):
+                # 包装MCPClient.call_tool方法，添加WebSocket推送
+                async def wrapped_client_call_tool(server, tool_name: str, parameters: dict, user_id: str, approved: bool = True):
                     # 获取server_name
-                    tool = agent.mcp_host.discovered_tools.get(tool_name)
-                    server_name = "Unknown"
-                    if tool:
-                        server = agent.mcp_host.servers.get(tool.server_id)
-                        if server:
-                            server_name = server.name
+                    server_name = server.name if server else "Unknown"
+                    
+                    print(f"[WebSocket] 工具调用开始: {tool_name}")
                     
                     # 发送工具开始消息
                     await ws_manager.send_message(user_id, session_id, {
@@ -1659,7 +1656,9 @@ async def websocket_agent_chat(websocket: WebSocket):
                     
                     try:
                         # 调用原始方法
-                        result = await original_call_tool(tool_name, parameters)
+                        result = await original_client_call_tool(server, tool_name, parameters, user_id, approved)
+                        
+                        print(f"[WebSocket] 工具调用完成: {tool_name}")
                         
                         # 发送工具完成消息
                         await ws_manager.send_message(user_id, session_id, {
@@ -1672,6 +1671,8 @@ async def websocket_agent_chat(websocket: WebSocket):
                         
                         return result
                     except Exception as e:
+                        print(f"[WebSocket] 工具调用失败: {tool_name}, 错误: {e}")
+                        
                         # 发送工具失败消息
                         await ws_manager.send_message(user_id, session_id, {
                             "type": MessageType.TOOL_FAILED,
@@ -1682,8 +1683,9 @@ async def websocket_agent_chat(websocket: WebSocket):
                         })
                         raise
                 
-                # 替换call_tool方法
-                agent.mcp_host.call_tool = wrapped_call_tool
+                # 替换MCPClient.call_tool方法
+                agent.mcp_host.client.call_tool = wrapped_client_call_tool
+                print(f"[WebSocket] 已设置工具调用回调")
             
             # 执行Agent处理
             result = agent.process(message)
