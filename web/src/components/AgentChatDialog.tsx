@@ -121,41 +121,41 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
           case 'tool_start':
             console.log('[WebSocket] 工具开始:', data.tool_name);
-            console.log('[WebSocket] 当前currentToolCalls:', currentToolCalls);
-            // 添加running状态的工具调用
+            // 使用函数式更新，不依赖闭包中的currentToolCalls
             setCurrentToolCalls(prev => {
+              console.log('[WebSocket] tool_start - 当前状态:', prev);
               const newCalls = [...prev, {
                 tool_name: data.tool_name,
                 server_name: data.server_name,
                 status: 'running'
               }];
-              console.log('[WebSocket] 更新后currentToolCalls:', newCalls);
+              console.log('[WebSocket] tool_start - 更新后:', newCalls);
               return newCalls;
             });
             break;
 
           case 'tool_complete':
             console.log('[WebSocket] 工具完成:', data.tool_name);
-            console.log('[WebSocket] 当前currentToolCalls:', currentToolCalls);
-            // 更新工具状态为completed
+            // 使用函数式更新
             setCurrentToolCalls(prev => {
+              console.log('[WebSocket] tool_complete - 当前状态:', prev);
               const updated = prev.map(tool => 
                 tool.tool_name === data.tool_name && tool.status === 'running'
-                  ? { ...tool, status: 'completed', result: data.result }
+                  ? { ...tool, status: 'completed' as const, result: data.result }
                   : tool
               );
-              console.log('[WebSocket] 更新后currentToolCalls:', updated);
+              console.log('[WebSocket] tool_complete - 更新后:', updated);
               return updated;
             });
             break;
 
           case 'tool_failed':
             console.log('[WebSocket] 工具失败:', data.tool_name, data.error);
-            // 更新工具状态为failed
+            // 使用函数式更新
             setCurrentToolCalls(prev => 
               prev.map(tool => 
                 tool.tool_name === data.tool_name && tool.status === 'running'
-                  ? { ...tool, status: 'failed', result: data.error }
+                  ? { ...tool, status: 'failed' as const, result: data.error }
                   : tool
               )
             );
@@ -163,37 +163,43 @@ export function AgentChatDialog({ agentType, agentName, agentColor, token, onClo
 
           case 'response':
             console.log('[WebSocket] 收到响应');
-            console.log('[WebSocket] 当前currentToolCalls:', currentToolCalls);
-            console.log('[WebSocket] isLoading:', isLoading);
-            // 创建助手消息
-            const assistantMessage: Message = {
-              role: 'assistant',
-              content: data.content,
-              timestamp: new Date(),
-              retrievalStats: data.metadata?.retrieval_stats,
-              toolCalls: data.metadata?.tool_calls || currentToolCalls
-            };
-            
-            console.log('[WebSocket] 创建的消息:', assistantMessage);
-            
-            setMessages(prev => [...prev, assistantMessage]);
-            setCurrentToolCalls([]); // 清空工具调用
-            setIsLoading(false);
-            
-            // 保存conversation_id
-            if (data.metadata?.conversation_id && !conversationId) {
-              setConversationId(data.metadata.conversation_id);
-            }
-            
-            // 如果还没有标题，使用第一条用户消息作为标题
-            if (!conversationTitle) {
-              const title = userMessage.content.slice(0, 50) + (userMessage.content.length > 50 ? '...' : '');
-              setConversationTitle(title);
-            }
-            
-            // 关闭WebSocket
-            ws.close();
-            wsRef.current = null;
+            // 使用函数式更新获取最新的currentToolCalls
+            setCurrentToolCalls(prevToolCalls => {
+              console.log('[WebSocket] response - 当前工具调用:', prevToolCalls);
+              console.log('[WebSocket] response - isLoading:', isLoading);
+              
+              // 创建助手消息
+              const assistantMessage: Message = {
+                role: 'assistant',
+                content: data.content,
+                timestamp: new Date(),
+                retrievalStats: data.metadata?.retrieval_stats,
+                toolCalls: data.metadata?.tool_calls || prevToolCalls
+              };
+              
+              console.log('[WebSocket] 创建的消息:', assistantMessage);
+              
+              setMessages(prev => [...prev, assistantMessage]);
+              setIsLoading(false);
+              
+              // 保存conversation_id
+              if (data.metadata?.conversation_id && !conversationId) {
+                setConversationId(data.metadata.conversation_id);
+              }
+              
+              // 如果还没有标题，使用第一条用户消息作为标题
+              if (!conversationTitle && userMessage) {
+                const title = userMessage.content.slice(0, 50) + (userMessage.content.length > 50 ? '...' : '');
+                setConversationTitle(title);
+              }
+              
+              // 关闭WebSocket
+              ws.close();
+              wsRef.current = null;
+              
+              // 返回空数组清空工具调用
+              return [];
+            });
             break;
 
           case 'error':
