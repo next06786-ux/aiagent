@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { API_BASE_URL } from '../services/api';
+import { AICoreModal } from '../components/ai/AICoreModal';
+import { GlobalAIFloatingButton } from '../components/ai/GlobalAIFloatingButton';
 import '../styles/AdminPage.css';
 
 interface PentagramNode {
@@ -43,6 +45,7 @@ export function AdminPage() {
   const { user } = useAuth();
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAICoreOpen, setIsAICoreOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -507,7 +510,12 @@ export function AdminPage() {
               </button>
             ))}
 
-            <div className="pentagram-core admin-core">
+            <button
+              className="pentagram-core admin-core"
+              onClick={() => setIsAICoreOpen(true)}
+              type="button"
+              aria-label="打开 AI 核心"
+            >
               <span className="pentagram-core-halo" />
               <span className="pentagram-core-ring pentagram-core-ring-outer" />
               <span className="pentagram-core-ring pentagram-core-ring-inner" />
@@ -521,10 +529,18 @@ export function AdminPage() {
                 <strong>管理核心</strong>
                 <span>监控 / 管理 / 配置</span>
               </span>
-            </div>
+            </button>
           </div>
         </div>
       </section>
+
+      {/* AI Core Modal */}
+      {isAICoreOpen && (
+        <AICoreModal onClose={() => setIsAICoreOpen(false)} />
+      )}
+
+      {/* Global AI Floating Button */}
+      <GlobalAIFloatingButton />
     </div>
   );
 }
