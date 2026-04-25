@@ -113,8 +113,8 @@ export function AdminStatsPage() {
     if (total === 0) return;
 
     const colors = [
-      '#2c2c2c', '#3a3a3a', '#4a4a4a', '#5a5a5a', 
-      '#6a6a6a', '#7a7a7a', '#8a8a8a', '#9a9a9a'
+      '#0A59F7', '#6B48FF', '#3b82f6', '#8B5CF6', 
+      '#60a5fa', '#a78bfa', '#93c5fd', '#c4b5fd'
     ];
 
     let currentAngle = -Math.PI / 2;
@@ -174,10 +174,10 @@ export function AdminStatsPage() {
 
     // 数据
     const data = [
-      { label: '总用户', value: stats.users.total, color: '#2c2c2c' },
-      { label: '活跃', value: stats.users.active, color: '#4a4a4a' },
-      { label: '24h活跃', value: stats.users.active_24h, color: '#6a6a6a' },
-      { label: '7天新增', value: stats.users.new_7d, color: '#8a8a8a' },
+      { label: '总用户', value: stats.users.total, color: '#0A59F7' },
+      { label: '活跃', value: stats.users.active, color: '#6B48FF' },
+      { label: '24h活跃', value: stats.users.active_24h, color: '#3b82f6' },
+      { label: '7天新增', value: stats.users.new_7d, color: '#8B5CF6' },
     ];
 
     const maxValue = Math.max(...data.map(d => d.value));
@@ -271,8 +271,8 @@ export function AdminStatsPage() {
                     .sort(([, a], [, b]) => b - a)
                     .map(([category, count], index) => {
                       const colors = [
-                        '#2c2c2c', '#3a3a3a', '#4a4a4a', '#5a5a5a', 
-                        '#6a6a6a', '#7a7a7a', '#8a8a8a', '#9a9a9a'
+                        '#0A59F7', '#6B48FF', '#3b82f6', '#8B5CF6', 
+                        '#60a5fa', '#a78bfa', '#93c5fd', '#c4b5fd'
                       ];
                       return (
                         <div key={category} className="admin-viz-legend-item">
