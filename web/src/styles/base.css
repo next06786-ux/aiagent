@@ -683,9 +683,9 @@ pre {
   overflow: hidden;
   padding: 42px;
   background:
-    radial-gradient(circle at top left, rgba(10, 89, 247, 0.18), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(107, 72, 255, 0.18), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.46));
+    radial-gradient(circle at top left, rgba(10, 89, 247, 0.06), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(107, 72, 255, 0.06), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.75));
 }
 
 .hero-badge,
@@ -702,7 +702,8 @@ pre {
 .hero-badge,
 .status-primary {
   color: var(--primary);
-  background: rgba(10, 89, 247, 0.12);
+  background: rgba(10, 89, 247, 0.06);
+  border: 1px solid rgba(10, 89, 247, 0.12);
 }
 
 .status-success {
@@ -750,7 +751,8 @@ pre {
   gap: 10px;
   padding: 6px;
   border-radius: 999px;
-  background: rgba(10, 89, 247, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .switch-chip {
@@ -759,35 +761,51 @@ pre {
   border-radius: 999px;
   cursor: pointer;
   background: transparent;
+  color: rgba(0, 0, 0, 0.7);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.switch-chip:hover {
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .switch-chip.is-active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: var(--primary);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(10, 89, 247, 0.2);
+  box-shadow: 0 2px 8px rgba(10, 89, 247, 0.1);
 }
 
 .quick-login-chip {
   color: var(--primary);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(10, 89, 247, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(10, 89, 247, 0.15);
+  font-weight: 600;
+}
+
+.quick-login-chip:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(10, 89, 247, 0.25);
 }
 
 .admin-login-chip {
   color: #6B48FF;
-  background: rgba(107, 72, 255, 0.08);
+  background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(107, 72, 255, 0.15);
   font-weight: 600;
 }
 
 .admin-login-chip:hover {
-  background: rgba(107, 72, 255, 0.12);
+  background: rgba(255, 255, 255, 0.95);
   border-color: rgba(107, 72, 255, 0.25);
 }
 
 .admin-login-chip.is-active {
-  color: #fff;
-  background: linear-gradient(135deg, #6B48FF, #8B5CF6);
-  border-color: transparent;
+  color: #6B48FF;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(107, 72, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(107, 72, 255, 0.15);
 }
 
 .auth-admin-tip {
@@ -795,8 +813,8 @@ pre {
   padding: 10px 12px;
   border-radius: 14px;
   color: rgba(107, 72, 255, 0.9);
-  background: rgba(107, 72, 255, 0.08);
-  border: 1px solid rgba(107, 72, 255, 0.15);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(107, 72, 255, 0.2);
 }
 
 .auth-quick-tip {
@@ -804,7 +822,8 @@ pre {
   padding: 10px 12px;
   border-radius: 14px;
   color: var(--text-secondary);
-  background: rgba(10, 89, 247, 0.06);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(10, 89, 247, 0.15);
 }
 
 .hero-card {
