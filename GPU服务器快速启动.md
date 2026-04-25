@@ -4,12 +4,12 @@
 
 ### 1. 安装依赖
 ```bash
-pip install fastapi uvicorn torch transformers accelerate
+pip install fastapi uvicorn torch transformers accelerate python-dotenv pydantic
 ```
 
 ### 2. 启动模型服务
 ```bash
-cd /root/your-project-path
+cd /root/autodl-tmp/aiagent
 export LOCAL_QUANTIZED_MODEL_PATH=/root/autodl-tmp/quarot_qwen3-8b_w4a16kv16_s50.pt
 python -m backend.llm.remote_model_server --host 0.0.0.0 --port 8001 --model-path /root/autodl-tmp/quarot_qwen3-8b_w4a16kv16_s50.pt
 ```

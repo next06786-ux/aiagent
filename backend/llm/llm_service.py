@@ -151,12 +151,20 @@ class LLMService:
                 self.enabled = False
         
         elif self.provider == LLMProvider.LOCAL_QUANTIZED:
+            # 优先使用远程GPU服务器
             try:
-                from backend.llm.local_quantized_model import get_local_model_service
-                self.local_model_service = get_local_model_service()
+                from backend.llm.remote_model_client import get_remote_model_client
+                self.remote_client = get_remote_model_client()
                 self.model = "Qwen3-8B-4bit"
-                self.enabled = True
-                logger.info("✅ 本地量化模型服务已就绪")
+                self.enabled = self.remote_client.is_available
+                if self.enabled:
+                    logger.info(f"✅ 本地量化模型服务已就绪（远程GPU）: {self.remote_client.base_url}")
+                else:
+                    logger.warning(f"⚠️ 远程GPU服务器不可用，尝试本地加载")
+                    # 降级到真正的本地模型
+                    from backend.llm.local_quantized_model import get_local_model_service
+                    self.local_model_service = get_local_model_service()
+                    self.enabled = self.local_model_service is not None
             except Exception as e:
                 logger.error(f"⚠️ 本地量化模型初始化失败: {e}")
                 self.enabled = False
@@ -556,12 +564,18 @@ class LLMService:
             return f"本地模型推理失败: {str(e)}"
     
     def _chat_local_quantized(self, messages: List[Dict[str, str]], temperature: float) -> str:
-        """本地量化模型对话"""
-        if not self.local_model_service:
-            raise RuntimeError("本地量化模型服务不可用")
+        """本地量化模型对话（优先使用远程GPU）"""
+        # 优先使用远程GPU服务器
+        if hasattr(self, 'remote_client') and self.remote_client and self.remote_client.is_available:
+            logger.info("[LLM] 使用远程GPU量化模型")
+            return self.remote_client.chat(messages, temperature=temperature)
         
-        logger.info("[LLM] 使用本地量化模型")
-        return self.local_model_service.chat(messages, temperature=temperature)
+        # 降级到真正的本地模型
+        if hasattr(self, 'local_model_service') and self.local_model_service:
+            logger.info("[LLM] 使用本地量化模型")
+            return self.local_model_service.chat(messages, temperature=temperature)
+        
+        raise RuntimeError("本地量化模型服务不可用")
     
     def _chat_remote_model(self, messages: List[Dict[str, str]], temperature: float) -> str:
         """远程模型对话"""

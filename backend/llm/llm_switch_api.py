@@ -51,44 +51,29 @@ async def get_llm_status():
         "status": "已配置" if qwen_key else "未配置 API Key"
     }
     
-    # 2. 远程基座模型
+    # 2. 本地量化模型（实际是远程GPU服务器）
     try:
         from backend.llm.remote_model_client import RemoteModelClient
         remote_client = RemoteModelClient(base_url=remote_url)
-        available_providers["remote_model"] = {
-            "name": "远程基座模型",
+        available_providers["local_quantized"] = {
+            "name": "本地量化模型",
             "available": remote_client.is_available,
-            "description": "自建服务器，成本低，需要 GPU",
-            "status": f"已连接 ({remote_url})" if remote_client.is_available else f"未连接 ({remote_url})",
+            "description": "本地运行，离线可用，需要 GPU",
+            "status": "已加载" if remote_client.is_available else "未加载",
             "url": remote_url
         }
         remote_client.close()
     except Exception as e:
-        available_providers["remote_model"] = {
-            "name": "远程基座模型",
+        available_providers["local_quantized"] = {
+            "name": "本地量化模型",
             "available": False,
-            "description": "自建服务器，成本低，需要 GPU",
-            "status": f"连接失败: {str(e)}",
+            "description": "本地运行，离线可用，需要 GPU",
+            "status": f"加载失败: {str(e)}",
             "url": remote_url
         }
     
-    # 3. 本地量化模型
-    try:
-        from backend.llm.local_quantized_model import get_local_model_service
-        local_service = get_local_model_service()
-        available_providers["local_quantized"] = {
-            "name": "本地量化模型",
-            "available": local_service is not None,
-            "description": "本地运行，离线可用，需要 GPU",
-            "status": "已加载" if local_service else "未加载"
-        }
-    except Exception as e:
-        available_providers["local_quantized"] = {
-            "name": "本地量化模型",
-            "available": False,
-            "description": "本地运行，离线可用，需要 GPU",
-            "status": f"加载失败: {str(e)}"
-        }
+    # 3. 远程基座模型（隐藏，不再使用）
+    # 已合并到 local_quantized
     
     # 4. OpenAI API
     openai_key = os.getenv("OPENAI_API_KEY")
