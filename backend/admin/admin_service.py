@@ -342,17 +342,40 @@ class AdminService:
             activities = []
             for user in recent_logins:
                 activities.append({
-                    'type': 'login',
+                    'id': f"login-{user.id}-{user.last_login.timestamp() if user.last_login else 0}",
                     'user_id': user.id,
-                    'username': user.username,
-                    'nickname': user.nickname,
-                    'timestamp': user.last_login.isoformat() if user.last_login else None
+                    'username': user.nickname or user.username,
+                    'action': 'login',
+                    'details': f'{user.nickname or user.username} 登录了系统',
+                    'timestamp': user.last_login.isoformat() if user.last_login else None,
+                    'ip_address': None  # 可以从日志中获取
                 })
+            
+            # 获取最近注册的用户
+            recent_registers = session.query(User)\
+                                     .order_by(desc(User.created_at))\
+                                     .limit(limit // 2)\
+                                     .all()
+            
+            for user in recent_registers:
+                if user.created_at:
+                    activities.append({
+                        'id': f"register-{user.id}-{user.created_at.timestamp()}",
+                        'user_id': user.id,
+                        'username': user.nickname or user.username,
+                        'action': 'register',
+                        'details': f'{user.nickname or user.username} 注册了账号',
+                        'timestamp': user.created_at.isoformat(),
+                        'ip_address': None
+                    })
+            
+            # 按时间排序
+            activities.sort(key=lambda x: x['timestamp'] or '', reverse=True)
             
             return {
                 'success': True,
                 'data': {
-                    'activities': activities
+                    'activities': activities[:limit]
                 }
             }
             

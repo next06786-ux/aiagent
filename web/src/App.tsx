@@ -30,6 +30,7 @@ import SmartSchedulePage from './pages/SmartSchedulePage';
 import { AdminPage } from './pages/AdminPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AdminStatsPage } from './pages/AdminStatsPage';
+import { AdminActivitiesPage } from './pages/AdminActivitiesPage';
 import { LLMSettingsPage } from './pages/LLMSettingsPage';
 
 function ProtectedLayout() {
@@ -102,6 +103,7 @@ function AppRoutes() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/stats" element={<AdminStatsPage />} />
+        <Route path="/admin/activities" element={<AdminActivitiesPage />} />
         <Route path="/llm-settings" element={<LLMSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

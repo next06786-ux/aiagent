@@ -125,13 +125,11 @@ export function AdminPage() {
       id: 'activities',
       title: '活动监控',
       subtitle: '实时监控',
-      action: () => {
-        alert('活动监控功能开发中...');
-      },
+      route: '/admin/activities',
       top: '79%',
       left: '70%',
       gradient: ['#B0D9FF', '#7DBDFF'],
-      status: 'preview',
+      status: 'live',
     },
     {
       id: 'settings',
