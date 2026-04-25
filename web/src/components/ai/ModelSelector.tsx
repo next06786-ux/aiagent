@@ -61,12 +61,14 @@ export function ModelSelector({ compact = false }: ModelSelectorProps) {
           <>
             <div className="model-selector-backdrop" onClick={() => setIsOpen(false)} />
             <div className="model-selector-dropdown">
-              {Object.entries(availableModels).map(([key, model]: [string, any]) => (
+              {Object.entries(availableModels)
+                .filter(([key, model]: [string, any]) => model.available) // 只显示可用的模型
+                .map(([key, model]: [string, any]) => (
                 <button
                   key={key}
-                  className={`model-option ${key === currentModel ? 'active' : ''} ${!model.available ? 'disabled' : ''}`}
+                  className={`model-option ${key === currentModel ? 'active' : ''}`}
                   onClick={() => handleSwitch(key)}
-                  disabled={!model.available || switching}
+                  disabled={switching}
                 >
                   <span className="model-option-icon">{getProviderIcon(key)}</span>
                   <div className="model-option-info">
