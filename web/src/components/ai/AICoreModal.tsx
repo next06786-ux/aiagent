@@ -7,6 +7,8 @@ import './AICoreModal.css';
 
 interface AICoreModalProps {
   onClose: () => void;
+  disableNavigation?: boolean;  // 是否禁用导航功能
+  disableQuickActions?: boolean;  // 是否禁用快捷功能按钮
 }
 
 interface Message {
@@ -28,7 +30,7 @@ interface Message {
   };
 }
 
-export function AICoreModal({ onClose }: AICoreModalProps) {
+export function AICoreModal({ onClose, disableNavigation = false, disableQuickActions = false }: AICoreModalProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [input, setInput] = useState('');
@@ -128,6 +130,12 @@ export function AICoreModal({ onClose }: AICoreModalProps) {
             });
           },
           onNavigation: (navData: any) => {
+            // 如果禁用导航，则忽略导航建议
+            if (disableNavigation) {
+              console.log('[导航] 导航功能已禁用，忽略导航建议');
+              return;
+            }
+            
             // 处理导航建议
             currentNavigation = {
               prompt: navData.content,
@@ -304,20 +312,22 @@ export function AICoreModal({ onClose }: AICoreModalProps) {
         </div>
 
         {/* 快捷功能栏 */}
-        <div className="ai-modal-quick-actions">
-          {quickActions.map((action, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                action.action();
-                onClose();
-              }}
-              className="quick-action-btn"
-            >
-              <span className="quick-action-label">{action.label}</span>
-            </button>
-          ))}
-        </div>
+        {!disableQuickActions && (
+          <div className="ai-modal-quick-actions">
+            {quickActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  action.action();
+                  onClose();
+                }}
+                className="quick-action-btn"
+              >
+                <span className="quick-action-label">{action.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 消息区域 */}
         <div className="ai-modal-messages">
@@ -354,8 +364,8 @@ export function AICoreModal({ onClose }: AICoreModalProps) {
 
                 {/* 消息内容 */}
                 <div className="message-content-wrapper">
-                  {/* 导航建议 - 可以被隐藏 */}
-                  {msg.navigation && !hiddenNavigations.has(i) && (
+                  {/* 导航建议 - 可以被隐藏，且可以被全局禁用 */}
+                  {!disableNavigation && msg.navigation && !hiddenNavigations.has(i) && (
                     <div className="message-navigation">
                       <div className="navigation-prompt">{msg.navigation.prompt}</div>
                       {msg.navigation.routes && msg.navigation.routes.length > 0 && (
@@ -461,7 +471,10 @@ export function AICoreModal({ onClose }: AICoreModalProps) {
             </button>
           </div>
           <div className="input-hint">
-            AI 核心可以帮你导航到任何功能模块，或回答你的问题
+            {disableNavigation 
+              ? 'AI 核心可以帮你回答管理相关的问题'
+              : 'AI 核心可以帮你导航到任何功能模块，或回答你的问题'
+            }
           </div>
         </div>
       </div>

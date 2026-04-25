@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { AICoreModal } from './AICoreModal';
 import './GlobalAIFloatingButton.css';
 
-export function GlobalAIFloatingButton() {
+interface GlobalAIFloatingButtonProps {
+  disableNavigation?: boolean;
+  disableQuickActions?: boolean;
+}
+
+export function GlobalAIFloatingButton({ 
+  disableNavigation = false, 
+  disableQuickActions = false 
+}: GlobalAIFloatingButtonProps = {}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -32,7 +40,11 @@ export function GlobalAIFloatingButton() {
 
       {/* AI核心弹窗 */}
       {isModalOpen && (
-        <AICoreModal onClose={() => setIsModalOpen(false)} />
+        <AICoreModal 
+          onClose={() => setIsModalOpen(false)} 
+          disableNavigation={disableNavigation}
+          disableQuickActions={disableQuickActions}
+        />
       )}
     </>
   );

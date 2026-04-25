@@ -536,11 +536,18 @@ export function AdminPage() {
 
       {/* AI Core Modal */}
       {isAICoreOpen && (
-        <AICoreModal onClose={() => setIsAICoreOpen(false)} />
+        <AICoreModal 
+          onClose={() => setIsAICoreOpen(false)} 
+          disableNavigation={true}
+          disableQuickActions={true}
+        />
       )}
 
       {/* Global AI Floating Button */}
-      <GlobalAIFloatingButton />
+      <GlobalAIFloatingButton 
+        disableNavigation={true}
+        disableQuickActions={true}
+      />
     </div>
   );
 }
