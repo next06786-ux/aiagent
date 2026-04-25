@@ -301,6 +301,11 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
+  pointer-events: none; /* 不拦截点击事件，让下拉菜单可以点击 */
+}
+
+.ai-modal-messages > * {
+  pointer-events: auto; /* 恢复子元素的点击事件 */
 }
 
 /* 空状态 */
