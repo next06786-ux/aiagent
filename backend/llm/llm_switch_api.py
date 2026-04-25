@@ -125,7 +125,7 @@ async def switch_llm_provider(request: LLMSwitchRequest):
         from backend.llm.llm_service import get_llm_service
         # 清除旧的单例
         import backend.llm.llm_service as llm_module
-        llm_module._llm_service = None
+        llm_module.llm_service = None  # 修正：变量名是 llm_service，不是 _llm_service
         
         # 创建新的服务实例
         new_service = get_llm_service()
