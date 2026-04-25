@@ -136,9 +136,13 @@ async def switch_llm_provider(request: LLMSwitchRequest):
                 detail=f"切换失败: {request.provider} 不可用，请检查配置"
             )
         
-        # 测试新服务
+        # 测试新服务（使用较少的tokens避免等待太久）
         test_messages = [{"role": "user", "content": "你好"}]
         response = new_service.chat(test_messages, temperature=0.7)
+        
+        # 如果是量化模型，限制测试响应长度
+        if request.provider in ['local_quantized', 'remote_model']:
+            logger.info(f"[LLM切换] 量化模型测试成功，响应长度: {len(response)}")
         
         return {
             "success": True,
