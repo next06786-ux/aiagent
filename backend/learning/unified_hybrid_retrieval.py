@@ -323,9 +323,8 @@ class Neo4jRetriever(BaseRetriever):
         try:
             # 1. 第一阶段：使用LLM识别查询领域，获取候选集
             print(f"[Neo4jRetriever] 两阶段语义检索...")
-            # 限制候选数量，避免第二阶段超时
-            # 减少到30个候选，加快处理速度
-            max_candidates = min(max_results * 3, 30)  # 最多30个候选
+            # 增加候选数量，提供更多上下文
+            max_candidates = min(max_results * 5, 150)  # 最多150个候选（之前是30）
             candidates = self._get_semantic_candidates(query, filters, max_candidates)
             
             if not candidates:
@@ -381,7 +380,7 @@ class Neo4jRetriever(BaseRetriever):
             traceback.print_exc()
             return []
     
-    def _get_semantic_candidates(self, query: str, filters: Dict, max_candidates: int = 100) -> List[Dict]:
+    def _get_semantic_candidates(self, query: str, filters: Dict, max_candidates: int = 150) -> List[Dict]:
         """
         第一阶段：获取语义相关的候选集
         
@@ -390,8 +389,8 @@ class Neo4jRetriever(BaseRetriever):
         2. 宽松查询该领域的所有相关节点
         3. 返回候选集供第二阶段语义排序
         """
-        # 限制候选数量，避免查询过多数据
-        max_candidates = min(max_candidates, 30)  # 最多30个
+        # 增加候选数量上限
+        max_candidates = min(max_candidates, 150)  # 最多150个（之前是30）
         
         try:
             from backend.llm.llm_service import get_llm_service

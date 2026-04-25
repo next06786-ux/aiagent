@@ -686,7 +686,7 @@ class MemoryModule:
         self,
         query: str,
         agent_type: str,
-        max_results: int = 5,
+        max_results: int = 20,  # 增加默认值从5到20，提供更多上下文
         reason: str = "general",
         use_cache: bool = True
     ) -> str:
@@ -696,7 +696,7 @@ class MemoryModule:
         Args:
             query: 查询文本
             agent_type: Agent类型
-            max_results: 最大结果数
+            max_results: 最大结果数（默认20，提供更丰富的上下文）
             reason: 检索原因（'task_start', 'unknown_problem', 'fact_check'）
             use_cache: 是否使用缓存（默认True，工具调用时建议False）
         
@@ -739,7 +739,8 @@ class MemoryModule:
             
             if retrieval_context and retrieval_context.results:
                 context_parts = []
-                for result in retrieval_context.results[:5]:
+                # 显示所有检索到的结果，而不是只显示前5个
+                for result in retrieval_context.results:
                     context_parts.append(f"- {result.content}")
                 
                 retrieved = "\n".join(context_parts)
@@ -1198,10 +1199,11 @@ class ToolModule:
             print(f"   🔍 RAG检索: {query} (原因: {reason})")
             
             # 工具调用时禁用缓存，确保获取最新数据
+            # 增加max_results到20，提供更丰富的上下文
             context = self.memory_module.retrieve_from_external_memory(
                 query,
                 self.agent_type,
-                max_results=5,
+                max_results=20,  # 增加从5到20
                 reason=reason,
                 use_cache=False  # 工具调用时不使用缓存
             )
@@ -1684,7 +1686,7 @@ Final Answer: 基于分析结果给出建议...
         context.retrieved_memory = self.memory_module.retrieve_from_external_memory(
             f"用户偏好和历史背景",
             self.agent_type,
-            max_results=3,
+            max_results=20,  # 增加从3到20，提供更丰富的用户背景
             reason="task_start"
         )
         return "default"
@@ -2132,7 +2134,7 @@ Final Answer: 基于分析结果给出建议...
         user_context = self.memory_module.retrieve_from_external_memory(
             f"用户偏好和历史背景",
             self.agent_type,
-            max_results=3,
+            max_results=20,  # 增加从3到20，提供更丰富的用户背景
             reason="task_start"
         )
         
