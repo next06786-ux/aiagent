@@ -29,9 +29,13 @@ export function ModelSelector({ compact = false }: ModelSelectorProps) {
   const handleSwitch = async (provider: string) => {
     if (provider === currentModel || switching) return;
 
+    console.log('[ModelSelector] 切换模型:', provider);
+    
     try {
       setSwitching(true);
-      await switchLLMProvider({ provider });
+      const result = await switchLLMProvider({ provider });
+      console.log('[ModelSelector] 切换成功:', result);
+      
       setCurrentModel(provider);
       setIsOpen(false);
       
@@ -40,12 +44,12 @@ export function ModelSelector({ compact = false }: ModelSelectorProps) {
       
       // 强制刷新页面以确保UI更新
       setTimeout(() => {
+        console.log('[ModelSelector] 刷新页面');
         window.location.reload();
       }, 500);
     } catch (error) {
-      console.error('切换模型失败:', error);
-      alert('切换模型失败，请重试');
-    } finally {
+      console.error('[ModelSelector] 切换模型失败:', error);
+      alert(`切换模型失败: ${error}`);
       setSwitching(false);
     }
   };
@@ -67,16 +71,32 @@ export function ModelSelector({ compact = false }: ModelSelectorProps) {
 
         {isOpen && (
           <>
-            <div className="model-selector-backdrop" onClick={() => setIsOpen(false)} />
+            <div 
+              className="model-selector-backdrop" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+              }} 
+            />
             <div className="model-selector-dropdown">
               {Object.entries(availableModels)
                 .filter(([key, model]: [string, any]) => model.available) // 只显示可用的模型
                 .map(([key, model]: [string, any]) => (
                 <button
                   key={key}
+                  type="button"
                   className={`model-option ${key === currentModel ? 'active' : ''}`}
-                  onClick={() => handleSwitch(key)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('[ModelSelector] 按钮点击:', key);
+                    handleSwitch(key);
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                  }}
                   disabled={switching}
+                  style={{ cursor: switching ? 'wait' : 'pointer' }}
                 >
                   <span className="model-option-icon">{getProviderIcon(key)}</span>
                   <div className="model-option-info">

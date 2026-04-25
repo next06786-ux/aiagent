@@ -55,7 +55,8 @@
 .model-selector-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 999;
+  z-index: 9998;
+  background: transparent;
 }
 
 .model-selector-dropdown {
@@ -70,8 +71,9 @@
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(10, 89, 247, 0.2);
   padding: 0.5rem;
-  z-index: 1000;
+  z-index: 9999;
   animation: dropdownSlideIn 0.2s ease-out;
+  pointer-events: auto;
 }
 
 @keyframes dropdownSlideIn {
@@ -95,13 +97,17 @@
   border: 1px solid transparent;
   border-radius: 8px;
   text-align: left;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: all 0.2s ease;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 1;
 }
 
 .model-option:hover:not(:disabled) {
   background: linear-gradient(135deg, rgba(10, 89, 247, 0.05) 0%, rgba(107, 72, 255, 0.05) 100%);
   border-color: rgba(10, 89, 247, 0.15);
+  transform: translateX(2px);
 }
 
 .model-option.active {
@@ -109,9 +115,10 @@
   border-color: rgba(10, 89, 247, 0.3);
 }
 
-.model-option.disabled {
+.model-option:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
 }
 
 .model-option-icon {
