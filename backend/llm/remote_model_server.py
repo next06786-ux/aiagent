@@ -37,7 +37,7 @@ class ChatRequest(BaseModel):
     """聊天请求"""
     messages: List[ChatMessage]
     temperature: float = 0.7
-    max_tokens: int = 2000
+    max_tokens: int = 100  # 降低到100避免显存不足
 
 
 class ChatResponse(BaseModel):
