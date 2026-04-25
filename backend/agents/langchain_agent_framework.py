@@ -1288,6 +1288,21 @@ class LangChainReActAgent(ABC):
         if self.mcp_host:
             await self.tool_module.discover_mcp_tools()
         
+        # 检查用户是否是管理员，如果是则加载管理工具
+        try:
+            from backend.admin.admin_service import get_admin_service
+            from backend.agents.admin_tools import get_admin_tools
+            
+            admin_service = get_admin_service()
+            if admin_service.is_admin(self.user_id):
+                print(f"   检测到管理员用户，加载管理工具...")
+                admin_tools = get_admin_tools()
+                for tool in admin_tools:
+                    self.tool_module.register_tool(tool)
+                print(f"   ✓ 已加载 {len(admin_tools)} 个管理工具")
+        except Exception as e:
+            print(f"   ⚠️  管理工具加载失败: {e}")
+        
         # 创建Agent Executor
         self.agent_executor = self._create_react_agent()
         
