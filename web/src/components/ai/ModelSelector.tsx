@@ -34,6 +34,14 @@ export function ModelSelector({ compact = false }: ModelSelectorProps) {
       await switchLLMProvider({ provider });
       setCurrentModel(provider);
       setIsOpen(false);
+      
+      // 强制重新加载状态
+      await loadStatus();
+      
+      // 强制刷新页面以确保UI更新
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
       console.error('切换模型失败:', error);
       alert('切换模型失败，请重试');
