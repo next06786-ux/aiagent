@@ -30,14 +30,15 @@ class RemoteModelClient:
         self.timeout = timeout
         self.is_available = False
         
-        # 创建 HTTP 客户端
+        # 创建 HTTP 客户端（支持HTTPS和自签名证书）
         self.client = httpx.Client(
             base_url=self.base_url,
             timeout=httpx.Timeout(timeout, connect=10.0),
             limits=httpx.Limits(
                 max_connections=100,
                 max_keepalive_connections=20
-            )
+            ),
+            verify=False  # 禁用SSL证书验证（AutoDL使用自签名证书）
         )
         
         logger.info(f"[远程模型] 初始化客户端，服务器: {self.base_url}")
