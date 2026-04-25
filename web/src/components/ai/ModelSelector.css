@@ -91,6 +91,11 @@
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
+  position: relative;
+}
+
+.model-option * {
+  pointer-events: none;
 }
 
 .model-option:hover:not(:disabled) {
@@ -107,6 +112,10 @@
 .model-option:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.model-option:disabled * {
+  pointer-events: none;
 }
 
 .model-option-icon {
