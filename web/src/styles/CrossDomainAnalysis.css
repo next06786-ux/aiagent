@@ -64,21 +64,23 @@
 
 .analyze-button {
   padding: 16px 40px;
-  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
-  color: white;
-  border: none;
+  background: linear-gradient(135deg, #ffffff, #f5f5f5);
+  color: #0A59F7;
+  border: 2px solid rgba(10, 89, 247, 0.2);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(10, 89, 247, 0.3);
+  box-shadow: 0 4px 12px rgba(10, 89, 247, 0.15);
 }
 
 .analyze-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(10, 89, 247, 0.4);
+  box-shadow: 0 8px 20px rgba(10, 89, 247, 0.25);
+  border-color: rgba(10, 89, 247, 0.3);
+  background: linear-gradient(135deg, #ffffff, #fafafa);
 }
 
 .analyze-button:disabled {

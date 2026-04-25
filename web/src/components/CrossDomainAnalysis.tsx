@@ -216,7 +216,13 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
                 {/* 整合洞察 */}
                 {result.cross_domain_analysis.integrated_insights.length > 0 && (
                   <div className="integrated-insights">
-                    <h3>🔍 整合洞察</h3>
+                    <h3>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#0A59F7'}}>
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                      </svg>
+                      整合洞察
+                    </h3>
                     {result.cross_domain_analysis.integrated_insights.map((insight, index) => (
                       <div key={index} className={`insight-card importance-${insight.importance}`}>
                         <div className="insight-header">
@@ -239,7 +245,13 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
               <div className="patterns-content">
                 {/* 跨领域模式 */}
                 <div className="section">
-                  <h3>🔗 跨领域模式 ({result.cross_domain_analysis.cross_domain_patterns.length})</h3>
+                  <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#0A59F7'}}>
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    跨领域模式 ({result.cross_domain_analysis.cross_domain_patterns.length})
+                  </h3>
                   {result.cross_domain_analysis.cross_domain_patterns.map((pattern, index) => (
                     <div key={index} className={`pattern-card strength-${pattern.strength}`}>
                       <div className="pattern-header">
@@ -259,13 +271,23 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
 
                 {/* 协同效应 */}
                 <div className="section">
-                  <h3>⚡ 协同效应 ({result.cross_domain_analysis.synergies.length})</h3>
+                  <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#10b981'}}>
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    协同效应 ({result.cross_domain_analysis.synergies.length})
+                  </h3>
                   {result.cross_domain_analysis.synergies.map((synergy, index) => (
                     <div key={index} className="synergy-card">
                       <div className="synergy-title">{synergy.title}</div>
                       <div className="synergy-description">{synergy.description}</div>
                       <div className="synergy-benefit">
-                        💡 潜在收益: {synergy.potential_benefit}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '6px', color: '#10b981'}}>
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M12 16v-4"/>
+                          <path d="M12 8h.01"/>
+                        </svg>
+                        潜在收益: {synergy.potential_benefit}
                       </div>
                     </div>
                   ))}
@@ -276,7 +298,14 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
 
                 {/* 潜在冲突 */}
                 <div className="section">
-                  <h3>⚠️ 潜在冲突 ({result.cross_domain_analysis.conflicts.length})</h3>
+                  <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#f59e0b'}}>
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                      <line x1="12" y1="9" x2="12" y2="13"/>
+                      <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    潜在冲突 ({result.cross_domain_analysis.conflicts.length})
+                  </h3>
                   {result.cross_domain_analysis.conflicts.map((conflict, index) => (
                     <div key={index} className={`conflict-card severity-${conflict.severity}`}>
                       <div className="conflict-header">
@@ -285,7 +314,12 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
                       </div>
                       <div className="conflict-description">{conflict.description}</div>
                       <div className="conflict-resolution">
-                        💡 解决建议: {conflict.resolution_suggestion}
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '6px', color: '#f59e0b'}}>
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M12 16v-4"/>
+                          <path d="M12 8h.01"/>
+                        </svg>
+                        解决建议: {conflict.resolution_suggestion}
                       </div>
                     </div>
                   ))}
@@ -298,7 +332,14 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
 
             {selectedTab === 'recommendations' && (
               <div className="recommendations-content">
-                <h3>🎯 战略建议 ({result.cross_domain_analysis.strategic_recommendations.length})</h3>
+                <h3>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#0A59F7'}}>
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="6"/>
+                    <circle cx="12" cy="12" r="2"/>
+                  </svg>
+                  战略建议 ({result.cross_domain_analysis.strategic_recommendations.length})
+                </h3>
                 {result.cross_domain_analysis.strategic_recommendations.map((rec, index) => (
                   <div key={index} className={`recommendation-card priority-${rec.priority}`}>
                     <div className="rec-header">
@@ -328,11 +369,21 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
 
             {selectedTab === 'action_plan' && (
               <div className="action-plan-content">
-                <h3>📅 分阶段行动计划</h3>
+                <h3>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{display: 'inline-block', verticalAlign: 'middle', marginRight: '8px', color: '#0A59F7'}}>
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  分阶段行动计划
+                </h3>
                 
                 <div className="plan-section">
                   <div className="plan-header">
-                    <span className="plan-icon">🚀</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{color: '#0A59F7'}}>
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
                     <span className="plan-title">短期行动 (1-3个月)</span>
                   </div>
                   <ul className="plan-list">
@@ -344,7 +395,10 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
 
                 <div className="plan-section">
                   <div className="plan-header">
-                    <span className="plan-icon">📈</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{color: '#10b981'}}>
+                      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                      <polyline points="17 6 23 6 23 12"/>
+                    </svg>
                     <span className="plan-title">中期行动 (3-6个月)</span>
                   </div>
                   <ul className="plan-list">
@@ -356,7 +410,11 @@ export const CrossDomainAnalysis: React.FC<CrossDomainAnalysisProps> = ({ token 
 
                 <div className="plan-section">
                   <div className="plan-header">
-                    <span className="plan-icon">🎯</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{color: '#6B48FF'}}>
+                      <circle cx="12" cy="12" r="10"/>
+                      <circle cx="12" cy="12" r="6"/>
+                      <circle cx="12" cy="12" r="2"/>
+                    </svg>
                     <span className="plan-title">长期行动 (6-12个月)</span>
                   </div>
                   <ul className="plan-list">
