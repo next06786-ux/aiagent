@@ -891,8 +891,8 @@ def get_llm_service() -> Optional[LLMService]:
         elif provider == 'openai':
             api_key = os.getenv('OPENAI_API_KEY')
             key_name = 'OPENAI_API_KEY'
-        elif provider == 'transformers':
-            # Transformers 本地推理不需要 API key
+        elif provider in ['transformers', 'local_quantized', 'remote_model']:
+            # 本地模型和远程模型不需要 API key
             api_key = 'local'
             key_name = 'LOCAL_MODEL'
         else:
