@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useAICoreSession } from '../../hooks/useAICoreSession';
 import { openChatSocket } from '../../services/chat';
+import { ModelSelector } from './ModelSelector';
 import './AICoreModal.css';
 
 interface AICoreModalProps {
@@ -287,6 +288,9 @@ export function AICoreModal({ onClose, disableNavigation = false, disableQuickAc
           </div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* 模型选择器 */}
+            <ModelSelector compact />
+            
             {/* 清空会话按钮 */}
             {messages.length > 0 && (
               <button
