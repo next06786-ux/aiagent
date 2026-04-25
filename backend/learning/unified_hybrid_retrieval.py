@@ -63,8 +63,8 @@ class FusionMethod(Enum):
 class RetrievalConfig:
     """检索配置"""
     # 基础配置
-    max_results: int = 50  # 增加默认值从20到50
-    min_confidence: float = 0.3
+    max_results: int = 100  # 增加默认值从50到100，提供更多上下文
+    min_confidence: float = 0.2  # 降低最小置信度，允许更多结果
     
     # 检索策略
     strategy: RetrievalStrategy = RetrievalStrategy.ADAPTIVE
@@ -238,7 +238,7 @@ class BaseRetriever(ABC):
     def retrieve(
         self,
         query: str,
-        max_results: int = 20,
+        max_results: int = 50,  # 增加默认值
         filters: Dict[str, Any] = None
     ) -> List[RetrievalResult]:
         """
@@ -301,7 +301,7 @@ class Neo4jRetriever(BaseRetriever):
     def retrieve(
         self,
         query: str,
-        max_results: int = 20,
+        max_results: int = 50,  # 增加默认值
         filters: Dict[str, Any] = None
     ) -> List[RetrievalResult]:
         """
@@ -1459,7 +1459,7 @@ class RAGRetriever(BaseRetriever):
     def retrieve(
         self,
         query: str,
-        max_results: int = 20,
+        max_results: int = 50,  # 增加默认值
         filters: Dict[str, Any] = None
     ) -> List[RetrievalResult]:
         """
@@ -2397,7 +2397,7 @@ def quick_retrieve(
     user_id: str,
     query: str,
     domain: Optional[str] = None,
-    max_results: int = 20
+    max_results: int = 100  # 增加默认值
 ) -> RetrievalContext:
     """快速检索的便捷函数"""
     retriever = UnifiedHybridRetrieval(user_id)
