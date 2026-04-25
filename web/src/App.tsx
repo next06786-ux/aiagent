@@ -31,6 +31,7 @@ import { AdminPage } from './pages/AdminPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AdminStatsPage } from './pages/AdminStatsPage';
 import { AdminActivitiesPage } from './pages/AdminActivitiesPage';
+import { AdminSettingsPage } from './pages/AdminSettingsPage';
 import { LLMSettingsPage } from './pages/LLMSettingsPage';
 
 function ProtectedLayout() {
@@ -104,6 +105,7 @@ function AppRoutes() {
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/stats" element={<AdminStatsPage />} />
         <Route path="/admin/activities" element={<AdminActivitiesPage />} />
+        <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="/llm-settings" element={<LLMSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

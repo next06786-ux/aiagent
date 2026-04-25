@@ -1,0 +1,463 @@
+/* 系统设置页面样式 - 白色系 */
+
+.admin-settings-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* 背景装饰 */
+.admin-settings-background {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.admin-settings-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+  animation: float 20s ease-in-out infinite;
+}
+
+.admin-settings-blob-1 {
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
+  top: -100px;
+  left: -100px;
+  animation-delay: 0s;
+}
+
+.admin-settings-blob-2 {
+  width: 350px;
+  height: 350px;
+  background: linear-gradient(135deg, #6B48FF 0%, #8B5CF6 100%);
+  bottom: -80px;
+  right: -80px;
+  animation-delay: 5s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -30px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+/* 加载状态 */
+.admin-settings-loading {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: #64748b;
+}
+
+/* 头部 */
+.admin-settings-header {
+  position: relative;
+  z-index: 1;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(10, 89, 247, 0.1);
+}
+
+.admin-settings-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  border: 1px solid rgba(10, 89, 247, 0.2);
+  border-radius: 12px;
+  color: #0A59F7;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(10, 89, 247, 0.08);
+}
+
+.admin-settings-back-btn:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: rgba(10, 89, 247, 0.3);
+  box-shadow: 0 4px 12px rgba(10, 89, 247, 0.15);
+  transform: translateY(-1px);
+}
+
+.admin-settings-header-content {
+  flex: 1;
+}
+
+.admin-settings-title {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0 0 0.25rem 0;
+}
+
+.admin-settings-subtitle {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* 操作按钮 */
+.admin-settings-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.admin-settings-reset-btn,
+.admin-settings-save-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid;
+}
+
+.admin-settings-reset-btn {
+  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  border-color: rgba(10, 89, 247, 0.2);
+  color: #64748b;
+  box-shadow: 0 2px 8px rgba(10, 89, 247, 0.08);
+}
+
+.admin-settings-reset-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: rgba(10, 89, 247, 0.3);
+  box-shadow: 0 4px 12px rgba(10, 89, 247, 0.15);
+  transform: translateY(-1px);
+}
+
+.admin-settings-save-btn {
+  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 4px 12px rgba(10, 89, 247, 0.3);
+}
+
+.admin-settings-save-btn:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(10, 89, 247, 0.4);
+  transform: translateY(-2px);
+}
+
+.admin-settings-reset-btn:disabled,
+.admin-settings-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 消息提示 */
+.admin-settings-message {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 1.5rem auto 0;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.admin-settings-message-success {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #059669;
+}
+
+.admin-settings-message-error {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+/* 设置容器 */
+.admin-settings-container {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* 设置区块 */
+.admin-settings-section {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 2px 12px rgba(10, 89, 247, 0.06);
+  transition: all 0.3s ease;
+}
+
+.admin-settings-section:hover {
+  border-color: rgba(10, 89, 247, 0.2);
+  box-shadow: 0 4px 20px rgba(10, 89, 247, 0.12);
+}
+
+.admin-settings-section-danger {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.admin-settings-section-danger:hover {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.12);
+}
+
+.admin-settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(10, 89, 247, 0.1);
+}
+
+.admin-settings-section-danger .admin-settings-section-header {
+  border-bottom-color: rgba(239, 68, 68, 0.2);
+}
+
+.admin-settings-section-header svg {
+  color: #0A59F7;
+  flex-shrink: 0;
+}
+
+.admin-settings-section-danger .admin-settings-section-header svg {
+  color: #ef4444;
+}
+
+.admin-settings-section-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+/* 设置组 */
+.admin-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* 设置字段 */
+.admin-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-settings-field label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #475569;
+}
+
+.admin-settings-field input[type="text"],
+.admin-settings-field input[type="number"],
+.admin-settings-field textarea,
+.admin-settings-field select {
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid rgba(10, 89, 247, 0.2);
+  border-radius: 10px;
+  color: #1e293b;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.admin-settings-field input[type="text"]:focus,
+.admin-settings-field input[type="number"]:focus,
+.admin-settings-field textarea:focus,
+.admin-settings-field select:focus {
+  border-color: #0A59F7;
+  box-shadow: 0 0 0 3px rgba(10, 89, 247, 0.1);
+}
+
+.admin-settings-field input[type="text"]:disabled,
+.admin-settings-field input[type="number"]:disabled,
+.admin-settings-field textarea:disabled,
+.admin-settings-field select:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.admin-settings-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.admin-settings-field-hint {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* 开关切换 */
+.admin-settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.03) 0%, rgba(107, 72, 255, 0.03) 100%);
+  border: 1px solid rgba(10, 89, 247, 0.1);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.admin-settings-toggle:hover {
+  background: linear-gradient(135deg, rgba(10, 89, 247, 0.05) 0%, rgba(107, 72, 255, 0.05) 100%);
+  border-color: rgba(10, 89, 247, 0.2);
+}
+
+.admin-settings-toggle-info {
+  flex: 1;
+}
+
+.admin-settings-toggle-info label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 0.25rem;
+}
+
+.admin-settings-toggle-info p {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #cbd5e1;
+  transition: 0.3s;
+  border-radius: 28px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+.toggle-switch-danger input:checked + .toggle-slider {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .admin-settings-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .admin-settings-actions {
+    flex-direction: column;
+  }
+
+  .admin-settings-container {
+    padding: 1rem;
+  }
+
+  .admin-settings-section {
+    padding: 1.5rem;
+  }
+
+  .admin-settings-toggle {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .toggle-switch {
+    align-self: flex-end;
+  }
+}

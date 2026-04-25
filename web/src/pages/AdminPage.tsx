@@ -135,13 +135,11 @@ export function AdminPage() {
       id: 'settings',
       title: '系统设置',
       subtitle: '配置管理',
-      action: () => {
-        alert('系统设置功能开发中...');
-      },
+      route: '/admin/settings',
       top: '79%',
       left: '30%',
       gradient: ['#B0D9FF', '#7DBDFF'],
-      status: 'preview',
+      status: 'live',
     },
     {
       id: 'logout',
