@@ -2,6 +2,7 @@
 
 .model-selector-compact {
   position: relative;
+  z-index: 100000;
 }
 
 .model-selector-trigger {
@@ -19,6 +20,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(10, 89, 247, 0.08);
+  position: relative;
+  z-index: 100001;
 }
 
 .model-selector-trigger:hover:not(:disabled) {
@@ -63,7 +66,7 @@
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   padding: 0.5rem;
-  z-index: 10000;
+  z-index: 100002;
   animation: dropdownSlideIn 0.2s ease-out;
 }
 
