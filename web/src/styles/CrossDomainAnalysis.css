@@ -215,8 +215,9 @@
   display: flex;
   justify-content: space-around;
   padding: 32px 24px;
-  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
-  color: white;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.95));
+  border-bottom: 2px solid rgba(10, 89, 247, 0.15);
+  color: #1a1a1a;
 }
 
 .summary-item {
@@ -226,10 +227,11 @@
 .summary-item .label {
   display: block;
   font-size: 13px;
-  opacity: 0.9;
+  opacity: 0.6;
   margin-bottom: 8px;
   font-weight: 500;
   letter-spacing: 0.05em;
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .summary-item .value {
@@ -237,6 +239,10 @@
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* 标签页 */
@@ -601,11 +607,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0A59F7 0%, #6B48FF 100%);
-  color: white;
+  background: linear-gradient(135deg, #ffffff, #f5f5f5);
+  color: #0A59F7;
+  border: 2px solid rgba(10, 89, 247, 0.2);
   border-radius: 50%;
   font-weight: 700;
   font-size: 15px;
+  box-shadow: 0 2px 8px rgba(10, 89, 247, 0.15);
 }
 
 .rec-priority,
