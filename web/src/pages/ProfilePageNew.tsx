@@ -92,7 +92,7 @@ export function ProfilePageNew() {
       action: () => setActiveSection('profile'),
       top: '5%',
       left: '50%',
-      gradient: ['#4a4a4a', '#2c2c2c'],
+      gradient: ['#ffffff', '#f5f5f5'],
       icon: 'user',
     },
     {
@@ -102,7 +102,7 @@ export function ProfilePageNew() {
       action: () => setActiveSection('password'),
       top: '24%',
       left: '84%',
-      gradient: ['#5a5a5a', '#3a3a3a'],
+      gradient: ['#ffffff', '#f5f5f5'],
       icon: 'lock',
     },
     {
@@ -112,7 +112,7 @@ export function ProfilePageNew() {
       action: () => navigate('/lora-training'),
       top: '79%',
       left: '70%',
-      gradient: ['#6a6a6a', '#4a4a4a'],
+      gradient: ['#ffffff', '#f5f5f5'],
       icon: 'ai',
     },
     {
@@ -122,7 +122,7 @@ export function ProfilePageNew() {
       action: () => navigate('/learning-progress'),
       top: '79%',
       left: '30%',
-      gradient: ['#7a7a7a', '#5a5a5a'],
+      gradient: ['#ffffff', '#f5f5f5'],
       icon: 'chart',
     },
     {
@@ -132,7 +132,7 @@ export function ProfilePageNew() {
       action: () => navigate('/insights'),
       top: '24%',
       left: '16%',
-      gradient: ['#8a8a8a', '#6a6a6a'],
+      gradient: ['#ffffff', '#f5f5f5'],
       icon: 'insight',
     },
   ], [navigate]);
@@ -412,32 +412,33 @@ export function ProfilePageNew() {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 24, padding: '28px 32px',
             borderRadius: 28, marginBottom: 24,
-            background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.08) 0%, rgba(50, 50, 50, 0.06) 100%)',
-            border: '1px solid rgba(0, 0, 0, 0.12)',
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%)',
+            border: '1px solid rgba(10, 89, 247, 0.1)',
             position: 'relative',
             overflow: 'hidden',
-            boxShadow: '0 18px 48px rgba(0, 0, 0, 0.04)',
+            boxShadow: '0 18px 48px rgba(10, 89, 247, 0.08)',
           }}>
             {/* 微光效果 */}
             <div style={{
               position: 'absolute', top: 0, right: 0, width: '50%', height: '100%',
-              background: 'radial-gradient(ellipse at 80% 50%, rgba(0, 0, 0, 0.08), transparent 60%)',
+              background: 'radial-gradient(ellipse at 80% 50%, rgba(10, 89, 247, 0.06), transparent 60%)',
               pointerEvents: 'none',
             }}/>
             
             {/* 头像 */}
             <div style={{
               width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
-              background: 'linear-gradient(135deg, #2c2c2c 0%, #1a1a1a 100%)',
+              background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 32, fontWeight: 800, color: '#fff',
-              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.25)',
+              fontSize: 32, fontWeight: 800, color: '#0A59F7',
+              boxShadow: '0 12px 32px rgba(10, 89, 247, 0.15)',
               position: 'relative',
+              border: '2px solid rgba(10, 89, 247, 0.1)',
             }}>
               {/* 头像光晕 */}
               <div style={{
                 position: 'absolute', inset: -4, borderRadius: '50%',
-                background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.3), rgba(50, 50, 50, 0.2))',
+                background: 'linear-gradient(135deg, rgba(10, 89, 247, 0.15), rgba(107, 72, 255, 0.1))',
                 filter: 'blur(8px)', zIndex: -1,
               }}/>
               {user?.avatar_url
@@ -509,7 +510,7 @@ export function ProfilePageNew() {
                   <div style={{
                     position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
                     width: 4, height: hoveredNode === node.id ? '60%' : '0%',
-                    background: `linear-gradient(180deg, ${node.gradient[0]}, ${node.gradient[1]})`,
+                    background: `linear-gradient(180deg, rgba(10, 89, 247, 0.8), rgba(107, 72, 255, 0.8))`,
                     borderRadius: '0 4px 4px 0',
                     transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   }}/>
@@ -519,10 +520,11 @@ export function ProfilePageNew() {
                     width: 52, height: 52, borderRadius: 16, flexShrink: 0,
                     background: `linear-gradient(135deg, ${node.gradient[0]} 0%, ${node.gradient[1]} 100%)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff',
+                    color: '#0A59F7',
+                    border: '2px solid rgba(10, 89, 247, 0.15)',
                     boxShadow: hoveredNode === node.id 
-                      ? `0 8px 24px rgba(0, 0, 0, 0.3)`
-                      : '0 4px 12px rgba(0, 0, 0, 0.08)',
+                      ? `0 8px 24px rgba(10, 89, 247, 0.25)`
+                      : '0 4px 12px rgba(10, 89, 247, 0.08)',
                     transform: hoveredNode === node.id ? 'scale(1.05)' : 'scale(1)',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   }}>
@@ -537,12 +539,12 @@ export function ProfilePageNew() {
                   {/* 箭头 */}
                   <div style={{
                     width: 32, height: 32, borderRadius: 12,
-                    background: hoveredNode === node.id ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                    background: hoveredNode === node.id ? 'rgba(10, 89, 247, 0.1)' : 'rgba(10, 89, 247, 0.05)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     transform: hoveredNode === node.id ? 'translateX(4px)' : 'translateX(0)',
                   }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={hoveredNode === node.id ? '#2c2c2c' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={hoveredNode === node.id ? '#0A59F7' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="9 18 15 12 9 6"/>
                     </svg>
                   </div>
